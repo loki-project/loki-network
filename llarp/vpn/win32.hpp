@@ -7,6 +7,8 @@
 #include <llarp/util/thread/queue.hpp>
 #include <llarp/ev/vpn.hpp>
 
+#include <fwpmu.h>
+
 // DDK macros
 #define CTL_CODE(DeviceType, Function, Method, Access) \
   (((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method))
@@ -31,16 +33,16 @@
 /* Windows registry crap */
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME 16383
-#define NETWORK_ADAPTERS                                                 \
-  "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-" \
-  "08002BE10318}"
 
 typedef unsigned long IPADDR;
 
 namespace llarp::vpn
 {
+  constexpr auto NETWORK_ADAPTERS =
+      "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}";
+
   static char*
-  reg_query(char* key_name)
+  reg_query(const char* key_name)
   {
     HKEY adapters, adapter;
     DWORD i, ret, len;
@@ -495,99 +497,181 @@ namespace llarp::vpn
     }
   };
 
-  class Win32RouteManager : public IRouteManager
+  /// \brief FWPMRouterManager is heavily based off wireguard's windows port's firewall code
+  class FWPMRouteManager : public IRouteManager
   {
+    HANDLE m_Handle;
+
+    template <typename Operation>
     void
-    Execute(std::string cmd) const
+    RunTransaction(Operation tx)
     {
-      LogInfo(cmd);
-      ::system(cmd.c_str());
-    }
-
-    static std::string
-    RouteCommand()
-    {
-      return Win32Interface::RouteCommand();
-    }
-
-    void
-    Route(IPVariant_t ip, IPVariant_t gateway, std::string cmd)
-    {
-      std::stringstream ss;
-      std::string ip_str;
-      std::string gateway_str;
-
-      std::visit([&ip_str](auto&& ip) { ip_str = ip.ToString(); }, ip);
-      std::visit([&gateway_str](auto&& gateway) { gateway_str = gateway.ToString(); }, gateway);
-
-      ss << RouteCommand() << " " << cmd << " " << ip_str << " MASK 255.255.255.255 " << gateway_str
-         << " METRIC 2";
-      Execute(ss.str());
-    }
-
-    void
-    DefaultRouteViaInterface(std::string ifname, std::string cmd)
-    {
-      // poke hole for loopback bacause god is dead on windows
-      Execute(RouteCommand() + " " + cmd + " 127.0.0.0 MASK 255.0.0.0 0.0.0.0");
-
-      huint32_t ip{};
-      ip.FromString(ifname);
-      const auto ipv6 = net::ExpandV4Lan(ip);
-
-      Execute(RouteCommand() + " " + cmd + " ::/2 " + ipv6.ToString());
-      Execute(RouteCommand() + " " + cmd + " 4000::/2 " + ipv6.ToString());
-      Execute(RouteCommand() + " " + cmd + " 8000::/2 " + ipv6.ToString());
-      Execute(RouteCommand() + " " + cmd + " c000::/2 " + ipv6.ToString());
-
-      ifname.back()++;
-      Execute(RouteCommand() + " " + cmd + " 0.0.0.0 MASK 128.0.0.0 " + ifname);
-      Execute(RouteCommand() + " " + cmd + " 128.0.0.0 MASK 128.0.0.0 " + ifname);
-    }
-
-    void
-    RouteViaInterface(std::string ifname, IPRange range, std::string cmd)
-    {
-      if (range.IsV4())
+      if (auto err = FwpmTransactionBegin0(m_Handle, 0); err != ERROR_SUCCESS)
       {
-        const huint32_t addr4 = net::TruncateV6(range.addr);
-        const huint32_t mask4 = net::TruncateV6(range.netmask_bits);
-        Execute(
-            RouteCommand() + " " + cmd + " " + addr4.ToString() + " MASK " + mask4.ToString() + " "
-            + ifname);
+        throw std::runtime_error{"FwpmTransactionBegin0 failed"};
       }
-      else
+      try
       {
-        Execute(
-            RouteCommand() + " " + cmd + range.addr.ToString() + " MASK "
-            + range.netmask_bits.ToString() + " " + ifname);
+        tx();
+        if (auto err = FwpmTransactionCommit0(m_Handle); err != ERROR_SUCCESS)
+        {
+          throw std::runtime_error{"FwpmTransactionCommit0 failed"};
+        }
+      }
+      catch (std::exception& ex)
+      {
+        LogError("failed to run fwpm transaction: ", ex.what());
+        FwpmTransactionAbort0(m_Handle);
+        throw std::current_exception();
       }
     }
+
+    static void
+    GenerateUUID(UUID& uuid)
+    {
+      if (auto err = UuidCreateSequential(&uuid); err != RPC_S_OK)
+      {
+        throw std::runtime_error{"cannot generate uuid"};
+      }
+    }
+
+    class Provider
+    {
+      std::wstring _name;
+      std::wstring _description;
+
+     protected:
+      FWPM_PROVIDER0 _provider;
+
+     public:
+      explicit Provider(const wchar_t* name, const wchar_t* description)
+          : _name{name}, _description{description}
+      {
+        GenerateUUID(_provider.providerKey);
+        _provider.displayData.name = _name.data();
+        _provider.displayData.description = _description.data();
+        _provider.flags = 0;
+        _provider.serviceName = nullptr;
+      }
+
+      operator FWPM_PROVIDER0*()
+      {
+        return &_provider;
+      }
+    };
+
+    class SubLayer
+    {
+      std::wstring _name;
+      std::wstring _description;
+
+     protected:
+      FWPM_SUBLAYER0 _sublayer;
+
+     public:
+      explicit SubLayer(const wchar_t* name, const wchar_t* description, GUID* providerKey)
+          : _name{name}, _description{description}
+      {
+        GenerateUUID(_sublayer.subLayerKey);
+        _sublayer.providerKey = providerKey;
+        _sublayer.displayData.name = _name.data();
+        _sublayer.displayData.description = _description.data();
+        _sublayer.weight = 0xffff;
+      }
+
+      operator FWPM_SUBLAYER0*()
+      {
+        return &_sublayer;
+      }
+    };
+
+    class Firewall : public Provider, public SubLayer
+    {
+      HANDLE m_Handle;
+
+     public:
+      Firewall(HANDLE handle)
+          : Provider{L"Lokinet", L"Lokinet Provider"}
+          , SubLayer{L"Lokinet Filters", L"RoutePoker Filters", &_provider.providerKey}
+          , m_Handle{handle}
+      {
+        if (auto err = FwpmProviderAdd0(m_Handle, *this, 0); err != ERROR_SUCCESS)
+        {
+          throw std::runtime_error{"fwpmProviderAdd0 failed"};
+        }
+        if (auto err = FwpmSubLayerAdd0(m_Handle, *this, 0); err != ERROR_SUCCESS)
+        {
+          throw std::runtime_error{"fwpmSubLayerAdd0 failed"};
+        }
+      }
+
+      ~Firewall()
+      {
+        FwpmSubLayerDeleteByKey0(m_Handle, &_sublayer.subLayerKey);
+        FwpmProviderDeleteByKey0(m_Handle, &_provider.providerKey);
+      }
+    };
+
+    std::unique_ptr<Firewall> m_Firewall;
+
+    void
+    PermitLokinetService()
+    {}
+
+    void
+    PermitLoopback()
+    {}
+
+    void
+    PermitTunInterface()
+    {}
 
    public:
+    FWPMRouteManager()
+    {
+      if (auto result = FwpmEngineOpen0(nullptr, RPC_C_AUTHN_WINNT, nullptr, nullptr, &m_Handle);
+          result != ERROR_SUCCESS)
+      {
+        throw std::runtime_error{"cannot open fwpm engine"};
+      }
+    }
+
+    ~FWPMRouteManager()
+    {
+      FwpmEngineClose0(m_Handle);
+    }
+
+    void
+    AddBlackhole() override
+    {
+      RunTransaction([&]() {
+        m_Firewall = std::make_unique<Firewall>(m_Handle);
+        PermitLokinetService();
+        PermitLoopback();
+      });
+    }
+
+    void
+    DelBlackhole() override
+    {
+      RunTransaction([&]() { m_Firewall.reset(); });
+    }
+
     void
     AddRoute(IPVariant_t ip, IPVariant_t gateway) override
-    {
-      Route(ip, gateway, "ADD");
-    }
+    {}
 
     void
     DelRoute(IPVariant_t ip, IPVariant_t gateway) override
-    {
-      Route(ip, gateway, "DELETE");
-    }
+    {}
 
     void
     AddRouteViaInterface(NetworkInterface& vpn, IPRange range) override
-    {
-      RouteViaInterface(vpn.IfName(), range, "ADD");
-    }
+    {}
 
     void
     DelRouteViaInterface(NetworkInterface& vpn, IPRange range) override
-    {
-      RouteViaInterface(vpn.IfName(), range, "DELETE");
-    }
+    {}
 
     std::vector<IPVariant_t>
     GetGatewaysNotOnInterface(std::string ifname) override
@@ -612,20 +696,16 @@ namespace llarp::vpn
 
     void
     AddDefaultRouteViaInterface(std::string ifname) override
-    {
-      DefaultRouteViaInterface(ifname, "ADD");
-    }
+    {}
 
     void
     DelDefaultRouteViaInterface(std::string ifname) override
-    {
-      DefaultRouteViaInterface(ifname, "DELETE");
-    }
+    {}
   };
 
   class Win32Platform : public Platform
   {
-    Win32RouteManager _routeManager{};
+    FWPMRouteManager _routeManager{};
 
    public:
     std::shared_ptr<NetworkInterface>

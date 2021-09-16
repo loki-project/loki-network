@@ -8,12 +8,6 @@
 extern "C"
 {
 #endif
-#if _WIN32_WINNT < 0x600
-  const char*
-  inet_ntop(int af, const void* src, char* dst, size_t size);
-  int
-  inet_pton(int af, const char* src, void* dst);
-#endif
 #ifdef __cplusplus
 }
 #endif

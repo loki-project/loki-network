@@ -74,11 +74,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 
 if (WIN32)
-  target_sources(lokinet-platform PRIVATE
-    win32/win32_inet.c
-    win32/win32_intrnl.c)
-
-  target_link_libraries(lokinet-platform PUBLIC iphlpapi)
+  target_link_libraries(lokinet-platform PUBLIC iphlpapi fwpuclnt rpcrt4)
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")

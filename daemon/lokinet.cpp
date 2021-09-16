@@ -135,10 +135,10 @@ insert_description()
   SC_HANDLE schSCManager;
   SC_HANDLE schService;
   SERVICE_DESCRIPTION sd;
-  LPTSTR szDesc =
+  const std::string szDesc{
       "LokiNET is a free, open source, private, "
       "decentralized, \"market based sybil resistant\" "
-      "and IP based onion routing network";
+      "and IP based onion routing network"};
   // Get a handle to the SCM database.
   schSCManager = OpenSCManager(
       NULL,                    // local computer
@@ -165,7 +165,7 @@ insert_description()
   }
 
   // Change the service description.
-  sd.lpDescription = szDesc;
+  sd.lpDescription = strdup(szDesc.c_str());
 
   if (!ChangeServiceConfig2(
           schService,                  // handle to service
@@ -313,8 +313,7 @@ class WindowsServiceStopped
 LONG
 GenerateDump(EXCEPTION_POINTERS* pExceptionPointers)
 {
-  const DWORD flags = MiniDumpWithFullMemory | MiniDumpWithFullMemoryInfo | MiniDumpWithHandleData
-      | MiniDumpWithUnloadedModules | MiniDumpWithThreadInfo;
+  const MINIDUMP_TYPE flags{MiniDumpWithThreadInfo};
 
   std::stringstream ss;
   ss << "C:\\ProgramData\\lokinet\\crash-" << llarp::time_now_ms().count() << ".dmp";
@@ -351,7 +350,7 @@ main(int argc, char* argv[])
   return lokinet_main(argc, argv);
 #else
   SERVICE_TABLE_ENTRY DispatchTable[] = {
-      {"lokinet", (LPSERVICE_MAIN_FUNCTION)win32_daemon_entry}, {NULL, NULL}};
+      {strdup("lokinet"), (LPSERVICE_MAIN_FUNCTION)win32_daemon_entry}, {NULL, NULL}};
   if (lstrcmpi(argv[1], "--win32-daemon") == 0)
   {
     start_as_daemon = true;
@@ -680,7 +679,7 @@ win32_daemon_entry(DWORD argc, LPTSTR* argv)
   ReportSvcStatus(SERVICE_START_PENDING, NO_ERROR, 3000);
   // SCM clobbers startup args, regenerate them here
   argc = 2;
-  argv[1] = "c:/programdata/lokinet/lokinet.ini";
+  argv[1] = strdup("c:/programdata/lokinet/lokinet.ini");
   argv[2] = nullptr;
   lokinet_main(argc, argv);
 }
