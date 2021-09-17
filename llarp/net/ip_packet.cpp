@@ -189,6 +189,9 @@ namespace llarp
       return uint16_t((~sum) & 0xFFff);
     }
 
+    static void
+    RewriteIPv4Packet(ip_header*, size_t, nuint32_t, nuint32_t);
+
 #define ADD32CS(x) ((uint32_t)(x & 0xFFff) + (uint32_t)(x >> 16))
 #define SUB32CS(x) ((uint32_t)((~x) & 0xFFff) + (uint32_t)((~x) >> 16))
 
@@ -268,6 +271,31 @@ namespace llarp
       // emulate that.
       if (check->n == 0xFFff)
         check->n = 0x0000;
+    }
+
+    static void
+    deltaChecksumIPv4ICMP(
+        byte_t* pld,
+        size_t psz,
+        nuint32_t oSrcIP,
+        nuint32_t oDstIP,
+        nuint32_t nSrcIP,
+        nuint32_t nDstIP)
+    {
+      constexpr auto outerChecksumOffset = 2;
+      constexpr auto icmpHeaderSize = 8;
+      /// if the icmp type is destination unreachable do inner ip packet rewrite
+      if (pld[0] == 0x03)
+      {
+        ip_header* innerHdr = (ip_header*)pld + icmpHeaderSize;
+        // rewrite inner ip packet
+        // addresses flipped to match what is in there
+        RewriteIPv4Packet(innerHdr, psz - icmpHeaderSize, nDstIP, nSrcIP);
+      }
+      // rewrite outer icmp checksum as needed
+      auto check = (nuint16_t*)(pld + outerChecksumOffset);
+      if (check->n)
+        *check = deltaIPv4Checksum(*check, oSrcIP, oDstIP, nSrcIP, nDstIP);
     }
 
     static void
@@ -358,13 +386,10 @@ namespace llarp
       //   check->n = 0xFFff;
     }
 
-    void
-    IPPacket::UpdateIPv4Address(nuint32_t nSrcIP, nuint32_t nDstIP)
+    static void
+    RewriteIPv4Packet(ip_header* hdr, size_t sz, nuint32_t nSrcIP, nuint32_t nDstIP)
     {
-      llarp::LogDebug("set src=", nSrcIP, " dst=", nDstIP);
-
-      auto hdr = Header();
-
+      byte_t* buf = (byte_t*)hdr;
       auto oSrcIP = nuint32_t{hdr->saddr};
       auto oDstIP = nuint32_t{hdr->daddr};
 
@@ -379,6 +404,9 @@ namespace llarp
 
         switch (hdr->protocol)
         {
+          case 1:  // icmp
+            deltaChecksumIPv4ICMP(pld, psz, oSrcIP, oDstIP, nSrcIP, nDstIP);
+            break;
           case 6:  // TCP
             deltaChecksumIPv4TCP(pld, psz, fragoff, 16, oSrcIP, oDstIP, nSrcIP, nDstIP);
             break;
@@ -399,6 +427,13 @@ namespace llarp
       // write new IP addresses
       hdr->saddr = nSrcIP.n;
       hdr->daddr = nDstIP.n;
+    }
+
+    void
+    IPPacket::UpdateIPv4Address(nuint32_t nSrcIP, nuint32_t nDstIP)
+    {
+      llarp::LogDebug("set src=", nSrcIP, " dst=", nDstIP);
+      RewriteIPv4Packet(Header(), sz, nSrcIP, nDstIP);
     }
 
     void
