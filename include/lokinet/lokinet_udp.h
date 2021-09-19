@@ -59,46 +59,40 @@ extern "C"
 
   /// inbound listen udp socket
   /// expose udp port exposePort to the void
-  /// if srv is not NULL add an srv record for this port, the format being "thingservice" in which
-  /// will add a srv record "_udp.thingservice.ouraddress.tld" that advertises this port provide
-  /// localAddr to forward inbound udp packets to "ip:port" if localAddr is NULL then the resulting
-  /// socket MUST be drained by lokinet_udp_recvmmsg
-  ///
+  /// localAddr to forward inbound udp packets to "ip:port"
   /// returns 0 on success
   /// returns nonzero on error in which it is an errno value
   int EXPORT
   lokinet_udp_bind(
       int exposedPort,
-      char* srv,
       char* localAddr,
       struct lokinet_udp_listen_result* result,
       struct lokinet_context* ctx);
 
-  /// poll many udp sockets for activity
-  /// returns 0 on sucess
-  ///
-  /// returns non zero errno on error
+  /// get remote peer information about a local udp flow coming from localaddr
+  /// returns 0 on success
+  /// returns nonzero on error in which it is an errno value
   int EXPORT
-  lokinet_udp_poll(
-      const int* socket_ids,
-      size_t numsockets,
-      const struct timespec* timeout,
-      struct lokinet_context* ctx);
+  lokinet_udp_peername(char* localAddr, struct lokinet_udp_flow* flow, struct lokinet_context* ctx);
 
-  struct lokinet_udp_pkt
-  {
-    char remote_addr[256];
-    int remote_port;
-    struct iovec pkt;
-  };
+  /*
 
-  /// analog to recvmmsg
-  ssize_t EXPORT
-  lokinet_udp_recvmmsg(
-      int socket_id,
-      struct lokinet_udp_pkt* events,
-      size_t max_events,
-      struct lokient_context* ctx);
+  Packet arrives for new flow:
+  - call "new_flow" callback, which can return:
+  - drop
+  - accept, returns (context pointer, flow timeout).
+
+  If accepted then this packet and subsequent packets on the flow:
+  - call "new_packet" callback, given it the context pointer from accept.
+
+  If no packets for (timeout) we call
+  - "flow_timeout" with the context pointer
+
+  int new_flow(const struct remote_details* remote, void** user_ctx, int* flow_timeout);
+  void new_packet(const struct remote_details* remote, char* data, size_t len, void* user_ctx);
+  void flow_timeout(const struct remote_details* remote, void* user_ctx);
+
+  */
 
 #ifdef __cplusplus
 }
