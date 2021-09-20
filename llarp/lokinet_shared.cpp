@@ -233,7 +233,6 @@ extern "C"
   lokinet_add_bootstrap_rc(const char* data, size_t datalen, struct lokinet_context* ctx)
   {
     llarp_buffer_t buf{data, datalen};
-    llarp::RouterContact rc{};
     if (ctx == nullptr)
       return -3;
     auto lock = ctx->acquire();
@@ -243,7 +242,7 @@ extern "C"
     {
       if (not ctx->config->bootstrap.routers.BDecode(&buf))
       {
-        LogError("Cannot decode bootstrap list: ", llarp::buffer_printer{buf});
+        llarp::LogError("Cannot decode bootstrap list: ", llarp::buffer_printer{buf});
         return -1;
       }
       for (const auto& rc : ctx->config->bootstrap.routers)
@@ -254,8 +253,12 @@ extern "C"
     }
     else
     {
+      llarp::RouterContact rc{};
       if (not rc.BDecode(&buf))
+      {
+        llarp::LogError("failed to decode signle RC: ", llarp::buffer_printer{buf});
         return -1;
+      }
       if (not rc.Verify(llarp::time_now_ms()))
         return -2;
       ctx->config->bootstrap.routers.insert(std::move(rc));
