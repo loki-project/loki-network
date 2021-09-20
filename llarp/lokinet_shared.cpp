@@ -8,6 +8,7 @@
 #include <llarp/router/abstractrouter.hpp>
 #include <llarp/service/context.hpp>
 #include <llarp/quic/tunnel.hpp>
+#include <llarp/bootstrap.hpp>
 #include <llarp/nodedb.hpp>
 
 #include <mutex>
@@ -237,11 +238,26 @@ extern "C"
     auto lock = ctx->acquire();
     // add a temp cryptography implementation here so rc.Verify works
     llarp::CryptoManager instance{new llarp::sodium::CryptoLibSodium{}};
-    if (not rc.BDecode(&buf))
-      return -1;
-    if (not rc.Verify(llarp::time_now_ms()))
-      return -2;
-    ctx->config->bootstrap.routers.insert(std::move(rc));
+    if (data[0] == 'l')
+    {
+      llarp::BootstrapList routers{};
+      if (not routers.BDecode(&buf))
+        return -1;
+      for (const auto& rc : routers)
+      {
+        if (not rc.Verify(llarp::time_now_ms()))
+          return -2;
+      }
+      ctx->config->bootstrap.routers = std::move(routers);
+    }
+    else
+    {
+      if (not rc.BDecode(&buf))
+        return -1;
+      if (not rc.Verify(llarp::time_now_ms()))
+        return -2;
+      ctx->config->bootstrap.routers.insert(std::move(rc));
+    }
     return 0;
   }
 
