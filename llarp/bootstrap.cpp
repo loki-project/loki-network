@@ -1,5 +1,7 @@
 #include "bootstrap.hpp"
 #include "util/bencode.hpp"
+#include "util/logging/logger.hpp"
+#include "util/logging/buffer.hpp"
 
 namespace llarp
 {
@@ -16,9 +18,12 @@ namespace llarp
         [&](llarp_buffer_t* b, bool more) -> bool {
           if (more)
           {
-            RouterContact rc;
+            RouterContact rc{};
             if (not rc.BDecode(b))
+            {
+              LogError("invalid rc in bootstrap list: ", llarp::buffer_printer{*b});
               return false;
+            }
             emplace(std::move(rc));
           }
           return true;
