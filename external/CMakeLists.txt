@@ -56,7 +56,7 @@ add_ngtcp2_lib()
 
 # cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires
 # 3.15+, and we target lower than that (and this is fairly simple to build).
-
+if(WITH_BOOTSTRAP)
 if(NOT BUILD_STATIC_DEPS)
   find_package(CURL REQUIRED COMPONENTS HTTP HTTPS SSL)
 
@@ -79,3 +79,4 @@ target_link_libraries(cpr PUBLIC CURL::libcurl)
 target_include_directories(cpr PUBLIC cpr/include)
 target_compile_definitions(cpr PUBLIC CPR_CURL_NOSIGNAL)
 add_library(cpr::cpr ALIAS cpr)
+endif()

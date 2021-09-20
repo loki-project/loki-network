@@ -60,6 +60,7 @@ option(TRACY_ROOT "include tracy profiler source" OFF)
 option(WITH_TESTS "build unit tests" ON)
 option(WITH_HIVE "build simulation stubs" OFF)
 option(BUILD_PACKAGE "builds extra components for making an installer (with 'make package')" OFF)
+option(BUILD_DAEMON "build lokinet daemon and associated utils" ON)
 
 include(cmake/enable_lto.cmake)
 
@@ -182,7 +183,7 @@ if(OXENMQ_FOUND)
   message(STATUS "Found system liboxenmq ${OXENMQ_VERSION}")
 else()
   message(STATUS "using oxenmq submodule")
-  add_subdirectory(${CMAKE_SOURCE_DIR}/external/oxen-mq)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/oxen-mq)
 endif()
 
 
@@ -327,8 +328,9 @@ endif()
 
 add_subdirectory(crypto)
 add_subdirectory(llarp)
-add_subdirectory(daemon)
-
+if(BUILD_DAEMON)
+  add_subdirectory(daemon)
+endif()
 
 if(WITH_HIVE)
   add_subdirectory(pybind)

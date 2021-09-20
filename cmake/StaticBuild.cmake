@@ -335,6 +335,7 @@ set_target_properties(libzmq PROPERTIES
   INTERFACE_LINK_LIBRARIES "${libzmq_link_libs}"
   INTERFACE_COMPILE_DEFINITIONS "ZMQ_STATIC")
 
+if(WITH_BOOTSTRAP)
 set(curl_extra)
 if(WIN32)
   set(curl_ssl_opts --without-ssl --with-schannel)
@@ -423,3 +424,4 @@ endif()
 set_target_properties(CURL::libcurl PROPERTIES
   INTERFACE_LINK_LIBRARIES "${libcurl_link_libs}"
   INTERFACE_COMPILE_DEFINITIONS "CURL_STATICLIB")
+endif()
