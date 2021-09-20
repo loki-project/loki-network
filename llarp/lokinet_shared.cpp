@@ -242,7 +242,7 @@ extern "C"
     {
       if (not ctx->config->bootstrap.routers.BDecode(&buf))
         return -1;
-      for (const auto& rc : ctx->config.bootstrap.routers)
+      for (const auto& rc : ctx->config->bootstrap.routers)
       {
         if (not rc.Verify(llarp::time_now_ms()))
           return -2;
