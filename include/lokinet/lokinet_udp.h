@@ -41,7 +41,7 @@ extern "C"
 
   /// hook function for flow timeout
   typedef void (*lokinet_udp_flow_timeout_func)(
-      const lokinet_udp_flowinfo* /* remote address  */, void* /* flow-userdata */);
+      const struct lokinet_udp_flowinfo* /* remote address  */, void* /* flow-userdata */);
 
   /// inbound listen udp socket
   /// expose udp port exposePort to the void
