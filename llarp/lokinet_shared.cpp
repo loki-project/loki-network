@@ -240,15 +240,13 @@ extern "C"
     llarp::CryptoManager instance{new llarp::sodium::CryptoLibSodium{}};
     if (data[0] == 'l')
     {
-      llarp::BootstrapList routers{};
-      if (not routers.BDecode(&buf))
+      if (not ctx->config->bootstrap.routers.BDecode(&buf))
         return -1;
-      for (const auto& rc : routers)
+      for (const auto& rc : ctx->config.bootstrap.routers)
       {
         if (not rc.Verify(llarp::time_now_ms()))
           return -2;
       }
-      ctx->config->bootstrap.routers = std::move(routers);
     }
     else
     {

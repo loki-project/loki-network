@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <llarp/bootstrap.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/router_contact.hpp>
 #include <llarp/util/fs.hpp>
@@ -193,7 +194,7 @@ namespace llarp
   struct BootstrapConfig
   {
     std::vector<fs::path> files;
-    std::set<RouterContact> routers;
+    BootstrapList routers;
     bool seednode;
     void
     defineConfigOptions(ConfigDefinition& conf, const ConfigGenParameters& params);
