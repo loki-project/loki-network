@@ -21,7 +21,7 @@ extern "C"
 #endif
 
   /// information about a udp flow
-  struct lokinet_udp_flow
+  struct lokinet_udp_flowinfo
   {
     /// the socket id for this flow used for i/o purposes and closing this socket
     int socket_id;
@@ -35,21 +35,6 @@ extern "C"
     int local_port;
   };
 
-  /// establish an outbound udp flow
-  /// remoteHost is the remote .loki or .snode address conneting to
-  /// remotePort is either a string integer or an srv record name to lookup, e.g. thingservice in
-  /// which we do a srv lookup for _udp.thingservice.remotehost.tld and use the "best" port provided
-  /// localAddr is the local ip:port to bind our socket to, if localAddr is NULL then
-  /// lokinet_udp_sendmmsg MUST be used to send packets return 0 on success return nonzero on fail,
-  /// containing an errno value
-  int EXPORT
-  lokinet_udp_establish(
-      char* remoteHost,
-      char* remotePort,
-      char* localAddr,
-      struct lokinet_udp_flow* flow,
-      struct lokinet_context* ctx);
-
   /// a result from a lokinet_udp_bind call
   struct lokinet_udp_bind_result
   {
@@ -57,42 +42,33 @@ extern "C"
     int socket_id;
   };
 
+  /// flow acceptor hook, return 0 success, return nonzero with errno on failure
+  typedef int (*lokinet_udp_flow_filter)(void*, const struct lokinet_udp_flowinfo*, void**, int*);
+
+  /// hook function for handling packets
+  typedef void (*lokinet_udp_flow_recv_func)(
+      const struct lokinet_udp_flowinfo*, char*, size_t, void*);
+
+  /// hook function for flow timeout
+  typedef void (*lokinet_udp_flow_timeout_func)(const lokinet_udp_flowinfo*, void*);
+
   /// inbound listen udp socket
   /// expose udp port exposePort to the void
-  /// localAddr to forward inbound udp packets to "ip:port"
-  /// returns 0 on success
-  /// returns nonzero on error in which it is an errno value
+  /// filter MUST be non null, pointing to a flow filter for accepting new udp flows, called with
+  /// user data recv MUST be non null, pointing to a packet handler function for each flow, called
+  /// with per flow user data provided by filter function if accepted timeout MUST be non null,
+  /// pointing to a cleanup function to clean up a stale flow, staleness determined by the value
+  /// given by the filter function returns 0 on success returns nonzero on error in which it is an
+  /// errno value
   int EXPORT
   lokinet_udp_bind(
       int exposedPort,
-      char* localAddr,
+      lokinet_udp_flow_filter filter,
+      lokinet_udp_flow_recv_func recv,
+      lokinet_udp_flow_timeout_func timeout,
+      void* user,
       struct lokinet_udp_listen_result* result,
       struct lokinet_context* ctx);
-
-  /// get remote peer information about a local udp flow coming from localaddr
-  /// returns 0 on success
-  /// returns nonzero on error in which it is an errno value
-  int EXPORT
-  lokinet_udp_peername(char* localAddr, struct lokinet_udp_flow* flow, struct lokinet_context* ctx);
-
-  /*
-
-  Packet arrives for new flow:
-  - call "new_flow" callback, which can return:
-  - drop
-  - accept, returns (context pointer, flow timeout).
-
-  If accepted then this packet and subsequent packets on the flow:
-  - call "new_packet" callback, given it the context pointer from accept.
-
-  If no packets for (timeout) we call
-  - "flow_timeout" with the context pointer
-
-  int new_flow(const struct remote_details* remote, void** user_ctx, int* flow_timeout);
-  void new_packet(const struct remote_details* remote, char* data, size_t len, void* user_ctx);
-  void flow_timeout(const struct remote_details* remote, void* user_ctx);
-
-  */
 
 #ifdef __cplusplus
 }
