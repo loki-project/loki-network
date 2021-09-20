@@ -8,8 +8,9 @@
 #include <llarp/router/abstractrouter.hpp>
 #include <llarp/service/context.hpp>
 #include <llarp/quic/tunnel.hpp>
-#include <llarp/bootstrap.hpp>
 #include <llarp/nodedb.hpp>
+
+#include <llarp/util/logging/buffer.hpp>
 
 #include <mutex>
 
@@ -241,7 +242,10 @@ extern "C"
     if (data[0] == 'l')
     {
       if (not ctx->config->bootstrap.routers.BDecode(&buf))
+      {
+        LogError("Cannot decode bootstrap list: ", llarp::buffer_printer{buf});
         return -1;
+      }
       for (const auto& rc : ctx->config->bootstrap.routers)
       {
         if (not rc.Verify(llarp::time_now_ms()))
