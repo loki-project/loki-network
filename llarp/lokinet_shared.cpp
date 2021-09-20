@@ -232,6 +232,8 @@ extern "C"
   int EXPORT
   lokinet_add_bootstrap_rc(const char* data, size_t datalen, struct lokinet_context* ctx)
   {
+    if (data == nullptr or datalen == 0)
+      return -3;
     llarp_buffer_t buf{data, datalen};
     if (ctx == nullptr)
       return -3;
