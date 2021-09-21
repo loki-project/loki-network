@@ -10,12 +10,12 @@ extern "C"
   /// information about a udp flow
   struct lokinet_udp_flowinfo
   {
-    /// the socket id for this flow used for i/o purposes and closing this socket
-    int socket_id;
     /// remote endpoint's .loki or .snode address
     char remote_addr[256];
     /// remote endpont's port
     int remote_port;
+    /// the socket id for this flow used for i/o purposes and closing this socket
+    int socket_id;
   };
 
   /// a result from a lokinet_udp_bind call
@@ -30,7 +30,7 @@ extern "C"
       void* /*user*/,
       const struct lokinet_udp_flowinfo* /* remote address */,
       void** /* flow-userdata */,
-      int* /* timeout */);
+      int* /* timeout seconds */);
 
   /// hook function for handling packets
   typedef void (*lokinet_udp_flow_recv_func)(
@@ -64,7 +64,7 @@ extern "C"
       lokinet_udp_flow_recv_func recv,
       lokinet_udp_flow_timeout_func timeout,
       void* user,
-      struct lokinet_udp_listen_result* result,
+      struct lokinet_udp_bind_result* result,
       struct lokinet_context* ctx);
 
   /// @brief establish a udp flow to remote endpoint
