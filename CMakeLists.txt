@@ -61,6 +61,7 @@ option(WITH_TESTS "build unit tests" ON)
 option(WITH_HIVE "build simulation stubs" OFF)
 option(BUILD_PACKAGE "builds extra components for making an installer (with 'make package')" OFF)
 option(BUILD_DAEMON "build lokinet daemon and associated utils" ON)
+option(WITH_BOOTSTRAP "build lokinet-bootstrap tool" ON)
 
 include(cmake/enable_lto.cmake)
 
