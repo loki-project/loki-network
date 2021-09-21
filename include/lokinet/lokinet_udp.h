@@ -11,7 +11,7 @@ extern "C"
   struct lokinet_udp_flowinfo
   {
     /// remote endpoint's .loki or .snode address
-    char remote_host[[256];
+    char remote_host[256];
     /// remote endpont's port
     int remote_port;
     /// the socket id for this flow used for i/o purposes and closing this socket
