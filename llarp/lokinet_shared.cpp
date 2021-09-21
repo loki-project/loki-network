@@ -12,6 +12,8 @@
 
 #include <llarp/util/logging/buffer.hpp>
 
+#include <oxenmq/base32z.h>
+
 #include <mutex>
 
 #ifdef _WIN32
@@ -544,6 +546,13 @@ extern "C"
       ctx->inbound_stream(id);
     }
     return id;
+  }
+
+  char* EXPORT
+  lokinet_hex_to_base32z(const char* hex)
+  {
+    const auto base32z = oxenmq::to_base32z(oxenmq::from_hex(std::string{hex}));
+    return strdup(base32z.c_str());
   }
 
   void EXPORT
