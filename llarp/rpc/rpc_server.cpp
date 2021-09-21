@@ -134,6 +134,13 @@ namespace llarp::rpc
               });
             })
         .add_request_command(
+            "get_status",
+            [&](oxenmq::Message& msg) {
+              m_Router->loop()->call([defer = msg.send_later(), r = m_Router]() {
+                defer.reply(CreateJSONResponse(r->ExtractSummaryStatus()));
+              });
+            })
+        .add_request_command(
             "quic_connect",
             [&](oxenmq::Message& msg) {
               HandleJSONRequest(msg, [r = m_Router](nlohmann::json obj, ReplyFunction_t reply) {

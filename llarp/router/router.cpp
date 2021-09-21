@@ -97,6 +97,84 @@ namespace llarp
     }
   }
 
+  util::StatusObject
+  Router::ExtractSummaryStatus() const
+  {
+    if (_running)
+    {
+      auto services = _hiddenServiceContext.ExtractStatus();
+      auto link_types = _linkManager.ExtractStatus();
+
+      int tx_rate = 0;
+      int rx_rate = 0;
+      int peers = 0;
+      for (const auto& links : link_types)
+      {
+        if (links == nlohmann::json::array())
+          continue;
+        for (const auto& link : links)
+        {
+          if (links == nlohmann::json::array())
+            continue;
+          const auto& established_peers = link["sessions"]["established"];
+          for (const auto& peer : established_peers)
+          {
+            tx_rate += peer["tx"].get<int>();
+            rx_rate += peer["rx"].get<int>();
+            peers++;
+          }
+        }
+      }
+
+      // Compute all stats on all path builders on the default endpoint
+      // Merge snodeSessions, remoteSessions and default into a single array
+      std::vector<nlohmann::json> builders;
+      auto snode_sessions = services["default"]["snodeSessions"];
+      for (const auto& session : snode_sessions)
+        builders.push_back(session["buildStats"]);
+
+      auto remote_sessions = services["default"]["remoteSessions"];
+      for (const auto& session : remote_sessions)
+        builders.push_back(session["buildStats"]);
+
+      builders.push_back(services["default"]["buildStats"]);
+
+      // Iterate over all items on this array to build the global pathStats
+      int paths = 0;
+      int success = 0;
+      int attempts = 0;
+      for (const auto& builder : builders)
+      {
+        if (builder.is_null())
+          continue;
+        if (builder["length"].is_number())
+          paths += builder["length"].get<int>();
+        if (builder["success"].is_number())
+          success += builder["success"].get<int>();
+        if (builder["attempts"].is_number())
+          attempts += builder["attempts"].get<int>();
+      }
+      double ratio = static_cast<double>(success) / (attempts + 1);
+
+      return util::StatusObject{
+          {"running", true},
+          {"authCodes", services["default"]["authCodes"]},
+          {"exitMap", services["default"]["exitMap"]},
+          {"lokiAddress", services["default"]["identity"]},
+          {"numPathsBuilt", paths},
+          {"numPeersConnected", peers},
+          {"numRoutersKnown", _nodedb->NumLoaded()},
+          {"ratio", ratio},
+          {"txRate", tx_rate},
+          {"rxRate", rx_rate},
+      };
+    }
+    else
+    {
+      return util::StatusObject{{"running", false}};
+    }
+  }
+
   bool
   Router::HandleRecvLinkMessageBuffer(ILinkSession* session, const llarp_buffer_t& buf)
   {

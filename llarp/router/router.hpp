@@ -103,6 +103,9 @@ namespace llarp
     util::StatusObject
     ExtractStatus() const override;
 
+    util::StatusObject
+    ExtractSummaryStatus() const override;
+
     const std::shared_ptr<NodeDB>&
     nodedb() const override
     {

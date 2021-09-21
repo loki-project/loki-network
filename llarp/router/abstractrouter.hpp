@@ -324,6 +324,9 @@ namespace llarp
     virtual util::StatusObject
     ExtractStatus() const = 0;
 
+    virtual util::StatusObject
+    ExtractSummaryStatus() const = 0;
+
     /// gossip an rc if required
     virtual void
     GossipRCIfNeeded(const RouterContact rc) = 0;
