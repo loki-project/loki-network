@@ -93,7 +93,16 @@ extern "C"
       const struct lokinet_udp_flowinfo* remote,
       const void* ptr,
       size_t len,
-      struct lokinet_ctx* ctx);
+      struct lokinet_context* ctx);
+
+  /// @brief close a bound udp socket
+  /// closes all flows immediately
+  ///
+  /// @param socket_id the bound udp socket's id
+  ///
+  /// @param ctx lokinet context
+  void EXPORT
+  lokinet_udp_close(int socket_id, struct lokinet_context* ctx);
 
 #ifdef __cplusplus
 }
