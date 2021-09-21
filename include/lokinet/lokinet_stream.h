@@ -53,6 +53,9 @@ extern "C"
   int EXPORT
   lokinet_inbound_stream(uint16_t port, struct lokinet_context* context);
 
+  void EXPORT
+  lokinet_close_stream(int stream_id, struct lokinet_context* context);
+
 #ifdef __cplusplus
 }
 #endif
