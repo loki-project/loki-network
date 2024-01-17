@@ -3,7 +3,7 @@
 #include "kademlia.hpp"
 #include "key.hpp"
 
-#include <llarp/util/status.hpp>
+#include <llarp/util/types.hpp>
 
 #include <map>
 #include <set>
@@ -20,9 +20,9 @@ namespace llarp::dht
         Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r))
         {}
 
-        util::StatusObject ExtractStatus() const
+        StatusObject ExtractStatus() const
         {
-            util::StatusObject obj{};
+            StatusObject obj{};
             for (const auto& item : nodes)
             {
                 obj[item.first.ToString()] = item.second.ExtractStatus();

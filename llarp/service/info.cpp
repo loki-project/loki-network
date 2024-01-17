@@ -61,13 +61,13 @@ namespace llarp::service
 
     std::string ServiceInfo::Name() const
     {
-        if (m_CachedAddr.IsZero())
+        if (_cached_addr.IsZero())
         {
             Address addr;
             CalculateAddress(addr.as_array());
             return addr.ToString();
         }
-        return m_CachedAddr.ToString();
+        return _cached_addr.ToString();
     }
 
     bool ServiceInfo::CalculateAddress(std::array<byte_t, 32>& data) const
@@ -78,9 +78,9 @@ namespace llarp::service
 
     bool ServiceInfo::UpdateAddr()
     {
-        if (m_CachedAddr.IsZero())
+        if (_cached_addr.IsZero())
         {
-            return CalculateAddress(m_CachedAddr.as_array());
+            return CalculateAddress(_cached_addr.as_array());
         }
         return true;
     }

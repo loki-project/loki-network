@@ -6,8 +6,8 @@
 #include <llarp/ev/ev.hpp>
 #include <llarp/link/tunnel.hpp>
 #include <llarp/service/address.hpp>
-#include <llarp/service/convotag.hpp>
-#include <llarp/service/protocol_type.hpp>
+#include <llarp/service/tag.hpp>
+#include <llarp/service/types.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxenc/variant.h>
@@ -27,6 +27,11 @@ namespace llarp
         class Server;
     }
 
+    namespace session
+    {
+        struct BaseSession;
+    }
+
     // TODO: add forward declaration of TunnelManager
     //  namespace link
     //  {
@@ -35,95 +40,62 @@ namespace llarp
 
     class EndpointBase
     {
-        std::unordered_set<dns::SRVData> m_SRVRecords;
+        std::unordered_set<dns::SRVData> _srv_records;
 
        public:
+        bool _publish_introset = true;
+
+        std::unordered_map<service::SessionTag, RouterID> _session_lookup;
+        std::unordered_map<RouterID, std::shared_ptr<session::BaseSession>> _sessions;
+
         virtual ~EndpointBase() = default;
 
-        using AddressVariant_t = std::variant<service::Address, RouterID>;
-
-        struct SendStat
+        bool have_session(const RouterID& rid) const
         {
-            /// how many routing messages we sent to them
-            uint64_t messagesSend;
-            /// how many routing messages we got from them
-            uint64_t messagesRecv;
-            /// how many convos have we had to this guy total?
-            size_t numTotalConvos;
-            /// current estimated rtt
-            Duration_t estimatedRTT;
-            /// last time point when we sent a message to them
-            Duration_t lastSendAt;
-            /// last time point when we got a message from them
-            Duration_t lastRecvAt;
-        };
+            return _sessions.count(rid);
+        }
 
-        /// info about a quic mapping
-        struct QUICMappingInfo
-        {
-            /// srv data if it was provided
-            std::optional<dns::SRVData> srv;
-            /// address we are bound on
-            SockAddr localAddr;
-            /// the remote's lns name if we have one
-            std::optional<std::string> remoteName;
-            /// the remote's address
-            AddressVariant_t remoteAddr;
-            /// the remote's port we are connecting to
-            uint16_t remotePort;
-        };
+        std::shared_ptr<session::BaseSession> get_session(service::SessionTag tag) const;
+
+        std::shared_ptr<session::BaseSession> get_session(const RouterID& rid) const;
 
         /// add an srv record to this endpoint's descriptor
-        void PutSRVRecord(dns::SRVData srv);
+        virtual void put_srv_record(dns::SRVData srv);
 
-        /// get dns serverr if we have on on this endpoint
+        /// get dns server if we have on on this endpoint
         virtual std::shared_ptr<dns::Server> DNS() const
         {
             return nullptr;
         };
 
         /// called when srv data changes in some way
-        virtual void SRVRecordsChanged() = 0;
+        virtual void srv_records_changed() = 0;
 
-        /// remove srv records from this endpoint that match a filter
-        /// for each srv record call it with filter, remove if filter returns true
-        /// return if we removed any srv records
-        bool DelSRVRecordIf(std::function<bool(const dns::SRVData&)> filter);
+        /// Removes one SRV record that returns true given a filter function. Returns true if one
+        /// SRV record was removed, false otherwise
+        bool delete_srv_record_conditional(std::function<bool(const dns::SRVData&)> filter);
+
+        /// Removes up to `n` (or exactly `n` if the optional third parameter is passed true) SRV
+        /// records that return true given a filter function. Returns true if up to/exactly `n` were
+        /// removed (depending on the third parameter), false otherwise
+        bool delete_n_srv_records_conditional(
+            size_t n, std::function<bool(const dns::SRVData&)> filter, bool exact = false);
+
+        /// Removes all SRV records that return true given a filter function, indiscriminate of
+        /// number
+        bool delete_all_srv_records_conditional(std::function<bool(const dns::SRVData&)> filter);
 
         /// get copy of all srv records
-        std::set<dns::SRVData> SRVRecords() const;
+        std::set<dns::SRVData> srv_records() const;
 
-        /// get statistics about how much traffic we sent and recv'd to a remote endpoint
-        virtual std::optional<SendStat> GetStatFor(AddressVariant_t remote) const = 0;
-
-        /// list all remote endpoint addresses we have that are mapped
-        virtual std::unordered_set<AddressVariant_t> AllRemoteEndpoints() const = 0;
-
-        /// get our local address
-        virtual AddressVariant_t LocalAddress() const = 0;
+        /// Gets the local address for the given endpoint, service or exit node
+        virtual AddressVariant_t local_address() const = 0;
 
         virtual link::TunnelManager* GetQUICTunnel() = 0;
 
-        virtual std::optional<AddressVariant_t> GetEndpointWithConvoTag(service::ConvoTag tag) const = 0;
+        virtual const std::shared_ptr<EventLoop>& loop() = 0;
 
-        virtual std::optional<service::ConvoTag> GetBestConvoTagFor(AddressVariant_t addr) const = 0;
-
-        virtual bool EnsurePathTo(
-            AddressVariant_t addr,
-            std::function<void(std::optional<service::ConvoTag>)> hook,
-            llarp_time_t timeout) = 0;
-
-        virtual void lookup_name(std::string name, std::function<void(std::string, bool)> func) = 0;
-
-        virtual const EventLoop_ptr& Loop() = 0;
-
-        virtual bool send_to(service::ConvoTag tag, std::string payload) = 0;
-
-        /// lookup srv records async
-        virtual void LookupServiceAsync(
-            std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> resultHandler) = 0;
-
-        virtual void MarkAddressOutbound(service::Address remote) = 0;
+        // virtual void send_to(service::SessionTag tag, std::string payload) = 0;
     };
 
 }  // namespace llarp

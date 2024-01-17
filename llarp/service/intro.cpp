@@ -4,9 +4,9 @@
 
 namespace llarp::service
 {
-    util::StatusObject Introduction::ExtractStatus() const
+    StatusObject Introduction::ExtractStatus() const
     {
-        util::StatusObject obj{
+        StatusObject obj{
             {"router", router.ToHex()},
             {"path", path_id.ToHex()},
             {"expiresAt", to_json(expiry)},
@@ -37,7 +37,7 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{std::move(buf)};
 
-            router.from_string(btdc.require<std::string>("k"));
+            router.from_snode_address(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
             path_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};

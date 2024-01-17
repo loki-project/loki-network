@@ -15,7 +15,7 @@ namespace llarp::service
         tag.Zero();
     }
 
-    ProtocolMessage::ProtocolMessage(const ConvoTag& t) : tag(t)
+    ProtocolMessage::ProtocolMessage(const SessionTag& t) : tag(t)
     {}
 
     ProtocolMessage::~ProtocolMessage() = default;
@@ -27,10 +27,13 @@ namespace llarp::service
     }
 
     void ProtocolMessage::ProcessAsync(
-        std::shared_ptr<path::Path> path, PathID_t from, std::shared_ptr<ProtocolMessage> self)
+        std::shared_ptr<path::Path> path, HopID from, std::shared_ptr<ProtocolMessage> self)
     {
-        if (!self->handler->HandleDataMessage(path, from, self))
-            LogWarn("failed to handle data message from ", path->name());
+        (void)path;
+        (void)from;
+        (void)self;
+        // if (!self->handler->HandleDataMessage(path, from, self))
+        //   LogWarn("failed to handle data message from ", path->name());
     }
 
     bool ProtocolMessage::decode_key(const llarp_buffer_t& k, llarp_buffer_t* buf)
@@ -214,7 +217,7 @@ namespace llarp::service
     struct AsyncFrameDecrypt
     {
         std::shared_ptr<path::Path> path;
-        EventLoop_ptr loop;
+        std::shared_ptr<EventLoop> loop;
         std::shared_ptr<ProtocolMessage> msg;
         const Identity& m_LocalIdentity;
         Endpoint* handler;
@@ -222,7 +225,7 @@ namespace llarp::service
         const Introduction fromIntro;
 
         AsyncFrameDecrypt(
-            EventLoop_ptr l,
+            std::shared_ptr<EventLoop> l,
             const Identity& localIdent,
             Endpoint* h,
             std::shared_ptr<ProtocolMessage> m,
@@ -274,13 +277,13 @@ namespace llarp::service
                 return;
             }
 
-            if (self->handler->HasConvoTag(self->msg->tag))
-            {
-                LogError("dropping duplicate convo tag T=", self->msg->tag);
-                // TODO: send convotag reset
-                self->msg.reset();
-                return;
-            }
+            // if (self->handler->HasConvoTag(self->msg->tag))
+            // {
+            //   LogError("dropping duplicate convo tag T=", self->msg->tag);
+            //   // TODO: send convotag reset
+            //   self->msg.reset();
+            //   return;
+            // }
 
             // PKE (A, B, N)
             SharedSecret shared_secret;
@@ -305,36 +308,39 @@ namespace llarp::service
 
             std::shared_ptr<ProtocolMessage> msg = std::move(self->msg);
             std::shared_ptr<path::Path> path = std::move(self->path);
-            const PathID_t from = self->frame.path_id;
+            const HopID from = self->frame.path_id;
             msg->handler = self->handler;
-            self->handler->AsyncProcessAuthMessage(
-                msg,
-                [path, msg, from, handler = self->handler, fromIntro = self->fromIntro, shared_key](
-                    std::string result, bool success) {
-                    if (success)
-                    {
-                        if (handler->WantsOutboundSession(msg->sender.Addr()))
-                        {
-                            handler->PutSenderFor(msg->tag, msg->sender, false);
-                        }
-                        else
-                        {
-                            handler->PutSenderFor(msg->tag, msg->sender, true);
-                        }
-                        handler->PutReplyIntroFor(msg->tag, msg->introReply);
-                        handler->PutCachedSessionKeyFor(msg->tag, shared_key);
-                        handler->SendAuthResult(path, from, msg->tag, result, success);
+            // self->handler->AsyncProcessAuthMessage(
+            //     msg,
+            //     [path, msg, from, handler = self->handler, fromIntro = self->fromIntro,
+            //     shared_key](
+            //         std::string result, bool success) {
+            //       if (success)
+            //       {
+            //         if (handler->WantsOutboundSession(msg->sender.Addr()))
+            //         {
+            //           handler->PutSenderFor(msg->tag, msg->sender, false);
+            //         }
+            //         else
+            //         {
+            //           handler->PutSenderFor(msg->tag, msg->sender, true);
+            //         }
+            //         handler->PutReplyIntroFor(msg->tag, msg->introReply);
+            //         handler->PutCachedSessionKeyFor(msg->tag, shared_key);
+            //         handler->SendAuthResult(path, from, msg->tag, result, success);
 
-                        log::info(logcat, "Auth accepted for tag {} from sender {}", msg->tag, msg->sender.Addr());
-                        ProtocolMessage::ProcessAsync(path, from, msg);
-                    }
-                    else
-                    {
-                        log::warning(logcat, "Auth invalid for tag {} (code: {})", msg->tag, result);
-                    }
+            //         log::info(
+            //             logcat, "Auth accepted for tag {} from sender {}", msg->tag,
+            //             msg->sender.Addr());
+            //         ProtocolMessage::ProcessAsync(path, from, msg);
+            //       }
+            //       else
+            //       {
+            //         log::warning(logcat, "Auth invalid for tag {} (code: {})", msg->tag, result);
+            //       }
 
-                    handler->Pump(time_now_ms());
-                });
+            //       handler->Pump(time_now_ms());
+            //     });
         }
     };
 
@@ -346,7 +352,7 @@ namespace llarp::service
     };
 
     bool ProtocolFrameMessage::AsyncDecryptAndVerify(
-        EventLoop_ptr loop,
+        std::shared_ptr<EventLoop> loop,
         std::shared_ptr<path::Path> recvPath,
         const Identity& localIdent,
         Endpoint* handler,
@@ -359,33 +365,33 @@ namespace llarp::service
             // we need to dh
             auto dh = std::make_shared<AsyncFrameDecrypt>(loop, localIdent, handler, msg, *this, recvPath->intro);
             dh->path = recvPath;
-            handler->router()->queue_work([dh = std::move(dh)] { return AsyncFrameDecrypt::Work(dh); });
+            handler->router().queue_work([dh = std::move(dh)] { return AsyncFrameDecrypt::Work(dh); });
             return true;
         }
 
         auto v = std::make_shared<AsyncDecrypt>();
 
-        if (!handler->GetCachedSessionKeyFor(convo_tag, v->shared))
-        {
-            LogError("No cached session for T=", convo_tag);
-            return false;
-        }
-        if (v->shared.IsZero())
-        {
-            LogError("bad cached session key for T=", convo_tag);
-            return false;
-        }
+        // if (!handler->GetCachedSessionKeyFor(convo_tag, v->shared))
+        // {
+        //   LogError("No cached session for T=", convo_tag);
+        //   return false;
+        // }
+        // if (v->shared.IsZero())
+        // {
+        //   LogError("bad cached session key for T=", convo_tag);
+        //   return false;
+        // }
 
-        if (!handler->GetSenderFor(convo_tag, v->si))
-        {
-            LogError("No sender for T=", convo_tag);
-            return false;
-        }
-        if (v->si.Addr().IsZero())
-        {
-            LogError("Bad sender for T=", convo_tag);
-            return false;
-        }
+        // if (!handler->GetSenderFor(convo_tag, v->si))
+        // {
+        //   LogError("No sender for T=", convo_tag);
+        //   return false;
+        // }
+        // if (v->si.Addr().IsZero())
+        // {
+        //   LogError("Bad sender for T=", convo_tag);
+        //   return false;
+        // }
 
         v->frame = *this;
         auto callback = [loop, hook](std::shared_ptr<ProtocolMessage> msg) {
@@ -394,31 +400,34 @@ namespace llarp::service
                 loop->call([msg, hook]() { hook(msg); });
             }
         };
-        handler->router()->queue_work([v, msg = std::move(msg), recvPath = std::move(recvPath), callback, handler]() {
-            auto resetTag = [handler, tag = v->frame.convo_tag, from = v->frame.path_id, path = recvPath]() {
-                handler->ResetConvoTag(tag, path, from);
-            };
+        // handler->router()->queue_work(
+        //     [v, msg = std::move(msg), recvPath = std::move(recvPath), callback, handler]() {
+        //       auto resetTag =
+        //           [handler, tag = v->frame.convo_tag, from = v->frame.path_id, path = recvPath]()
+        //           {
+        //             handler->ResetConvoTag(tag, path, from);
+        //           };
 
-            if (not v->frame.Verify(v->si))
-            {
-                LogError("Signature failure from ", v->si.Addr());
-                handler->Loop()->call_soon(resetTag);
-                return;
-            }
-            if (not v->frame.DecryptPayloadInto(v->shared, *msg))
-            {
-                LogError("failed to decrypt message from ", v->si.Addr());
-                handler->Loop()->call_soon(resetTag);
-                return;
-            }
-            callback(msg);
-            RecvDataEvent ev;
-            ev.fromPath = std::move(recvPath);
-            ev.pathid = v->frame.path_id;
-            auto* handler = msg->handler;
-            ev.msg = std::move(msg);
-            handler->QueueRecvData(std::move(ev));
-        });
+        //       if (not v->frame.Verify(v->si))
+        //       {
+        //         LogError("Signature failure from ", v->si.Addr());
+        //         handler->Loop()->call_soon(resetTag);
+        //         return;
+        //       }
+        //       if (not v->frame.DecryptPayloadInto(v->shared, *msg))
+        //       {
+        //         LogError("failed to decrypt message from ", v->si.Addr());
+        //         handler->Loop()->call_soon(resetTag);
+        //         return;
+        //       }
+        //       callback(msg);
+        //       RecvDataEvent ev;
+        //       ev.fromPath = std::move(recvPath);
+        //       ev.pathid = v->frame.path_id;
+        //       auto* handler = msg->handler;
+        //       ev.msg = std::move(msg);
+        //       handler->QueueRecvData(std::move(ev));
+        //     });
         return true;
     }
 

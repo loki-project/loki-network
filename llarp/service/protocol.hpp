@@ -1,21 +1,27 @@
 #pragma once
 
 #include "identity.hpp"
-#include "info.hpp"
+// #include "info.hpp"
 #include "intro.hpp"
-#include "protocol_type.hpp"
 
 #include <llarp/crypto/encrypted.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/ev/ev.hpp>
-#include <llarp/path/pathset.hpp>
-#include <llarp/service/convotag.hpp>
+#include <llarp/path/pathhandler.hpp>
+#include <llarp/service/tag.hpp>
 #include <llarp/util/bencode.hpp>
 #include <llarp/util/time.hpp>
 
 #include <vector>
 
 struct llarp_threadpool;
+
+/** TODO:
+    - All of the references to service::Endpoint must be changed to EndpointBase
+    - Now that there are four objects handling local/remote hidden service/exit node sessions,
+      each of the four will need to handle ProtocolMessage objects and the ProtocolMessageFrames
+      that contain them
+*/
 
 namespace llarp
 {
@@ -34,7 +40,7 @@ namespace llarp
         /// inner message
         struct ProtocolMessage
         {
-            ProtocolMessage(const ConvoTag& tag);
+            ProtocolMessage(const SessionTag& tag);
             ProtocolMessage();
             ~ProtocolMessage();
             ProtocolType proto = ProtocolType::TrafficV4;
@@ -43,7 +49,7 @@ namespace llarp
             Introduction introReply;
             ServiceInfo sender;
             Endpoint* handler = nullptr;
-            ConvoTag tag;
+            SessionTag tag;
             std::chrono::milliseconds creation_time{time_now_ms()};
 
             /// encode metainfo for lmq endpoint auth
@@ -55,8 +61,7 @@ namespace llarp
 
             void put_buffer(std::string buf);
 
-            static void ProcessAsync(
-                std::shared_ptr<path::Path> p, PathID_t from, std::shared_ptr<ProtocolMessage> self);
+            static void ProcessAsync(std::shared_ptr<path::Path> p, HopID from, std::shared_ptr<ProtocolMessage> self);
 
             bool operator>(const ProtocolMessage& other) const
             {
@@ -72,8 +77,8 @@ namespace llarp
             uint64_t flag;  // set to indicate in plaintext a nack, aka "dont try again"
             SymmNonce nonce;
             Signature sig;
-            PathID_t path_id;
-            service::ConvoTag convo_tag;
+            HopID path_id;
+            service::SessionTag convo_tag;
 
             ProtocolFrameMessage(const ProtocolFrameMessage& other) = default;
 
@@ -98,7 +103,7 @@ namespace llarp
             bool Sign(const Identity& localIdent);
 
             bool AsyncDecryptAndVerify(
-                EventLoop_ptr loop,
+                std::shared_ptr<EventLoop> loop,
                 std::shared_ptr<path::Path> fromPath,
                 const Identity& localIdent,
                 Endpoint* handler,

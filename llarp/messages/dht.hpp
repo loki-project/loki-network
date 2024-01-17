@@ -33,14 +33,13 @@ namespace llarp
     {
         inline auto NOT_FOUND = "NOT FOUND"sv;
 
-        // NOT USED
-        inline static std::string serialize(dht::Key_t name_hash)
+        inline static std::string serialize(std::string name_hash)
         {
             oxenc::bt_dict_producer btdp;
 
             try
             {
-                btdp.append("H", name_hash.ToView());
+                btdp.append("H", std::move(name_hash));
             }
             catch (...)
             {
@@ -50,13 +49,13 @@ namespace llarp
             return std::move(btdp).str();
         }
 
-        inline static std::string serialize(std::string name_hash)
+        inline static std::string serialize_response(std::string encrypted_name)
         {
             oxenc::bt_dict_producer btdp;
 
             try
             {
-                btdp.append("H", std::move(name_hash));
+                btdp.append("E", std::move(encrypted_name));
             }
             catch (...)
             {

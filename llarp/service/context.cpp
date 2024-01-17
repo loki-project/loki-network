@@ -12,14 +12,14 @@ namespace llarp::service
     static auto logcat = log::Cat("service");
     namespace
     {
-        using EndpointConstructor = std::function<std::shared_ptr<Endpoint>(Router*, service::Context*)>;
+        using EndpointConstructor = std::function<std::shared_ptr<handlers::BaseHandler>(Router*)>;
         using EndpointConstructors = std::map<std::string, EndpointConstructor>;
 
         static EndpointConstructors endpointConstructors = {
-            {"tun", [](Router* r, service::Context* c) { return std::make_shared<handlers::TunEndpoint>(r, c); }},
-            {"android", [](Router* r, service::Context* c) { return std::make_shared<handlers::TunEndpoint>(r, c); }},
-            {"ios", [](Router* r, service::Context* c) { return std::make_shared<handlers::TunEndpoint>(r, c); }},
-            {"null", [](Router* r, service::Context* c) { return std::make_shared<handlers::NullEndpoint>(r, c); }}};
+            {"tun", [](Router* r) { return std::make_shared<handlers::TunEndpoint>(r); }},
+            {"android", [](Router* r) { return std::make_shared<handlers::TunEndpoint>(r); }},
+            {"ios", [](Router* r) { return std::make_shared<handlers::TunEndpoint>(r); }},
+            {"null", [](Router* r) { return std::make_shared<handlers::NullEndpoint>(r); }}};
 
     }  // namespace
     Context::Context(Router* r) : m_Router(r)
@@ -33,7 +33,7 @@ namespace llarp::service
         while (itr != m_Endpoints.end())
         {
             log::debug(logcat, "Stopping endpoint {}.", itr->first);
-            itr->second->Stop();
+            itr->second->stop();
             log::debug(logcat, "Endpoint {} stopped.", itr->first);
             m_Stopped.emplace_back(std::move(itr->second));
             itr = m_Endpoints.erase(itr);
@@ -41,9 +41,9 @@ namespace llarp::service
         return true;
     }
 
-    util::StatusObject Context::ExtractStatus() const
+    StatusObject Context::ExtractStatus() const
     {
-        util::StatusObject obj{};
+        StatusObject obj{};
         auto itr = m_Endpoints.begin();
         while (itr != m_Endpoints.end())
         {
@@ -63,13 +63,6 @@ namespace llarp::service
             else
                 return;
         }
-    }
-
-    void Context::Pump()
-    {
-        auto now = time_now_ms();
-        for (auto& [name, endpoint] : m_Endpoints)
-            endpoint->Pump(now);
     }
 
     bool Context::RemoveEndpoint(const std::string& name)
@@ -127,12 +120,12 @@ namespace llarp::service
         auto itr = m_Endpoints.begin();
         while (itr != m_Endpoints.end())
         {
-            if (!itr->second->Start())
-            {
-                LogError(itr->first, " failed to start");
-                return false;
-            }
-            LogInfo(itr->first, " started");
+            // if (!itr->second->Start())
+            // {
+            //   LogError(itr->first, " failed to start");
+            //   return false;
+            // }
+            // LogInfo(itr->first, " started");
             ++itr;
         }
         return true;
@@ -148,11 +141,13 @@ namespace llarp::service
 
     void Context::InjectEndpoint(std::string name, std::shared_ptr<Endpoint> ep)
     {
-        ep->LoadKeyFile();
-        if (ep->Start())
-        {
-            m_Endpoints.emplace(std::move(name), std::move(ep));
-        }
+        (void)name;
+        (void)ep;
+        // ep->LoadKeyFile();
+        // if (ep->Start())
+        // {
+        //   m_Endpoints.emplace(std::move(name), std::move(ep));
+        // }
     }
 
     void Context::AddEndpoint(const Config& conf, bool autostart)
@@ -168,14 +163,15 @@ namespace llarp::service
         if (itr == endpointConstructors.end())
             throw std::invalid_argument{fmt::format("Endpoint type {} does not exist", endpointType)};
 
-        auto service = itr->second(m_Router, this);
+        auto service = itr->second(m_Router);
+
         if (not service)
             throw std::runtime_error{fmt::format("Failed to construct endpoint of type {}", endpointType)};
 
         // pass conf to service
-        service->Configure(conf.network, conf.dns);
+        service->configure(conf.network, conf.dns);
 
-        if (not service->LoadKeyFile())
+        if (not service->load_key_file())
             throw std::runtime_error("Endpoint's keyfile could not be loaded");
 
         // autostart if requested

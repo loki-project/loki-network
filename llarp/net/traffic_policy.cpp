@@ -190,9 +190,9 @@ namespace llarp::net
             buf);
     }
 
-    util::StatusObject ProtocolInfo::ExtractStatus() const
+    StatusObject ProtocolInfo::ExtractStatus() const
     {
-        util::StatusObject status{
+        StatusObject status{
             {"protocol", static_cast<uint32_t>(protocol)},
         };
         if (port)
@@ -200,19 +200,19 @@ namespace llarp::net
         return status;
     }
 
-    util::StatusObject TrafficPolicy::ExtractStatus() const
+    StatusObject TrafficPolicy::ExtractStatus() const
     {
-        std::vector<util::StatusObject> rangesStatus;
+        std::vector<StatusObject> rangesStatus;
         std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
             return range.ToString();
         });
 
-        std::vector<util::StatusObject> protosStatus;
+        std::vector<StatusObject> protosStatus;
         std::transform(protocols.begin(), protocols.end(), std::back_inserter(protosStatus), [](const auto& proto) {
             return proto.ExtractStatus();
         });
 
-        return util::StatusObject{{"ranges", rangesStatus}, {"protocols", protosStatus}};
+        return StatusObject{{"ranges", rangesStatus}, {"protocols", protosStatus}};
     }
 
 }  // namespace llarp::net

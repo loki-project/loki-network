@@ -1,7 +1,5 @@
 #include "key_manager.hpp"
 
-#include "config.hpp"
-
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/util/logging.hpp>
@@ -32,17 +30,14 @@ namespace llarp
         // falling back to root / defaultName if not
         auto deriveFile = [&](const std::string& defaultName, const std::string& option) {
             if (option.empty())
-            {
                 return root / defaultName;
-            }
-            else
-            {
-                fs::path file(option);
-                if (not file.is_absolute())
-                    file = root / file;
 
-                return file;
-            }
+            fs::path file(option);
+
+            if (not file.is_absolute())
+                file = root / file;
+
+            return file;
         };
 
         rc_path = deriveFile(our_rc_filename, config.router.rc_file);
@@ -190,14 +185,14 @@ namespace llarp
             LogInfo("Generating new key", path);
             keygen(key);
 
-            if (!key.SaveToFile(path))
+            if (!key.write_to_file(path))
             {
                 LogError("Failed to save new key");
                 return false;
             }
         }
         LogDebug("Loading key from file ", path);
-        return key.LoadFromFile(path);
+        return key.load_from_file(path);
     }
 
 }  // namespace llarp

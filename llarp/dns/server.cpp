@@ -35,7 +35,7 @@ namespace llarp::dns
         SockAddr m_LocalAddr;
 
        public:
-        explicit UDPReader(Server& dns, const EventLoop_ptr& loop, llarp::SockAddr bindaddr) : m_DNS{dns}
+        explicit UDPReader(Server& dns, const std::shared_ptr<EventLoop>& loop, llarp::SockAddr bindaddr) : m_DNS{dns}
         {
             m_udp = loop->make_udp([&](auto&, SockAddr src, llarp::OwnedBuffer buf) {
                 if (src == m_LocalAddr)
@@ -303,7 +303,8 @@ namespace llarp::dns
             llarp::DnsConfig m_conf;
 
            public:
-            explicit Resolver(const EventLoop_ptr& loop, llarp::DnsConfig conf) : m_Loop{loop}, m_conf{std::move(conf)}
+            explicit Resolver(const std::shared_ptr<EventLoop>& loop, llarp::DnsConfig conf)
+                : m_Loop{loop}, m_conf{std::move(conf)}
             {
                 Up(m_conf);
             }
@@ -540,7 +541,7 @@ namespace llarp::dns
         }
     }  // namespace libunbound
 
-    Server::Server(EventLoop_ptr loop, llarp::DnsConfig conf, unsigned int netif)
+    Server::Server(std::shared_ptr<EventLoop> loop, llarp::DnsConfig conf, unsigned int netif)
         : m_Loop{std::move(loop)},
           m_Config{std::move(conf)},
           m_Platform{CreatePlatform()},

@@ -1,9 +1,9 @@
 #include "tunnel.hpp"
 
 #include <llarp/ev/libuv.hpp>
-#include <llarp/service/convotag.hpp>
 #include <llarp/service/endpoint.hpp>
 #include <llarp/service/name.hpp>
+#include <llarp/service/tag.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/str.hpp>

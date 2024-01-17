@@ -2,7 +2,7 @@
 
 #include "abstracthophandler.hpp"
 #include "path_types.hpp"
-#include "pathset.hpp"
+#include "pathhandler.hpp"
 #include "transit_hop.hpp"
 
 #include <llarp/ev/ev.hpp>
@@ -27,7 +27,7 @@ namespace llarp
         struct TransitHopID
         {
             RouterID rid;
-            PathID_t path_id;
+            HopID path_id;
 
             bool operator==(const TransitHopID& other) const
             {
@@ -44,7 +44,7 @@ namespace std
     {
         size_t operator()(const llarp::path::TransitHopID& obj) const noexcept
         {
-            return std::hash<llarp::PathID_t>{}(obj.path_id);
+            return std::hash<llarp::HopID>{}(obj.path_id);
         }
     };
 }  // namespace std
@@ -70,26 +70,24 @@ namespace llarp::path
 
         void put_transit_hop(std::shared_ptr<TransitHop> hop);
 
-        std::shared_ptr<Path> get_path(const PathID_t& path_id);
+        std::shared_ptr<Path> get_path(const HopID& path_id);
 
-        bool TransitHopPreviousIsRouter(const PathID_t& path, const RouterID& r);
+        bool TransitHopPreviousIsRouter(const HopID& path, const RouterID& r);
 
-        std::shared_ptr<TransitHop> GetPathForTransfer(const PathID_t& topath);
+        std::shared_ptr<TransitHop> GetPathForTransfer(const HopID& topath);
 
-        std::shared_ptr<TransitHop> GetTransitHop(const RouterID&, const PathID_t&);
+        std::shared_ptr<TransitHop> GetTransitHop(const RouterID&, const HopID&);
 
-        std::shared_ptr<PathSet> GetLocalPathSet(const PathID_t& id);
+        std::shared_ptr<PathHandler> GetLocalPathSet(const HopID& id);
 
         /// get a set of all paths that we own who's endpoint is r
         std::vector<std::shared_ptr<Path>> FindOwnedPathsWithEndpoint(const RouterID& r);
 
         bool HopIsUs(const RouterID& k) const;
 
-        void AddOwnPath(std::shared_ptr<PathSet> set, std::shared_ptr<Path> p);
+        void AddOwnPath(std::shared_ptr<PathHandler> set, std::shared_ptr<Path> p);
 
-        void RemovePathSet(std::shared_ptr<PathSet> set);
-
-        const EventLoop_ptr& loop();
+        const std::shared_ptr<EventLoop>& loop();
 
         const SecretKey& EncryptionSecretKey();
 
@@ -97,9 +95,6 @@ namespace llarp::path
 
         /// current number of transit paths we have
         uint64_t CurrentTransitPaths();
-
-        /// current number of paths we created in status
-        uint64_t CurrentOwnedPaths(path::PathStatus status = path::PathStatus::ESTABLISHED);
 
         Router* router() const
         {
@@ -110,7 +105,7 @@ namespace llarp::path
         Router* _router;
 
         std::unordered_map<TransitHopID, std::shared_ptr<TransitHop>> transit_hops;
-        std::unordered_map<PathID_t, std::shared_ptr<Path>> own_paths;
+        std::unordered_map<HopID, std::shared_ptr<Path>> own_paths;
         bool m_AllowTransit;
         util::DecayingHashSet<IpAddress> path_limits;
     };

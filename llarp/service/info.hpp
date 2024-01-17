@@ -22,7 +22,7 @@ namespace llarp::service
        private:
         PubKey enckey;
         PubKey signkey;
-        mutable Address m_CachedAddr;
+        mutable Address _cached_addr;
 
        public:
         VanityNonce vanity;
@@ -37,9 +37,9 @@ namespace llarp::service
 
         const PubKey& EncryptionPublicKey() const
         {
-            if (m_CachedAddr.IsZero())
+            if (_cached_addr.IsZero())
             {
-                CalculateAddress(m_CachedAddr.as_array());
+                CalculateAddress(_cached_addr.as_array());
             }
             return enckey;
         }
@@ -71,11 +71,11 @@ namespace llarp::service
 
         const Address& Addr() const
         {
-            if (m_CachedAddr.IsZero())
+            if (_cached_addr.IsZero())
             {
-                CalculateAddress(m_CachedAddr.as_array());
+                CalculateAddress(_cached_addr.as_array());
             }
-            return m_CachedAddr;
+            return _cached_addr;
         }
 
         /// calculate our address

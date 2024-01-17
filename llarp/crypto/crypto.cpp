@@ -63,7 +63,7 @@ namespace llarp
     {
         llarp::SharedSecret dh_result;
 
-        if (dh(dh_result, sk.toPublic(), pk, pk.data(), sk))
+        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk))
         {
             return crypto_generichash_blake2b(shared.data(), 32, n.data(), 32, dh_result.data(), 32) != -1;
         }
@@ -76,7 +76,7 @@ namespace llarp
     {
         llarp::SharedSecret dh_result;
 
-        if (dh(dh_result, pk, sk.toPublic(), pk.data(), sk))
+        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk))
         {
             return crypto_generichash_blake2b(shared.data(), 32, n.data(), n.size(), dh_result.data(), 32) != -1;
         }
@@ -201,7 +201,7 @@ namespace llarp
     {
         PubKey pubkey;
 
-        privkey.toPublic(pubkey);
+        privkey.to_pubkey(pubkey);
 
         crypto_hash_sha512_state hs;
         unsigned char nonce[64];
@@ -213,7 +213,7 @@ namespace llarp
         // PrivateKeys will come from a hash of the root key's s concatenated with
         // the derivation hash.
         crypto_hash_sha512_init(&hs);
-        crypto_hash_sha512_update(&hs, privkey.signingHash(), 32);
+        crypto_hash_sha512_update(&hs, privkey.signing_hash(), 32);
         crypto_hash_sha512_update(&hs, buf, size);
         crypto_hash_sha512_final(&hs, nonce);
         crypto_core_ed25519_scalar_reduce(nonce, nonce);
@@ -359,7 +359,7 @@ namespace llarp
         // generate it from a hash of `h` and the root key's (psuedorandom)
         // signing hash, `s`.
         //
-        const auto root_pubkey = root_key.toPublic();
+        const auto root_pubkey = root_key.to_pubkey();
 
         AlignedBuffer<32> h;
         if (hash)
@@ -375,7 +375,7 @@ namespace llarp
         h[31] |= 64;
 
         PrivateKey a;
-        if (!root_key.toPrivate(a))
+        if (!root_key.to_privkey(a))
             return false;
 
         // a' = ha
@@ -384,8 +384,8 @@ namespace llarp
         // s' = H(h || s)
         std::array<byte_t, 64> buf;
         std::copy(h.begin(), h.end(), buf.begin());
-        std::copy(a.signingHash(), a.signingHash() + 32, buf.begin() + 32);
-        return -1 != crypto_generichash_blake2b(out_key.signingHash(), 32, buf.data(), buf.size(), nullptr, 0);
+        std::copy(a.signing_hash(), a.signing_hash() + 32, buf.begin() + 32);
+        return -1 != crypto_generichash_blake2b(out_key.signing_hash(), 32, buf.data(), buf.size(), nullptr, 0);
 
         return true;
     }
@@ -405,7 +405,7 @@ namespace llarp
         PubKey pk;
         int result = crypto_sign_keypair(pk.data(), keys.data());
         assert(result != -1);
-        const PubKey sk_pk = keys.toPublic();
+        const PubKey sk_pk = keys.to_pubkey();
         assert(pk == sk_pk);
         (void)result;
         (void)sk_pk;
@@ -422,7 +422,7 @@ namespace llarp
             return false;
         if (crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data()) == -1)
             return false;
-        return keys.toPublic() == pk && sk == keys;
+        return keys.to_pubkey() == pk && sk == keys;
     }
 
     void crypto::encryption_keygen(llarp::SecretKey& keys)

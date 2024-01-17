@@ -3,6 +3,7 @@
 #include "ip.hpp"
 
 #include <llarp/constants/net.hpp>
+#include <llarp/service/types.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/str.hpp>
 #ifndef _WIN32
@@ -121,6 +122,16 @@ namespace llarp::net
     {
         if (size() < MinSize)
             _buf.resize(0);
+    }
+
+    auto IPPacket::ServiceProtocol() const
+    {
+        if (IsV4())
+            return service::ProtocolType::TrafficV4;
+        if (IsV6())
+            return service::ProtocolType::TrafficV6;
+
+        return service::ProtocolType::Control;
     }
 
     byte_view_t IPPacket::view() const

@@ -33,8 +33,8 @@ namespace llarp
         void put_down();
 
         /// set dns resolver
-        /// pass in if we are using exit node mode right now  as a bool
-        void set_dns_mode(bool using_exit_mode) const;
+        /// pass in if we are using exit node mode right now  as a bool void set_dns_mode(bool
+        /// using_exit_mode) const;
 
        private:
         void update();

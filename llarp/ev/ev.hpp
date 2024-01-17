@@ -5,8 +5,6 @@
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
 
-#include <uvw.hpp>
-
 #include <algorithm>
 #include <deque>
 #include <future>
@@ -255,7 +253,5 @@ namespace llarp
         // call_soon(). Idempotent and thread-safe.
         virtual void wakeup() = 0;
     };
-
-    using EventLoop_ptr = std::shared_ptr<EventLoop>;
 
 }  // namespace llarp

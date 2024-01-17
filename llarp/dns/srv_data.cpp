@@ -124,9 +124,9 @@ namespace llarp::dns
         };
     }
 
-    util::StatusObject SRVData::ExtractStatus() const
+    StatusObject SRVData::ExtractStatus() const
     {
-        return util::StatusObject{
+        return StatusObject{
             {"proto", service_proto}, {"priority", priority}, {"weight", weight}, {"port", port}, {"target", target}};
     }
 }  // namespace llarp::dns

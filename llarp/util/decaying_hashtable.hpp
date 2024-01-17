@@ -2,6 +2,7 @@
 
 #include "time.hpp"
 
+#include <optional>
 #include <unordered_map>
 
 namespace llarp::util

@@ -22,8 +22,8 @@ namespace llarp
             std::string_view ciphertext, SymmNonce nonce, std::string_view name);
 
         /// xchacha symmetric cipher
-        bool xchacha20(uint8_t*, size_t size, const SharedSecret&, const SymmNonce&);
-        bool xchacha20(uint8_t*, size_t size, const uint8_t*, const uint8_t*);
+        bool xchacha20(uint8_t* buf, size_t size, const SharedSecret&, const SymmNonce&);
+        bool xchacha20(uint8_t* buf, size_t size, const uint8_t* secret, const uint8_t* nonce);
 
         SymmNonce onion(
             unsigned char* buf,

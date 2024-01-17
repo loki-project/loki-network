@@ -19,13 +19,13 @@ namespace llarp
         return oxenc::to_base32z(begin(), begin() + 5);
     }
 
-    util::StatusObject RouterID::ExtractStatus() const
+    StatusObject RouterID::ExtractStatus() const
     {
-        util::StatusObject obj{{"snode", ToString()}, {"hex", ToHex()}};
+        StatusObject obj{{"snode", ToString()}, {"hex", ToHex()}};
         return obj;
     }
 
-    bool RouterID::from_string(std::string_view str)
+    bool RouterID::from_snode_address(std::string_view str)
     {
         auto pos = str.find(SNODE_TLD);
         if (pos != str.size() - SNODE_TLD.size())

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <llarp/net/sock_addr.hpp>
-#include <llarp/service/convotag.hpp>
+#include <llarp/service/tag.hpp>
 
 #include <charconv>
 #include <chrono>
@@ -134,7 +134,7 @@ namespace llarp::link
         /// \param dest - the convotag for which the packet arrived
         /// \param buf - the raw arriving packet
         ///
-        void receive_packet(const service::ConvoTag& tag, const llarp_buffer_t& buf);
+        void receive_packet(const service::SessionTag& tag, const llarp_buffer_t& buf);
 
         /// return true if we have any listeners added
         inline bool hasListeners() const

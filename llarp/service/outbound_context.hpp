@@ -1,9 +1,9 @@
 #pragma once
 
-#include <llarp/path/pathbuilder.hpp>
-#include <llarp/service/auth.hpp>
-#include <llarp/service/convotag.hpp>
-#include <llarp/util/status.hpp>
+#include <llarp/auth/auth.hpp>
+#include <llarp/path/pathhandler.hpp>
+#include <llarp/service/tag.hpp>
+#include <llarp/util/types.hpp>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -29,7 +29,7 @@ namespace llarp::service
         ServiceInfo remote_identity;
         Introduction remote_intro;
 
-        ConvoTag current_tag;
+        SessionTag current_tag;
 
         uint64_t update_introset_tx = 0;
         uint16_t lookup_fails = 0;
@@ -56,7 +56,7 @@ namespace llarp::service
 
         ~OutboundContext() override;
 
-        ConvoTag get_current_tag() const
+        SessionTag get_current_tag() const
         {
             return current_tag;
         }
@@ -72,16 +72,16 @@ namespace llarp::service
 
         void Tick(llarp_time_t now) override;
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         void BlacklistSNode(const RouterID) override{};
 
-        std::shared_ptr<path::PathSet> GetSelf() override
+        std::shared_ptr<path::PathBuilder> GetSelf() override
         {
             return shared_from_this();
         }
 
-        std::weak_ptr<path::PathSet> GetWeak() override
+        std::weak_ptr<path::PathBuilder> GetWeak() override
         {
             return weak_from_this();
         }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "util/aligned.hpp"
-#include "util/status.hpp"
+#include "util/types.hpp"
 
 #include <llarp/crypto/types.hpp>
 
@@ -27,7 +27,7 @@ namespace llarp
         RouterID(std::string_view data) : RouterID(to_usv(data))
         {}
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         std::string ToString() const;
 
@@ -36,7 +36,7 @@ namespace llarp
         // FIXME: this is deceptively named: it parses something base32z formatted with .snode on
         // the end, so should probably be called "from_snode_address" or "from_base32z" or something
         // that doesn't sound exactly like the other (different) from_strings of its base classes.
-        bool from_string(std::string_view str);
+        bool from_snode_address(std::string_view str);
 
         RouterID& operator=(const byte_t* ptr)
         {

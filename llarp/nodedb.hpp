@@ -134,7 +134,7 @@ namespace llarp
         std::set<RemoteRC> known_rcs;
         std::set<Unconfirmed<RemoteRC>> unconfirmed_rcs;
 
-        std::map<RouterID, RemoteRC> rc_lookup;
+        std::map<RouterID, const RemoteRC&> rc_lookup;
 
         BootstrapList _bootstraps{};
 
@@ -342,7 +342,8 @@ namespace llarp
             return known_rcs;
         }
 
-        // const std::unordered_map<RouterID, RemoteRC>& // get_rcs() const
+        // const std::unordered_map<RouterID, RemoteRC>&
+        // get_rcs() const
         // {
         //   return known_rcs;
         // }
@@ -398,7 +399,6 @@ namespace llarp
                 - generate a random integer x from 0 to i
                   - x < n ? Selected[x] = current : continue;
         */
-
         std::optional<RemoteRC> get_random_rc_conditional(std::function<bool(RemoteRC)> hook) const;
 
         std::optional<std::vector<RemoteRC>> get_n_random_rcs_conditional(

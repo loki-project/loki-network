@@ -73,18 +73,18 @@ namespace llarp
             return "[secretkey]";
         }
 
-        PubKey toPublic() const
+        PubKey to_pubkey() const
         {
             return PubKey(data() + 32);
         }
 
         /// Computes the private key from the secret key (which is actually the
         /// seed)
-        bool toPrivate(PrivateKey& key) const;
+        bool to_privkey(PrivateKey& key) const;
 
-        bool LoadFromFile(const fs::path& fname);
+        bool load_from_file(const fs::path& fname);
 
-        bool SaveToFile(const fs::path& fname) const;
+        bool write_to_file(const fs::path& fname) const;
     };
 
     /// PrivateKey is similar to SecretKey except that it only stores the private
@@ -104,14 +104,14 @@ namespace llarp
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        const byte_t* signingHash() const
+        const byte_t* signing_hash() const
         {
             return data() + 32;
         }
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        byte_t* signingHash()
+        byte_t* signing_hash()
         {
             return data() + 32;
         }
@@ -122,7 +122,7 @@ namespace llarp
         }
 
         /// Computes the public key
-        bool toPublic(PubKey& pubkey) const;
+        bool to_pubkey(PubKey& pubkey) const;
     };
 
     template <>

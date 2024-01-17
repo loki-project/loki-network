@@ -9,7 +9,7 @@ namespace llarp::service
 {
     struct AsyncKeyExchange : public std::enable_shared_from_this<AsyncKeyExchange>
     {
-        EventLoop_ptr loop;
+        std::shared_ptr<EventLoop> loop;
         SharedSecret sharedKey;
         ServiceInfo m_remote;
         const Identity& m_LocalIdentity;
@@ -19,16 +19,16 @@ namespace llarp::service
         Introduction remoteIntro;
         std::function<void(std::shared_ptr<ProtocolFrameMessage>)> hook;
         Endpoint* handler;
-        ConvoTag tag;
+        SessionTag tag;
 
         AsyncKeyExchange(
-            EventLoop_ptr l,
+            std::shared_ptr<EventLoop> l,
             ServiceInfo r,
             const Identity& localident,
             const PQPubKey& introsetPubKey,
             const Introduction& remote,
             Endpoint* h,
-            const ConvoTag& t);
+            const SessionTag& t);
 
         static void Result(std::shared_ptr<AsyncKeyExchange> user, std::shared_ptr<ProtocolFrameMessage> frame);
 

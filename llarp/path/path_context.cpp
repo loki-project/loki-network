@@ -36,7 +36,7 @@ namespace llarp::path
 #endif
     }
 
-    const EventLoop_ptr& PathContext::loop()
+    const std::shared_ptr<EventLoop>& PathContext::loop()
     {
         return _router->loop();
     }
@@ -66,15 +66,15 @@ namespace llarp::path
             if (path->TXID() == pathid)
                 continue;
 
-            if (path->Endpoint() == r && path->IsReady())
+            if (path->pivot_router_id() == r && path->IsReady())
                 found.push_back(path);
         }
         return found;
     }
 
-    void PathContext::AddOwnPath(std::shared_ptr<PathSet> set, std::shared_ptr<Path> path)
+    void PathContext::AddOwnPath(std::shared_ptr<PathHandler> set, std::shared_ptr<Path> path)
     {
-        set->AddPath(path);
+        set->add_path(path);
         own_paths[path->TXID()] = path;
         own_paths[path->RXID()] = path;
     }
@@ -92,7 +92,7 @@ namespace llarp::path
         return false;
     }
 
-    std::shared_ptr<TransitHop> PathContext::GetTransitHop(const RouterID& rid, const PathID_t& path_id)
+    std::shared_ptr<TransitHop> PathContext::GetTransitHop(const RouterID& rid, const HopID& path_id)
     {
         if (auto itr = transit_hops.find({rid, path_id}); itr != transit_hops.end())
             return itr->second;
@@ -100,7 +100,7 @@ namespace llarp::path
         return nullptr;
     }
 
-    std::shared_ptr<Path> PathContext::get_path(const PathID_t& path_id)
+    std::shared_ptr<Path> PathContext::get_path(const HopID& path_id)
     {
         if (auto itr = own_paths.find(path_id); itr != own_paths.end())
             return itr->second;
@@ -108,12 +108,12 @@ namespace llarp::path
         return nullptr;
     }
 
-    bool PathContext::TransitHopPreviousIsRouter(const PathID_t& path_id, const RouterID& otherRouter)
+    bool PathContext::TransitHopPreviousIsRouter(const HopID& path_id, const RouterID& otherRouter)
     {
         return transit_hops.count({otherRouter, path_id});
     }
 
-    std::shared_ptr<PathSet> PathContext::GetLocalPathSet(const PathID_t& id)
+    std::shared_ptr<PathHandler> PathContext::GetLocalPathSet(const HopID& id)
     {
         if (auto itr = own_paths.find(id); itr != own_paths.end())
         {
@@ -128,7 +128,7 @@ namespace llarp::path
         return _router->pubkey();
     }
 
-    std::shared_ptr<TransitHop> PathContext::GetPathForTransfer(const PathID_t& id)
+    std::shared_ptr<TransitHop> PathContext::GetPathForTransfer(const HopID& id)
     {
         if (auto itr = transit_hops.find({OurRouterID(), id}); itr != transit_hops.end())
         {
@@ -141,17 +141,6 @@ namespace llarp::path
     uint64_t PathContext::CurrentTransitPaths()
     {
         return transit_hops.size() / 2;
-    }
-
-    uint64_t PathContext::CurrentOwnedPaths(path::PathStatus st)
-    {
-        uint64_t num{};
-        for (auto& own_path : own_paths)
-        {
-            if (own_path.second->Status() == st)
-                num++;
-        }
-        return num / 2;
     }
 
     void PathContext::put_transit_hop(std::shared_ptr<TransitHop> hop)
@@ -171,7 +160,7 @@ namespace llarp::path
             auto itr = transit_hops.begin();
             while (itr != transit_hops.end())
             {
-                if (itr->second->Expired(now))
+                if (itr->second->is_expired(now))
                 {
                     // TODO: this
                     // _router->outboundMessageHandler().RemovePath(itr->first);
@@ -186,7 +175,7 @@ namespace llarp::path
         {
             for (auto itr = own_paths.begin(); itr != own_paths.end();)
             {
-                if (itr->second->Expired(now))
+                if (itr->second->is_expired(now))
                 {
                     itr = own_paths.erase(itr);
                 }
@@ -197,7 +186,4 @@ namespace llarp::path
             }
         }
     }
-
-    void PathContext::RemovePathSet(std::shared_ptr<PathSet>)
-    {}
 }  // namespace llarp::path

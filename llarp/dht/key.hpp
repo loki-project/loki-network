@@ -29,7 +29,7 @@ namespace llarp::dht
             return rid.ToString();
         }
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         std::string ToString() const
         {

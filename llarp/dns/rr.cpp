@@ -73,9 +73,9 @@ namespace llarp::dns
         return true;
     }
 
-    util::StatusObject ResourceRecord::ToJSON() const
+    StatusObject ResourceRecord::ToJSON() const
     {
-        return util::StatusObject{
+        return StatusObject{
             {"name", rr_name},
             {"type", rr_type},
             {"class", rr_class},

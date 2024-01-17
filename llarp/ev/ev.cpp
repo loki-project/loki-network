@@ -8,7 +8,7 @@
 
 namespace llarp
 {
-    EventLoop_ptr EventLoop::create(size_t queueLength)
+    std::shared_ptr<EventLoop> EventLoop::create(size_t queueLength)
     {
         return std::make_shared<llarp::uv::Loop>(queueLength);
     }

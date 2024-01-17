@@ -2,16 +2,15 @@
 
 #include "info.hpp"
 #include "intro.hpp"
-#include "protocol_type.hpp"
-#include "tag.hpp"
+#include "types.hpp"
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/ip_range.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/util/bencode.hpp>
-#include <llarp/util/status.hpp>
 #include <llarp/util/time.hpp>
+#include <llarp/util/types.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -30,7 +29,6 @@ namespace llarp::service
         ServiceInfo address_keys;
         std::vector<Introduction> intros;
         PQPubKey sntru_pubkey;
-        Tag topic;
         std::vector<llarp::dns::SRVTuple> SRVs;
         llarp_time_t time_signed = 0s;
 
@@ -83,7 +81,7 @@ namespace llarp::service
 
         bool verify(llarp_time_t now) const;
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
     };
 
     inline bool operator<(const IntroSet& lhs, const IntroSet& rhs)
@@ -93,22 +91,8 @@ namespace llarp::service
 
     inline bool operator==(const IntroSet& lhs, const IntroSet& rhs)
     {
-        return std::tie(
-                   lhs.address_keys,
-                   lhs.intros,
-                   lhs.sntru_pubkey,
-                   lhs.time_signed,
-                   lhs.version,
-                   lhs.topic,
-                   lhs.signature)
-            == std::tie(
-                   rhs.address_keys,
-                   rhs.intros,
-                   rhs.sntru_pubkey,
-                   rhs.time_signed,
-                   rhs.version,
-                   rhs.topic,
-                   rhs.signature);
+        return std::tie(lhs.address_keys, lhs.intros, lhs.sntru_pubkey, lhs.time_signed, lhs.version, lhs.signature)
+            == std::tie(rhs.address_keys, rhs.intros, rhs.sntru_pubkey, rhs.time_signed, rhs.version, rhs.signature);
     }
 
     inline bool operator!=(const IntroSet& lhs, const IntroSet& rhs)
@@ -123,7 +107,6 @@ namespace llarp::service
         llarp_time_t signedAt = 0s;
         ustring introsetPayload;
         SymmNonce nonce;
-        std::optional<Tag> topic;
         Signature sig;
 
         EncryptedIntroSet() = default;
@@ -161,7 +144,7 @@ namespace llarp::service
 
         std::string ToString() const;
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         IntroSet decrypt(const PubKey& root) const;
     };

@@ -2,8 +2,8 @@
 
 #include "config.hpp"
 
-#include <llarp/crypto/types.hpp>
-#include <llarp/router_contact.hpp>
+// #include <llarp/crypto/types.hpp>
+// #include <llarp/router_contact.hpp>
 
 #include <atomic>
 
@@ -41,7 +41,7 @@ namespace llarp
         ///        do not exist.
         /// @param isSNode
         /// @return true on success, false otherwise
-        bool initialize(const llarp::Config& config, bool genIfAbsent, bool isSNode);
+        bool initialize(const Config& config, bool genIfAbsent, bool isSNode);
 
         /// Obtain the self-signed RouterContact
         ///

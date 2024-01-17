@@ -27,25 +27,28 @@ namespace llarp::path
         nonce = crypto::onion(reinterpret_cast<unsigned char*>(data.data()), data.size(), pathKey, nonce, nonceXOR);
     }
 
-    std::string TransitHop::onion_and_payload(
-        std::string& payload, PathID_t next_id, std::optional<SymmNonce> nonce) const
+    std::string TransitHop::onion_and_payload(std::string& payload, HopID next_id, std::optional<SymmNonce> nonce) const
     {
         SymmNonce n;
         auto& nref = nonce ? *nonce : n;
         onion(payload, nref, not nonce);
 
-        return path::make_onion_payload(nref, next_id, payload);
+        return make_onion_payload(nref, next_id, payload);
     }
 
+    // TODO: if we want terminal/pivot hops to be able to *initiate* a request rather than
+    //       simply responding/reacting to the client end's requests, these will need
+    //       an implementation.
     bool TransitHop::send_path_control_message(std::string, std::string, std::function<void(std::string)>)
     {
-        // TODO: if we want terminal/pivot hops to be able to *initiate* a request rather than
-        //       simply responding/reacting to the client end's requests, this will need
-        //       an implementation.
+        return true;
+    }
+    bool TransitHop::send_path_data_message(std::string)
+    {
         return true;
     }
 
-    bool TransitHop::Expired(llarp_time_t now) const
+    bool TransitHop::is_expired(llarp_time_t now) const
     {
         return destroy || (now >= ExpireTime());
     }
@@ -74,8 +77,7 @@ namespace llarp::path
         std::move around.
     */
     /* TODO: replace this with layer of onion + send data message
-    bool
-    TransitHop::SendRoutingMessage(std::string payload, Router* r)
+    bool TransitHop::SendRoutingMessage(std::string payload, Router* r)
     {
       if (!IsEndpoint(r->pubkey()))
         return false;

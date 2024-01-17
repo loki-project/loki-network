@@ -2,8 +2,6 @@
 
 #include "net.hpp"
 
-// #include <llarp/ev/ev.hpp>
-#include <llarp/service/protocol_type.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/time.hpp>
 
@@ -274,15 +272,7 @@ namespace llarp::net
             return Version() == 6;
         }
 
-        inline service::ProtocolType ServiceProtocol() const
-        {
-            if (IsV4())
-                return service::ProtocolType::TrafficV4;
-            if (IsV6())
-                return service::ProtocolType::TrafficV6;
-
-            return service::ProtocolType::Control;
-        }
+        auto ServiceProtocol() const;
 
         huint128_t srcv6() const;
 

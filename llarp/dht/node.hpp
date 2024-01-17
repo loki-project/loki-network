@@ -22,7 +22,7 @@ namespace llarp::dht
         RCNode(const RouterContact& other) : rc(other), ID(other.router_id())
         {}
 
-        util::StatusObject ExtractStatus() const
+        StatusObject ExtractStatus() const
         {
             return rc.extract_status();
         }
@@ -49,7 +49,7 @@ namespace llarp::dht
             ID = Key_t(introset.derivedSigningKey.as_array());
         }
 
-        util::StatusObject ExtractStatus() const
+        StatusObject ExtractStatus() const
         {
             return introset.ExtractStatus();
         }

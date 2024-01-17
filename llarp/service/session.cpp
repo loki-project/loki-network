@@ -2,9 +2,9 @@
 
 namespace llarp::service
 {
-    util::StatusObject Session::ExtractStatus() const
+    StatusObject Session::ExtractStatus() const
     {
-        util::StatusObject obj{
+        StatusObject obj{
             {"lastSend", to_json(lastSend)},
             {"lastRecv", to_json(lastRecv)},
             {"replyIntro", replyIntro.ExtractStatus()},

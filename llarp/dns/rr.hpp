@@ -27,7 +27,7 @@ namespace llarp::dns
 
         bool Decode(llarp_buffer_t* buf) override;
 
-        util::StatusObject ToJSON() const override;
+        StatusObject ToJSON() const override;
 
         std::string ToString() const;
 

@@ -2,6 +2,7 @@
 
 #include <llarp/messages/dht.hpp>
 #include <llarp/messages/exit.hpp>
+#include <llarp/messages/path.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/buffer.hpp>
@@ -9,13 +10,8 @@
 namespace llarp::path
 {
 
-    Path::Path(
-        Router* rtr,
-        const std::vector<RemoteRC>& h,
-        std::weak_ptr<PathSet> pathset,
-        PathRole startingRoles,
-        std::string shortName)
-        : path_set{std::move(pathset)}, router{*rtr}, _role{startingRoles}, _short_name{std::move(shortName)}
+    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, std::string shortName)
+        : path_set{std::move(pathset)}, _router{rtr}, _short_name{std::move(shortName)}
     {
         hops.resize(h.size());
         size_t hsz = h.size();
@@ -37,11 +33,10 @@ namespace llarp::path
         {
             hops[idx].txID = hops[idx + 1].rxID;
         }
+
         // initialize parts of the introduction
         intro.router = hops[hsz - 1].rc.router_id();
         intro.path_id = hops[hsz - 1].txID;
-        if (auto parent = path_set.lock())
-            EnterState(PathStatus::BUILDING, parent->Now());
     }
 
     bool Path::obtain_exit(SecretKey sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
@@ -68,14 +63,8 @@ namespace llarp::path
         return send_path_control_message("find_name", FindNameMessage::serialize(std::move(name)), std::move(func));
     }
 
-    bool Path::send_path_control_message(std::string method, std::string body, std::function<void(std::string)> func)
+    std::string Path::make_outer_payload(std::string payload)
     {
-        oxenc::bt_dict_producer btdp;
-        btdp.append("BODY", body);
-        btdp.append("METHOD", method);
-        auto payload = std::move(btdp).str();
-
-        // TODO: old impl padded messages if smaller than a certain size; do we still want to?
         SymmNonce nonce;
         nonce.Randomize();
 
@@ -86,9 +75,23 @@ namespace llarp::path
                 reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
         }
 
-        auto outer_payload = make_onion_payload(nonce, TXID(), payload);
+        return make_onion_payload(nonce, TXID(), payload);
+    }
 
-        return router.send_control_message(
+    bool Path::send_path_data_message(std::string body)
+    {
+        auto payload = PathData::serialize(std::move(body));
+        auto outer_payload = make_outer_payload(payload);
+
+        return _router.send_data_message(upstream(), std::move(outer_payload));
+    }
+
+    bool Path::send_path_control_message(std::string method, std::string body, std::function<void(std::string)> func)
+    {
+        auto payload = PathControl::serialize(std::move(method), std::move(body));
+        auto outer_payload = make_outer_payload(payload);
+
+        return _router.send_control_message(
             upstream(),
             "path_control",
             std::move(outer_payload),
@@ -138,36 +141,26 @@ namespace llarp::path
             });
     }
 
-    RouterID Path::Endpoint() const
+    RouterID Path::pivot_router_id() const
     {
         return hops[hops.size() - 1].rc.router_id();
     }
 
-    PubKey Path::EndpointPubKey() const
-    {
-        return hops[hops.size() - 1].rc.router_id();
-    }
-
-    PathID_t Path::TXID() const
+    HopID Path::TXID() const
     {
         return hops[0].txID;
     }
 
-    PathID_t Path::RXID() const
+    HopID Path::RXID() const
     {
         return hops[0].rxID;
     }
 
     bool Path::IsReady() const
     {
-        if (Expired(llarp::time_now_ms()))
+        if (is_expired(llarp::time_now_ms()))
             return false;
-        return intro.latency > 0s && _status == PathStatus::ESTABLISHED;
-    }
-
-    bool Path::is_endpoint(const RouterID& r, const PathID_t& id) const
-    {
-        return hops[hops.size() - 1].rc.router_id() == r && hops[hops.size() - 1].txID == id;
+        return intro.latency > 0s && _established;
     }
 
     RouterID Path::upstream() const
@@ -193,56 +186,9 @@ namespace llarp::path
         return hops_str;
     }
 
-    void Path::EnterState(PathStatus st, llarp_time_t now)
+    StatusObject PathHopConfig::ExtractStatus() const
     {
-        if (now == 0s)
-            now = router.now();
-
-        if (st == PathStatus::FAILED)
-        {
-            _status = st;
-            return;
-        }
-        if (st == PathStatus::EXPIRED && _status == PathStatus::BUILDING)
-        {
-            _status = st;
-            if (auto parent = path_set.lock())
-            {
-                parent->HandlePathBuildTimeout(shared_from_this());
-            }
-        }
-        else if (st == PathStatus::BUILDING)
-        {
-            LogInfo("path ", name(), " is building");
-            buildStarted = now;
-        }
-        else if (st == PathStatus::ESTABLISHED && _status == PathStatus::BUILDING)
-        {
-            LogInfo("path ", name(), " is built, took ", ToString(now - buildStarted));
-        }
-        else if (st == PathStatus::TIMEOUT && _status == PathStatus::ESTABLISHED)
-        {
-            LogInfo("path ", name(), " died");
-            _status = st;
-            if (auto parent = path_set.lock())
-            {
-                parent->HandlePathDied(shared_from_this());
-            }
-        }
-        else if (st == PathStatus::ESTABLISHED && _status == PathStatus::TIMEOUT)
-        {
-            LogInfo("path ", name(), " reanimated");
-        }
-        else if (st == PathStatus::IGNORE)
-        {
-            LogInfo("path ", name(), " ignored");
-        }
-        _status = st;
-    }
-
-    util::StatusObject PathHopConfig::ExtractStatus() const
-    {
-        util::StatusObject obj{
+        StatusObject obj{
             {"ip", rc.addr().to_string()},
             {"lifetime", to_json(lifetime)},
             {"router", rc.router_id().ToHex()},
@@ -251,58 +197,58 @@ namespace llarp::path
         return obj;
     }
 
-    util::StatusObject Path::ExtractStatus() const
+    StatusObject Path::ExtractStatus() const
     {
         auto now = llarp::time_now_ms();
 
-        util::StatusObject obj{
+        StatusObject obj{
             {"intro", intro.ExtractStatus()},
             {"lastRecvMsg", to_json(last_recv_msg)},
             {"lastLatencyTest", to_json(last_latency_test)},
             {"buildStarted", to_json(buildStarted)},
-            {"expired", Expired(now)},
+            {"expired", is_expired(now)},
             {"expiresSoon", ExpiresSoon(now)},
             {"expiresAt", to_json(ExpireTime())},
             {"ready", IsReady()},
             // {"txRateCurrent", m_LastTXRate},
             // {"rxRateCurrent", m_LastRXRate},
-            {"hasExit", SupportsAnyRoles(ePathRoleExit)}};
+            // {"hasExit", SupportsAnyRoles(ePathRoleExit)}
+        };
 
-        std::vector<util::StatusObject> hopsObj;
-        std::transform(
-            hops.begin(), hops.end(), std::back_inserter(hopsObj), [](const auto& hop) -> util::StatusObject {
-                return hop.ExtractStatus();
-            });
+        std::vector<StatusObject> hopsObj;
+        std::transform(hops.begin(), hops.end(), std::back_inserter(hopsObj), [](const auto& hop) -> StatusObject {
+            return hop.ExtractStatus();
+        });
         obj["hops"] = hopsObj;
 
-        switch (_status)
-        {
-            case PathStatus::BUILDING:
-                obj["status"] = "building";
-                break;
-            case PathStatus::ESTABLISHED:
-                obj["status"] = "established";
-                break;
-            case PathStatus::TIMEOUT:
-                obj["status"] = "timeout";
-                break;
-            case PathStatus::EXPIRED:
-                obj["status"] = "expired";
-                break;
-            case PathStatus::FAILED:
-                obj["status"] = "failed";
-                break;
-            case PathStatus::IGNORE:
-                obj["status"] = "ignored";
-                break;
-            default:
-                obj["status"] = "unknown";
-                break;
-        }
+        // switch (_status)
+        // {
+        //   case PathStatus::BUILDING:
+        //     obj["status"] = "building";
+        //     break;
+        //   case PathStatus::ESTABLISHED:
+        //     obj["status"] = "established";
+        //     break;
+        //   case PathStatus::TIMEOUT:
+        //     obj["status"] = "timeout";
+        //     break;
+        //   case PathStatus::EXPIRED:
+        //     obj["status"] = "expired";
+        //     break;
+        //   case PathStatus::FAILED:
+        //     obj["status"] = "failed";
+        //     break;
+        //   case PathStatus::IGNORE:
+        //     obj["status"] = "ignored";
+        //     break;
+        //   default:
+        //     obj["status"] = "unknown";
+        //     break;
+        // }
         return obj;
     }
 
-    void Path::Rebuild()
+    void Path::rebuild()
     {
         if (auto parent = path_set.lock())
         {
@@ -312,7 +258,7 @@ namespace llarp::path
                 new_hops.emplace_back(hop.rc);
 
             LogInfo(name(), " rebuilding on ", short_name());
-            parent->Build(new_hops);
+            parent->build(new_hops);
         }
     }
 
@@ -340,7 +286,9 @@ namespace llarp::path
 
     void Path::Tick(llarp_time_t now, Router* r)
     {
-        if (Expired(now))
+        (void)r;
+
+        if (is_expired(now))
             return;
 
         // m_LastRXRate = m_RXRate;
@@ -349,68 +297,69 @@ namespace llarp::path
         // m_RXRate = 0;
         // m_TXRate = 0;
 
-        if (_status == PathStatus::BUILDING)
-        {
-            if (buildStarted == 0s)
-                return;
-            if (now >= buildStarted)
-            {
-                const auto dlt = now - buildStarted;
-                if (dlt >= path::BUILD_TIMEOUT)
-                {
-                    LogWarn(name(), " waited for ", ToString(dlt), " and no path was built");
-                    r->router_profiling().MarkPathFail(this);
-                    EnterState(PathStatus::EXPIRED, now);
-                    return;
-                }
-            }
-        }
+        // if (_status == PathStatus::BUILDING)
+        // {
+        //   if (buildStarted == 0s)
+        //     return;
+        //   if (now >= buildStarted)
+        //   {
+        //     const auto dlt = now - buildStarted;
+        //     if (dlt >= path::BUILD_TIMEOUT)
+        //     {
+        //       LogWarn(name(), " waited for ", ToString(dlt), " and no path was built");
+        //       r->router_profiling().MarkPathFail(this);
+        //       EnterState(PathStatus::EXPIRED, now);
+        //       return;
+        //     }
+        //   }
+        // }
         // check to see if this path is dead
-        if (_status == PathStatus::ESTABLISHED)
-        {
-            auto dlt = now - last_latency_test;
-            if (dlt > path::LATENCY_INTERVAL && last_latency_test_id == 0)
-            {
-                SendLatencyMessage(r);
-                // latency test FEC
-                r->loop()->call_later(2s, [self = shared_from_this(), r]() {
-                    if (self->last_latency_test_id)
-                        self->SendLatencyMessage(r);
-                });
-                return;
-            }
-            dlt = now - last_recv_msg;
-            if (dlt >= path::ALIVE_TIMEOUT)
-            {
-                LogWarn(name(), " waited for ", ToString(dlt), " and path looks dead");
-                r->router_profiling().MarkPathFail(this);
-                EnterState(PathStatus::TIMEOUT, now);
-            }
-        }
-        if (_status == PathStatus::IGNORE and now - last_recv_msg >= path::ALIVE_TIMEOUT)
-        {
-            // clean up this path as we dont use it anymore
-            EnterState(PathStatus::EXPIRED, now);
-        }
+        // if (_status == PathStatus::ESTABLISHED)
+        // {
+        //   auto dlt = now - last_latency_test;
+        //   if (dlt > path::LATENCY_INTERVAL && last_latency_test_id == 0)
+        //   {
+        //     SendLatencyMessage(r);
+        //     // latency test FEC
+        //     r->loop()->call_later(2s, [self = shared_from_this(), r]() {
+        //       if (self->last_latency_test_id)
+        //         self->SendLatencyMessage(r);
+        //     });
+        //     return;
+        //   }
+        //   dlt = now - last_recv_msg;
+        //   if (dlt >= path::ALIVE_TIMEOUT)
+        //   {
+        //     LogWarn(name(), " waited for ", ToString(dlt), " and path looks dead");
+        //     r->router_profiling().MarkPathFail(this);
+        //     EnterState(PathStatus::TIMEOUT, now);
+        //   }
+        // }
+        // if (_status == PathStatus::IGNORE and now - last_recv_msg >= path::ALIVE_TIMEOUT)
+        // {
+        //   // clean up this path as we dont use it anymore
+        //   EnterState(PathStatus::EXPIRED, now);
+        // }
     }
 
     /// how long we wait for a path to become active again after it times out
-    constexpr auto PathReanimationTimeout = 45s;
+    // constexpr auto PathReanimationTimeout = 45s;
 
-    bool Path::Expired(llarp_time_t now) const
+    bool Path::is_expired(llarp_time_t now) const
     {
-        if (_status == PathStatus::FAILED)
-            return true;
-        if (_status == PathStatus::BUILDING)
-            return false;
-        if (_status == PathStatus::TIMEOUT)
-        {
-            return now >= last_recv_msg + PathReanimationTimeout;
-        }
-        if (_status == PathStatus::ESTABLISHED or _status == PathStatus::IGNORE)
-        {
-            return now >= ExpireTime();
-        }
+        (void)now;
+        // if (_status == PathStatus::FAILED)
+        //   return true;
+        // if (_status == PathStatus::BUILDING)
+        //   return false;
+        // if (_status == PathStatus::TIMEOUT)
+        // {
+        //   return now >= last_recv_msg + PathReanimationTimeout;
+        // }
+        // if (_status == PathStatus::ESTABLISHED or _status == PathStatus::IGNORE)
+        // {
+        //   return now >= ExpireTime();
+        // }
         return true;
     }
 
@@ -435,8 +384,7 @@ namespace llarp::path
         std::move around.
     */
     /* TODO: replace this with sending an onion-ed data message
-    bool
-    Path::SendRoutingMessage(std::string payload, Router*)
+    bool Path::SendRoutingMessage(std::string payload, Router*)
     {
       std::string buf(MAX_LINK_MSG_SIZE / 2, '\0');
       buf.insert(0, payload);

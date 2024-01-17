@@ -15,7 +15,6 @@ namespace llarp
 {
     namespace service
     {
-        /// Snapp Address
         struct Address : public AlignedBuffer<32>
         {
             /// if parsed using FromString this contains the subdomain
@@ -76,9 +75,20 @@ namespace llarp
             }
         };
 
-        std::optional<std::variant<Address, RouterID>> parse_address(std::string_view lokinet_addr);
-
     }  // namespace service
+
+    using AddressVariant_t = std::variant<service::Address, RouterID>;
+
+    inline std::optional<AddressVariant_t> parse_address(std::string_view lokinet_addr)
+    {
+        RouterID router{};
+        service::Address addr{};
+        if (router.from_snode_address(lokinet_addr))
+            return router;
+        if (addr.FromString(lokinet_addr))
+            return addr;
+        return std::nullopt;
+    }
 
     template <>
     constexpr inline bool IsToStringFormattable<service::Address> = true;

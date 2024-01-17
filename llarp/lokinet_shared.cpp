@@ -4,7 +4,6 @@
 #include <llarp/link/tunnel.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/context.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/logging/callback_sink.hpp>
@@ -73,7 +72,7 @@ namespace
 
     struct UDPHandler
     {
-        using AddressVariant_t = llarp::vpn::AddressVariant_t;
+        using AddressVariant_t = llarp::AddressVariant_t;
         int m_SocketID;
         llarp::nuint16_t m_LocalPort;
         lokinet_udp_flow_filter m_Filter;
@@ -184,7 +183,7 @@ struct lokinet_context
     std::mutex m_access;
 
     std::shared_ptr<llarp::Context> impl = std::make_shared<Context>();
-    std::shared_ptr<llarp::Config> config = llarp::Config::EmbeddedConfig();
+    std::shared_ptr<llarp::Config> config = llarp::Config::make_embedded_config();
 
     std::unique_ptr<std::thread> runner;
 

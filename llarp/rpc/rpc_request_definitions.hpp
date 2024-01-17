@@ -7,7 +7,6 @@
 #include <llarp/router/route_poker.hpp>
 #include <llarp/service/address.hpp>
 #include <llarp/service/endpoint.hpp>
-#include <llarp/service/outbound_context.hpp>
 
 #include <oxen/log/omq_logger.hpp>
 #include <oxenmq/address.h>

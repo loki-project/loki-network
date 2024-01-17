@@ -3,7 +3,7 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path_types.hpp>
 #include <llarp/util/bencode.hpp>
-#include <llarp/util/status.hpp>
+#include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
 
@@ -19,7 +19,7 @@ namespace llarp::service
     struct Introduction
     {
         RouterID router;
-        PathID_t path_id;
+        HopID path_id;
         llarp_time_t latency = 0s;
         llarp_time_t expiry = 0s;
         uint64_t version = llarp::constants::proto_version;
@@ -27,7 +27,7 @@ namespace llarp::service
         Introduction() = default;
         Introduction(std::string buf);
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         bool IsExpired(llarp_time_t now) const
         {
@@ -90,7 +90,7 @@ namespace std
     {
         size_t operator()(const llarp::service::Introduction& i) const
         {
-            return std::hash<llarp::PubKey>{}(i.router) ^ std::hash<llarp::PathID_t>{}(i.path_id);
+            return std::hash<llarp::PubKey>{}(i.router) ^ std::hash<llarp::HopID>{}(i.path_id);
         }
     };
 }  // namespace std

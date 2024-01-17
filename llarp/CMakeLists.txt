@@ -19,41 +19,58 @@ lokinet_add_library(lokinet-cryptography
 # needed by vpn/ router/ rpc/ handlers/ net/ link/
 lokinet_add_library(lokinet-core-utils
   endpoint_base.cpp
-  exit/context.cpp
-  exit/endpoint.cpp # handlers/exit.hpp 
-  exit/policy.cpp   # net/
-  handlers/exit.cpp # link/ exit/
+
+  auth/file_auth.cpp
+  auth/rpc_auth.cpp
+  auth/session_auth.cpp
+  
+  exit/handler.cpp
+  exit/endpoint.cpp
+  
+  handlers/common.cpp
+  handlers/remote.cpp
   handlers/tun.cpp
-  service/auth.cpp  # config/
-  service/context.cpp
+
+  service/handler.cpp # link/ exit/
+  service/endpoint.cpp
+  
   service/identity.cpp
   service/info.cpp
   service/intro.cpp # path
+  service/intro_set.cpp
   service/lns_tracker.cpp
   service/name.cpp
-  service/session.cpp
-  service/tag.cpp
+  # service/session.cpp
+  
   vpn/egres_packet_router.cpp
 )
-
+  
 lokinet_add_library(lokinet-core
   context.cpp
+  
   consensus/reachability_testing.cpp
-  exit/session.cpp
+
+  # handlers/tun.cpp
+  
   link/link_manager.cpp
+  
   router/router.cpp
   router/route_poker.cpp
-  service/async_key_exchange.cpp
-  service/endpoint_util.cpp
-  service/endpoint.cpp
+  
+  # service/async_key_exchange.cpp
+  service/types.cpp
   service/endpoint_state.cpp
-  service/name.cpp
-  service/outbound_context.cpp
+  # service/name.cpp
   service/protocol.cpp
+  
+  service/session.cpp
+  session/base_session.cpp
+  session/exit_session.cpp
+  session/inbound_session.cpp
+  session/service_session.cpp
 )
 
 lokinet_add_library(lokinet-rpc
-  rpc/endpoint_rpc.cpp
   rpc/json_binary_proxy.cpp
   rpc/json_conversions.cpp
   rpc/lokid_rpc_client.cpp
@@ -101,8 +118,8 @@ lokinet_add_library(lokinet-time-place
   router_id.cpp
   router_version.cpp  # to be deleted shortly
   service/address.cpp
-  service/convotag.cpp
-  service/intro_set.cpp
+  # service/intro_set.cpp
+  service/tag.cpp
 )
 
 # lokinet-platform holds all platform specific code
@@ -207,8 +224,7 @@ lokinet_add_library(lokinet-path
   path/abstracthophandler.cpp
   path/path.cpp
   path/path_context.cpp
-  path/pathbuilder.cpp
-  path/pathset.cpp
+  path/pathhandler.cpp
   path/transit_hop.cpp
 )
 

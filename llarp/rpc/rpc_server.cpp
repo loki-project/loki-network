@@ -6,11 +6,10 @@
 #include <llarp/config/ini.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/dns/dns.hpp>
-#include <llarp/exit/context.hpp>
+#include <llarp/endpoint_base.hpp>
 #include <llarp/net/ip_range.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>
-#include <llarp/service/context.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -66,14 +65,17 @@ namespace llarp::rpc
         return true;
     }
 
-    std::shared_ptr<EndpointBase> GetEndpointByName(Router& r, std::string name)
+    std::shared_ptr<EndpointBase> GetEndpointByName(Router&, std::string)
     {
-        if (r.is_service_node())
-        {
-            return r.exitContext().get_exit_endpoint(name);
-        }
+        // TOFIX: this stupid shit or delete
 
-        return r.hidden_service_context().GetEndpointByName(name);
+        // if (r.is_service_node())
+        // {
+        //   return r.exit_context().get_exit_endpoint(name);
+        // }
+
+        // return r.hidden_service_context().GetEndpointByName(name);
+        return nullptr;
     }
 
     template <typename RPC>
@@ -136,12 +138,12 @@ namespace llarp::rpc
             return;
         }
         SetJSONResponse("OK", halt.response);
-        m_Router.Stop();
+        m_Router.stop();
     }
 
     void RPCServer::invoke(Version& version)
     {
-        util::StatusObject result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
+        StatusObject result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
 
         SetJSONResponse(result, version.response);
     }
@@ -206,7 +208,7 @@ namespace llarp::rpc
             // auto [addr, id] = quic->open(
             //     quicconnect.request.remoteHost, quicconnect.request.port, [](auto&&) {}, laddr);
 
-            util::StatusObject status;
+            StatusObject status;
             // status["addr"] = addr.ToString();
             // status["id"] = id;
 
@@ -268,17 +270,17 @@ namespace llarp::rpc
                 return;
             }
 
-            util::StatusObject result;
+            StatusObject result;
             result["id"] = id;
             std::string localAddress;
-            var::visit([&](auto&& addr) { localAddress = addr.ToString(); }, endpoint->LocalAddress());
+            var::visit([&](auto&& addr) { localAddress = addr.ToString(); }, endpoint->local_address());
             result["addr"] = localAddress + ":" + std::to_string(quiclistener.request.port);
 
             if (not quiclistener.request.srvProto.empty())
             {
                 auto srvData = dns::SRVData::fromTuple(
                     std::make_tuple(quiclistener.request.srvProto, 1, 1, quiclistener.request.port, ""));
-                endpoint->PutSRVRecord(std::move(srvData));
+                endpoint->put_srv_record(std::move(srvData));
             }
 
             SetJSONResponse(result, quiclistener.response);
@@ -302,34 +304,34 @@ namespace llarp::rpc
             return;
         }
 
-        if (not routerID.from_string(lookupsnode.request.routerID))
+        if (not routerID.from_snode_address(lookupsnode.request.routerID))
         {
             SetJSONError("Invalid remote: " + lookupsnode.request.routerID, lookupsnode.response);
             return;
         }
 
-        m_Router.loop()->call([&]() {
-            auto endpoint = m_Router.exitContext().get_exit_endpoint("default");
+        // m_Router.loop()->call([&]() {
+        //   auto endpoint = m_Router.exit_context().get_exit_endpoint("default");
 
-            if (endpoint == nullptr)
-            {
-                SetJSONError("Cannot find local endpoint: default", lookupsnode.response);
-                return;
-            }
+        //   if (endpoint == nullptr)
+        //   {
+        //     SetJSONError("Cannot find local endpoint: default", lookupsnode.response);
+        //     return;
+        //   }
 
-            endpoint->ObtainSNodeSession(routerID, [&](auto session) {
-                if (session and session->IsReady())
-                {
-                    const auto ip = net::TruncateV6(endpoint->GetIPForIdent(PubKey{routerID}));
-                    util::StatusObject status{{"ip", ip.ToString()}};
-                    SetJSONResponse(status, lookupsnode.response);
-                    return;
-                }
+        //   endpoint->ObtainSNodeSession(routerID, [&](auto session) {
+        //     if (session and session->IsReady())
+        //     {
+        //       const auto ip = net::TruncateV6(endpoint->GetIPForIdent(PubKey{routerID}));
+        //       StatusObject status{{"ip", ip.ToString()}};
+        //       SetJSONResponse(status, lookupsnode.response);
+        //       return;
+        //     }
 
-                SetJSONError("Failed to obtain snode session", lookupsnode.response);
-                return;
-            });
-        });
+        //     SetJSONError("Failed to obtain snode session", lookupsnode.response);
+        //     return;
+        //   });
+        // });
     }
 
     void RPCServer::invoke(MapExit& mapexit)
@@ -338,37 +340,39 @@ namespace llarp::rpc
         // steal replier from exit RPC endpoint
         exit_request.replier.emplace(mapexit.move());
 
-        m_Router.hidden_service_context().GetDefault()->map_exit(
-            mapexit.request.address,
-            mapexit.request.token,
-            mapexit.request.ip_range,
-            [exit = std::move(exit_request)](bool success, std::string result) mutable {
-                if (success)
-                    exit.send_response({{"result"}, std::move(result)});
-                else
-                    exit.send_response({{"error"}, std::move(result)});
-            });
+        // TODO: connect this to remote service session management (service::Handler)
+        // m_Router.hidden_service_context().GetDefault()->map_exit(
+        //     mapexit.request.address,
+        //     mapexit.request.token,
+        //     mapexit.request.ip_range,
+        //     [exit = std::move(exit_request)](bool success, std::string result) mutable {
+        //       if (success)
+        //         exit.send_response({{"result"}, std::move(result)});
+        //       else
+        //         exit.send_response({{"error"}, std::move(result)});
+        //     });
     }
 
     void RPCServer::invoke(ListExits& listexits)
     {
-        if (not m_Router.hidden_service_context().hasEndpoints())
-        {
-            SetJSONError("No mapped endpoints found", listexits.response);
-            return;
-        }
+        (void)listexits;
+        // if (not m_Router.hidden_service_context().hasEndpoints())
+        // {
+        //   SetJSONError("No mapped endpoints found", listexits.response);
+        //   return;
+        // }
 
-        auto status = m_Router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
+        // auto status = m_Router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
 
-        SetJSONResponse((status.empty()) ? "No exits" : status, listexits.response);
+        // SetJSONResponse((status.empty()) ? "No exits" : status, listexits.response);
     }
 
     void RPCServer::invoke(UnmapExit& unmapexit)
     {
         try
         {
-            for (auto& ip : unmapexit.request.ip_range)
-                m_Router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
+            // for (auto& ip : unmapexit.request.ip_range)
+            //   m_Router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
         }
         catch (std::exception& e)
         {
@@ -386,74 +390,77 @@ namespace llarp::rpc
     //  logic and leaves the message handling to the unmap_exit struct
     void RPCServer::invoke(SwapExits& swapexits)
     {
-        MapExit map_request;
-        UnmapExit unmap_request;
-        auto endpoint = m_Router.hidden_service_context().GetDefault();
-        auto current_exits = endpoint->ExtractStatus()["exitMap"];
+        (void)swapexits;
+        // MapExit map_request;
+        // UnmapExit unmap_request;
+        // auto endpoint = m_Router.hidden_service_context().GetDefault();
+        // auto current_exits = endpoint->ExtractStatus()["exitMap"];
 
-        if (current_exits.empty())
-        {
-            SetJSONError("Cannot swap to new exit: no exits currently mapped", swapexits.response);
-            return;
-        }
+        // if (current_exits.empty())
+        // {
+        //   SetJSONError("Cannot swap to new exit: no exits currently mapped", swapexits.response);
+        //   return;
+        // }
 
-        if (swapexits.request.exit_addresses.size() < 2)
-        {
-            SetJSONError("Exit addresses not passed", swapexits.response);
-            return;
-        }
+        // if (swapexits.request.exit_addresses.size() < 2)
+        // {
+        //   SetJSONError("Exit addresses not passed", swapexits.response);
+        //   return;
+        // }
 
-        // steal replier from swapexit RPC endpoint
-        unmap_request.replier.emplace(swapexits.move());
+        // // steal replier from swapexit RPC endpoint
+        // unmap_request.replier.emplace(swapexits.move());
 
-        // set map_exit request to new address
-        map_request.request.address = swapexits.request.exit_addresses[1];
+        // // set map_exit request to new address
+        // map_request.request.address = swapexits.request.exit_addresses[1];
 
-        // set token for new exit node mapping
-        if (not swapexits.request.token.empty())
-            map_request.request.token = swapexits.request.token;
+        // // set token for new exit node mapping
+        // if (not swapexits.request.token.empty())
+        //   map_request.request.token = swapexits.request.token;
 
-        // populate map_exit request with old IP ranges
-        for (auto& [range, exit] : current_exits.items())
-        {
-            if (exit.get<std::string>() == swapexits.request.exit_addresses[0])
-            {
-                map_request.request.ip_range.emplace_back(range);
-                unmap_request.request.ip_range.emplace_back(range);
-            }
-        }
+        // // populate map_exit request with old IP ranges
+        // for (auto& [range, exit] : current_exits.items())
+        // {
+        //   if (exit.get<std::string>() == swapexits.request.exit_addresses[0])
+        //   {
+        //     map_request.request.ip_range.emplace_back(range);
+        //     unmap_request.request.ip_range.emplace_back(range);
+        //   }
+        // }
 
-        if (map_request.request.ip_range.empty() or unmap_request.request.ip_range.empty())
-        {
-            SetJSONError("No mapped ranges found matching requested swap", swapexits.response);
-            return;
-        }
+        // if (map_request.request.ip_range.empty() or unmap_request.request.ip_range.empty())
+        // {
+        //   SetJSONError("No mapped ranges found matching requested swap", swapexits.response);
+        //   return;
+        // }
 
-        endpoint->map_exit(
-            map_request.request.address,
-            map_request.request.token,
-            map_request.request.ip_range,
-            [unmap = std::move(unmap_request), ep = endpoint, old_exit = swapexits.request.exit_addresses[0]](
-                bool success, std::string result) mutable {
-                if (not success)
-                    unmap.send_response({{"error"}, std::move(result)});
-                else
-                {
-                    try
-                    {
-                        for (auto& ip : unmap.request.ip_range)
-                            ep->UnmapRangeByExit(ip, old_exit);
-                    }
-                    catch (std::exception& e)
-                    {
-                        SetJSONError("Unable to unmap to given range", unmap.response);
-                        return;
-                    }
+        // endpoint->map_exit(
+        //     map_request.request.address,
+        //     map_request.request.token,
+        //     map_request.request.ip_range,
+        //     [unmap = std::move(unmap_request),
+        //      ep = endpoint,
+        //      old_exit = swapexits.request.exit_addresses[0]](bool success, std::string result)
+        //      mutable {
+        //       if (not success)
+        //         unmap.send_response({{"error"}, std::move(result)});
+        //       else
+        //       {
+        //         try
+        //         {
+        //           for (auto& ip : unmap.request.ip_range)
+        //             ep->UnmapRangeByExit(ip, old_exit);
+        //         }
+        //         catch (std::exception& e)
+        //         {
+        //           SetJSONError("Unable to unmap to given range", unmap.response);
+        //           return;
+        //         }
 
-                    SetJSONResponse("OK", unmap.response);
-                    unmap.send_response();
-                }
-            });
+        //         SetJSONResponse("OK", unmap.response);
+        //         unmap.send_response();
+        //       }
+        //     });
     }
 
     void RPCServer::invoke(DNSQuery& dnsquery)

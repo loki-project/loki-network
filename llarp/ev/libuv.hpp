@@ -4,7 +4,7 @@
 
 #include <llarp/util/thread/queue.hpp>
 
-// #include <uvw.hpp>
+#include <uvw.hpp>
 
 #include <functional>
 #include <map>

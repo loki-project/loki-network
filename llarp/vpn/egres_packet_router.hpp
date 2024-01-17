@@ -8,7 +8,6 @@
 
 namespace llarp::vpn
 {
-    using AddressVariant_t = llarp::EndpointBase::AddressVariant_t;
     using EgresPacketHandlerFunc = std::function<void(AddressVariant_t, net::IPPacket)>;
 
     struct EgresLayer4Handler

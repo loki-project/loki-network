@@ -3,18 +3,12 @@
 #include "definition.hpp"
 #include "ini.hpp"
 
-#include <llarp/constants/files.hpp>
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/net.hpp>
 #include <llarp/net/sock_addr.hpp>
-#include <llarp/router_contact.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/util/file.hpp>
-#include <llarp/util/fs.hpp>
-#include <llarp/util/logging.hpp>
-#include <llarp/util/str.hpp>
 
 #include <stdexcept>
 
@@ -242,8 +236,6 @@ namespace llarp
         static constexpr Default PathsDefault{6};
         static constexpr Default IP6RangeDefault{"fd00::"};
 
-        conf.define_option<std::string>("network", "type", Default{"tun"}, Hidden, assignment_acceptor(endpoint_type));
-
         conf.define_option<bool>(
             "network", "save-profiles", SaveProfilesDefault, Hidden, assignment_acceptor(save_profiles));
 
@@ -259,7 +251,7 @@ namespace llarp
             MultiValue,
             [this](std::string value) {
                 RouterID router;
-                if (not router.from_string(value))
+                if (not router.from_snode_address(value))
                     throw std::invalid_argument{"bad snode value: " + value};
                 if (not strict_connect.insert(router).second)
                     throw std::invalid_argument{"duplicate strict connect snode: " + value};
@@ -291,7 +283,7 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     return;
-                auth_type = service::parse_auth_type(arg);
+                auth_type = auth::parse_auth_type(arg);
             });
 
         conf.define_option<std::string>(
@@ -357,7 +349,7 @@ namespace llarp
                 "How to interpret the contents of an auth file.",
                 "Possible values: hashes, plaintext",
             },
-            [this](std::string arg) { auth_file_type = service::parse_auth_file_type(std::move(arg)); });
+            [this](std::string arg) { auth_file_type = auth::parse_auth_file_type(std::move(arg)); });
 
         conf.define_option<std::string>(
             "network",
@@ -521,7 +513,7 @@ namespace llarp
                 if (arg.empty())
                     return;
                 service::Address exit;
-                service::AuthInfo auth;
+                auth::AuthInfo auth;
                 const auto pos = arg.find(":");
                 if (pos == std::string::npos)
                 {
@@ -532,7 +524,7 @@ namespace llarp
                 const auto exit_str = arg.substr(0, pos);
                 auth.token = arg.substr(pos + 1);
 
-                if (service::is_valid_name(exit_str))
+                if (llarp::service::is_valid_name(exit_str))
                 {
                     ons_exit_auths.emplace(exit_str, auth);
                     return;
@@ -677,7 +669,7 @@ namespace llarp
             },
             [this](std::string arg) {
                 RouterID id;
-                if (not id.from_string(arg))
+                if (not id.from_snode_address(arg))
                     throw std::invalid_argument{fmt::format("Invalid RouterID: {}", arg)};
 
                 auto itr = snode_blacklist.emplace(std::move(id));

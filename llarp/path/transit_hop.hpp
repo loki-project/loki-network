@@ -16,7 +16,7 @@ namespace llarp
             TransitHopInfo() = default;
             TransitHopInfo(const RouterID& down);
 
-            PathID_t txID, rxID;
+            HopID txID, rxID;
             RouterID upstream;
             RouterID downstream;
 
@@ -63,9 +63,9 @@ namespace llarp
             void onion(std::string& data, SymmNonce& nonce, bool randomize = false) const;
 
             std::string onion_and_payload(
-                std::string& payload, PathID_t next_id, std::optional<SymmNonce> nonce = std::nullopt) const;
+                std::string& payload, HopID next_id, std::optional<SymmNonce> nonce = std::nullopt) const;
 
-            PathID_t RXID() const override
+            HopID RXID() const override
             {
                 return info.rxID;
             }
@@ -93,7 +93,7 @@ namespace llarp
 
             std::string ToString() const;
 
-            bool Expired(llarp_time_t now) const override;
+            bool is_expired(llarp_time_t now) const override;
 
             bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt) const override
             {
@@ -115,6 +115,7 @@ namespace llarp
             /// a timeout flag (if set, response string will be empty)
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func) override;
+            bool send_path_data_message(std::string body) override;
 
             void QueueDestroySelf(Router* r);
 
@@ -138,7 +139,7 @@ namespace std
         std::size_t operator()(llarp::path::TransitHopInfo const& a) const
         {
             hash<llarp::RouterID> RHash{};
-            hash<llarp::PathID_t> PHash{};
+            hash<llarp::HopID> PHash{};
             return RHash(a.upstream) ^ RHash(a.downstream) ^ PHash(a.txID) ^ PHash(a.rxID);
         }
     };

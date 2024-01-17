@@ -24,9 +24,9 @@ namespace llarp
         return enc;
     }
 
-    util::StatusObject Contacts::ExtractStatus() const
+    StatusObject Contacts::ExtractStatus() const
     {
-        util::StatusObject obj{{"services", _introset_nodes->ExtractStatus()}, {"local_key", _local_key.ToHex()}};
+        StatusObject obj{{"services", _introset_nodes->ExtractStatus()}, {"local_key", _local_key.ToHex()}};
         return obj;
     }
 

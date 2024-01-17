@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# set -x
+set -e
+
 . $(dirname $0)/format-version.sh
 
 cd "$(dirname $0)/../"

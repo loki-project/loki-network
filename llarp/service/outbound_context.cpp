@@ -223,7 +223,7 @@ namespace llarp::service
         }
     }
 
-    util::StatusObject OutboundContext::ExtractStatus() const
+    StatusObject OutboundContext::ExtractStatus() const
     {
         auto obj = path::PathBuilder::ExtractStatus();
         obj["current_tag"] = current_tag.ToHex();
@@ -613,7 +613,7 @@ namespace llarp::service
         msg->tag = f->convo_tag;
         msg->put_buffer(buf);
 
-        router->loop()->call_soon([this, f, msg, shared, path]() {
+        _router->loop()->call_soon([this, f, msg, shared, path]() {
             if (f->EncryptAndSign(*msg, shared, ep.GetIdentity()))
                 path->send_path_control_message("convo_intro", msg->bt_encode());
             else

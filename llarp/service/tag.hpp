@@ -1,55 +1,31 @@
 #pragma once
 
-#include <llarp/dht/key.hpp>
+#include <llarp/net/net.hpp>
 #include <llarp/util/aligned.hpp>
-#include <llarp/util/status.hpp>
 
-#include <sodium/crypto_generichash.h>
-
-namespace llarp
+namespace llarp::service
 {
-    namespace service
+    struct SessionTag final : AlignedBuffer<16>
     {
-        struct Tag : public AlignedBuffer<16>
-        {
-            Tag() : AlignedBuffer<SIZE>()
-            {}
+        using AlignedBuffer<16>::AlignedBuffer;
 
-            Tag(const byte_t* d) : AlignedBuffer<SIZE>(d)
-            {}
+        void Randomize() override;
 
-            Tag(const std::string& str) : Tag()
-            {
-                // evidently, does nothing on LP64 systems (where size_t is *already*
-                // unsigned long but zero-extends this on LLP64 systems
-                // 2Jan19: reeee someone undid the patch
-                std::copy(str.begin(), str.begin() + std::min(std::string::size_type(16), str.size()), begin());
-            }
+        sockaddr_in6 ToV6() const;
 
-            Tag& operator=(const std::string& str)
-            {
-                std::copy(str.begin(), str.begin() + std::min(std::string::size_type(16), str.size()), begin());
-                return *this;
-            }
-
-            util::StatusObject ExtractStatus() const
-            {
-                return util::StatusObject{{"name", ToString()}};
-            }
-
-            std::string ToString() const;
-
-            bool Empty() const
-            {
-                return data()[0] == 0;
-            }
-        };
-    }  // namespace service
-}  // namespace llarp
+        void FromV6(sockaddr_in6 saddr);
+    };
+}  // namespace llarp::service
 
 namespace std
 {
     template <>
-    struct hash<llarp::service::Tag> : hash<llarp::AlignedBuffer<llarp::service::Tag::SIZE>>
-    {};
+    struct hash<llarp::service::SessionTag>
+    {
+        size_t operator()(const llarp::service::SessionTag& tag) const
+        {
+            std::hash<std::string_view> h{};
+            return h(std::string_view{reinterpret_cast<const char*>(tag.data()), tag.size()});
+        }
+    };
 }  // namespace std

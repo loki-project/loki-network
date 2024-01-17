@@ -7,7 +7,7 @@
 #include <llarp/messages/common.hpp>
 #include <llarp/path/transit_hop.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/router_contact.hpp>
+// #include <llarp/router_contact.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/logging.hpp>
@@ -140,7 +140,7 @@ namespace llarp
 
         friend struct link::Endpoint;
 
-        std::atomic<bool> is_stopping{false};
+        std::atomic<bool> is_stopping;
 
         // sessions to persist -> timestamp to end persist at
         std::unordered_map<RouterID, llarp_time_t> persisting_conns;
@@ -241,7 +241,7 @@ namespace llarp
 
         void check_persisting_conns(llarp_time_t now);
 
-        util::StatusObject extract_status() const;
+        StatusObject extract_status() const;
 
         void init();
 

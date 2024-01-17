@@ -1,5 +1,6 @@
 #include "identity.hpp"
 
+#include <llarp/config/key_manager.hpp>
 #include <llarp/crypto/crypto.hpp>
 
 namespace llarp::service
@@ -51,12 +52,15 @@ namespace llarp::service
         vanity.Zero();
     }
 
-    void Identity::RegenerateKeys()
+    void Identity::regenerate_keys()
     {
         crypto::identity_keygen(signkey);
         crypto::encryption_keygen(enckey);
+
         pub.Update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey));
+
         crypto::pqe_keygen(pq);
+
         if (not crypto::derive_subkey_private(derivedSignKey, signkey, 1))
         {
             throw std::runtime_error("failed to derive subkey");
@@ -74,7 +78,7 @@ namespace llarp::service
         return crypto::sign(sig, signkey, buf, size);
     }
 
-    void Identity::EnsureKeys(fs::path fname, bool needBackup)
+    void Identity::ensure_keys(fs::path fname, bool needBackup)
     {
         // make sure we are empty
         Clear();
@@ -94,14 +98,14 @@ namespace llarp::service
         if (!exists)
         {
             // regen and encode
-            RegenerateKeys();
+            regenerate_keys();
 
             buf = bt_encode();
 
             // write
             try
             {
-                util::buffer_to_file(fname, buf.data(), buf.size());
+                llarp::util::buffer_to_file(fname, buf.data(), buf.size());
             }
             catch (const std::exception& e)
             {
@@ -118,7 +122,7 @@ namespace llarp::service
         // read file
         try
         {
-            util::file_to_buffer(fname, buf.data(), buf.size());
+            llarp::util::file_to_buffer(fname, buf.data(), buf.size());
         }
         catch (const std::length_error&)
         {

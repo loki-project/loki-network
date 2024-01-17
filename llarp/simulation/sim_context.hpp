@@ -1,5 +1,5 @@
 #pragma once
-#include <llarp/crypto/crypto_libsodium.hpp>
+#include <llarp/crypto/crypto.hpp>
 #include <llarp/ev/ev.hpp>
 
 namespace llarp
@@ -15,7 +15,7 @@ namespace llarp
             Simulation();
 
             llarp::CryptoManager m_CryptoManager;
-            EventLoop_ptr m_NetLoop;
+            std::shared_ptr<EventLoop> m_NetLoop;
 
             std::unordered_map<std::string, Node_ptr> m_Nodes;
 

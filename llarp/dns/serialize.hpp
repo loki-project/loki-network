@@ -1,7 +1,7 @@
 #pragma once
 
 #include <llarp/util/buffer.hpp>
-#include <llarp/util/status.hpp>
+#include <llarp/util/types.hpp>
 
 #include <vector>
 
@@ -19,7 +19,7 @@ namespace llarp::dns
         virtual bool Decode(llarp_buffer_t* buf) = 0;
 
         /// convert this whatever into json
-        virtual util::StatusObject ToJSON() const = 0;
+        virtual StatusObject ToJSON() const = 0;
     };
 
     bool EncodeRData(llarp_buffer_t* buf, const std::vector<byte_t>& rdata);

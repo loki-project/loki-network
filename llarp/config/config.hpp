@@ -1,7 +1,9 @@
 #pragma once
+
 #include "definition.hpp"
 #include "ini.hpp"
 
+#include <llarp/auth/auth.hpp>
 #include <llarp/bootstrap.hpp>
 #include <llarp/constants/files.hpp>
 #include <llarp/crypto/types.hpp>
@@ -13,7 +15,6 @@
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/router_contact.hpp>
 #include <llarp/service/address.hpp>
-#include <llarp/service/auth.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
@@ -110,22 +111,26 @@ namespace llarp
         IPRange if_addr;
 
         std::optional<fs::path> keyfile;
-        std::string endpoint_type;
-        bool is_reachable = false;
+
+        std::string endpoint_type{"tun"};
+
         std::optional<int> hops;
         std::optional<int> paths;
+
         bool allow_exit = false;
+        bool is_reachable = false;
+
         std::set<RouterID> snode_blacklist;
         net::IPRangeMap<service::Address> exit_map;
         net::IPRangeMap<std::string> ons_exit_map;
 
-        std::unordered_map<service::Address, service::AuthInfo> exit_auths;
-        std::unordered_map<std::string, service::AuthInfo> ons_exit_auths;
+        std::unordered_map<service::Address, auth::AuthInfo> exit_auths;
+        std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
 
         std::unordered_map<huint128_t, service::Address> map_addrs;
 
-        service::AuthType auth_type = service::AuthType::NONE;
-        service::AuthFileType auth_file_type = service::AuthFileType::HASHES;
+        auth::AuthType auth_type = auth::AuthType::NONE;
+        auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
         std::optional<std::string> auth_url;
         std::optional<std::string> auth_method;
         std::unordered_set<service::Address> auth_whitelist;

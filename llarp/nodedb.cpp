@@ -666,12 +666,11 @@ namespace llarp
                 {
                     log::warning(
                         logcat,
-                        "BootstrapRC fetch request to {} failed (error {}/{}): {}",
+                        "BootstrapRC fetch request to {} failed (error {}/{})",
                         src,
                         bootstrap_attempts,
-                        MAX_BOOTSTRAP_FETCH_ATTEMPTS,
-                        m.body());
-                    // fallback_to_bootstrap();
+                        MAX_BOOTSTRAP_FETCH_ATTEMPTS);
+                    fallback_to_bootstrap();
                     return;
                 }
 
@@ -701,7 +700,7 @@ namespace llarp
                         bootstrap_attempts,
                         MAX_BOOTSTRAP_FETCH_ATTEMPTS,
                         e.what());
-                    // fallback_to_bootstrap();
+                    fallback_to_bootstrap();
                     return;
                 }
 
@@ -891,8 +890,6 @@ namespace llarp
     void NodeDB::remove_router(RouterID pk)
     {
         _router.loop()->call([this, pk]() {
-            if (auto itr = rc_lookup.find(pk); itr != rc_lookup.end())
-            {}
             rc_lookup.erase(pk);
             remove_many_from_disk_async({pk});
         });

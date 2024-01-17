@@ -4,7 +4,7 @@
 #include "platform.hpp"
 
 #include <llarp/config/config.hpp>
-#include <llarp/ev/ev.hpp>
+// #include <llarp/ev/ev.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/fs.hpp>
@@ -193,7 +193,7 @@ namespace llarp::dns
        public:
         virtual ~Server() = default;
 
-        explicit Server(EventLoop_ptr loop, llarp::DnsConfig conf, unsigned int netif_index);
+        explicit Server(std::shared_ptr<EventLoop> loop, llarp::DnsConfig conf, unsigned int netif_index);
 
         /// returns all sockaddr we have from all of our PacketSources
         std::vector<SockAddr> BoundPacketSourceAddrs() const;
@@ -238,7 +238,7 @@ namespace llarp::dns
         void SetDNSMode(bool all_queries);
 
        protected:
-        EventLoop_ptr m_Loop;
+        std::shared_ptr<EventLoop> m_Loop;
         llarp::DnsConfig m_Config;
         std::shared_ptr<I_Platform> m_Platform;
 

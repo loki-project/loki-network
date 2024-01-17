@@ -1,11 +1,11 @@
 #pragma once
 
 #include "abstracthophandler.hpp"
-#include "path_types.hpp"
-#include "pathset.hpp"
+#include "pathhandler.hpp"
 
 #include <llarp/constants/path.hpp>
 #include <llarp/crypto/types.hpp>
+#include <llarp/dht/key.hpp>
 #include <llarp/router_id.hpp>
 #include <llarp/service/intro.hpp>
 #include <llarp/util/aligned.hpp>
@@ -25,6 +25,11 @@ namespace llarp
 {
     struct Router;
 
+    /*
+      TODO:
+        - Add a boolean for "allow incoming session" or something
+    */
+
     namespace path
     {
         struct TransitHop;
@@ -39,25 +44,29 @@ namespace llarp
         {
             std::vector<PathHopConfig> hops;
 
-            std::weak_ptr<PathSet> path_set;
+            std::weak_ptr<PathHandler> path_set;
 
             service::Introduction intro;
 
             llarp_time_t buildStarted = 0s;
 
             Path(
-                Router* rtr,
+                Router& rtr,
                 const std::vector<RemoteRC>& routers,
-                std::weak_ptr<PathSet> parent,
-                PathRole startingRoles,
+                std::weak_ptr<PathHandler> parent,
                 std::string shortName);
 
-            util::StatusObject ExtractStatus() const;
-
-            PathRole Role() const
+            std::shared_ptr<Path> get_self()
             {
-                return _role;
+                return shared_from_this();
             }
+
+            std::weak_ptr<Path> get_weak()
+            {
+                return weak_from_this();
+            }
+
+            StatusObject ExtractStatus() const;
 
             bool operator<(const Path& other) const
             {
@@ -69,29 +78,6 @@ namespace llarp
                 last_recv_msg = std::max(now, last_recv_msg);
             }
 
-            /// return true if ALL of the specified roles are supported
-            bool SupportsAllRoles(PathRole roles) const
-            {
-                return (_role & roles) == roles;
-            }
-
-            /// return true if ANY of the specified roles are supported
-            bool SupportsAnyRoles(PathRole roles) const
-            {
-                return roles == ePathRoleAny || (_role | roles) != 0;
-            }
-
-            /// clear role bits
-            void ClearRoles(PathRole roles)
-            {
-                _role &= ~roles;
-            }
-
-            PathStatus Status() const
-            {
-                return _status;
-            }
-
             const std::string& short_name() const;
 
             std::string HopsString() const;
@@ -101,7 +87,11 @@ namespace llarp
                 return last_recv_msg;
             }
 
-            void EnterState(PathStatus st, llarp_time_t now = 0s);
+            // TODO: make this into multiple functions and fuck PathStatus forever
+            void set_established()
+            {
+                _established = true;
+            }
 
             llarp_time_t ExpireTime() const
             {
@@ -115,23 +105,23 @@ namespace llarp
 
             void enable_exit_traffic()
             {
-                log::info(path_cat, "{} {} granted exit", name(), Endpoint());
-                _role |= ePathRoleExit;
+                log::info(path_cat, "{} {} granted exit", name(), pivot_router_id());
+                // _role |= ePathRoleExit;
             }
 
             void mark_exit_closed()
             {
                 log::info(path_cat, "{} hd its exit closed", name());
-                _role &= ePathRoleExit;
+                // _role &= ePathRoleExit;
             }
 
             bool update_exit(uint64_t tx_id);
 
-            bool Expired(llarp_time_t now) const override;
+            bool is_expired(llarp_time_t now) const override;
 
             /// build a new path on the same set of hops as us
             /// regenerates keys
-            void Rebuild();
+            void rebuild();
 
             void Tick(llarp_time_t now, Router* r);
 
@@ -159,36 +149,36 @@ namespace llarp
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func = nullptr) override;
 
+            bool send_path_data_message(std::string body) override;
+
             bool IsReady() const;
 
             // Is this deprecated?
             // nope not deprecated :^DDDD
-            PathID_t TXID() const;
+            HopID TXID() const;
 
-            RouterID Endpoint() const;
+            RouterID pivot_router_id() const;
 
-            PubKey EndpointPubKey() const;
-
-            bool is_endpoint(const RouterID& router, const PathID_t& path) const;
-
-            PathID_t RXID() const override;
+            HopID RXID() const override;
 
             RouterID upstream() const;
 
             std::string name() const;
 
            private:
+            std::string make_outer_payload(std::string payload);
+
             bool SendLatencyMessage(Router* r);
 
             /// call obtained exit hooks
             bool InformExitResult(llarp_time_t b);
 
-            Router& router;
+            std::atomic<bool> _established{false};
+
+            Router& _router;
             llarp_time_t last_recv_msg = 0s;
             llarp_time_t last_latency_test = 0s;
             uint64_t last_latency_test_id = 0;
-            PathStatus _status;
-            PathRole _role;
             const std::string _short_name;
         };
 
@@ -215,7 +205,7 @@ namespace llarp
             {
                 if (p == nullptr)
                     return 0;
-                return std::hash<RouterID>{}(p->Endpoint());
+                return std::hash<RouterID>{}(p->pivot_router_id());
             }
         };
 
@@ -224,7 +214,7 @@ namespace llarp
         {
             bool operator()(const std::shared_ptr<Path>& left, const std::shared_ptr<Path>& right) const
             {
-                return left && right && left->Endpoint() == left->Endpoint();
+                return left && right && left->pivot_router_id() == left->pivot_router_id();
             }
         };
     }  // namespace path

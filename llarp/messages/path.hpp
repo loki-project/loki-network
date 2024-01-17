@@ -4,13 +4,42 @@
 
 namespace llarp
 {
+    namespace PathData
+    {
+        // this might be totally superfluous, but if we want to add more to the data messages,
+        // there is a bespoke place to do exactly that
+        inline static std::string serialize(std::string body)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("BODY", body);
+            return std::move(btdp).str();
+        }
+    }  // namespace PathData
+
+    namespace PathControl
+    {
+        inline static std::string serialize(std::string method, std::string body)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("BODY", body);
+            btdp.append("METHOD", method);
+            return std::move(btdp).str();
+        }
+    }  // namespace PathControl
+
     namespace PathBuildMessage
     {
-        inline auto BAD_FRAMES = "BAD_FRAMES"sv;
-        inline auto BAD_CRYPTO = "BAD_CRYPTO"sv;
-        inline auto NO_TRANSIT = "NOT ALLOWING TRANSIT"sv;
-        inline auto BAD_PATHID = "BAD PATH ID"sv;
-        inline auto BAD_LIFETIME = "BAD PATH LIFETIME (TOO LONG)"sv;
+        inline auto bad_frames = "BAD_FRAMES"sv;
+        inline auto bad_crypto = "BAD_CRYPTO"sv;
+        inline auto no_transit = "NOT ALLOWING TRANSIT"sv;
+        inline auto bad_pathid = "BAD PATH ID"sv;
+        inline auto bad_lifetime = "BAD PATH LIFETIME (TOO LONG)"sv;
+
+        inline const auto NO_TRANSIT = messages::serialize_response({{messages::STATUS_KEY, no_transit}});
+        inline const auto BAD_LIFETIME = messages::serialize_response({{messages::STATUS_KEY, bad_lifetime}});
+        inline const auto BAD_FRAMES = messages::serialize_response({{messages::STATUS_KEY, bad_frames}});
+        inline const auto BAD_PATHID = messages::serialize_response({{messages::STATUS_KEY, bad_pathid}});
+        inline const auto BAD_CRYPTO = messages::serialize_response({{messages::STATUS_KEY, bad_crypto}});
 
         inline static void setup_hop_keys(path::PathHopConfig& hop, const RouterID& nextHop)
         {
@@ -40,7 +69,7 @@ namespace llarp
             {
                 oxenc::bt_dict_producer btdp;
 
-                btdp.append("COMMKEY", hop.commkey.toPublic().ToView());
+                btdp.append("COMMKEY", hop.commkey.to_pubkey().ToView());
                 btdp.append("LIFETIME", path::DEFAULT_LIFETIME.count());
                 btdp.append("NONCE", hop.nonce.ToView());
                 btdp.append("RX", hop.rxID.ToView());
@@ -79,7 +108,7 @@ namespace llarp
 
                 btdp.append("ENCRYPTED", hop_info);
                 btdp.append("NONCE", outer_nonce.ToView());
-                btdp.append("PUBKEY", framekey.toPublic().ToView());
+                btdp.append("PUBKEY", framekey.to_pubkey().ToView());
 
                 hashed_data = std::move(btdp).str();
             }

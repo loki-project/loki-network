@@ -22,19 +22,17 @@ namespace llarp
 
     namespace path
     {
-
         std::string make_onion_payload(
-            const SymmNonce& nonce, const PathID_t& path_id, const std::string_view& inner_payload);
-        std::string make_onion_payload(
-            const SymmNonce& nonce, const PathID_t& path_id, const ustring_view& inner_payload);
+            const SymmNonce& nonce, const HopID& path_id, const std::string_view& inner_payload);
+        std::string make_onion_payload(const SymmNonce& nonce, const HopID& path_id, const ustring_view& inner_payload);
 
         struct AbstractHopHandler
         {
             virtual ~AbstractHopHandler() = default;
 
-            virtual PathID_t RXID() const = 0;
+            virtual HopID RXID() const = 0;
 
-            virtual bool Expired(llarp_time_t now) const = 0;
+            virtual bool is_expired(llarp_time_t now) const = 0;
 
             virtual bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt) const = 0;
 
@@ -49,17 +47,10 @@ namespace llarp
             virtual bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func) = 0;
 
+            virtual bool send_path_data_message(std::string body) = 0;
+
             /// return timestamp last remote activity happened at
             virtual llarp_time_t LastRemoteActivityAt() const = 0;
-
-            // TODO: remove this method after all commented out uses are deleted
-            uint64_t NextSeqNo()
-            {
-                return m_SequenceNum++;
-            }
-
-           protected:
-            uint64_t m_SequenceNum = 0;
         };
 
         // using HopHandler_ptr = std::shared_ptr<AbstractHopHandler>;

@@ -4,7 +4,6 @@
 #include "intro_set.hpp"
 #include "vanity.hpp"
 
-#include <llarp/config/key_manager.hpp>
 #include <llarp/constants/proto.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/util/buffer.hpp>
@@ -28,14 +27,14 @@ namespace llarp::service
         ServiceInfo pub;
 
         // regenerate secret keys
-        void RegenerateKeys();
+        void regenerate_keys();
 
         std::string bt_encode() const;
 
         void bt_decode(std::string);
 
         /// @param needBackup determines whether existing keys will be cycled
-        void EnsureKeys(fs::path fpath, bool needBackup);
+        void ensure_keys(fs::path fpath, bool needBackup);
 
         bool KeyExchange(
             path_dh_func dh, SharedSecret& sharedkey, const ServiceInfo& other, const KeyExchangeNonce& N) const;

@@ -49,7 +49,7 @@ namespace llarp::consensus
     class reachability_testing
     {
        public:
-        // Distribution for the seconds between node tests: we throw in some randomness to avoid
+        // Distribution for the seconds between node tests: we throw in some randomness to avoid //
         // potential clustering of tests.  (Note that there is some granularity here as the test
         // timer only runs every REACHABILITY_TESTING_TIMER_INTERVAL).
         std::normal_distribution<float> TESTING_INTERVAL{10.0, 3.0};

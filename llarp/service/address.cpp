@@ -70,15 +70,4 @@ namespace llarp::service
         return dht::Key_t{k.as_array()};
     }
 
-    std::optional<std::variant<Address, RouterID>> parse_address(std::string_view lokinet_addr)
-    {
-        RouterID router{};
-        service::Address addr{};
-        if (router.from_string(lokinet_addr))
-            return router;
-        if (addr.FromString(lokinet_addr))
-            return addr;
-        return std::nullopt;
-    }
-
 }  // namespace llarp::service

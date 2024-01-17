@@ -41,7 +41,7 @@ namespace llarp
         return lhs.as_array() == rhs.as_array();
     }
 
-    bool SecretKey::LoadFromFile(const fs::path& fname)
+    bool SecretKey::load_from_file(const fs::path& fname)
     {
         size_t sz;
         std::array<byte_t, 128> tmp;
@@ -69,13 +69,13 @@ namespace llarp
     {
         PrivateKey key;
         PubKey pubkey;
-        if (!toPrivate(key) || !key.toPublic(pubkey))
+        if (!to_privkey(key) || !key.to_pubkey(pubkey))
             return false;
         std::memcpy(data() + 32, pubkey.data(), 32);
         return true;
     }
 
-    bool SecretKey::toPrivate(PrivateKey& key) const
+    bool SecretKey::to_privkey(PrivateKey& key) const
     {
         // Ed25519 calculates a 512-bit hash from the seed; the first half (clamped)
         // is the private key; the second half is the hash that gets used in
@@ -90,12 +90,12 @@ namespace llarp
         return true;
     }
 
-    bool PrivateKey::toPublic(PubKey& pubkey) const
+    bool PrivateKey::to_pubkey(PubKey& pubkey) const
     {
         return crypto_scalarmult_ed25519_base_noclamp(pubkey.data(), data()) != -1;
     }
 
-    bool SecretKey::SaveToFile(const fs::path& fname) const
+    bool SecretKey::write_to_file(const fs::path& fname) const
     {
         auto bte = bt_encode();
 

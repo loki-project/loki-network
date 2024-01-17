@@ -5,6 +5,7 @@
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/ev/ev.hpp>
+#include <llarp/handlers/tun.hpp>
 #include <llarp/link/link_manager.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/logging.hpp>
@@ -31,7 +32,7 @@ namespace llarp
     void Context::Configure(std::shared_ptr<Config> conf)
     {
         if (nullptr != config.get())
-            throw std::runtime_error("Config already exists");
+            throw std::runtime_error{"Config already exists"};
 
         config = std::move(conf);
     }
@@ -50,7 +51,7 @@ namespace llarp
     {
         /// Call one of the Configure() methods before calling Setup()
         if (not config)
-            throw std::runtime_error("Cannot call Setup() on context without a Config");
+            throw std::runtime_error{"Cannot call Setup() on context without a Config"};
 
         if (opts.showBanner)
             llarp::LogInfo(fmt::format("{}", llarp::LOKINET_VERSION_FULL));
@@ -64,8 +65,8 @@ namespace llarp
         router = makeRouter(loop);
         nodedb = makeNodeDB();
 
-        if (!router->Configure(config, opts.isSNode, nodedb))
-            throw std::runtime_error("Failed to configure router");
+        if (!router->configure(config, nodedb))
+            throw std::runtime_error{"Failed to configure router"};
     }
 
     std::shared_ptr<NodeDB> Context::makeNodeDB()
@@ -74,7 +75,7 @@ namespace llarp
             nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
-    std::shared_ptr<Router> Context::makeRouter(const EventLoop_ptr& loop)
+    std::shared_ptr<Router> Context::makeRouter(const std::shared_ptr<EventLoop>& loop)
     {
         return std::make_shared<Router>(loop, makeVPNPlatform());
     }
@@ -83,7 +84,7 @@ namespace llarp
     {
         auto plat = vpn::MakeNativePlatform(this);
         if (plat == nullptr)
-            throw std::runtime_error("vpn platform not supported");
+            throw std::runtime_error{"vpn platform not supported"};
         return plat;
     }
 
@@ -96,7 +97,7 @@ namespace llarp
             return 1;
         }
 
-        if (not router->Run())
+        if (not router->run())
             return 2;
 
         // run net io thread
@@ -143,14 +144,6 @@ namespace llarp
             SigINT();
         }
 #ifndef _WIN32
-        if (sig == SIGUSR1)
-        {
-            if (router and not router->is_service_node())
-            {
-                LogInfo("SIGUSR1: resetting network state");
-                router->Thaw();
-            }
-        }
         if (sig == SIGHUP)
         {
             Reload();
@@ -167,7 +160,7 @@ namespace llarp
         {
             llarp::log::error(logcat, "Handling SIGINT");
             /// async stop router on sigint
-            router->Stop();
+            router->stop();
         }
     }
 

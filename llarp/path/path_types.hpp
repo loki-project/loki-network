@@ -13,7 +13,7 @@ namespace
 
 namespace llarp
 {
-    struct PathID_t final : public AlignedBuffer<PATHIDSIZE>
+    struct HopID final : public AlignedBuffer<PATHIDSIZE>
     {
         using AlignedBuffer<PATHIDSIZE>::AlignedBuffer;
     };
@@ -24,7 +24,7 @@ namespace llarp
         struct PathHopConfig
         {
             /// path id
-            PathID_t txID, rxID;
+            HopID txID, rxID;
             // router contact of router
             RemoteRC rc;
             // temp public encryption key
@@ -40,7 +40,7 @@ namespace llarp
             // lifetime
             llarp_time_t lifetime = DEFAULT_LIFETIME;
 
-            util::StatusObject ExtractStatus() const;
+            StatusObject ExtractStatus() const;
         };
 
         inline bool operator<(const PathHopConfig& lhs, const PathHopConfig& rhs)
@@ -58,6 +58,6 @@ namespace llarp
 namespace std
 {
     template <>
-    struct hash<llarp::PathID_t> : hash<llarp::AlignedBuffer<llarp::PathID_t::SIZE>>
+    struct hash<llarp::HopID> : hash<llarp::AlignedBuffer<llarp::HopID::SIZE>>
     {};
 }  // namespace std

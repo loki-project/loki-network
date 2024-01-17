@@ -4,7 +4,7 @@
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <llarp/util/status.hpp>
+#include <llarp/util/types.hpp>
 
 #include <string_view>
 #include <tuple>
@@ -57,7 +57,7 @@ namespace llarp::dns
 
         bool BDecode(llarp_buffer_t*);
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         static SRVData fromTuple(SRVTuple tuple);
 

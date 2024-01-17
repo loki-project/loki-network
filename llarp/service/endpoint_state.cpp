@@ -2,22 +2,7 @@
 
 namespace llarp::service
 {
-    bool EndpointState::Configure(const NetworkConfig& conf)
-    {
-        if (conf.keyfile.has_value())
-            key_file = conf.keyfile->string();
-        snode_blacklist = conf.snode_blacklist;
-        is_exit_enabled = conf.allow_exit;
-
-        for (const auto& record : conf.srv_records)
-        {
-            local_introset.SRVs.push_back(record.toTuple());
-        }
-
-        return true;
-    }
-
-    util::StatusObject EndpointState::ExtractStatus(util::StatusObject& obj) const
+    StatusObject EndpointState::ExtractStatus(StatusObject& obj) const
     {
         obj["lastPublished"] = to_json(last_publish);
         obj["lastPublishAttempt"] = to_json(last_publish_attempt);
@@ -43,7 +28,7 @@ namespace llarp::service
         //     std::back_inserter(obj["snodeSessions"]),
         //     [](const auto& item) { return item.second->ExtractStatus(); });
 
-        util::StatusObject sessionObj{};
+        StatusObject sessionObj{};
 
         // TODO:
         // for (const auto& item : m_Sessions)

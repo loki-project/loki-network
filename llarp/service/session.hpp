@@ -5,7 +5,6 @@
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path.hpp>
-#include <llarp/util/status.hpp>
 #include <llarp/util/types.hpp>
 
 namespace llarp::service
@@ -35,7 +34,7 @@ namespace llarp::service
         Duration_t lastSend{};
         Duration_t lastRecv{};
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         /// called to indicate we recieved on this session
         void RX();

@@ -2,7 +2,6 @@
 
 #include <llarp.hpp>
 #include <llarp/handlers/tun.hpp>
-#include <llarp/service/context.hpp>
 
 #include <memory>
 

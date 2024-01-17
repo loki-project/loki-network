@@ -10,13 +10,13 @@
 namespace llarp::service
 {
     AsyncKeyExchange::AsyncKeyExchange(
-        EventLoop_ptr l,
+        std::shared_ptr<EventLoop> l,
         ServiceInfo r,
         const Identity& localident,
         const PQPubKey& introsetPubKey,
         const Introduction& remote,
         Endpoint* h,
-        const ConvoTag& t)
+        const SessionTag& t)
         : loop(std::move(l)),
           m_remote(std::move(r)),
           m_LocalIdentity(localident),
@@ -29,10 +29,10 @@ namespace llarp::service
     void AsyncKeyExchange::Result(std::shared_ptr<AsyncKeyExchange> self, std::shared_ptr<ProtocolFrameMessage> frame)
     {
         // put values
-        self->handler->PutSenderFor(self->msg.tag, self->m_remote, false);
-        self->handler->PutCachedSessionKeyFor(self->msg.tag, self->sharedKey);
-        self->handler->PutIntroFor(self->msg.tag, self->remoteIntro);
-        self->handler->PutReplyIntroFor(self->msg.tag, self->msg.introReply);
+        // self->handler->PutSenderFor(self->msg.tag, self->m_remote, false);
+        // self->handler->PutCachedSessionKeyFor(self->msg.tag, self->sharedKey);
+        // self->handler->PutIntroFor(self->msg.tag, self->remoteIntro);
+        // self->handler->PutReplyIntroFor(self->msg.tag, self->msg.introReply);
         self->hook(frame);
     }
 

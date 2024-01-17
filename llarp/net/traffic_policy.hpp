@@ -3,7 +3,7 @@
 #include "ip_packet.hpp"
 #include "ip_range.hpp"
 
-#include <llarp/util/status.hpp>
+#include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
 
@@ -25,7 +25,7 @@ namespace llarp::net
 
         bool BDecode(llarp_buffer_t* buf);
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         /// returns true if an ip packet looks like it matches this protocol info
         /// returns false otherwise
@@ -54,7 +54,7 @@ namespace llarp::net
         void bt_decode(oxenc::bt_dict_consumer& btdc);
 
         bool BDecode(llarp_buffer_t* buf);
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise

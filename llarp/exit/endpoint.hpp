@@ -1,111 +1,33 @@
 #pragma once
 
 #include <llarp/crypto/types.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/endpoint_base.hpp>
+#include <llarp/net/ip_range_map.hpp>
 #include <llarp/path/abstracthophandler.hpp>
-#include <llarp/service/protocol_type.hpp>
+#include <llarp/service/types.hpp>
 #include <llarp/util/time.hpp>
 
 #include <queue>
 
-namespace llarp
+namespace llarp::exit
 {
-    namespace handlers
+    /** This class is the counterpart to service::Endpoint. While service::Endpoint manages hidden
+        services ran locally, exit::Endpoint manages locally operated client exit nodes
+    */
+    struct Endpoint /* final */ : public path::PathHandler,
+                                  public EndpointBase,
+                                  public std::enable_shared_from_this<Endpoint>
     {
-        // forward declare
-        struct ExitEndpoint;
-    }  // namespace handlers
-
-    namespace exit
-    {
-        /// persistant exit state for 1 identity on the exit node
-        struct Endpoint
+        std::shared_ptr<path::PathHandler> get_self() override
         {
-            static constexpr size_t MaxUpstreamQueueSize = 256;
+            return shared_from_this();
+        }
 
-            explicit Endpoint(
-                const llarp::PubKey& remoteIdent,
-                const std::shared_ptr<llarp::path::AbstractHopHandler>& path,
-                bool rewriteIP,
-                huint128_t ip,
-                llarp::handlers::ExitEndpoint* parent);
+        std::weak_ptr<path::PathHandler> get_weak() override
+        {
+            return weak_from_this();
+        }
 
-            ~Endpoint();
-
-            /// close ourselves
-            void Close();
-
-            /// implement istateful
-            util::StatusObject ExtractStatus() const;
-
-            /// return true if we are expired right now
-            bool IsExpired(llarp_time_t now) const;
-
-            bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt = 5s) const;
-
-            /// return true if this endpoint looks dead right now
-            bool LooksDead(llarp_time_t now, llarp_time_t timeout = 10s) const;
-
-            /// tick ourself, reset tx/rx rates
-            void Tick(llarp_time_t now);
-
-            /// queue traffic from service node / internet to be transmitted
-            bool QueueInboundTraffic(std::vector<byte_t> data, service::ProtocolType t);
-
-            /// flush inbound and outbound traffic queues
-            bool Flush();
-
-            /// queue outbound traffic
-            /// does ip rewrite here
-            // bool
-            // QueueOutboundTraffic(
-            //     PathID_t txid, std::vector<byte_t> data, uint64_t counter, service::ProtocolType
-            //     t);
-
-            /// update local path id and cascade information to parent
-            /// return true if success
-            bool UpdateLocalPath(const llarp::PathID_t& nextPath);
-
-            std::shared_ptr<llarp::path::AbstractHopHandler> GetCurrentPath() const
-            {
-                return current_path;
-            }
-
-            const llarp::PubKey& PubKey() const
-            {
-                return remote_signkey;
-            }
-
-            RouterID router_id() const
-            {
-                return remote_signkey.data();
-            }
-
-            uint64_t TxRate() const
-            {
-                return tx_rate;
-            }
-
-            uint64_t RxRate() const
-            {
-                return rx_rate;
-            }
-
-            huint128_t LocalIP() const
-            {
-                return IP;
-            }
-
-            const llarp_time_t createdAt;
-
-           private:
-            llarp::handlers::ExitEndpoint* parent;
-            llarp::PubKey remote_signkey;
-            std::shared_ptr<llarp::path::AbstractHopHandler> current_path;
-            llarp::huint128_t IP;
-            uint64_t tx_rate, rx_rate;
-            llarp_time_t last_active;
-            bool rewrite_source;
-        };
-    }  // namespace exit
-}  // namespace llarp
+        net::IPRangeMap<service::Address> _exit_map;
+    };
+}  // namespace llarp::exit

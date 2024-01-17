@@ -38,7 +38,7 @@ namespace llarp::service
         }
     }
 
-    util::StatusObject EncryptedIntroSet::ExtractStatus() const
+    StatusObject EncryptedIntroSet::ExtractStatus() const
     {
         const auto sz = introsetPayload.size();
         return {{"location", derivedSigningKey.ToString()}, {"signedAt", to_json(signedAt)}, {"size", sz}};
@@ -127,7 +127,7 @@ namespace llarp::service
     bool EncryptedIntroSet::Sign(const PrivateKey& k)
     {
         signedAt = llarp::time_now_ms();
-        if (not k.toPublic(derivedSigningKey))
+        if (not k.to_pubkey(derivedSigningKey))
             return false;
         sig.Zero();
         auto bte = bt_encode();
@@ -164,33 +164,33 @@ namespace llarp::service
             reinterpret_cast<uint8_t*>(sig.data()));
     }
 
-    util::StatusObject IntroSet::ExtractStatus() const
+    StatusObject IntroSet::ExtractStatus() const
     {
-        util::StatusObject obj{{"published", to_json(time_signed)}};
+        StatusObject obj{{"published", to_json(time_signed)}};
         // TODO: this
-        // std::vector<util::StatusObject> introsObjs;
+        // std::vector<StatusObject> introsObjs;
         // std::transform(
         //     intros.begin(),
         //     intros.end(),
         //     std::back_inserter(introsObjs),
-        //     [](const auto& intro) -> util::StatusObject { return intro.ExtractStatus(); });
+        //     [](const auto& intro) -> StatusObject { return intro.ExtractStatus(); });
         // obj["intros"] = introsObjs;
         // if (!topic.IsZero())
         //   obj["topic"] = topic.ToString();
 
-        // std::vector<util::StatusObject> protocols;
+        // std::vector<StatusObject> protocols;
         // std::transform(
         //     supported_protocols.begin(),
         //     supported_protocols.end(),
         //     std::back_inserter(protocols),
-        //     [](const auto& proto) -> util::StatusObject { return service::ToString(proto); });
+        //     [](const auto& proto) -> StatusObject { return service::ToString(proto); });
         // obj["protos"] = protocols;
-        // std::vector<util::StatusObject> ranges;
+        // std::vector<StatusObject> ranges;
         // std::transform(
         //     owned_ranges.begin(),
         //     owned_ranges.end(),
         //     std::back_inserter(ranges),
-        //     [](const auto& range) -> util::StatusObject { return range.ToString(); });
+        //     [](const auto& range) -> StatusObject { return range.ToString(); });
 
         // obj["advertisedRanges"] = ranges;
         // if (exit_policy)
@@ -219,9 +219,6 @@ namespace llarp::service
             return BEncodeReadList(intros, buf);
         }
         if (!BEncodeMaybeReadDictEntry("k", sntru_pubkey, read, key, buf))
-            return false;
-
-        if (!BEncodeMaybeReadDictEntry("n", topic, read, key, buf))
             return false;
 
         if (key.startswith("p"))
@@ -307,7 +304,6 @@ namespace llarp::service
             }
 
             sntru_pubkey.from_string(btdc.require<std::string>("k"));
-            topic.from_string(btdc.require<std::string>("n"));
 
             if (btdc.key() == "p")
             {
@@ -372,7 +368,6 @@ namespace llarp::service
             }
 
             btdp.append("k", sntru_pubkey.ToView());
-            btdp.append("n", topic.ToView());
 
             if (not supported_protocols.empty())
             {
@@ -482,7 +477,6 @@ namespace llarp::service
             address_keys,
             fmt::format("{}", fmt::join(intros, ",")),
             sntru_pubkey,
-            topic,
             time_signed.count(),
             version,
             signature);

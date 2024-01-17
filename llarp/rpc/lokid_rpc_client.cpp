@@ -32,22 +32,22 @@ namespace llarp::rpc
     }
 
     LokidRpcClient::LokidRpcClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r)
-        : m_lokiMQ{std::move(lmq)}, m_Router{std::move(r)}
+        : m_lokiMQ{std::move(lmq)}, _router{std::move(r)}
     {
         // m_lokiMQ->log_level(toLokiMQLogLevel(LogLevel::Instance().curLevel));
 
         // new block handler
         m_lokiMQ->add_category("notify", oxenmq::Access{oxenmq::AuthLevel::none})
-            .add_command("block", [this](oxenmq::Message& m) { HandleNewBlock(m); });
+            .add_command("block", [this](oxenmq::Message& m) { handle_new_block(m); });
 
         // TODO: proper auth here
         auto lokidCategory = m_lokiMQ->add_category("lokid", oxenmq::Access{oxenmq::AuthLevel::none});
-        m_UpdatingList = false;
+        _is_updating_list = false;
     }
 
-    void LokidRpcClient::ConnectAsync(oxenmq::address url)
+    void LokidRpcClient::connect_async(oxenmq::address url)
     {
-        if (auto router = m_Router.lock())
+        if (auto router = _router.lock())
         {
             if (not router->is_service_node())
             {
@@ -59,21 +59,21 @@ namespace llarp::rpc
                 [](oxenmq::ConnectionID) {},
                 [self = shared_from_this(), url](oxenmq::ConnectionID, std::string_view f) {
                     llarp::LogWarn("Failed to connect to lokid: ", f);
-                    if (auto router = self->m_Router.lock())
+                    if (auto router = self->_router.lock())
                     {
-                        router->loop()->call([self, url]() { self->ConnectAsync(url); });
+                        router->loop()->call([self, url]() { self->connect_async(url); });
                     }
                 });
         }
     }
 
-    void LokidRpcClient::Command(std::string_view cmd)
+    void LokidRpcClient::command(std::string_view cmd)
     {
         LogDebug("lokid command: ", cmd);
         m_lokiMQ->send(*m_Connection, std::move(cmd));
     }
 
-    void LokidRpcClient::HandleNewBlock(oxenmq::Message& msg)
+    void LokidRpcClient::handle_new_block(oxenmq::Message& msg)
     {
         if (msg.data.size() != 2)
         {
@@ -85,7 +85,7 @@ namespace llarp::rpc
         }
         try
         {
-            m_BlockHeight = std::stoll(std::string{msg.data[0]});
+            _block_height = std::stoll(std::string{msg.data[0]});
         }
         catch (std::exception& ex)
         {
@@ -93,18 +93,18 @@ namespace llarp::rpc
             return;  // bail
         }
 
-        log::trace(logcat, "new block at height {}", m_BlockHeight);
+        log::trace(logcat, "new block at height {}", _block_height);
         // don't upadate on block notification if an update is pending
-        if (not m_UpdatingList)
-            UpdateServiceNodeList();
+        if (not _is_updating_list)
+            update_service_node_list();
     }
 
-    void LokidRpcClient::UpdateServiceNodeList()
+    void LokidRpcClient::update_service_node_list()
     {
-        if (m_UpdatingList.exchange(true))
+        if (_is_updating_list.exchange(true))
             return;  // update already in progress
 
-        nlohmann::json request{
+        nlohmann::json req{
             {"fields",
              {
                  {"pubkey_ed25519", true},
@@ -114,10 +114,10 @@ namespace llarp::rpc
                  {"block_hash", true},
              }},
         };
-        if (!m_LastUpdateHash.empty())
-            request["poll_block_hash"] = m_LastUpdateHash;
+        if (!_last_hash_update.empty())
+            req["poll_block_hash"] = _last_hash_update;
 
-        Request(
+        request(
             "rpc.get_service_nodes",
             [self = shared_from_this()](bool success, std::vector<std::string> data) {
                 if (not success)
@@ -135,11 +135,11 @@ namespace llarp::rpc
                             log::trace(logcat, "service node list unchanged");
                         else
                         {
-                            self->HandleNewServiceNodeList(json.at("service_node_states"));
+                            self->handle_new_service_node_list(json.at("service_node_states"));
                             if (auto it = json.find("block_hash"); it != json.end() and it->is_string())
-                                self->m_LastUpdateHash = it->get<std::string>();
+                                self->_last_hash_update = it->get<std::string>();
                             else
-                                self->m_LastUpdateHash.clear();
+                                self->_last_hash_update.clear();
                         }
                     }
                     catch (const std::exception& ex)
@@ -151,23 +151,23 @@ namespace llarp::rpc
                 // set down here so that the 1) we don't start updating until we're completely
                 // finished with the previous update; and 2) so that m_UpdatingList also guards
                 // m_LastUpdateHash
-                self->m_UpdatingList = false;
+                self->_is_updating_list = false;
             },
-            request.dump());
+            req.dump());
     }
 
-    void LokidRpcClient::StartPings()
+    void LokidRpcClient::start_pings()
     {
         constexpr auto PingInterval = 30s;
 
-        auto router = m_Router.lock();
+        auto router = _router.lock();
         if (not router)
             return;
 
         auto makePingRequest = router->loop()->make_caller([self = shared_from_this()]() {
             // send a ping
             PubKey pk{};
-            auto r = self->m_Router.lock();
+            auto r = self->_router.lock();
             if (not r)
                 return;  // router has gone away, maybe shutting down?
 
@@ -180,7 +180,7 @@ namespace llarp::rpc
             if (auto err = r->OxendErrorState())
                 payload["error"] = *err;
 
-            self->Request(
+            self->request(
                 "admin.lokinet_ping",
                 [](bool success, std::vector<std::string> data) {
                     (void)data;
@@ -189,7 +189,7 @@ namespace llarp::rpc
                 payload.dump());
 
             // subscribe to block updates
-            self->Request("sub.block", [](bool success, std::vector<std::string> data) {
+            self->request("sub.block", [](bool success, std::vector<std::string> data) {
                 if (data.empty() or not success)
                 {
                     LogError("failed to subscribe to new blocks");
@@ -201,7 +201,7 @@ namespace llarp::rpc
             // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
             // known hash so that the poll is very cheap (basically empty) if the block hasn't
             // advanced.
-            self->UpdateServiceNodeList();
+            self->update_service_node_list();
         });
 
         // Fire one ping off right away to get things going.
@@ -209,7 +209,7 @@ namespace llarp::rpc
         m_lokiMQ->add_timer(std::move(makePingRequest), PingInterval);
     }
 
-    void LokidRpcClient::HandleNewServiceNodeList(const nlohmann::json& j)
+    void LokidRpcClient::handle_new_service_node_list(const nlohmann::json& j)
     {
         std::unordered_map<RouterID, PubKey> keymap;
         std::vector<RouterID> activeNodeList, decommNodeList, unfundedNodeList;
@@ -249,7 +249,7 @@ namespace llarp::rpc
         }
 
         // inform router about the new list
-        if (auto router = m_Router.lock())
+        if (auto router = _router.lock())
         {
             auto& loop = router->loop();
             loop->call([this,
@@ -258,7 +258,7 @@ namespace llarp::rpc
                         unfunded = std::move(unfundedNodeList),
                         keymap = std::move(keymap),
                         router = std::move(router)]() mutable {
-                m_KeyMap = std::move(keymap);
+                _key_map = std::move(keymap);
 
                 router->set_router_whitelist(active, decomm, unfunded);
             });
@@ -267,16 +267,16 @@ namespace llarp::rpc
             LogWarn("Cannot update whitelist: router object has gone away");
     }
 
-    void LokidRpcClient::InformConnection(RouterID router, bool success)
+    void LokidRpcClient::inform_connection(RouterID router, bool success)
     {
-        if (auto r = m_Router.lock())
+        if (auto r = _router.lock())
         {
             r->loop()->call([router, success, this]() {
-                if (auto itr = m_KeyMap.find(router); itr != m_KeyMap.end())
+                if (auto itr = _key_map.find(router); itr != _key_map.end())
                 {
-                    const nlohmann::json request = {
+                    const nlohmann::json req = {
                         {"passed", success}, {"pubkey", itr->second.ToHex()}, {"type", "lokinet"}};
-                    Request(
+                    request(
                         "admin.report_peer_status",
                         [self = shared_from_this()](bool success, std::vector<std::string>) {
                             if (not success)
@@ -286,16 +286,16 @@ namespace llarp::rpc
                             }
                             LogDebug("reported connection status to core");
                         },
-                        request.dump());
+                        req.dump());
                 }
             });
         }
     }
 
-    SecretKey LokidRpcClient::ObtainIdentityKey()
+    SecretKey LokidRpcClient::obtain_identity_key()
     {
         std::promise<SecretKey> promise;
-        Request(
+        request(
             "admin.get_service_privkeys",
             [self = shared_from_this(), &promise](bool success, std::vector<std::string> data) {
                 try
@@ -340,7 +340,7 @@ namespace llarp::rpc
     {
         LogDebug("Looking Up LNS NameHash ", namehash);
         const nlohmann::json req{{"type", 2}, {"name_hash", oxenc::to_hex(namehash)}};
-        Request(
+        request(
             "rpc.lns_resolve",
             [this, resultHandler](bool success, std::vector<std::string> data) {
                 std::optional<service::EncryptedName> maybe = std::nullopt;
@@ -366,7 +366,7 @@ namespace llarp::rpc
                         LogError("failed to parse response from lns lookup: ", ex.what());
                     }
                 }
-                if (auto r = m_Router.lock())
+                if (auto r = _router.lock())
                 {
                     r->loop()->call([resultHandler, maybe = std::move(maybe)]() { resultHandler(std::move(maybe)); });
                 }

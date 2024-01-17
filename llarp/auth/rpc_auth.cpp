@@ -1,56 +1,60 @@
-#include "endpoint_rpc.hpp"
+#include "auth.hpp"
 
+#include <llarp/router/router.hpp>
 #include <llarp/service/endpoint.hpp>
 
-namespace llarp::rpc
+namespace llarp::auth
 {
-    EndpointAuthRPC::EndpointAuthRPC(
+    RPCAuthPolicy::RPCAuthPolicy(
+        Router& r,
         std::string url,
         std::string method,
-        Whitelist_t whitelist_addrs,
+        std::unordered_set<llarp::service::Address> whitelist_addrs,
         std::unordered_set<std::string> whitelist_tokens,
-        LMQ_ptr lmq,
-        Endpoint_ptr endpoint)
-        : m_AuthURL{std::move(url)},
-          m_AuthMethod{std::move(method)},
-          m_AuthWhitelist{std::move(whitelist_addrs)},
-          m_AuthStaticTokens{std::move(whitelist_tokens)},
-          m_LMQ{std::move(lmq)},
-          m_Endpoint{std::move(endpoint)}
+        std::shared_ptr<oxenmq::OxenMQ> lmq,
+        std::shared_ptr<service::Endpoint> endpoint)
+        : AuthPolicy{r},
+          _url{std::move(url)},
+          _method{std::move(method)},
+          _whitelist{std::move(whitelist_addrs)},
+          _static_tokens{std::move(whitelist_tokens)},
+          _omq{std::move(lmq)},
+          _ep{std::move(endpoint)}
     {}
 
-    void EndpointAuthRPC::Start()
+    void RPCAuthPolicy::start()
     {
-        if (m_AuthURL.empty() or m_AuthMethod.empty())
+        if (_url.empty() or _method.empty())
             return;
-        m_LMQ->connect_remote(
-            oxenmq::address{m_AuthURL},
+
+        _omq->connect_remote(
+            oxenmq::address{_url},
             [self = shared_from_this()](oxenmq::ConnectionID c) {
-                self->m_Conn = std::move(c);
-                LogInfo("connected to endpoint auth server");
+                self->_omq_conn = std::move(c);
+                log::info(logcat, "OMQ connected to endpoint auth server");
             },
             [self = shared_from_this()](oxenmq::ConnectionID, std::string_view fail) {
-                LogWarn("failed to connect to endpoint auth server: ", fail);
-                self->m_Endpoint->Loop()->call_later(1s, [self] { self->Start(); });
+                log::warning(logcat, "OMQ failed to connect to endpoint auth server: {}", fail);
+                self->_router.loop()->call_later(1s, [self] { self->start(); });
             });
     }
 
-    bool EndpointAuthRPC::auth_async_pending(service::ConvoTag tag) const
+    bool RPCAuthPolicy::auth_async_pending(service::SessionTag tag) const
     {
-        return m_PendingAuths.count(tag) > 0;
+        return _pending_sessions.count(tag) > 0;
     }
 
-    void EndpointAuthRPC::authenticate_async(
+    void RPCAuthPolicy::authenticate_async(
         std::shared_ptr<llarp::service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook)
     {
-        service::ConvoTag tag = msg->tag;
-        m_PendingAuths.insert(tag);
+        service::SessionTag tag = msg->tag;
+        _pending_sessions.insert(tag);
         const auto from = msg->sender.Addr();
-        auto reply = m_Endpoint->Loop()->make_caller([this, tag, hook](std::string code, bool success) {
-            m_PendingAuths.erase(tag);
+        auto reply = _ep->loop()->make_caller([this, tag, hook](std::string code, bool success) {
+            _pending_sessions.erase(tag);
             hook(code, success);
         });
-        if (m_AuthWhitelist.count(from))
+        if (_whitelist.count(from))
         {
             // explicitly whitelisted source
             reply("explicitly whitelisted", true);
@@ -66,15 +70,15 @@ namespace llarp::rpc
 
         std::string payload{(char*)msg->payload.data(), msg->payload.size()};
 
-        if (m_AuthStaticTokens.count(payload))
+        if (_static_tokens.count(payload))
         {
             reply("explicitly whitelisted", true);
             return;
         }
 
-        if (not m_Conn.has_value())
+        if (not _omq_conn.has_value())
         {
-            if (m_AuthStaticTokens.empty())
+            if (_static_tokens.empty())
             {
                 // we don't have a connection to the backend so it's failed
                 reply("remote has no connection to auth backend", false);
@@ -90,19 +94,19 @@ namespace llarp::rpc
         const auto authinfo = msg->EncodeAuthInfo();
         std::string_view metainfo{authinfo.data(), authinfo.size()};
         // call method with 2 parameters: metainfo and userdata
-        m_LMQ->request(
-            *m_Conn,
-            m_AuthMethod,
+        _omq->request(
+            *_omq_conn,
+            _method,
             [self = shared_from_this(), reply = std::move(reply)](bool success, std::vector<std::string> data) {
-                service::AuthResult result{service::AuthCode::FAILED, "no reason given"};
+                AuthResult result{AuthCode::FAILED, "no reason given"};
 
                 if (success and not data.empty())
                 {
-                    if (const auto maybe = service::parse_auth_code(data[0]))
+                    if (const auto maybe = parse_auth_code(data[0]))
                     {
                         result.code = *maybe;
                     }
-                    if (result.code == service::AuthCode::ACCEPTED)
+                    if (result.code == AuthCode::ACCEPTED)
                     {
                         result.reason = "OK";
                     }
@@ -117,5 +121,4 @@ namespace llarp::rpc
             metainfo,
             payload);
     }
-
-}  // namespace llarp::rpc
+}  // namespace llarp::auth

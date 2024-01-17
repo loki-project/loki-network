@@ -3,27 +3,29 @@
 #include "route_poker.hpp"
 
 #include <llarp/bootstrap.hpp>
-#include <llarp/config/config.hpp>
+#include <llarp/profiling.hpp>
+#include <llarp/router_contact.hpp>
+
+// #include <llarp/config/config.hpp>
 #include <llarp/config/key_manager.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/ev/ev.hpp>
-#include <llarp/exit/context.hpp>
-#include <llarp/handlers/tun.hpp>
+#include <llarp/exit/endpoint.hpp>
+#include <llarp/exit/handler.hpp>
 #include <llarp/path/path_context.hpp>
-#include <llarp/profiling.hpp>
-#include <llarp/router_contact.hpp>
 #include <llarp/rpc/lokid_rpc_client.hpp>
 #include <llarp/rpc/rpc_server.hpp>
-#include <llarp/service/context.hpp>
+#include <llarp/service/handler.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/mem.hpp>
 #include <llarp/util/service_manager.hpp>
-#include <llarp/util/status.hpp>
 #include <llarp/util/str.hpp>
 #include <llarp/util/time.hpp>
+#include <llarp/util/types.hpp>
+#include <llarp/vpn/platform.hpp>
 
 #include <oxenmq/address.h>
 
@@ -36,14 +38,20 @@
 #include <unordered_map>
 #include <vector>
 
-namespace llarp::link
-{
-    struct Connection;
-}
-
 namespace llarp
 {
+    namespace handlers
+    {
+        struct BaseHandler;
+    }
+
+    namespace link
+    {
+        struct Connection;
+    }
+
     struct LinkManager;
+    class NodeDB;
 
     /// number of routers to publish to
     inline constexpr size_t INTROSET_RELAY_REDUNDANCY{2};
@@ -75,14 +83,14 @@ namespace llarp
     {
         friend class NodeDB;
 
-        explicit Router(EventLoop_ptr loop, std::shared_ptr<vpn::Platform> vpnPlatform);
+        explicit Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
 
         ~Router() = default;
 
        private:
         std::shared_ptr<RoutePoker> _route_poker;
         std::chrono::steady_clock::time_point _next_explore_at;
-        llarp_time_t last_pump = 0s;
+        llarp_time_t last_pump{0s};
         // transient iwp encryption key
         fs::path transport_keyfile;
         // long term identity key
@@ -91,32 +99,40 @@ namespace llarp
         // path to write our self signed rc to
         fs::path our_rc_file;
         // use file based logging?
-        bool use_file_logging = false;
+        bool use_file_logging{false};
         // our router contact
         LocalRC router_contact;
         std::shared_ptr<oxenmq::OxenMQ> _lmq;
         path::BuildLimiter _pathbuild_limiter;
         std::shared_ptr<EventLoopWakeup> loop_wakeup;
 
-        std::atomic<bool> is_stopping;
-        std::atomic<bool> is_running;
+        std::atomic<bool> is_stopping{false};
+        std::atomic<bool> is_running{false};
 
-        int _outbound_udp_socket = -1;
-        bool _is_service_node = false;
+        int _outbound_udp_socket{-1};
+        bool _is_service_node{false};
 
-        bool _testnet = false;
-        bool _testing_disabled = false;
-        bool _bootstrap_seed = false;
+        bool _testing_disabled{false};
+        bool _testnet{false};
+        bool _bootstrap_seed{false};
+        bool _should_init_tun{true};
 
         consensus::reachability_testing router_testing;
 
         std::optional<oxen::quic::Address> _public_address;  // public addr for relays
         oxen::quic::Address _listen_address;
 
-        EventLoop_ptr _loop;
+        std::unique_ptr<service::Endpoint> _service_endpoint;  // local service
+        std::unique_ptr<exit::Endpoint> _exit_endpoint;        // local exit node
+        std::unique_ptr<service::Handler> _service_handler;    // remote services
+        std::unique_ptr<exit::Handler> _exit_handler;          // remote exit nodes
+
+        // TunEndpoint or NullEndpoint, depending on lokinet configuration
+        std::unique_ptr<handlers::BaseHandler> _api;
+
+        std::shared_ptr<EventLoop> _loop;
         std::shared_ptr<vpn::Platform> _vpn;
         path::PathContext paths;
-        exit::Context _exit_context;
         SecretKey _identity;
         SecretKey _encryption;
         std::shared_ptr<Contacts> _contacts;
@@ -124,15 +140,16 @@ namespace llarp
         llarp_time_t _started_at;
         const oxenmq::TaggedThreadID _disk_thread;
 
-        llarp_time_t _last_stats_report = 0s;
-        llarp_time_t _next_decomm_warning = time_now_ms() + 15s;
+        llarp_time_t _last_stats_report{0s};
+        llarp_time_t _next_decomm_warning{time_now_ms() + 15s};
         std::shared_ptr<llarp::KeyManager> _key_manager;
         std::shared_ptr<Config> _config;
-        uint32_t _path_build_count = 0;
+        uint32_t _path_build_count{0};
 
         std::unique_ptr<rpc::RPCServer> _rpc_server;
 
-        const llarp_time_t _randomStartDelay;
+        const llarp_time_t _random_start_delay{
+            platform::is_simulation ? std::chrono::milliseconds{(llarp::randint() % 1250) + 2000} : 0s};
 
         std::shared_ptr<rpc::LokidRpcClient> _rpc_client;
         bool whitelist_received{false};
@@ -145,9 +162,7 @@ namespace llarp
         int client_router_connections;
 
         // should we be sending padded messages every interval?
-        bool send_padding = false;
-
-        service::Context _hidden_service_context;
+        bool send_padding{false};
 
         bool should_report_stats(llarp_time_t now) const;
 
@@ -157,9 +172,17 @@ namespace llarp
 
         void save_rc();
 
-        bool from_config(const Config& conf);
+        bool from_config();
 
         bool insufficient_peers() const;
+
+        void init_logging();
+
+        void init_rpc();
+
+        void init_net_if();
+
+        void init_api();
 
        protected:
         std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};
@@ -245,9 +268,9 @@ namespace llarp
             return _outbound_udp_socket;
         }
 
-        exit::Context& exitContext()
+        exit::Handler* exit_context()
         {
-            return _exit_context;
+            return _exit_handler.get();
         }
 
         const std::shared_ptr<KeyManager>& key_manager() const
@@ -270,7 +293,7 @@ namespace llarp
             return _router_profiling;
         }
 
-        const EventLoop_ptr& loop() const
+        const std::shared_ptr<EventLoop>& loop() const
         {
             return _loop;
         }
@@ -297,9 +320,9 @@ namespace llarp
 
         oxen::quic::Address listen_addr() const;
 
-        util::StatusObject ExtractStatus() const;
+        StatusObject ExtractStatus() const;
 
-        util::StatusObject ExtractSummaryStatus() const;
+        StatusObject ExtractSummaryStatus() const;
 
         const std::set<RouterID>& get_whitelist() const;
 
@@ -333,16 +356,6 @@ namespace llarp
 
         llarp_time_t Uptime() const;
 
-        service::Context& hidden_service_context()
-        {
-            return _hidden_service_context;
-        }
-
-        const service::Context& hidden_service_context() const
-        {
-            return _hidden_service_context;
-        }
-
         llarp_time_t _last_tick = 0s;
 
         std::function<void(void)> _router_close_cb;
@@ -369,10 +382,6 @@ namespace llarp
 
         std::string status_line();
 
-        void init_inbounds();
-
-        void init_outbounds();
-
         std::optional<RouterID> GetRandomGoodRouter();
 
         /// initialize us as a service node
@@ -386,39 +395,30 @@ namespace llarp
 
         std::optional<std::string> OxendErrorState() const;
 
-        void Close();
+        void close();
 
-        bool Configure(std::shared_ptr<Config> conf, bool isSNode, std::shared_ptr<NodeDB> nodedb);
+        bool configure(std::shared_ptr<Config> conf, std::shared_ptr<NodeDB> nodedb);
 
-        bool StartRpcServer();
-
-        void Freeze();
-
-        void Thaw();
-
-        bool Run();
+        bool run();
 
         /// stop running the router logic gracefully
-        void Stop();
+        void stop();
 
         /// non graceful stop router
-        void Die();
+        void stop_immediately();
 
         /// close all sessions and shutdown all links
-        void StopLinks();
+        void stop_sessions();
 
         void persist_connection_until(const RouterID& remote, llarp_time_t until);
 
-        bool EnsureIdentity();
+        bool ensure_identity();
 
-        bool EnsureEncryptionKey();
+        bool ensure_encryption_key();
 
         bool SessionToRouterAllowed(const RouterID& router) const;
 
         bool PathToRouterAllowed(const RouterID& router) const;
-
-        /// return true if we are a client with an exit configured
-        bool HasClientExit() const;
 
         const byte_t* pubkey() const
         {
@@ -430,8 +430,7 @@ namespace llarp
         /// returns true on successful queue
         /// NOT threadsafe
         /// MUST be called in the logic thread
-        // bool
-        // SendToOrQueue(
+        // bool // SendToOrQueue(
         //     const RouterID& remote, const AbstractLinkMessage& msg, SendStatusHandler handler);
 
         bool send_data_message(const RouterID& remote, std::string payload);
@@ -442,7 +441,7 @@ namespace llarp
             std::string body,
             std::function<void(oxen::quic::message m)> func = nullptr);
 
-        bool is_bootstrap_node(RouterID) const;
+        bool is_bootstrap_node(RouterID rid) const;
 
         /// call internal router ticker
         void Tick();

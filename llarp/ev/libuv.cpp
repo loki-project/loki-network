@@ -3,8 +3,6 @@
 #include <llarp/util/exceptions.hpp>
 #include <llarp/vpn/platform.hpp>
 
-#include <uvw.hpp>
-
 #include <cstring>
 #include <memory>
 #include <thread>

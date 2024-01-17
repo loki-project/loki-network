@@ -1,12 +1,14 @@
 #pragma once
 
+#include "common.hpp"
+
 #include <llarp/dns/server.hpp>
 #include <llarp/ev/ev.hpp>
 #include <llarp/net/ip.hpp>
 #include <llarp/net/ip_packet.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/endpoint.hpp>
-#include <llarp/service/protocol_type.hpp>
+#include <llarp/service/handler.hpp>
+#include <llarp/service/types.hpp>
 #include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
@@ -16,18 +18,38 @@
 #include <type_traits>
 #include <variant>
 
+/**
+  DISCUSS:
+    - Q: Where should {Tun,Null}Endpoint live in the heirarchy?
+
+    - Q: Does it make more sense for {Tun,Null}Endpoint to bypass service::Handler and directly
+      inherit from PathBuilder?
+      - A: Likely. The addition of handlers::RemoteHandler to the inheritance of service::Handler
+        and exit::Handler strengthen this argument, as those functionalities are not necessary for
+        {Tun,Null}Endpoint.
+    - Q: Is EndpointBase necessary? Or is session management outside the scope of {Tun,Null}Endpoint
+      - A: Likely not. But will leave it in at the moment. The previous implementation brought in
+        EndpointBase via service::Endpoint, and it seems reachability in regards to introsets may
+        be important.
+*/
+
 namespace llarp::handlers
 {
-    struct TunEndpoint : public service::Endpoint,
-                         public dns::Resolver_Base,
-                         public std::enable_shared_from_this<TunEndpoint>
+    struct TunEndpoint final : public dns::Resolver_Base,
+                               public BaseHandler,
+                               public std::enable_shared_from_this<TunEndpoint>
     {
-        TunEndpoint(Router* r, llarp::service::Context* parent);
+        TunEndpoint(Router& r);
         ~TunEndpoint() override;
 
         vpn::NetworkInterface* GetVPNInterface() override
         {
-            return m_NetIf.get();
+            return _net_if.get();
+        }
+
+        std::string name() const override
+        {
+            return "tun"s;
         }
 
         int Rank() const override
@@ -46,32 +68,17 @@ namespace llarp::handlers
             const SockAddr& to,
             const SockAddr& from) override;
 
-        std::shared_ptr<path::PathSet> GetSelf() override
-        {
-            return shared_from_this();
-        }
-
-        std::weak_ptr<path::PathSet> GetWeak() override
-        {
-            return weak_from_this();
-        }
-
-        void Thaw() override;
-
         // Reconfigures DNS servers and restarts libunbound with the new servers.
         void ReconfigureDNS(std::vector<SockAddr> servers);
 
-        bool Configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
-
-        void send_packet_to_remote(std::string) override{};
+        bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
 
         std::string GetIfName() const override;
 
-        void Tick(llarp_time_t now) override;
+        StatusObject ExtractStatus() const;
 
-        util::StatusObject ExtractStatus() const override;
-
-        std::unordered_map<std::string, std::string> NotifyParams() const override;
+        // std::unordered_map<std::string, std::string>
+        // NotifyParams() const override;
 
         bool SupportsV6() const override;
 
@@ -83,9 +90,9 @@ namespace llarp::handlers
 
         bool MapAddress(const service::Address& remote, huint128_t ip, bool SNode);
 
-        bool Start() override;
+        bool Start();
 
-        bool Stop() override;
+        bool stop();
 
         bool IsSNode() const;
 
@@ -95,48 +102,48 @@ namespace llarp::handlers
         void SetupDNS();
 
         /// overrides Endpoint
-        std::shared_ptr<dns::Server> DNS() const override
-        {
-            return m_DNS;
-        };
+        // std::shared_ptr<dns::Server> DNS() const override
+        // {
+        //   return _dns;
+        // };
 
         /// overrides Endpoint
         bool SetupNetworking() override;
 
         /// overrides Endpoint
         bool HandleInboundPacket(
-            const service::ConvoTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) override;
+            const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) override;
 
         /// handle inbound traffic
-        bool HandleWriteIPPacket(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
+        bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
 
         /// we got a packet from the user
-        void HandleGotUserPacket(llarp::net::IPPacket pkt);
+        void handle_user_packet(llarp::net::IPPacket pkt);
 
         /// get the local interface's address
-        huint128_t GetIfAddr() const override;
+        huint128_t GetIfAddr() const /* override */;
 
         /// we have an interface addr
-        bool HasIfAddr() const override
+        bool HasIfAddr() const /* override */
         {
             return true;
         }
 
         bool HasLocalIP(const huint128_t& ip) const;
 
-        std::optional<net::TrafficPolicy> GetExitPolicy() const override
+        std::optional<net::TrafficPolicy> GetExitPolicy() const /* override */
         {
-            return m_TrafficPolicy;
+            return _traffic_policy;
         }
 
-        std::set<IPRange> GetOwnedRanges() const override
+        std::set<IPRange> GetOwnedRanges() const /* override */
         {
-            return m_OwnedRanges;
+            return _owned_ranges;
         }
 
-        llarp_time_t PathAlignmentTimeout() const override
+        llarp_time_t PathAlignmentTimeout() const /* override */
         {
-            return m_PathAlignmentTimeout;
+            return _path_alignment_timeout;
         }
 
         /// ip packet against any exit policies we have
@@ -154,8 +161,6 @@ namespace llarp::handlers
 
         /// get ip address for key unconditionally
         huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID> addr) override;
-
-        void ResetInternalState() override;
 
        protected:
         struct WritePacket
@@ -222,46 +227,46 @@ namespace llarp::handlers
         }
 
         /// dns subsystem for this endpoint
-        std::shared_ptr<dns::Server> m_DNS;
+        std::shared_ptr<dns::Server> _dns;
 
-        DnsConfig m_DnsConfig;
+        DnsConfig _dns_config;
 
         /// maps ip address to timestamp last active
-        std::unordered_map<huint128_t, llarp_time_t> m_IPActivity;
+        std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
         /// our ip address (host byte order)
-        huint128_t m_OurIP;
+        huint128_t _local_ip;
         /// our network interface's ipv6 address
-        huint128_t m_OurIPv6;
+        huint128_t _local_ipv6;
 
         /// next ip address to allocate (host byte order)
-        huint128_t m_NextIP;
+        huint128_t _next_ip;
         /// highest ip address to allocate (host byte order)
-        huint128_t m_MaxIP;
+        huint128_t _max_ip;
         /// our ip range we are using
-        llarp::IPRange m_OurRange;
+        llarp::IPRange _local_range;
         /// list of strict connect addresses for hooks
-        std::vector<IpAddress> m_StrictConnectAddrs;
+        std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
-        bool m_UseV6;
-        std::string m_IfName;
+        bool _use_v6;
+        std::string _if_name;
 
-        std::optional<huint128_t> m_BaseV6Address;
+        std::optional<huint128_t> _base_address_v6;
 
-        std::shared_ptr<vpn::NetworkInterface> m_NetIf;
+        std::shared_ptr<vpn::NetworkInterface> _net_if;
 
-        std::shared_ptr<vpn::PacketRouter> m_PacketRouter;
+        std::shared_ptr<vpn::PacketRouter> _packet_router;
 
-        std::optional<net::TrafficPolicy> m_TrafficPolicy;
+        std::optional<net::TrafficPolicy> _traffic_policy;
         /// ranges we advetise as reachable
-        std::set<IPRange> m_OwnedRanges;
+        std::set<IPRange> _owned_ranges;
         /// how long to wait for path alignment
-        llarp_time_t m_PathAlignmentTimeout;
+        llarp_time_t _path_alignment_timeout;
 
         /// a file to load / store the ephemeral address map to
-        std::optional<fs::path> m_PersistAddrMapFile;
+        std::optional<fs::path> _persisting_addr_file;
 
         /// for raw packet dns
-        std::shared_ptr<vpn::I_Packet_IO> m_RawDNS;
+        std::shared_ptr<vpn::I_Packet_IO> _raw_DNS;
     };
 
 }  // namespace llarp::handlers
