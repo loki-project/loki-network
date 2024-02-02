@@ -613,7 +613,7 @@ namespace llarp
         auto [_in, _out, _relay, _client] = _link_manager->connection_stats();
         auto [_rcs, _rids, _bstraps] = _node_db->db_stats();
 
-        return "{} RCs, {} RIDs, {} bstraps, conns [{}:{} in:out, {}:{} relay:client"_format(
+        return "{} RCs, {} RIDs, {} bstraps, conns [{}:{} in:out, {}:{} relay:client]"_format(
             _rcs, _rids, _bstraps, _in, _out, _relay, _client);
     }
 

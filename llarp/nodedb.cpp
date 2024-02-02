@@ -910,7 +910,7 @@ namespace llarp
             {
                 log::info(logcat, "Pruning RC for {}, as it is too old to keep.", itr->first);
                 known_rcs.erase(itr->second);
-                rc_lookup.erase(itr);
+                itr = rc_lookup.erase(itr);
                 continue;
             }
             itr++;

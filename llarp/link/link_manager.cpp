@@ -403,12 +403,12 @@ namespace llarp
 
         if (ci.is_inbound())
         {
-            log::critical(logcat, "Inbound connection from {} (remote:{})", rid);
+            log::critical(logcat, "Inbound connection from {}", rid);
             on_inbound_conn(ci);
         }
         else
         {
-            log::critical(logcat, "Outbound connection to {} (remote:{})", rid);
+            log::critical(logcat, "Outbound connection to {}", rid);
             on_outbound_conn(ci);
         }
         // _router.loop()->call([this, &conn_interface = ci, is_snode = _is_service_node]() {
