@@ -1,0 +1,20 @@
+From: Jason Rhinelander <jason@imaginary.ca>
+Date: Sun, 4 Feb 2024 21:11:32 -0400
+Subject: Add missing cstdint header
+
+---
+ llarp/util/thread/queue_manager.hpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/llarp/util/thread/queue_manager.hpp b/llarp/util/thread/queue_manager.hpp
+index f202b4a..279d1ed 100644
+--- a/llarp/util/thread/queue_manager.hpp
++++ b/llarp/util/thread/queue_manager.hpp
+@@ -3,6 +3,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cassert>
++#include <cstdint>
+ #include <iostream>
+ #include <limits>
+ #include <string>
