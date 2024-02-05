@@ -29,7 +29,7 @@ namespace llarp
 
         StatusObject ExtractStatus() const;
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         std::string ShortString() const;
 

@@ -104,7 +104,7 @@ namespace llarp::dns
         return qname.find(tld) != std::string::npos && qname.rfind(tld) == (qname.size() - tld.size()) - 1;
     }
 
-    std::string Question::ToString() const
+    std::string Question::to_string() const
     {
         return fmt::format("[DNSQuestion qname={} qtype={:x} qclass={:x}]", qname, qtype, qclass);
     }

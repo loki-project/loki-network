@@ -55,11 +55,11 @@ namespace llarp::service
 
     StatusObject Handler::ExtractStatus() const
     {
-        // StatusObject obj{{"permitExit", permit_exit}, {"ip", if_addr.ToString()}};
+        // StatusObject obj{{"permitExit", permit_exit}, {"ip", if_addr.to_string()}};
         // StatusObject exitsObj{};
         // for (const auto& item : active_exits)
         // {
-        //   exitsObj[item.first.ToString()] = item.second->ExtractStatus();
+        //   exitsObj[item.first.to_string()] = item.second->ExtractStatus();
         // }
         // obj["exits"] = exitsObj;
         return {};
@@ -118,7 +118,7 @@ namespace llarp::service
     //     if (ip == _if_addr)
     //     {
     //       RouterID us = _router.pubkey();
-    //       msg.AddAReply(us.ToString(), 300);
+    //       msg.AddAReply(us.to_string(), 300);
     //     }
     //     else
     //     {
@@ -126,7 +126,7 @@ namespace llarp::service
     //       if (itr != ip_to_key.end() && snode_keys.find(itr->second) != snode_keys.end())
     //       {
     //         RouterID them{itr->second.data()};
-    //         msg.AddAReply(them.ToString());
+    //         msg.AddAReply(them.to_string());
     //       }
     //       else
     //         msg.AddNXReply();
@@ -137,14 +137,14 @@ namespace llarp::service
     //     if (msg.questions[0].IsName("random.snode"))
     //     {
     //       if (auto random = _router.GetRandomGoodRouter())
-    //         msg.AddCNAMEReply(random->ToString(), 1);
+    //         msg.AddCNAMEReply(random->to_string(), 1);
     //       else
     //         msg.AddNXReply();
     //     }
     //     else if (msg.questions[0].IsName("localhost.loki"))
     //     {
     //       RouterID us = _router.pubkey();
-    //       msg.AddAReply(us.ToString(), 1);
+    //       msg.AddAReply(us.to_string(), 1);
     //     }
     //     else
     //       msg.AddNXReply();
@@ -158,7 +158,7 @@ namespace llarp::service
     //       if (auto random = _router.GetRandomGoodRouter())
     //       {
     //         // TODO:
-    //         // msg.AddCNAMEReply(random->ToString(), 1);
+    //         // msg.AddCNAMEReply(random->to_string(), 1);
     //         // auto ip = ObtainServiceNodeIP(*random);
     //         // msg.AddINReply(ip, false);
     //       }

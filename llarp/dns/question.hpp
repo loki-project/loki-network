@@ -22,7 +22,7 @@ namespace llarp::dns
 
         bool Decode(llarp_buffer_t* buf) override;
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         bool operator==(const Question& other) const
         {

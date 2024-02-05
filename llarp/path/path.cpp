@@ -306,7 +306,7 @@ namespace llarp::path
         //     const auto dlt = now - buildStarted;
         //     if (dlt >= path::BUILD_TIMEOUT)
         //     {
-        //       LogWarn(name(), " waited for ", ToString(dlt), " and no path was built");
+        //       LogWarn(name(), " waited for ", to_string(dlt), " and no path was built");
         //       r->router_profiling().MarkPathFail(this);
         //       EnterState(PathStatus::EXPIRED, now);
         //       return;
@@ -330,7 +330,7 @@ namespace llarp::path
         //   dlt = now - last_recv_msg;
         //   if (dlt >= path::ALIVE_TIMEOUT)
         //   {
-        //     LogWarn(name(), " waited for ", ToString(dlt), " and path looks dead");
+        //     LogWarn(name(), " waited for ", to_string(dlt), " and path looks dead");
         //     r->router_profiling().MarkPathFail(this);
         //     EnterState(PathStatus::TIMEOUT, now);
         //   }

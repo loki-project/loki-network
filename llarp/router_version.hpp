@@ -32,7 +32,7 @@ namespace llarp
         /// set to be empty
         void Clear();
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         /// return true if the other router version is compatible with ours
         bool IsCompatableWith(const RouterVersion& other) const;

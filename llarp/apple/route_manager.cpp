@@ -62,7 +62,7 @@ namespace llarp::apple
                 if (route_callbacks.add_ipv4_route)
                     route_callbacks.add_ipv4_route(
                         range.BaseAddressString().c_str(),
-                        net::TruncateV6(range.netmask_bits).ToString().c_str(),
+                        net::TruncateV6(range.netmask_bits).to_string().c_str(),
                         callback_context);
             }
             else
@@ -84,7 +84,7 @@ namespace llarp::apple
                 if (route_callbacks.del_ipv4_route)
                     route_callbacks.del_ipv4_route(
                         range.BaseAddressString().c_str(),
-                        net::TruncateV6(range.netmask_bits).ToString().c_str(),
+                        net::TruncateV6(range.netmask_bits).to_string().c_str(),
                         callback_context);
             }
             else

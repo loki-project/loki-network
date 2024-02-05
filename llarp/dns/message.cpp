@@ -386,7 +386,7 @@ namespace llarp::dns
         }
     }
 
-    std::string Message::ToString() const
+    std::string Message::to_string() const
     {
         return fmt::format(
             "[DNSMessage id={:x} fields={:x} questions={{{}}} answers={{{}}} authorities={{{}}} "

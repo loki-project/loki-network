@@ -10,7 +10,7 @@ namespace llarp
     {
         try
         {
-            btlp.append(ToString());
+            btlp.append(to_string());
         }
         catch (...)
         {
@@ -86,9 +86,9 @@ namespace llarp
         if (IsV4())
         {
             const huint32_t addr4 = net::TruncateV6(addr);
-            return addr4.ToString();
+            return addr4.to_string();
         }
-        return addr.ToString();
+        return addr.to_string();
     }
 
     std::string IPRange::NetmaskString() const
@@ -96,9 +96,9 @@ namespace llarp
         if (IsV4())
         {
             const huint32_t mask = net::TruncateV6(netmask_bits);
-            return mask.ToString();
+            return mask.to_string();
         }
-        return netmask_bits.ToString();
+        return netmask_bits.to_string();
     }
 
     std::optional<IPRange> IPRange::FindPrivateRange(const std::list<IPRange>& excluding)

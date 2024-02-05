@@ -20,7 +20,7 @@ namespace llarp
 
     IpAddress::IpAddress(const SockAddr& addr)
     {
-        m_ipAddress = addr.ToString();
+        m_ipAddress = addr.to_string();
         uint16_t port = addr.getPort();
         if (port > 0)
             m_port = port;
@@ -41,7 +41,7 @@ namespace llarp
     {
         SockAddr addr(other);
 
-        m_ipAddress = addr.ToString();
+        m_ipAddress = addr.to_string();
         uint16_t port = addr.getPort();
         if (port > 0)
             m_port = port;
@@ -119,7 +119,7 @@ namespace llarp
         return IPRange::V4MappedRange().Contains(ipaddr_ipv4_bits(raw[12], raw[13], raw[14], raw[15]));
     }
 
-    std::string IpAddress::ToString() const
+    std::string IpAddress::to_string() const
     {
         return m_ipAddress;  // TODO: port
     }

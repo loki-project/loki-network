@@ -521,7 +521,7 @@ namespace llarp
             build_interval_limit = PATH_BUILD_RATE;
             router->router_profiling().MarkPathSuccess(p.get());
 
-            LogInfo(p->name(), " built latency=", ToString(p->intro.latency));
+            LogInfo(p->name(), " built latency=", to_string(p->intro.latency));
             build_stats.success++;
         }
 
@@ -536,7 +536,7 @@ namespace llarp
             static constexpr std::chrono::milliseconds MaxBuildInterval = 30s;
             // linear backoff
             build_interval_limit = std::min(PATH_BUILD_RATE + build_interval_limit, MaxBuildInterval);
-            LogWarn(Name(), " build interval is now ", ToString(build_interval_limit));
+            LogWarn(Name(), " build interval is now ", to_string(build_interval_limit));
         }
 
         void PathBuilder::HandlePathBuildTimeout(std::shared_ptr<Path> p)

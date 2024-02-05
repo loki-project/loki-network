@@ -39,8 +39,8 @@ namespace llarp::exit
         auto obj = path::PathBuilder::ExtractStatus();
         obj["lastExitUse"] = to_json(_last_use);
         auto pub = exit_key.toPublic();
-        obj["exitIdentity"] = pub.ToString();
-        obj["endpoint"] = exit_router.ToString();
+        obj["exitIdentity"] = pub.to_string();
+        obj["endpoint"] = exit_router.to_string();
         return obj;
     }
 
@@ -288,12 +288,12 @@ namespace llarp::exit
 
     std::string SNodeSession::Name() const
     {
-        return "SNode::" + exit_router.ToString();
+        return "SNode::" + exit_router.to_string();
     }
 
     std::string ExitSession::Name() const
     {
-        return "Exit::" + exit_router.ToString();
+        return "Exit::" + exit_router.to_string();
     }
 
     void ExitSession::send_packet_to_remote(std::string buf)

@@ -39,7 +39,7 @@ namespace llarp::service
             return IsExpired(now + dlt);
         }
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         void bt_encode(oxenc::bt_list_producer& btlp) const;
         void bt_encode(oxenc::bt_dict_producer& subdict) const;

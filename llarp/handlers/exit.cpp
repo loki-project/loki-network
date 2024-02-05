@@ -147,11 +147,11 @@ namespace llarp::handlers
 
     util::StatusObject ExitEndpoint::ExtractStatus() const
     {
-        util::StatusObject obj{{"permitExit", permit_exit}, {"ip", if_addr.ToString()}};
+        util::StatusObject obj{{"permitExit", permit_exit}, {"ip", if_addr.to_string()}};
         util::StatusObject exitsObj{};
         for (const auto& item : active_exits)
         {
-            exitsObj[item.first.ToString()] = item.second->ExtractStatus();
+            exitsObj[item.first.to_string()] = item.second->ExtractStatus();
         }
         obj["exits"] = exitsObj;
         return obj;
@@ -209,7 +209,7 @@ namespace llarp::handlers
             if (ip == if_addr)
             {
                 RouterID us = GetRouter()->pubkey();
-                msg.AddAReply(us.ToString(), 300);
+                msg.AddAReply(us.to_string(), 300);
             }
             else
             {
@@ -217,7 +217,7 @@ namespace llarp::handlers
                 if (itr != ip_to_key.end() && snode_keys.find(itr->second) != snode_keys.end())
                 {
                     RouterID them{itr->second.data()};
-                    msg.AddAReply(them.ToString());
+                    msg.AddAReply(them.to_string());
                 }
                 else
                     msg.AddNXReply();
@@ -228,14 +228,14 @@ namespace llarp::handlers
             if (msg.questions[0].IsName("random.snode"))
             {
                 if (auto random = GetRouter()->GetRandomGoodRouter())
-                    msg.AddCNAMEReply(random->ToString(), 1);
+                    msg.AddCNAMEReply(random->to_string(), 1);
                 else
                     msg.AddNXReply();
             }
             else if (msg.questions[0].IsName("localhost.loki"))
             {
                 RouterID us = router->pubkey();
-                msg.AddAReply(us.ToString(), 1);
+                msg.AddAReply(us.to_string(), 1);
             }
             else
                 msg.AddNXReply();
@@ -248,7 +248,7 @@ namespace llarp::handlers
             {
                 if (auto random = GetRouter()->GetRandomGoodRouter())
                 {
-                    msg.AddCNAMEReply(random->ToString(), 1);
+                    msg.AddCNAMEReply(random->to_string(), 1);
                     auto ip = ObtainServiceNodeIP(*random);
                     msg.AddINReply(ip, false);
                 }

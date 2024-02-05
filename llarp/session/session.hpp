@@ -100,7 +100,7 @@ namespace llarp
 
             std::string name() const override
             {
-                return prefix() + _remote_router.ToString();
+                return prefix() + _remote_router.to_string();
             }
 
            protected:

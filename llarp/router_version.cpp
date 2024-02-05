@@ -79,7 +79,7 @@ namespace llarp
         return idx == 4 || idx == 0;
     }
 
-    std::string RouterVersion::ToString() const
+    std::string RouterVersion::to_string() const
     {
         return std::to_string(m_Version.at(0)) + "." + std::to_string(m_Version.at(1)) + "."
             + std::to_string(m_Version.at(2)) + " protocol version " + std::to_string(m_ProtoVersion);

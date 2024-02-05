@@ -28,7 +28,7 @@ namespace llarp
             /// otherwise return false
             static bool PermitTLD(const char* tld);
 
-            std::string ToString(const char* tld = ".loki") const;
+            std::string to_string(const char* tld = ".loki") const;
 
             bool FromString(std::string_view str, const char* tld = ".loki");
 

@@ -61,7 +61,7 @@ namespace llarp
     }
 
     template <>
-    std::string huint32_t::ToString() const
+    std::string huint32_t::to_string() const
     {
         uint32_t n = htonl(h);
         char tmp[INET_ADDRSTRLEN] = {0};
@@ -71,7 +71,7 @@ namespace llarp
     }
 
     template <>
-    std::string huint128_t::ToString() const
+    std::string huint128_t::to_string() const
     {
         auto addr = ntoh128(h);
         char tmp[INET6_ADDRSTRLEN] = {0};
@@ -113,7 +113,7 @@ namespace llarp
     }
 
     template <>
-    std::string nuint32_t::ToString() const
+    std::string nuint32_t::to_string() const
     {
         char tmp[INET_ADDRSTRLEN] = {0};
         if (!inet_ntop(AF_INET, (void*)&n, tmp, sizeof(tmp)))
@@ -122,7 +122,7 @@ namespace llarp
     }
 
     template <>
-    std::string nuint128_t::ToString() const
+    std::string nuint128_t::to_string() const
     {
         char tmp[INET6_ADDRSTRLEN] = {0};
         if (!inet_ntop(AF_INET6, (void*)&n, tmp, sizeof(tmp)))
@@ -131,20 +131,20 @@ namespace llarp
     }
 
     template <>
-    std::string huint16_t::ToString() const
+    std::string huint16_t::to_string() const
     {
         return std::to_string(h);
     }
 
     template <>
-    std::string nuint16_t::ToString() const
+    std::string nuint16_t::to_string() const
     {
         return std::to_string(ntohs(n));
     }
 
-    std::string net::ToString(const ipaddr_t& ipaddr)
+    std::string net::to_string(const ipaddr_t& ipaddr)
     {
-        return std::visit([](const auto& ip) { return ip.ToString(); }, ipaddr);
+        return std::visit([](const auto& ip) { return ip.to_string(); }, ipaddr);
     }
 
 }  // namespace llarp

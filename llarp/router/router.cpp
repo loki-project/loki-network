@@ -1134,7 +1134,7 @@ namespace llarp
 
     std::string Router::ShortName() const
     {
-        return RouterID(pubkey()).ToString().substr(0, 8);
+        return RouterID(pubkey()).to_string().substr(0, 8);
     }
 
     uint32_t Router::NextPathBuildNumber()

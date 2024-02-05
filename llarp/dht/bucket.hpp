@@ -25,7 +25,7 @@ namespace llarp::dht
             StatusObject obj{};
             for (const auto& item : nodes)
             {
-                obj[item.first.ToString()] = item.second.ExtractStatus();
+                obj[item.first.to_string()] = item.second.ExtractStatus();
             }
             return obj;
         }

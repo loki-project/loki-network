@@ -126,7 +126,7 @@ namespace llarp::net
             StatusObject obj;
             for (const auto& [range, value] : m_Entries)
             {
-                obj[range.ToString()] = value.ToString();
+                obj[range.to_string()] = value.to_string();
             }
             return obj;
         }

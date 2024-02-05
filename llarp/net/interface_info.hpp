@@ -22,7 +22,7 @@ namespace llarp::net
         /// a gateway we can use if it exists
         std::optional<ipaddr_t> gateway;
 
-        std::string ToString() const;
+        std::string to_string() const;
     };
 }  // namespace llarp::net
 

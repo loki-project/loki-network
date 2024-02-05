@@ -6,7 +6,7 @@ namespace llarp
 {
     constexpr std::string_view SNODE_TLD = ".snode";
 
-    std::string RouterID::ToString() const
+    std::string RouterID::to_string() const
     {
         std::string b32 = oxenc::to_base32z(begin(), end());
         b32 += SNODE_TLD;
@@ -21,7 +21,7 @@ namespace llarp
 
     StatusObject RouterID::ExtractStatus() const
     {
-        StatusObject obj{{"snode", ToString()}, {"hex", ToHex()}};
+        StatusObject obj{{"snode", to_string()}, {"hex", ToHex()}};
         return obj;
     }
 

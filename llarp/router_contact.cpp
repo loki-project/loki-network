@@ -127,12 +127,12 @@ namespace llarp
         StatusObject obj{
             {"lastUpdated", _timestamp.time_since_epoch().count()},
             {"publicRouter", is_public_addressable()},
-            {"identity", _router_id.ToString()},
+            {"identity", _router_id.to_string()},
             {"address", _addr.to_string()}};
 
         // if (routerVersion)
         // {
-        //   obj["routerVersion"] = routerVersion->ToString();
+        //   obj["routerVersion"] = routerVersion->to_string();
         // }
         // std::vector<StatusObject> srv;
         // for (const auto& record : srvRecords)

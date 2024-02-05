@@ -62,7 +62,7 @@ namespace llarp::service
             return Addr() < other.Addr();
         }
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         /// .loki address
         std::string Name() const;

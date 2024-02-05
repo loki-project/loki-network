@@ -5,7 +5,7 @@
 
 namespace llarp::path
 {
-    std::string TransitHopInfo::ToString() const
+    std::string TransitHopInfo::to_string() const
     {
         return fmt::format("[TransitHopInfo tx={} rx={} upstream={} downstream={}]", txID, rxID, upstream, downstream);
     }
@@ -100,7 +100,7 @@ namespace llarp::path
     }
     */
 
-    std::string TransitHop::ToString() const
+    std::string TransitHop::to_string() const
     {
         return fmt::format("[TransitHop {} started={} lifetime={}", info, started.count(), lifetime.count());
     }

@@ -48,8 +48,8 @@ namespace llarp::session
         auto obj = path::PathHandler::ExtractStatus();
         obj["lastExitUse"] = to_json(_last_use);
         auto pub = _auth->session_key().to_pubkey();
-        obj["exitIdentity"] = pub.ToString();
-        obj["endpoint"] = _remote_router.ToString();
+        obj["exitIdentity"] = pub.to_string();
+        obj["endpoint"] = _remote_router.to_string();
         return obj;
     }
 

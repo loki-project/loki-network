@@ -98,7 +98,7 @@ namespace llarp
         using V6Container = std::vector<uint8_t>;
         [[deprecated]] void ToV6(V6Container& c);
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         bool FromString(const std::string&);
     };
@@ -161,7 +161,7 @@ namespace llarp
         using V6Container = std::vector<uint8_t>;
         [[deprecated]] void ToV6(V6Container& c);
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         bool FromString(const std::string& data)
         {
@@ -203,7 +203,7 @@ namespace llarp
         using ipv6addr_t = n_uint128_t;
         using ipaddr_t = std::variant<ipv4addr_t, ipv6addr_t>;
 
-        std::string ToString(const ipaddr_t& ip);
+        std::string to_string(const ipaddr_t& ip);
 
         huint16_t ToHost(port_t);
         huint32_t ToHost(ipv4addr_t);

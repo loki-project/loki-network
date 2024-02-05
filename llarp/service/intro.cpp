@@ -88,7 +88,7 @@ namespace llarp::service
         expiry = 0s;
     }
 
-    std::string Introduction::ToString() const
+    std::string Introduction::to_string() const
     {
         return fmt::format(
             "[Intro k={} l={} p={} v={} x={}]", RouterID{router}, latency.count(), path_id, version, expiry.count());

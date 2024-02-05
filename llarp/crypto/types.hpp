@@ -29,7 +29,7 @@ namespace llarp
         explicit PubKey(const AlignedBuffer<SIZE>& other) : AlignedBuffer<SIZE>(other)
         {}
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         bool from_hex(const std::string& str);
 
@@ -66,7 +66,7 @@ namespace llarp
         /// recalculate public component
         bool Recalculate();
 
-        std::string_view ToString() const
+        std::string_view to_string() const
         {
             return "[secretkey]";
         }
@@ -114,7 +114,7 @@ namespace llarp
             return data() + 32;
         }
 
-        std::string_view ToString() const
+        std::string_view to_string() const
         {
             return "[privatekey]";
         }

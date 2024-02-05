@@ -2,7 +2,7 @@
 
 namespace llarp
 {
-    std::string buffer_printer::ToString() const
+    std::string buffer_printer::to_string() const
     {
         auto& b = buf;
         std::string out;

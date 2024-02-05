@@ -73,7 +73,7 @@ namespace llarp
 
         void fromString(std::string_view str, bool allow_port = true);
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         /// convert ip address to string; ipv6_brackets - if true or omitted we add [...] around the
         /// IPv6 address, otherwise we return it bare.

@@ -7,8 +7,6 @@
 #include <cstdint>
 #include <string>
 
-// using uint8_t = uint8_t;
-
 namespace llarp
 {
     using Duration_t = std::chrono::milliseconds;

@@ -6,7 +6,7 @@ namespace llarp
 {
     void to_json(nlohmann::json& j, const IPRange& ipr)
     {
-        j = ipr.ToString();
+        j = ipr.to_string();
     }
 
     void from_json(const nlohmann::json& j, IPRange& ipr)

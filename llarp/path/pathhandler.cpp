@@ -41,7 +41,7 @@ namespace llarp::path
             {"success", success}, {"attempts", attempts}, {"timeouts", timeouts}, {"fails", build_fails}};
     }
 
-    std::string BuildStats::ToString() const
+    std::string BuildStats::to_string() const
     {
         return fmt::format(
             "{:.2f} percent success (success={} attempts={} timeouts={} fails={})",

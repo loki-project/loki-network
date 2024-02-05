@@ -69,7 +69,7 @@ namespace llarp
 
             double SuccessRatio() const;
 
-            std::string ToString() const;
+            std::string to_string() const;
         };
 
         /// TODO: supplant the PathRole int typedef with this, potentially make these ints rather

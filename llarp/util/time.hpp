@@ -34,7 +34,7 @@ namespace llarp
 
     // Makes a duration human readable.  This always has full millisecond precision, but formats up
     // to hours. E.g. "-4h04m12.123s" or "1234h00m09.876s.
-    std::string ToString(Duration_t t);
+    std::string to_string(Duration_t t);
 
 }  // namespace llarp
 

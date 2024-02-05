@@ -41,7 +41,7 @@ namespace llarp::service
     StatusObject EncryptedIntroSet::ExtractStatus() const
     {
         const auto sz = introsetPayload.size();
-        return {{"location", derivedSigningKey.ToString()}, {"signedAt", to_json(signedAt)}, {"size", sz}};
+        return {{"location", derivedSigningKey.to_string()}, {"signedAt", to_json(signedAt)}, {"size", sz}};
     }
 
     std::string EncryptedIntroSet::bt_encode() const
@@ -98,7 +98,7 @@ namespace llarp::service
         return signedAt < other.signedAt;
     }
 
-    std::string EncryptedIntroSet::ToString() const
+    std::string EncryptedIntroSet::to_string() const
     {
         return fmt::format(
             "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]",
@@ -176,21 +176,21 @@ namespace llarp::service
         //     [](const auto& intro) -> StatusObject { return intro.ExtractStatus(); });
         // obj["intros"] = introsObjs;
         // if (!topic.IsZero())
-        //   obj["topic"] = topic.ToString();
+        //   obj["topic"] = topic.to_string();
 
         // std::vector<StatusObject> protocols;
         // std::transform(
         //     supported_protocols.begin(),
         //     supported_protocols.end(),
         //     std::back_inserter(protocols),
-        //     [](const auto& proto) -> StatusObject { return service::ToString(proto); });
+        //     [](const auto& proto) -> StatusObject { return service::to_string(proto); });
         // obj["protos"] = protocols;
         // std::vector<StatusObject> ranges;
         // std::transform(
         //     owned_ranges.begin(),
         //     owned_ranges.end(),
         //     std::back_inserter(ranges),
-        //     [](const auto& range) -> StatusObject { return range.ToString(); });
+        //     [](const auto& range) -> StatusObject { return range.to_string(); });
 
         // obj["advertisedRanges"] = ranges;
         // if (exit_policy)
@@ -470,7 +470,7 @@ namespace llarp::service
         return maxTime;
     }
 
-    std::string IntroSet::ToString() const
+    std::string IntroSet::to_string() const
     {
         return fmt::format(
             "[IntroSet addressKeys={} intros={{{}}} sntrupKey={} topic={} signedAt={} v={} sig={}]",

@@ -222,7 +222,7 @@ namespace llarp::service
     {
         // auto obj = path::PathBuilder::ExtractStatus();
         // obj["exitMap"] = _exit_map.ExtractStatus();
-        // obj["identity"] = _identity.pub.Addr().ToString();
+        // obj["identity"] = _identity.pub.Addr().to_string();
         // obj["networkReady"] = ReadyForNetwork();
 
         return {};
@@ -578,7 +578,7 @@ namespace llarp::service
     // std::unordered_map<std::string, std::string>
     // Endpoint::NotifyParams() const
     // {
-    //   return {{"LOKINET_ADDR", _identity.pub.Addr().ToString()}};
+    //   return {{"LOKINET_ADDR", _identity.pub.Addr().to_string()}};
     // }
 
     // bool Endpoint::HandleDataMessage(
@@ -1118,7 +1118,7 @@ namespace llarp::service
     // {
     //   // unmap all ranges that match the given exit when hot swapping
     //   _exit_map.RemoveIf([&](const auto& item) -> bool {
-    //     if ((range.Contains(item.first)) and (item.second.ToString() == exit))
+    //     if ((range.Contains(item.first)) and (item.second.to_string() == exit))
     //     {
     //       log::info(logcat, "{} unmap {} range mapping to exit node {}", Name(), item.first,
     //       exit); return true;

@@ -41,7 +41,7 @@ namespace llarp
 
         };
 
-        inline constexpr std::string_view ToString(ProtocolType t)
+        inline constexpr std::string_view to_string(ProtocolType t)
         {
             using namespace std::literals;
             return t == ProtocolType::Control  ? "Control"sv

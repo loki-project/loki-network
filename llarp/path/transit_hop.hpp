@@ -20,7 +20,7 @@ namespace llarp
             RouterID upstream;
             RouterID downstream;
 
-            std::string ToString() const;
+            std::string to_string() const;
         };
 
         inline bool operator==(const TransitHopInfo& lhs, const TransitHopInfo& rhs)
@@ -91,7 +91,7 @@ namespace llarp
                 return last_activity;
             }
 
-            std::string ToString() const;
+            std::string to_string() const;
 
             bool is_expired(llarp_time_t now) const override;
 

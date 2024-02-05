@@ -17,7 +17,7 @@ namespace llarp::service
         return AllowedTLDs.count(gtld) != 0;
     }
 
-    std::string Address::ToString(const char* tld) const
+    std::string Address::to_string(const char* tld) const
     {
         if (!PermitTLD(tld))
             return "";

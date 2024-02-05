@@ -259,7 +259,7 @@ namespace llarp
         setIPv4(ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3]);
     }
 
-    std::string SockAddr::ToString() const
+    std::string SockAddr::to_string() const
     {
         // TODO: review
         if (isEmpty())

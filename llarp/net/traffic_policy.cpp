@@ -204,7 +204,7 @@ namespace llarp::net
     {
         std::vector<StatusObject> rangesStatus;
         std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
-            return range.ToString();
+            return range.to_string();
         });
 
         std::vector<StatusObject> protosStatus;

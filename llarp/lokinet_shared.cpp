@@ -156,7 +156,7 @@ namespace
             }
             lokinet_udp_flowinfo flow_addr{};
             // set flow remote address
-            std::string addrstr = var::visit([](auto&& from) { return from.ToString(); }, from);
+            std::string addrstr = var::visit([](auto&& from) { return from.to_string(); }, from);
 
             std::copy_n(addrstr.data(), std::min(addrstr.size(), sizeof(flow_addr.remote_host)), flow_addr.remote_host);
             // set socket id
@@ -409,7 +409,7 @@ extern "C"
 
     const char* EXPORT lokinet_get_netid()
     {
-        const auto netid = llarp::NetID::DefaultValue().ToString();
+        const auto netid = llarp::NetID::DefaultValue().to_string();
         return strdup(netid.c_str());
     }
 
@@ -438,7 +438,7 @@ extern "C"
         auto lock = ctx->acquire();
         auto ep = ctx->endpoint();
         const auto addr = ep->GetIdentity().pub.Addr();
-        const auto addrStr = addr.ToString();
+        const auto addrStr = addr.to_string();
         return strdup(addrStr.c_str());
     }
 
@@ -640,7 +640,7 @@ extern "C"
                     {
                         auto [addr, id] = quic->open(
                             remotehost, remoteport, [](auto) {}, localAddr);
-                        auto [host, port] = split_host_port(addr.ToString());
+                        auto [host, port] = split_host_port(addr.to_string());
                         ctx->outbound_stream(id);
                         stream_okay(result, host, port, id);
                     }

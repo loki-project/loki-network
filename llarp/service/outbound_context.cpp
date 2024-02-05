@@ -146,7 +146,7 @@ namespace llarp::service
 
     std::string OutboundContext::Name() const
     {
-        return "OBContext:" + current_intro.address_keys.Addr().ToString();
+        return "OBContext:" + current_intro.address_keys.Addr().to_string();
     }
 
     // TODO: it seems a lot of this logic is duplicated in service/endpoint
@@ -234,7 +234,7 @@ namespace llarp::service
         obj["lastIntrosetUpdate"] = to_json(last_introset_update);
         obj["marked_bad"] = marked_bad;
         obj["last_shift"] = to_json(last_shift);
-        obj["remote_identityity"] = addr.ToString();
+        obj["remote_identityity"] = addr.to_string();
         obj["currentRemote_introset"] = current_intro.ExtractStatus();
         obj["nextIntro"] = next_intro.ExtractStatus();
         obj["readyToSend"] = ReadyToSend();

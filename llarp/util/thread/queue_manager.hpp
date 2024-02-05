@@ -28,7 +28,7 @@ namespace llarp
             QueueFull
         };
 
-        constexpr std::string_view ToString(QueueReturn val)
+        constexpr std::string_view to_string(QueueReturn val)
         {
             using namespace std::literals;
             switch (val)

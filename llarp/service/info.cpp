@@ -65,9 +65,9 @@ namespace llarp::service
         {
             Address addr;
             CalculateAddress(addr.as_array());
-            return addr.ToString();
+            return addr.to_string();
         }
-        return _cached_addr.ToString();
+        return _cached_addr.to_string();
     }
 
     bool ServiceInfo::CalculateAddress(std::array<uint8_t, 32>& data) const
@@ -85,7 +85,7 @@ namespace llarp::service
         return true;
     }
 
-    std::string ServiceInfo::ToString() const
+    std::string ServiceInfo::to_string() const
     {
         return fmt::format("[ServiceInfo e={} s={} v={} x={}]", enckey, signkey, version, vanity);
     }

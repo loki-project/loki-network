@@ -255,7 +255,7 @@ namespace llarp::quic
                 return false;
             }
 
-            auto lokinet_addr = var::visit([](auto&& remote) { return remote.ToString(); }, *remote);
+            auto lokinet_addr = var::visit([](auto&& remote) { return remote.to_string(); }, *remote);
             auto tunnel_to = allow_connection(lokinet_addr, port);
             if (not tunnel_to)
                 return false;

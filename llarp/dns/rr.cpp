@@ -83,7 +83,7 @@ namespace llarp::dns
             {"rdata", std::string{reinterpret_cast<const char*>(rData.data()), rData.size()}}};
     }
 
-    std::string ResourceRecord::ToString() const
+    std::string ResourceRecord::to_string() const
     {
         return fmt::format(
             "[RR name={} type={} class={} ttl={} rdata-size={}]", rr_name, rr_type, rr_class, ttl, rData.size());

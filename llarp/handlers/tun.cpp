@@ -196,17 +196,17 @@ namespace llarp::handlers
     StatusObject TunEndpoint::ExtractStatus() const
     {
         // auto obj = service::Endpoint::ExtractStatus();
-        // obj["ifaddr"] = m_OurRange.ToString();
+        // obj["ifaddr"] = m_OurRange.to_string();
         // obj["ifname"] = m_IfName;
 
         // std::vector<std::string> upstreamRes;
         // for (const auto& ent : m_DnsConfig.upstream_dns)
-        //   upstreamRes.emplace_back(ent.ToString());
+        //   upstreamRes.emplace_back(ent.to_string());
         // obj["ustreamResolvers"] = upstreamRes;
 
         // std::vector<std::string> localRes;
         // for (const auto& ent : m_DnsConfig.bind_addr)
-        //   localRes.emplace_back(ent.ToString());
+        //   localRes.emplace_back(ent.to_string());
         // obj["localResolvers"] = localRes;
 
         // // for backwards compat
@@ -220,17 +220,17 @@ namespace llarp::handlers
         //   std::string remoteStr;
         //   AlignedBuffer<32> addr = m_IPToAddr.at(item.first);
         //   if (m_SNodes.at(addr))
-        //     remoteStr = RouterID(addr.as_array()).ToString();
+        //     remoteStr = RouterID(addr.as_array()).to_string();
         //   else
-        //     remoteStr = service::Address(addr.as_array()).ToString();
+        //     remoteStr = service::Address(addr.as_array()).to_string();
         //   ipObj["remote"] = remoteStr;
-        //   std::string ipaddr = item.first.ToString();
+        //   std::string ipaddr = item.first.to_string();
         //   ips[ipaddr] = ipObj;
         // }
         // obj["addrs"] = ips;
-        // obj["ourIP"] = m_OurIP.ToString();
-        // obj["nextIP"] = m_NextIP.ToString();
-        // obj["maxIP"] = m_MaxIP.ToString();
+        // obj["ourIP"] = m_OurIP.to_string();
+        // obj["nextIP"] = m_NextIP.to_string();
+        // obj["maxIP"] = m_MaxIP.to_string();
         // return obj;
         return {};
     }
@@ -671,7 +671,7 @@ namespace llarp::handlers
         //   {
         //     if (auto random = router().GetRandomGoodRouter())
         //     {
-        //       msg.AddCNAMEReply(random->ToString(), 1);
+        //       msg.AddCNAMEReply(random->to_string(), 1);
         //     }
         //     else
         //       msg.AddNXReply();
@@ -682,7 +682,7 @@ namespace llarp::handlers
         //     if (subdomain == "exit" and HasExit())
         //     {
         //       _exit_map.ForEachEntry(
-        //           [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.ToString(), 1);
+        //           [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.to_string(), 1);
         //           });
         //     }
         //     else
@@ -697,7 +697,7 @@ namespace llarp::handlers
         //         [&](const std::string&, const std::shared_ptr<service::Endpoint>& service) ->
         //         bool {
         //           const service::Address addr = service->GetIdentity().pub.Addr();
-        //           msg.AddCNAMEReply(addr.ToString(), 1);
+        //           msg.AddCNAMEReply(addr.to_string(), 1);
         //           ++counter;
         //           return true;
         //         });
@@ -723,7 +723,7 @@ namespace llarp::handlers
         //   {
         //     if (auto random = router().GetRandomGoodRouter())
         //     {
-        //       msg.AddCNAMEReply(random->ToString(), 1);
+        //       msg.AddCNAMEReply(random->to_string(), 1);
         //       return ReplyToSNodeDNSWhenReady(*random, std::make_shared<dns::Message>(msg),
         //       isV6);
         //     }
@@ -741,7 +741,7 @@ namespace llarp::handlers
         //         if (HasExit())
         //         {
         //           _exit_map.ForEachEntry(
-        //               [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.ToString());
+        //               [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.to_string());
         //               });
         //           msg.AddINReply(ip, isV6);
         //         }
@@ -817,7 +817,7 @@ namespace llarp::handlers
         //   {
         //     if (auto maybe = ObtainAddrForIP(*ip))
         //     {
-        //       var::visit([&msg](auto&& result) { msg.AddAReply(result.ToString()); }, *maybe);
+        //       var::visit([&msg](auto&& result) { msg.AddAReply(result.to_string()); }, *maybe);
         //       reply(msg);
         //       return true;
         //     }
@@ -901,10 +901,10 @@ namespace llarp::handlers
         auto itr = m_IPToAddr.find(ip);
         if (itr != m_IPToAddr.end())
         {
-            llarp::LogWarn(ip, " already mapped to ", service::Address(itr->second.as_array()).ToString());
+            llarp::LogWarn(ip, " already mapped to ", service::Address(itr->second.as_array()).to_string());
             return false;
         }
-        llarp::LogInfo(name() + " map ", addr.ToString(), " to ", ip);
+        llarp::LogInfo(name() + " map ", addr.to_string(), " to ", ip);
 
         m_IPToAddr[ip] = addr;
         m_AddrToIP[addr] = ip;
@@ -917,7 +917,7 @@ namespace llarp::handlers
     std::string TunEndpoint::GetIfName() const
     {
 #ifdef _WIN32
-        return net::TruncateV6(GetIfAddr()).ToString();
+        return net::TruncateV6(GetIfAddr()).to_string();
 #else
         return _if_name;
 #endif
@@ -1009,12 +1009,12 @@ namespace llarp::handlers
     // TunEndpoint::NotifyParams() const
     // {
     //   auto env = Endpoint::NotifyParams();
-    //   env.emplace("IP_ADDR", m_OurIP.ToString());
-    //   env.emplace("IF_ADDR", m_OurRange.ToString());
+    //   env.emplace("IP_ADDR", m_OurIP.to_string());
+    //   env.emplace("IF_ADDR", m_OurRange.to_string());
     //   env.emplace("IF_NAME", m_IfName);
     //   std::string strictConnect;
     //   for (const auto& addr : m_StrictConnectAddrs)
-    //     strictConnect += addr.ToString() + " ";
+    //     strictConnect += addr.to_string() + " ";
     //   env.emplace("STRICT_CONNECT_ADDRS", strictConnect);
     //   return env;
     // }
@@ -1046,7 +1046,7 @@ namespace llarp::handlers
             //     {
             //       const service::Address a{addr.as_array()};
             //       if (HasInboundConvo(a))
-            //         addrmap[ip.ToString()] = a.ToString();
+            //         addrmap[ip.to_string()] = a.to_string();
             //     }
             //   }
             //   const auto data = oxenc::bt_serialize(addrmap);

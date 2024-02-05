@@ -209,7 +209,7 @@ namespace llarp::rpc
             //     quicconnect.request.remoteHost, quicconnect.request.port, [](auto&&) {}, laddr);
 
             StatusObject status;
-            // status["addr"] = addr.ToString();
+            // status["addr"] = addr.to_string();
             // status["id"] = id;
 
             SetJSONResponse(status, quicconnect.response);
@@ -273,7 +273,7 @@ namespace llarp::rpc
             StatusObject result;
             result["id"] = id;
             std::string localAddress;
-            var::visit([&](auto&& addr) { localAddress = addr.ToString(); }, endpoint->local_address());
+            var::visit([&](auto&& addr) { localAddress = addr.to_string(); }, endpoint->local_address());
             result["addr"] = localAddress + ":" + std::to_string(quiclistener.request.port);
 
             if (not quiclistener.request.srvProto.empty())
@@ -323,7 +323,7 @@ namespace llarp::rpc
         //     if (session and session->IsReady())
         //     {
         //       const auto ip = net::TruncateV6(endpoint->GetIPForIdent(PubKey{routerID}));
-        //       StatusObject status{{"ip", ip.ToString()}};
+        //       StatusObject status{{"ip", ip.to_string()}};
         //       SetJSONResponse(status, lookupsnode.response);
         //       return;
         //     }

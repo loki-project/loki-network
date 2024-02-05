@@ -81,7 +81,7 @@ namespace llarp
             "ms"_a = ms);
     }
 
-    std::string ToString(Duration_t delta)
+    std::string to_string(Duration_t delta)
     {
         bool neg = delta < 0s;
         if (neg)

@@ -106,7 +106,7 @@ namespace llarp
         /// Returns a string representing this IpAddress
         ///
         /// @return string representation of this IpAddress
-        std::string ToString() const;
+        std::string to_string() const;
 
         std::string toHost() const;
 
@@ -142,7 +142,7 @@ namespace std
     {
         std::size_t operator()(const llarp::IpAddress& address) const noexcept
         {
-            return std::hash<std::string>{}(address.ToString());
+            return std::hash<std::string>{}(address.to_string());
         }
     };
 }  // namespace std

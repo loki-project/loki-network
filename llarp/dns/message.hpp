@@ -75,7 +75,7 @@ namespace llarp
             // Wrapper around Encode that encodes into a new buffer and returns it
             [[nodiscard]] OwnedBuffer ToBuffer() const;
 
-            std::string ToString() const;
+            std::string to_string() const;
 
             MsgID_t hdr_id;
             Fields_t hdr_fields;

@@ -5,12 +5,12 @@
 #include <type_traits>
 
 // Formattable types can specialize this to true and will get automatic fmt formattering support via
-// their .ToString() method.
+// their .to_string() method.
 
 namespace llarp
 {
-    // Types can opt-in to being formatting via .ToString() by specializing this to true.  This also
-    // allows scoped enums by instead looking for a call to `ToString(val)` (and so there should be
+    // Types can opt-in to being formatting via .to_string() by specializing this to true.  This also
+    // allows scoped enums by instead looking for a call to `to_string(val)` (and so there should be
     // a ToString function in the same namespace as the scoped enum to pick it up via ADL).
     template <typename T>
     constexpr bool IsToStringFormattable = false;
@@ -69,9 +69,9 @@ namespace fmt
         auto format(const T& val, FormatContext& ctx) const
         {
             if constexpr (llarp::is_scoped_enum_v<T>)
-                return formatter<std::string_view>::format(ToString(val), ctx);
+                return formatter<std::string_view>::format(to_string(val), ctx);
             else
-                return formatter<std::string_view>::format(val.ToString(), ctx);
+                return formatter<std::string_view>::format(val.to_string(), ctx);
         }
     };
 

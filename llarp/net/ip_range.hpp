@@ -129,7 +129,7 @@ namespace llarp
             return addr == other.addr and netmask_bits == other.netmask_bits;
         }
 
-        std::string ToString() const
+        std::string to_string() const
         {
             return BaseAddressString() + "/" + std::to_string(HostmaskBits());
         }
@@ -160,7 +160,7 @@ namespace std
     {
         size_t operator()(const llarp::IPRange& range) const
         {
-            const auto str = range.ToString();
+            const auto str = range.to_string();
             return std::hash<std::string>{}(str);
         }
     };

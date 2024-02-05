@@ -50,7 +50,7 @@ namespace llarp
             : buffer_printer(std::basic_string_view<uint8_t>{buf.base, buf.sz})
         {}
 
-        std::string ToString() const;
+        std::string to_string() const;
     };
 
     template <>

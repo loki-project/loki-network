@@ -44,7 +44,7 @@ const char* inet_ntop(int af, const void* src, char* dst, size_t size)
             return NULL;
     }
 
-    if (WSAAddressToString((LPSOCKADDR)&sa, address_length, NULL, dst, &string_length) == 0)
+    if (WSAAddressto_string((LPSOCKADDR)&sa, address_length, NULL, dst, &string_length) == 0)
     {
         return dst;
     }

@@ -29,7 +29,7 @@ namespace llarp::dns
 
         StatusObject ToJSON() const override;
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         bool HasCNameForTLD(const std::string& tld) const;
 

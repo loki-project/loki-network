@@ -12,7 +12,7 @@ namespace llarp::win32
         template <typename T>
         std::string ip_to_string(T ip)
         {
-            return var::visit([](auto&& ip) { return ip.ToString(); }, ip);
+            return var::visit([](auto&& ip) { return ip.to_string(); }, ip);
         }
     }  // namespace
 

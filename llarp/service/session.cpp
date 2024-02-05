@@ -8,7 +8,7 @@ namespace llarp::service
             {"lastSend", to_json(lastSend)},
             {"lastRecv", to_json(lastRecv)},
             {"replyIntro", replyIntro.ExtractStatus()},
-            {"remote", Addr().ToString()},
+            {"remote", Addr().to_string()},
             {"seqno", seqno},
             {"tx", messagesSend},
             {"rx", messagesRecv},

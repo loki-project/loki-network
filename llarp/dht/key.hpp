@@ -26,12 +26,12 @@ namespace llarp::dht
         std::string SNode() const
         {
             const RouterID rid{as_array()};
-            return rid.ToString();
+            return rid.to_string();
         }
 
         StatusObject ExtractStatus() const;
 
-        std::string ToString() const
+        std::string to_string() const
         {
             return SNode();
         }

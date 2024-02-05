@@ -55,7 +55,7 @@ namespace llarp::service
             return time_signed < other.time_signed;
         }
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         llarp_time_t GetNewestIntroExpiration() const;
 
@@ -142,7 +142,7 @@ namespace llarp::service
 
         static bool verify(std::string introset, std::string key, std::string sig);
 
-        std::string ToString() const;
+        std::string to_string() const;
 
         StatusObject ExtractStatus() const;
 

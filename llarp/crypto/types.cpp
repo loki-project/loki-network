@@ -25,7 +25,7 @@ namespace llarp
         return p;
     }
 
-    std::string PubKey::ToString() const
+    std::string PubKey::to_string() const
     {
         return oxenc::to_hex(begin(), end());
     }
