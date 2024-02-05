@@ -420,7 +420,7 @@ namespace llarp
 
         bool PathToRouterAllowed(const RouterID& router) const;
 
-        const byte_t* pubkey() const
+        const uint8_t* pubkey() const
         {
             return seckey_to_pubkey(_identity);
         }

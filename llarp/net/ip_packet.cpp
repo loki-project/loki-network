@@ -118,7 +118,7 @@ namespace llarp::net
             return SockAddr{ToNet(dstv6()), port};
     }
 
-    IPPacket::IPPacket(std::vector<byte_t>&& stolen) : _buf{stolen}
+    IPPacket::IPPacket(std::vector<uint8_t>&& stolen) : _buf{stolen}
     {
         if (size() < MinSize)
             _buf.resize(0);
@@ -194,7 +194,7 @@ namespace llarp::net
         return ExpandV4Lan(srcv4());
     }
 
-    uint16_t ipchksum(const byte_t* buf, size_t sz, uint32_t sum)
+    uint16_t ipchksum(const uint8_t* buf, size_t sz, uint32_t sum)
     {
         while (sz > 1)
         {
@@ -206,7 +206,7 @@ namespace llarp::net
         {
             uint16_t x = 0;
 
-            *(byte_t*)&x = *(const byte_t*)buf;
+            *(uint8_t*)&x = *(const uint8_t*)buf;
             sum += x;
         }
 
@@ -269,7 +269,7 @@ namespace llarp::net
 #undef SUB32CS
 
     static void deltaChecksumIPv4TCP(
-        byte_t* pld,
+        uint8_t* pld,
         size_t psz,
         size_t fragoff,
         size_t chksumoff,
@@ -293,7 +293,7 @@ namespace llarp::net
     }
 
     static void deltaChecksumIPv6TCP(
-        byte_t* pld,
+        uint8_t* pld,
         size_t psz,
         size_t fragoff,
         size_t chksumoff,
@@ -317,7 +317,13 @@ namespace llarp::net
     }
 
     static void deltaChecksumIPv4UDP(
-        byte_t* pld, size_t psz, size_t fragoff, nuint32_t oSrcIP, nuint32_t oDstIP, nuint32_t nSrcIP, nuint32_t nDstIP)
+        uint8_t* pld,
+        size_t psz,
+        size_t fragoff,
+        nuint32_t oSrcIP,
+        nuint32_t oDstIP,
+        nuint32_t nSrcIP,
+        nuint32_t nDstIP)
     {
         if (fragoff > 6 || psz < 6 + 2)
             return;
@@ -338,7 +344,7 @@ namespace llarp::net
     }
 
     static void deltaChecksumIPv6UDP(
-        byte_t* pld,
+        uint8_t* pld,
         size_t psz,
         size_t fragoff,
         const uint32_t oSrcIP[4],
@@ -601,7 +607,7 @@ namespace llarp::net
             net::port_t srcport,
             net::ipv4addr_t dstaddr,
             net::port_t dstport,
-            std::vector<byte_t> udp_data)
+            std::vector<uint8_t> udp_data)
         {
             constexpr auto pkt_overhead = constants::udp_header_bytes + constants::ip_header_min_bytes;
             net::IPPacket pkt{udp_data.size() + pkt_overhead};
@@ -640,7 +646,7 @@ namespace llarp::net
         net::port_t srcport,
         net::ipaddr_t dstaddr,
         net::port_t dstport,
-        std::vector<byte_t> udp_data)
+        std::vector<uint8_t> udp_data)
     {
         auto getfam = [](auto&& v) {
             if (std::holds_alternative<net::ipv4addr_t>(v))

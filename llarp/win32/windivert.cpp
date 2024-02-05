@@ -143,7 +143,7 @@ namespace llarp::win32
 
         struct Packet
         {
-            std::vector<byte_t> pkt;
+            std::vector<uint8_t> pkt;
             WINDIVERT_ADDRESS addr;
         };
 
@@ -178,7 +178,7 @@ namespace llarp::win32
             std::optional<Packet> recv_packet() const
             {
                 WINDIVERT_ADDRESS addr{};
-                std::vector<byte_t> pkt;
+                std::vector<uint8_t> pkt;
                 pkt.resize(1500);  // net::IPPacket::MaxSize
                 UINT sz{};
                 if (not wd::recv(m_Handle, pkt.data(), pkt.size(), &sz, &addr))

@@ -19,7 +19,7 @@ namespace llarp::util
     /// file is bigger than the buffer.  Returns the bytes copied on success.
     size_t file_to_buffer(const fs::path& filename, char* buffer, size_t buffer_size);
 
-    /// Same, but for some non-char but single-byte char type (e.g. byte_t, std::byte, unsigned
+    /// Same, but for some non-char but single-byte char type (e.g. uint8_t, std::byte, unsigned
     /// char).
     template <typename Char, std::enable_if_t<sizeof(Char) == 1 and not std::is_same_v<Char, char>, int> = 1>
     size_t file_to_buffer(const fs::path& filename, Char* buffer, size_t buffer_size)

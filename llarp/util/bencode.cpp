@@ -13,7 +13,7 @@ bool bencode_read_integer(struct llarp_buffer_t* buffer, uint64_t* result)
 
     buffer->cur++;
 
-    len = buffer->read_until('e', (byte_t*)numbuf, sizeof(numbuf) - 1);
+    len = buffer->read_until('e', (uint8_t*)numbuf, sizeof(numbuf) - 1);
     if (!len)
     {
         return false;
@@ -31,7 +31,7 @@ bool bencode_read_string(llarp_buffer_t* buffer, llarp_buffer_t* result)
 {
     char numbuf[10];
 
-    size_t len = buffer->read_until(':', (byte_t*)numbuf, sizeof(numbuf) - 1);
+    size_t len = buffer->read_until(':', (uint8_t*)numbuf, sizeof(numbuf) - 1);
     if (!len)
         return false;
 

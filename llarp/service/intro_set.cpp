@@ -16,7 +16,7 @@ namespace llarp::service
           introsetPayload{reinterpret_cast<uint8_t*>(enc_payload.data()), enc_payload.size()},
           nonce{reinterpret_cast<uint8_t*>(nonce.data())}
     {
-        derivedSigningKey = PubKey::from_string(signing_key);
+        derivedSigningKey = PubKey::make_from_hex(signing_key);
         sig.from_string(std::move(s));
     }
 
@@ -26,7 +26,7 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{bt_payload};
 
-            derivedSigningKey = PubKey::from_string(btdc.require<std::string>("d"));
+            derivedSigningKey = PubKey::make_from_hex(btdc.require<std::string>("d"));
             nonce.from_string(btdc.require<std::string>("n"));
             signedAt = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
             introsetPayload = btdc.require<ustring>("x");
@@ -244,11 +244,11 @@ namespace llarp::service
 
         if (key.startswith("s"))
         {
-            byte_t* begin = buf->cur;
+            uint8_t* begin = buf->cur;
             if (not bencode_discard(buf))
                 return false;
 
-            byte_t* end = buf->cur;
+            uint8_t* end = buf->cur;
 
             std::string_view srvString(reinterpret_cast<const char*>(begin), static_cast<size_t>(end - begin));
 

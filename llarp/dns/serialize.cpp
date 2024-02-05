@@ -4,7 +4,7 @@ namespace llarp::dns
 {
     Serialize::~Serialize() = default;
 
-    bool EncodeRData(llarp_buffer_t* buf, const std::vector<byte_t>& v)
+    bool EncodeRData(llarp_buffer_t* buf, const std::vector<uint8_t>& v)
     {
         if (v.size() > 65536)
             return false;
@@ -18,7 +18,7 @@ namespace llarp::dns
         return true;
     }
 
-    bool DecodeRData(llarp_buffer_t* buf, std::vector<byte_t>& v)
+    bool DecodeRData(llarp_buffer_t* buf, std::vector<uint8_t>& v)
     {
         uint16_t len;
         if (!buf->read_uint16(len))

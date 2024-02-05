@@ -22,8 +22,8 @@ namespace llarp::dns
         virtual StatusObject ToJSON() const = 0;
     };
 
-    bool EncodeRData(llarp_buffer_t* buf, const std::vector<byte_t>& rdata);
+    bool EncodeRData(llarp_buffer_t* buf, const std::vector<uint8_t>& rdata);
 
-    bool DecodeRData(llarp_buffer_t* buf, std::vector<byte_t>& rdata);
+    bool DecodeRData(llarp_buffer_t* buf, std::vector<uint8_t>& rdata);
 
 }  // namespace llarp::dns

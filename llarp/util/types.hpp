@@ -7,8 +7,7 @@
 #include <cstdint>
 #include <string>
 
-using byte_t = uint8_t;
-using llarp_proto_version_t = std::uint8_t;
+// using uint8_t = uint8_t;
 
 namespace llarp
 {

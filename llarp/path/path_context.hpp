@@ -91,7 +91,7 @@ namespace llarp::path
 
         const SecretKey& EncryptionSecretKey();
 
-        const byte_t* OurRouterID() const;
+        const uint8_t* OurRouterID() const;
 
         /// current number of transit paths we have
         uint64_t CurrentTransitPaths();

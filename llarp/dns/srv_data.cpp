@@ -106,10 +106,10 @@ namespace llarp::dns
 
     bool SRVData::BDecode(llarp_buffer_t* buf)
     {
-        byte_t* begin = buf->cur;
+        uint8_t* begin = buf->cur;
         if (not bencode_discard(buf))
             return false;
-        byte_t* end = buf->cur;
+        uint8_t* end = buf->cur;
         std::string_view srvString{reinterpret_cast<char*>(begin), static_cast<std::size_t>(end - begin)};
         try
         {

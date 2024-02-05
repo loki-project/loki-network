@@ -179,7 +179,7 @@ namespace llarp::service
     bool ProtocolFrameMessage::Sign(const Identity& localIdent)
     {
         sig.Zero();
-        std::array<byte_t, MAX_PROTOCOL_MESSAGE_SIZE> tmp;
+        std::array<uint8_t, MAX_PROTOCOL_MESSAGE_SIZE> tmp;
         llarp_buffer_t buf(tmp);
         // encode
         auto bte = bt_encode();

@@ -11,11 +11,11 @@ namespace llarp
     {
         static constexpr size_t SIZE = 32;
 
-        using Data = std::array<byte_t, SIZE>;
+        using Data = std::array<uint8_t, SIZE>;
 
         RouterID() = default;
 
-        RouterID(const byte_t* buf) : PubKey(buf)
+        RouterID(const uint8_t* buf) : PubKey(buf)
         {}
 
         RouterID(const Data& data) : PubKey(data)
@@ -33,12 +33,9 @@ namespace llarp
 
         std::string ShortString() const;
 
-        // FIXME: this is deceptively named: it parses something base32z formatted with .snode on
-        // the end, so should probably be called "from_snode_address" or "from_base32z" or something
-        // that doesn't sound exactly like the other (different) from_strings of its base classes.
         bool from_snode_address(std::string_view str);
 
-        RouterID& operator=(const byte_t* ptr)
+        RouterID& operator=(const uint8_t* ptr)
         {
             std::copy(ptr, ptr + SIZE, begin());
             return *this;

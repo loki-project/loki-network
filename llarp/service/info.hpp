@@ -44,7 +44,7 @@ namespace llarp::service
             return enckey;
         }
 
-        bool Update(const byte_t* sign, const byte_t* enc, const std::optional<VanityNonce>& nonce = {});
+        bool Update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce = {});
 
         bool operator==(const ServiceInfo& other) const
         {
@@ -79,7 +79,7 @@ namespace llarp::service
         }
 
         /// calculate our address
-        bool CalculateAddress(std::array<byte_t, 32>& data) const;
+        bool CalculateAddress(std::array<uint8_t, 32>& data) const;
 
         bool BDecode(llarp_buffer_t* buf)
         {

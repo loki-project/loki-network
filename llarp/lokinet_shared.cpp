@@ -404,7 +404,7 @@ extern "C"
 {
     void EXPORT lokinet_set_netid(const char* netid)
     {
-        llarp::NetID::DefaultValue() = llarp::NetID{reinterpret_cast<const byte_t*>(netid)};
+        llarp::NetID::DefaultValue() = llarp::NetID{reinterpret_cast<const uint8_t*>(netid)};
     }
 
     const char* EXPORT lokinet_get_netid()

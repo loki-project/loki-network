@@ -10,7 +10,7 @@
 
 namespace llarp
 {
-    bool PubKey::FromString(const std::string& str)
+    bool PubKey::from_hex(const std::string& str)
     {
         if (str.size() != 2 * size())
             return false;
@@ -18,7 +18,7 @@ namespace llarp
         return true;
     }
 
-    PubKey PubKey::from_string(const std::string& s)
+    PubKey PubKey::make_from_hex(const std::string& s)
     {
         PubKey p;
         oxenc::from_hex(s.begin(), s.end(), p.begin());
@@ -30,7 +30,7 @@ namespace llarp
         return oxenc::to_hex(begin(), end());
     }
 
-    PubKey& PubKey::operator=(const byte_t* ptr)
+    PubKey& PubKey::operator=(const uint8_t* ptr)
     {
         std::copy(ptr, ptr + SIZE, begin());
         return *this;
@@ -44,7 +44,7 @@ namespace llarp
     bool SecretKey::load_from_file(const fs::path& fname)
     {
         size_t sz;
-        std::array<byte_t, 128> tmp;
+        std::array<uint8_t, 128> tmp;
         try
         {
             sz = util::file_to_buffer(fname, tmp.data(), tmp.size());

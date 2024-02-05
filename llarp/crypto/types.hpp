@@ -14,16 +14,16 @@ namespace llarp
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
     using KeyExchangeNonce = AlignedBuffer<32>;
 
-    struct RouterID;
+    // struct RouterID;
 
     struct PubKey : public AlignedBuffer<PUBKEYSIZE>
     {
         PubKey() = default;
 
-        explicit PubKey(const byte_t* ptr) : AlignedBuffer<SIZE>(ptr)
+        explicit PubKey(const uint8_t* ptr) : AlignedBuffer<SIZE>(ptr)
         {}
 
-        explicit PubKey(const std::array<byte_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
+        explicit PubKey(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
         {}
 
         explicit PubKey(const AlignedBuffer<SIZE>& other) : AlignedBuffer<SIZE>(other)
@@ -31,13 +31,11 @@ namespace llarp
 
         std::string ToString() const;
 
-        // FIXME: this is deceptively named: it should be "from_hex" since that's what it does.
-        bool FromString(const std::string& str);
+        bool from_hex(const std::string& str);
 
-        // FIXME: this is deceptively named: it should be "from_hex" since that's what it does.
-        static PubKey from_string(const std::string& s);
+        static PubKey make_from_hex(const std::string& s);
 
-        PubKey& operator=(const byte_t* ptr);
+        PubKey& operator=(const uint8_t* ptr);
     };
 
     bool operator==(const PubKey& lhs, const PubKey& rhs);
@@ -51,7 +49,7 @@ namespace llarp
     {
         SecretKey() = default;
 
-        explicit SecretKey(const byte_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr)
+        explicit SecretKey(const uint8_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr)
         {}
 
         // The full data
@@ -96,7 +94,7 @@ namespace llarp
     {
         PrivateKey() = default;
 
-        explicit PrivateKey(const byte_t* ptr) : AlignedBuffer<64>(ptr)
+        explicit PrivateKey(const uint8_t* ptr) : AlignedBuffer<64>(ptr)
         {}
 
         explicit PrivateKey(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash)
@@ -104,14 +102,14 @@ namespace llarp
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        const byte_t* signing_hash() const
+        const uint8_t* signing_hash() const
         {
             return data() + 32;
         }
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        byte_t* signing_hash()
+        uint8_t* signing_hash()
         {
             return data() + 32;
         }

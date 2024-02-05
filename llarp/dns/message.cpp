@@ -145,7 +145,7 @@ namespace llarp::dns
 
     OwnedBuffer Message::ToBuffer() const
     {
-        std::array<byte_t, 1500> tmp;
+        std::array<uint8_t, 1500> tmp;
         llarp_buffer_t buf{tmp};
         if (not Encode(&buf))
             throw std::runtime_error("cannot encode dns message");
@@ -207,7 +207,7 @@ namespace llarp::dns
             rec.rr_type = question.qtype;
             rec.rr_class = qClassIN;
             rec.ttl = ttl;
-            std::array<byte_t, 512> tmp = {{0}};
+            std::array<uint8_t, 512> tmp = {{0}};
             llarp_buffer_t buf(tmp);
             if (EncodeNameTo(&buf, name))
             {
@@ -231,7 +231,7 @@ namespace llarp::dns
             rec.rr_type = qTypeNS;
             rec.rr_class = qClassIN;
             rec.ttl = ttl;
-            std::array<byte_t, 512> tmp = {{0}};
+            std::array<uint8_t, 512> tmp = {{0}};
             llarp_buffer_t buf(tmp);
             if (EncodeNameTo(&buf, name))
             {
@@ -255,7 +255,7 @@ namespace llarp::dns
             rec.rr_type = qTypeCNAME;
             rec.rr_class = qClassIN;
             rec.ttl = ttl;
-            std::array<byte_t, 512> tmp = {{0}};
+            std::array<uint8_t, 512> tmp = {{0}};
             llarp_buffer_t buf(tmp);
             if (EncodeNameTo(&buf, name))
             {
@@ -279,7 +279,7 @@ namespace llarp::dns
             rec.rr_type = qTypeMX;
             rec.rr_class = qClassIN;
             rec.ttl = ttl;
-            std::array<byte_t, 512> tmp = {{0}};
+            std::array<uint8_t, 512> tmp = {{0}};
             llarp_buffer_t buf(tmp);
             buf.put_uint16(priority);
             if (EncodeNameTo(&buf, name))
@@ -312,7 +312,7 @@ namespace llarp::dns
             rec.rr_class = qClassIN;
             rec.ttl = ttl;
 
-            std::array<byte_t, 512> tmp = {{0}};
+            std::array<uint8_t, 512> tmp = {{0}};
             llarp_buffer_t buf(tmp);
 
             buf.put_uint16(srv.priority);
@@ -352,7 +352,7 @@ namespace llarp::dns
         rec.rr_class = qClassIN;
         rec.rr_type = qTypeTXT;
         rec.ttl = ttl;
-        std::array<byte_t, 1024> tmp{};
+        std::array<uint8_t, 1024> tmp{};
         llarp_buffer_t buf(tmp);
         while (not str.empty())
         {

@@ -118,7 +118,7 @@ namespace llarp
                 result.data(),
                 nullptr,
                 nullptr,
-                reinterpret_cast<const byte_t*>(ciphertext.data()),
+                reinterpret_cast<const uint8_t*>(ciphertext.data()),
                 ciphertext.size(),
                 nullptr,
                 0,
@@ -265,7 +265,7 @@ namespace llarp
     }
 
     /// clamp a 32 byte ec point
-    static void clamp_ed25519(byte_t* out)
+    static void clamp_ed25519(uint8_t* out)
     {
         out[0] &= 248;
         out[31] &= 127;
@@ -297,7 +297,7 @@ namespace llarp
     static bool make_scalar(AlignedBuffer<32>& out, const K& k, uint64_t i)
     {
         // b = BLIND-STRING || k || i
-        std::array<byte_t, 160 + K::SIZE + sizeof(uint64_t)> buf;
+        std::array<uint8_t, 160 + K::SIZE + sizeof(uint64_t)> buf;
         std::copy(derived_key_hash_str, derived_key_hash_str + 160, buf.begin());
         std::copy(k.begin(), k.end(), buf.begin() + 160);
         oxenc::write_host_as_little(i, buf.data() + 160 + K::SIZE);
@@ -382,7 +382,7 @@ namespace llarp
         crypto_core_ed25519_scalar_mul(out_key.data(), h.data(), a.data());
 
         // s' = H(h || s)
-        std::array<byte_t, 64> buf;
+        std::array<uint8_t, 64> buf;
         std::copy(h.begin(), h.end(), buf.begin());
         std::copy(a.signing_hash(), a.signing_hash() + 32, buf.begin() + 32);
         return -1 != crypto_generichash_blake2b(out_key.signing_hash(), 32, buf.data(), buf.size(), nullptr, 0);
@@ -395,7 +395,7 @@ namespace llarp
         randombytes(buf, len);
     }
 
-    void crypto::randbytes(byte_t* ptr, size_t sz)
+    void crypto::randbytes(uint8_t* ptr, size_t sz)
     {
         randombytes((unsigned char*)ptr, sz);
     }
@@ -436,7 +436,7 @@ namespace llarp
     {
         return crypto_kem_enc(ciphertext.data(), sharedkey.data(), pubkey.data()) != -1;
     }
-    bool crypto::pqe_decrypt(const PQCipherBlock& ciphertext, SharedSecret& sharedkey, const byte_t* secretkey)
+    bool crypto::pqe_decrypt(const PQCipherBlock& ciphertext, SharedSecret& sharedkey, const uint8_t* secretkey)
     {
         return crypto_kem_dec(sharedkey.data(), ciphertext.data(), secretkey) != -1;
     }
@@ -463,17 +463,17 @@ namespace llarp
     }
 #endif
 
-    const byte_t* seckey_to_pubkey(const SecretKey& sec)
+    const uint8_t* seckey_to_pubkey(const SecretKey& sec)
     {
         return sec.data() + 32;
     }
 
-    const byte_t* pq_keypair_to_pubkey(const PQKeyPair& k)
+    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& k)
     {
         return k.data() + PQ_SECRETKEYSIZE;
     }
 
-    const byte_t* pq_keypair_to_seckey(const PQKeyPair& k)
+    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& k)
     {
         return k.data();
     }
@@ -481,7 +481,7 @@ namespace llarp
     uint64_t randint()
     {
         uint64_t i;
-        randombytes((byte_t*)&i, sizeof(i));
+        randombytes((uint8_t*)&i, sizeof(i));
         return i;
     }
 

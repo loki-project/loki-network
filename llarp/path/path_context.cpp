@@ -123,7 +123,7 @@ namespace llarp::path
         return nullptr;
     }
 
-    const byte_t* PathContext::OurRouterID() const
+    const uint8_t* PathContext::OurRouterID() const
     {
         return _router->pubkey();
     }

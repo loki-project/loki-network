@@ -6,8 +6,8 @@
 
 namespace llarp::vpn
 {
-    using PacketSendFunc_t = std::function<void(std::vector<byte_t>)>;
-    using PacketInterceptFunc_t = std::function<void(std::vector<byte_t>, PacketSendFunc_t)>;
+    using PacketSendFunc_t = std::function<void(std::vector<uint8_t>)>;
+    using PacketInterceptFunc_t = std::function<void(std::vector<uint8_t>, PacketSendFunc_t)>;
 
     class I_PacketInterceptor
     {

@@ -35,7 +35,7 @@ namespace llarp::vpn
 
         net::IPPacket ReadNextPacket() override
         {
-            std::vector<byte_t> pkt;
+            std::vector<uint8_t> pkt;
             pkt.reserve(net::IPPacket::MaxSize);
             const auto n = read(m_fd, pkt.data(), pkt.capacity());
             pkt.resize(std::min(std::max(ssize_t{}, n), static_cast<ssize_t>(pkt.capacity())));

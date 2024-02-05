@@ -48,17 +48,17 @@ namespace llarp
             Zero();
         }
 
-        explicit AlignedBuffer(const byte_t* data)
+        explicit AlignedBuffer(const uint8_t* data)
         {
             *this = data;
         }
 
-        explicit AlignedBuffer(const std::array<byte_t, SIZE>& buf)
+        explicit AlignedBuffer(const std::array<uint8_t, SIZE>& buf)
         {
             _data = buf;
         }
 
-        AlignedBuffer& operator=(const byte_t* data)
+        AlignedBuffer& operator=(const uint8_t* data)
         {
             std::memcpy(_data.data(), data, sz);
             return *this;
@@ -68,7 +68,7 @@ namespace llarp
         AlignedBuffer<sz> operator~() const
         {
             AlignedBuffer<sz> ret;
-            std::transform(begin(), end(), ret.begin(), [](byte_t a) { return ~a; });
+            std::transform(begin(), end(), ret.begin(), [](uint8_t a) { return ~a; });
 
             return ret;
         }
@@ -120,13 +120,13 @@ namespace llarp
             return *this;
         }
 
-        byte_t& operator[](size_t idx)
+        uint8_t& operator[](size_t idx)
         {
             assert(idx < SIZE);
             return _data[idx];
         }
 
-        const byte_t& operator[](size_t idx) const
+        const uint8_t& operator[](size_t idx) const
         {
             assert(idx < SIZE);
             return _data[idx];
@@ -137,27 +137,27 @@ namespace llarp
             return sz;
         }
 
-        void Fill(byte_t f)
+        void Fill(uint8_t f)
         {
             _data.fill(f);
         }
 
-        std::array<byte_t, SIZE>& as_array()
+        std::array<uint8_t, SIZE>& as_array()
         {
             return _data;
         }
 
-        const std::array<byte_t, SIZE>& as_array() const
+        const std::array<uint8_t, SIZE>& as_array() const
         {
             return _data;
         }
 
-        byte_t* data()
+        uint8_t* data()
         {
             return _data.data();
         }
 
-        const byte_t* data() const
+        const uint8_t* data() const
         {
             return _data.data();
         }
@@ -183,22 +183,22 @@ namespace llarp
             randombytes(data(), SIZE);
         }
 
-        typename std::array<byte_t, SIZE>::iterator begin()
+        typename std::array<uint8_t, SIZE>::iterator begin()
         {
             return _data.begin();
         }
 
-        typename std::array<byte_t, SIZE>::iterator end()
+        typename std::array<uint8_t, SIZE>::iterator end()
         {
             return _data.end();
         }
 
-        typename std::array<byte_t, SIZE>::const_iterator begin() const
+        typename std::array<uint8_t, SIZE>::const_iterator begin() const
         {
             return _data.cbegin();
         }
 
-        typename std::array<byte_t, SIZE>::const_iterator end() const
+        typename std::array<uint8_t, SIZE>::const_iterator end() const
         {
             return _data.cend();
         }
@@ -270,7 +270,7 @@ namespace llarp
         }
 
        private:
-        std::array<byte_t, SIZE> _data;
+        std::array<uint8_t, SIZE> _data;
     };
 
     namespace detail

@@ -45,7 +45,7 @@ namespace llarp
             ~ProtocolMessage();
             ProtocolType proto = ProtocolType::TrafficV4;
             llarp_time_t queued = 0s;
-            std::vector<byte_t> payload;  // encrypted AbstractLinkMessage
+            std::vector<uint8_t> payload;  // encrypted AbstractLinkMessage
             Introduction introReply;
             ServiceInfo sender;
             Endpoint* handler = nullptr;

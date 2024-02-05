@@ -63,7 +63,7 @@ namespace llarp::vpn
 
     namespace
     {
-        constexpr byte_t udp_proto = 0x11;
+        constexpr uint8_t udp_proto = 0x11;
     }
 
     void EgresPacketRouter::AddUDPHandler(huint16_t localport, EgresPacketHandlerFunc func)

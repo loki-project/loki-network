@@ -38,7 +38,7 @@ namespace llarp
             UpdateBuffer();
         }
 
-        Encrypted(const byte_t* buf, size_t sz)
+        Encrypted(const uint8_t* buf, size_t sz)
         {
             if (sz <= bufsz)
             {
@@ -87,7 +87,7 @@ namespace llarp
             return *this;
         }
 
-        void Fill(byte_t fill)
+        void Fill(uint8_t fill)
         {
             std::fill(_buf.begin(), _buf.begin() + _sz, fill);
         }
@@ -127,12 +127,12 @@ namespace llarp
             return _sz;
         }
 
-        byte_t* data()
+        uint8_t* data()
         {
             return _buf.data();
         }
 
-        const byte_t* data() const
+        const uint8_t* data() const
         {
             return _buf.data();
         }

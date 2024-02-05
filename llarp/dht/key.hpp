@@ -10,10 +10,10 @@ namespace llarp::dht
 {
     struct Key_t : public AlignedBuffer<32>
     {
-        explicit Key_t(const byte_t* buf) : AlignedBuffer<SIZE>(buf)
+        explicit Key_t(const uint8_t* buf) : AlignedBuffer<SIZE>(buf)
         {}
 
-        explicit Key_t(const std::array<byte_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
+        explicit Key_t(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
         {}
 
         explicit Key_t(const AlignedBuffer<SIZE>& data) : AlignedBuffer<SIZE>(data)
@@ -39,7 +39,7 @@ namespace llarp::dht
         Key_t operator^(const Key_t& other) const
         {
             Key_t dist;
-            std::transform(begin(), end(), other.begin(), dist.begin(), std::bit_xor<byte_t>());
+            std::transform(begin(), end(), other.begin(), dist.begin(), std::bit_xor<uint8_t>());
             return dist;
         }
 

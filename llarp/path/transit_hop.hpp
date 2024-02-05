@@ -50,7 +50,7 @@ namespace llarp
             llarp_time_t started = 0s;
             // 10 minutes default
             llarp_time_t lifetime = DEFAULT_LIFETIME;
-            llarp_proto_version_t version;
+            uint8_t version;
             llarp_time_t last_activity = 0s;
             bool terminal_hop{false};
 

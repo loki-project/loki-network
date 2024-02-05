@@ -11,7 +11,7 @@ namespace llarp::service
         return crypto::verify(signkey, buf, size, sig);
     }
 
-    bool ServiceInfo::Update(const byte_t* sign, const byte_t* enc, const std::optional<VanityNonce>& nonce)
+    bool ServiceInfo::Update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce)
     {
         signkey = sign;
         enckey = enc;
@@ -40,8 +40,8 @@ namespace llarp::service
     {
         try
         {
-            enckey.FromString(btdc.require<std::string>("e"));
-            signkey.FromString(btdc.require<std::string>("s"));
+            enckey.from_hex(btdc.require<std::string>("e"));
+            signkey.from_hex(btdc.require<std::string>("s"));
             vanity.from_string(btdc.require<std::string>("x"));
         }
         catch (...)
@@ -70,7 +70,7 @@ namespace llarp::service
         return _cached_addr.ToString();
     }
 
-    bool ServiceInfo::CalculateAddress(std::array<byte_t, 32>& data) const
+    bool ServiceInfo::CalculateAddress(std::array<uint8_t, 32>& data) const
     {
         data = signkey.as_array();
         return true;

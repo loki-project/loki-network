@@ -305,7 +305,7 @@ namespace llarp
     template <size_t bufsz, typename T>
     void Dump(const T& val)
     {
-        std::array<byte_t, bufsz> tmp;
+        std::array<uint8_t, bufsz> tmp;
         llarp_buffer_t buf(tmp);
 
         auto bte = val.bt_encode();
@@ -358,7 +358,7 @@ namespace llarp
     /// this call rewinds the buffer unconditionally before return
     /// returns false only if there was
     template <typename Int_t>
-    bool BEncodeSeekDictVersion(Int_t& v, llarp_buffer_t* buf, const byte_t k)
+    bool BEncodeSeekDictVersion(Int_t& v, llarp_buffer_t* buf, const uint8_t k)
     {
         const auto ret = bencode_read_dict(
             [&v, k](llarp_buffer_t* buffer, llarp_buffer_t* key) -> bool {

@@ -58,7 +58,7 @@ namespace llarp::vpn
 
     void PacketRouter::AddUDPHandler(huint16_t localport, PacketHandlerFunc_t func)
     {
-        constexpr byte_t udp_proto = 0x11;
+        constexpr uint8_t udp_proto = 0x11;
 
         if (m_IPProtoHandler.find(udp_proto) == m_IPProtoHandler.end())
         {

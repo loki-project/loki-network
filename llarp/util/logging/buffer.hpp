@@ -47,7 +47,7 @@ namespace llarp
 
         // llarp_buffer_t printer:
         explicit buffer_printer(const llarp_buffer_t& buf)
-            : buffer_printer(std::basic_string_view<byte_t>{buf.base, buf.sz})
+            : buffer_printer(std::basic_string_view<uint8_t>{buf.base, buf.sz})
         {}
 
         std::string ToString() const;

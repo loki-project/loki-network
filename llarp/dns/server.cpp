@@ -151,7 +151,7 @@ namespace llarp::dns
                 log::trace(logcat, "queueing dns response from libunbound to userland");
 
                 // rewrite response
-                OwnedBuffer pkt{(const byte_t*)result->answer_packet, (size_t)result->answer_len};
+                OwnedBuffer pkt{(const uint8_t*)result->answer_packet, (size_t)result->answer_len};
                 llarp_buffer_t buf{pkt};
                 MessageHeader hdr;
                 hdr.Decode(&buf);

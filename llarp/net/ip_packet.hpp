@@ -114,7 +114,7 @@ namespace llarp::net
     {
         static constexpr size_t _max_size = 1500;
         llarp_time_t timestamp;
-        std::vector<byte_t> _buf;
+        std::vector<uint8_t> _buf;
 
        public:
         IPPacket() : IPPacket{size_t{}}
@@ -124,7 +124,7 @@ namespace llarp::net
         /// create an ip packet from a view
         explicit IPPacket(byte_view_t);
         /// create an ip packet from a vector we then own
-        IPPacket(std::vector<byte_t>&&);
+        IPPacket(std::vector<uint8_t>&&);
 
         ~IPPacket() = default;
 
@@ -142,12 +142,12 @@ namespace llarp::net
             net::port_t srcport,
             net::ipaddr_t dstaddr,
             net::port_t dstport,
-            std::vector<byte_t> udp_body);
+            std::vector<uint8_t> udp_body);
 
         static inline IPPacket make_udp(
-            SockAddr src, SockAddr dst, std::variant<OwnedBuffer, std::vector<byte_t>> udp_body)
+            SockAddr src, SockAddr dst, std::variant<OwnedBuffer, std::vector<uint8_t>> udp_body)
         {
-            if (auto* vec = std::get_if<std::vector<byte_t>>(&udp_body))
+            if (auto* vec = std::get_if<std::vector<uint8_t>>(&udp_body))
                 return make_udp(src.getIP(), src.port(), dst.getIP(), dst.port(), std::move(*vec));
             if (auto* buf = std::get_if<OwnedBuffer>(&udp_body))
                 return make_udp(src, dst, buf->copy());
@@ -169,9 +169,9 @@ namespace llarp::net
         }
 
         /// steal the underlying vector
-        inline std::vector<byte_t> steal()
+        inline std::vector<uint8_t> steal()
         {
-            std::vector<byte_t> buf;
+            std::vector<uint8_t> buf;
             buf.resize(0);
             std::swap(_buf, buf);
             return buf;
@@ -187,12 +187,12 @@ namespace llarp::net
             return {reinterpret_cast<const char*>(_buf.data()), _buf.size()};
         }
 
-        inline byte_t* data()
+        inline uint8_t* data()
         {
             return _buf.data();
         }
 
-        inline const byte_t* data() const
+        inline const uint8_t* data() const
         {
             return _buf.data();
         }
@@ -255,7 +255,7 @@ namespace llarp::net
             return Header()->version;
         }
 
-        inline byte_t protocol() const
+        inline uint8_t protocol() const
         {
             if (IsV4())
                 return Header()->protocol;
@@ -306,7 +306,7 @@ namespace llarp::net
         inline std::optional<OwnedBuffer> L4OwnedBuffer() const
         {
             if (auto data = L4Data())
-                return OwnedBuffer{reinterpret_cast<const byte_t*>(data->first), data->second};
+                return OwnedBuffer{reinterpret_cast<const uint8_t*>(data->first), data->second};
             return std::nullopt;
         }
 
@@ -327,6 +327,6 @@ namespace llarp::net
     };
 
     /// generate ip checksum
-    uint16_t ipchksum(const byte_t* buf, size_t sz, uint32_t sum = 0);
+    uint16_t ipchksum(const uint8_t* buf, size_t sz, uint32_t sum = 0);
 
 }  // namespace llarp::net

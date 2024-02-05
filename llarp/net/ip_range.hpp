@@ -46,7 +46,7 @@ namespace llarp
             return IPRange{huint128_t{0x0000'ffff'0000'0000UL}, netmask_ipv6_bits(96)};
         }
 
-        static constexpr IPRange FromIPv4(byte_t a, byte_t b, byte_t c, byte_t d, byte_t mask)
+        static constexpr IPRange FromIPv4(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t mask)
         {
             return IPRange{net::ExpandV4(ipaddr_ipv4_bits(a, b, c, d)), netmask_ipv6_bits(mask + 96)};
         }

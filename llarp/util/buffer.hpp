@@ -18,7 +18,7 @@
 
 namespace llarp
 {
-    using byte_view_t = std::basic_string_view<byte_t>;
+    using byte_view_t = std::basic_string_view<uint8_t>;
     using ustring = std::basic_string<uint8_t>;
     using ustring_view = std::basic_string_view<uint8_t>;
     using bstring = std::basic_string<std::byte>;
@@ -110,20 +110,20 @@ struct ManagedBuffer;
 struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buffer_t
 {
     /// starting memory address
-    byte_t* base{nullptr};
+    uint8_t* base{nullptr};
     /// memory address of stream position
-    byte_t* cur{nullptr};
+    uint8_t* cur{nullptr};
     /// max size of buffer
     size_t sz{0};
 
-    byte_t operator[](size_t x)
+    uint8_t operator[](size_t x)
     {
         return *(this->base + x);
     }
 
     llarp_buffer_t() = default;
 
-    llarp_buffer_t(byte_t* b, byte_t* c, size_t s) : base(b), cur(c), sz(s)
+    llarp_buffer_t(uint8_t* b, uint8_t* c, size_t s) : base(b), cur(c), sz(s)
     {}
 
     llarp_buffer_t(const ManagedBuffer&) = delete;
@@ -132,10 +132,10 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     template <typename Byte>
     static constexpr bool is_basic_byte = sizeof(Byte) == 1 and std::is_trivially_copyable_v<Byte>;
 
-    /// Construct referencing some 1-byte, trivially copyable (e.g. char, unsigned char, byte_t)
+    /// Construct referencing some 1-byte, trivially copyable (e.g. char, unsigned char, uint8_t)
     /// pointer type and a buffer size.
     template <typename Byte, typename = std::enable_if_t<not std::is_const_v<Byte> && is_basic_byte<Byte>>>
-    llarp_buffer_t(Byte* buf, size_t sz) : base{reinterpret_cast<byte_t*>(buf)}, cur{base}, sz{sz}
+    llarp_buffer_t(Byte* buf, size_t sz) : base{reinterpret_cast<uint8_t*>(buf)}, cur{base}, sz{sz}
     {}
 
     /// initialize llarp_buffer_t from vector or array of byte-like values
@@ -171,19 +171,19 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
         return {reinterpret_cast<const char*>(base), sz};
     }
 
-    byte_t* begin()
+    uint8_t* begin()
     {
         return base;
     }
-    const byte_t* begin() const
+    const uint8_t* begin() const
     {
         return base;
     }
-    byte_t* end()
+    uint8_t* end()
     {
         return base + sz;
     }
-    const byte_t* end() const
+    const uint8_t* end() const
     {
         return base + sz;
     }
@@ -222,10 +222,10 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
 
     bool read_uint64(uint64_t& i);
 
-    size_t read_until(char delim, byte_t* result, size_t resultlen);
+    size_t read_until(char delim, uint8_t* result, size_t resultlen);
 
     /// make a copy of this buffer
-    std::vector<byte_t> copy() const;
+    std::vector<uint8_t> copy() const;
 
     /// get a read-only view over the entire region
     llarp::byte_view_t view_all() const
@@ -243,7 +243,7 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     /// view.
     bool startswith(std::string_view prefix_str) const
     {
-        llarp::byte_view_t prefix{reinterpret_cast<const byte_t*>(prefix_str.data()), prefix_str.size()};
+        llarp::byte_view_t prefix{reinterpret_cast<const uint8_t*>(prefix_str.data()), prefix_str.size()};
         return view_remaining().substr(0, prefix.size()) == prefix;
     }
 
@@ -301,23 +301,23 @@ struct ManagedBuffer
 
 namespace llarp
 {
-    // Wrapper around a std::unique_ptr<byte_t[]> that owns its own memory and is also implicitly
+    // Wrapper around a std::unique_ptr<uint8_t[]> that owns its own memory and is also implicitly
     // convertible to a llarp_buffer_t.
     struct OwnedBuffer
     {
-        std::unique_ptr<byte_t[]> buf;
+        std::unique_ptr<uint8_t[]> buf;
         size_t sz;
 
         template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        OwnedBuffer(std::unique_ptr<T[]> buf, size_t sz) : buf{reinterpret_cast<byte_t*>(buf.release())}, sz{sz}
+        OwnedBuffer(std::unique_ptr<T[]> buf, size_t sz) : buf{reinterpret_cast<uint8_t*>(buf.release())}, sz{sz}
         {}
 
         // Create a new, uninitialized owned buffer of the given size.
-        explicit OwnedBuffer(size_t sz) : OwnedBuffer{std::make_unique<byte_t[]>(sz), sz}
+        explicit OwnedBuffer(size_t sz) : OwnedBuffer{std::make_unique<uint8_t[]>(sz), sz}
         {}
 
         // copy content from existing memory
-        explicit OwnedBuffer(const byte_t* ptr, size_t sz) : OwnedBuffer{sz}
+        explicit OwnedBuffer(const uint8_t* ptr, size_t sz) : OwnedBuffer{sz}
         {
             std::copy_n(ptr, sz, buf.get());
         }
@@ -343,7 +343,7 @@ namespace llarp
         static OwnedBuffer copy_used(const llarp_buffer_t& b);
 
         /// copy everything in this owned buffer into a vector
-        std::vector<byte_t> copy() const;
+        std::vector<uint8_t> copy() const;
     };
 
 }  // namespace llarp

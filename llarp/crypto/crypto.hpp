@@ -67,7 +67,7 @@ namespace llarp
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);
         /// randomizer memory
-        void randbytes(byte_t*, size_t);
+        void randbytes(uint8_t*, size_t);
         /// generate signing keypair
         void identity_keygen(SecretKey&);
         /// generate encryption keypair
@@ -75,7 +75,7 @@ namespace llarp
         /// generate post quantum encrytion key
         void pqe_keygen(PQKeyPair&);
         /// post quantum decrypt (buffer, sharedkey_dst, sec)
-        bool pqe_decrypt(const PQCipherBlock&, SharedSecret&, const byte_t*);
+        bool pqe_decrypt(const PQCipherBlock&, SharedSecret&, const uint8_t*);
         /// post quantum encrypt (buffer, sharedkey_dst,  pub)
         bool pqe_encrypt(PQCipherBlock&, SharedSecret&, const PQPubKey&);
 
@@ -87,11 +87,11 @@ namespace llarp
     /// return random 64bit unsigned interger
     uint64_t randint();
 
-    const byte_t* seckey_to_pubkey(const SecretKey& secret);
+    const uint8_t* seckey_to_pubkey(const SecretKey& secret);
 
-    const byte_t* pq_keypair_to_pubkey(const PQKeyPair& keypair);
+    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& keypair);
 
-    const byte_t* pq_keypair_to_seckey(const PQKeyPair& keypair);
+    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& keypair);
 
     /// rng type that uses llarp::randint(), which is cryptographically secure
     struct CSRNG

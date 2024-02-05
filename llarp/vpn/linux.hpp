@@ -99,7 +99,7 @@ namespace llarp::vpn
 
         net::IPPacket ReadNextPacket() override
         {
-            std::vector<byte_t> pkt;
+            std::vector<uint8_t> pkt;
             pkt.resize(net::IPPacket::MaxSize);
             const auto sz = read(m_fd, pkt.data(), pkt.capacity());
             if (sz < 0)
