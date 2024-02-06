@@ -14,8 +14,6 @@ namespace llarp
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
     using KeyExchangeNonce = AlignedBuffer<32>;
 
-    // struct RouterID;
-
     struct PubKey : public AlignedBuffer<PUBKEYSIZE>
     {
         PubKey() = default;

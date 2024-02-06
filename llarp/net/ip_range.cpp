@@ -6,7 +6,7 @@
 
 namespace llarp
 {
-    void IPRange::bt_encode(oxenc::bt_list_producer& btlp) const
+    void IP_range_deprecated::bt_encode(oxenc::bt_list_producer& btlp) const
     {
         try
         {
@@ -18,7 +18,7 @@ namespace llarp
         }
     }
 
-    bool IPRange::BDecode(llarp_buffer_t* buf)
+    bool IP_range_deprecated::BDecode(llarp_buffer_t* buf)
     {
         const auto* start = buf->cur;
         if (not bencode_discard(buf))
@@ -36,7 +36,7 @@ namespace llarp
         return FromString(str);
     }
 
-    bool IPRange::FromString(std::string str)
+    bool IP_range_deprecated::FromString(std::string str)
     {
         const auto colinpos = str.find(":");
         const auto slashpos = str.find("/");
@@ -81,7 +81,7 @@ namespace llarp
         return true;
     }
 
-    std::string IPRange::BaseAddressString() const
+    std::string IP_range_deprecated::BaseAddressString() const
     {
         if (IsV4())
         {
@@ -91,7 +91,7 @@ namespace llarp
         return addr.to_string();
     }
 
-    std::string IPRange::NetmaskString() const
+    std::string IP_range_deprecated::NetmaskString() const
     {
         if (IsV4())
         {
@@ -101,22 +101,23 @@ namespace llarp
         return netmask_bits.to_string();
     }
 
-    std::optional<IPRange> IPRange::FindPrivateRange(const std::list<IPRange>& excluding)
+    std::optional<IP_range_deprecated> IP_range_deprecated::FindPrivateRange(
+        const std::list<IP_range_deprecated>& excluding)
     {
-        auto good = [&excluding](const IPRange& range) -> bool {
+        auto good = [&excluding](const IP_range_deprecated& range) -> bool {
             for (const auto& ex : excluding)
                 if (ex * range)
                     return false;
             return true;
         };
         for (int oct = 16; oct <= 31; ++oct)
-            if (auto range = IPRange::FromIPv4(172, oct, 0, 1, 16); good(range))
+            if (auto range = IP_range_deprecated::FromIPv4(172, oct, 0, 1, 16); good(range))
                 return range;
         for (int oct = 0; oct <= 255; ++oct)
-            if (auto range = IPRange::FromIPv4(10, oct, 0, 1, 16); good(range))
+            if (auto range = IP_range_deprecated::FromIPv4(10, oct, 0, 1, 16); good(range))
                 return range;
         for (int oct = 0; oct <= 255; ++oct)
-            if (auto range = IPRange::FromIPv4(192, 168, oct, 1, 24); good(range))
+            if (auto range = IP_range_deprecated::FromIPv4(192, 168, oct, 1, 24); good(range))
                 return range;
         return std::nullopt;
     }

@@ -20,9 +20,9 @@ namespace llarp::vpn
 {
     struct InterfaceAddress
     {
-        constexpr InterfaceAddress(IPRange r, int f = AF_INET) : range{std::move(r)}, fam{f}
+        constexpr InterfaceAddress(IP_range_deprecated r, int f = AF_INET) : range{std::move(r)}, fam{f}
         {}
-        IPRange range;
+        IP_range_deprecated range;
         int fam;
         bool operator<(const InterfaceAddress& other) const
         {
@@ -91,9 +91,9 @@ namespace llarp::vpn
 
         virtual void delete_default_route_via_interface(NetworkInterface& vpn) = 0;
 
-        virtual void add_route_via_interface(NetworkInterface& vpn, IPRange range) = 0;
+        virtual void add_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) = 0;
 
-        virtual void delete_route_via_interface(NetworkInterface& vpn, IPRange range) = 0;
+        virtual void delete_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) = 0;
 
         virtual std::vector<oxen::quic::Address> get_non_interface_gateways(NetworkInterface& vpn) = 0;
 
@@ -136,7 +136,8 @@ namespace llarp::vpn
         /// @param index the interface index of the network interface to use or 0 for all
         /// interfaces on the system
         virtual std::shared_ptr<I_Packet_IO> create_packet_io(
-            [[maybe_unused]] unsigned int ifindex, [[maybe_unused]] const std::optional<SockAddr>& dns_upstream_src)
+            [[maybe_unused]] unsigned int ifindex,
+            [[maybe_unused]] const std::optional<SockAddr_deprecated>& dns_upstream_src)
         {
             throw std::runtime_error{"raw packet io is unimplemented"};
         }

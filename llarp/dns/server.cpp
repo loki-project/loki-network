@@ -32,12 +32,13 @@ namespace llarp::dns
     {
         Server& m_DNS;
         std::shared_ptr<llarp::UDPHandle> m_udp;
-        SockAddr m_LocalAddr;
+        SockAddr_deprecated m_LocalAddr;
 
        public:
-        explicit UDPReader(Server& dns, const std::shared_ptr<EventLoop>& loop, llarp::SockAddr bindaddr) : m_DNS{dns}
+        explicit UDPReader(Server& dns, const std::shared_ptr<EventLoop>& loop, llarp::SockAddr_deprecated bindaddr)
+            : m_DNS{dns}
         {
-            m_udp = loop->make_udp([&](auto&, SockAddr src, llarp::OwnedBuffer buf) {
+            m_udp = loop->make_udp([&](auto&, SockAddr_deprecated src, llarp::OwnedBuffer buf) {
                 if (src == m_LocalAddr)
                     return;
                 if (not m_DNS.MaybeHandlePacket(shared_from_this(), m_LocalAddr, src, std::move(buf)))
@@ -54,17 +55,17 @@ namespace llarp::dns
                 throw std::runtime_error{"cannot find which address our dns socket is bound on"};
         }
 
-        std::optional<SockAddr> BoundOn() const override
+        std::optional<SockAddr_deprecated> BoundOn() const override
         {
             return m_udp->LocalAddr();
         }
 
-        bool WouldLoop(const SockAddr& to, const SockAddr&) const override
+        bool WouldLoop(const SockAddr_deprecated& to, const SockAddr_deprecated&) const override
         {
             return to != m_LocalAddr;
         }
 
-        void SendTo(const SockAddr& to, const SockAddr&, llarp::OwnedBuffer buf) const override
+        void SendTo(const SockAddr_deprecated& to, const SockAddr_deprecated&, llarp::OwnedBuffer buf) const override
         {
             m_udp->send(to, std::move(buf));
         }
@@ -82,16 +83,16 @@ namespace llarp::dns
         class Query : public QueryJob_Base, public std::enable_shared_from_this<Query>
         {
             std::shared_ptr<PacketSource_Base> src;
-            SockAddr resolverAddr;
-            SockAddr askerAddr;
+            SockAddr_deprecated resolverAddr;
+            SockAddr_deprecated askerAddr;
 
            public:
             explicit Query(
                 std::weak_ptr<Resolver> parent_,
                 Message query,
                 std::shared_ptr<PacketSource_Base> pktsrc,
-                SockAddr toaddr,
-                SockAddr fromaddr)
+                SockAddr_deprecated toaddr,
+                SockAddr_deprecated fromaddr)
                 : QueryJob_Base{std::move(query)},
                   src{std::move(pktsrc)},
                   resolverAddr{std::move(toaddr)},
@@ -117,7 +118,7 @@ namespace llarp::dns
             std::shared_ptr<uvw::PollHandle> m_Poller;
 #endif
 
-            std::optional<SockAddr> m_LocalAddr;
+            std::optional<SockAddr_deprecated> m_LocalAddr;
             std::unordered_set<std::shared_ptr<Query>> m_Pending;
 
             struct ub_result_deleter
@@ -163,7 +164,7 @@ namespace llarp::dns
                 query->SendReply(std::move(pkt));
             }
 
-            void AddUpstreamResolver(const SockAddr& dns)
+            void AddUpstreamResolver(const SockAddr_deprecated& dns)
             {
                 std::string str = fmt::format("{}@{}", dns.hostString(false), dns.getPort());
 
@@ -173,7 +174,7 @@ namespace llarp::dns
                 }
             }
 
-            bool ConfigureAppleTrampoline(const SockAddr& dns)
+            bool ConfigureAppleTrampoline(const SockAddr_deprecated& dns)
             {
                 // On Apple, when we turn on exit mode, we tear down and then reestablish the
                 // unbound resolver: in exit mode, we set use upstream to a localhost trampoline
@@ -230,7 +231,7 @@ namespace llarp::dns
 
                 if (auto maybe_addr = conf.query_bind; maybe_addr and not is_apple_tramp)
                 {
-                    SockAddr addr{*maybe_addr};
+                    SockAddr_deprecated addr{*maybe_addr};
                     std::string host{addr.hostString()};
 
                     if (addr.getPort() == 0)
@@ -272,7 +273,7 @@ namespace llarp::dns
                             throw std::invalid_argument{
                                 fmt::format("Failed to query UDP port for unbound: {}", strerror(errno))};
                         }
-                        addr = SockAddr{*sa};
+                        addr = SockAddr_deprecated{*sa};
                     }
                     m_LocalAddr = addr;
 
@@ -319,7 +320,7 @@ namespace llarp::dns
                 return "unbound";
             }
 
-            virtual std::optional<SockAddr> GetLocalAddr() const override
+            virtual std::optional<SockAddr_deprecated> GetLocalAddr() const override
             {
                 return m_LocalAddr;
             }
@@ -422,7 +423,7 @@ namespace llarp::dns
                 return 10;
             }
 
-            void ResetResolver(std::optional<std::vector<SockAddr>> replace_upstream) override
+            void ResetResolver(std::optional<std::vector<SockAddr_deprecated>> replace_upstream) override
             {
                 Down();
                 if (replace_upstream)
@@ -442,8 +443,8 @@ namespace llarp::dns
             bool MaybeHookDNS(
                 std::shared_ptr<PacketSource_Base> source,
                 const Message& query,
-                const SockAddr& to,
-                const SockAddr& from) override
+                const SockAddr_deprecated& to,
+                const SockAddr_deprecated& from) override
             {
                 auto tmp = std::make_shared<Query>(weak_from_this(), query, source, to, from);
                 // no questions, send fail
@@ -578,7 +579,8 @@ namespace llarp::dns
         return plat;
     }
 
-    std::shared_ptr<PacketSource_Base> Server::MakePacketSourceOn(const llarp::SockAddr& addr, const llarp::DnsConfig&)
+    std::shared_ptr<PacketSource_Base> Server::MakePacketSourceOn(
+        const llarp::SockAddr_deprecated& addr, const llarp::DnsConfig&)
     {
         return std::make_shared<UDPReader>(*this, m_Loop, addr);
     }
@@ -598,9 +600,9 @@ namespace llarp::dns
         return std::make_shared<libunbound::Resolver>(m_Loop, m_Config);
     }
 
-    std::vector<SockAddr> Server::BoundPacketSourceAddrs() const
+    std::vector<SockAddr_deprecated> Server::BoundPacketSourceAddrs() const
     {
-        std::vector<SockAddr> addrs;
+        std::vector<SockAddr_deprecated> addrs;
         for (const auto& src : m_PacketSources)
         {
             if (auto ptr = src.lock())
@@ -610,7 +612,7 @@ namespace llarp::dns
         return addrs;
     }
 
-    std::optional<SockAddr> Server::FirstBoundPacketSourceAddr() const
+    std::optional<SockAddr_deprecated> Server::FirstBoundPacketSourceAddr() const
     {
         for (const auto& src : m_PacketSources)
         {
@@ -668,7 +670,10 @@ namespace llarp::dns
     }
 
     bool Server::MaybeHandlePacket(
-        std::shared_ptr<PacketSource_Base> ptr, const SockAddr& to, const SockAddr& from, llarp::OwnedBuffer buf)
+        std::shared_ptr<PacketSource_Base> ptr,
+        const SockAddr_deprecated& to,
+        const SockAddr_deprecated& from,
+        llarp::OwnedBuffer buf)
     {
         // dont process to prevent feedback loop
         if (ptr->WouldLoop(to, from))

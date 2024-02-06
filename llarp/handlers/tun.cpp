@@ -27,8 +27,8 @@ namespace llarp::handlers
     bool TunEndpoint::MaybeHookDNS(
         std::shared_ptr<dns::PacketSource_Base> source,
         const dns::Message& query,
-        const SockAddr& to,
-        const SockAddr& from)
+        const SockAddr_deprecated& to,
+        const SockAddr_deprecated& from)
     {
         if (not ShouldHookDNSMessage(query))
             return false;
@@ -45,20 +45,21 @@ namespace llarp::handlers
     /// (windows/macos/ios/android ... aka everything that is not linux... funny that)
     class DnsInterceptor : public dns::PacketSource_Base
     {
-        std::function<void(net::IPPacket)> m_Reply;
+        std::function<void(net::IP_packet_deprecated)> m_Reply;
         net::ipaddr_t m_OurIP;
         llarp::DnsConfig m_Config;
 
        public:
-        explicit DnsInterceptor(std::function<void(net::IPPacket)> reply, net::ipaddr_t our_ip, llarp::DnsConfig conf)
+        explicit DnsInterceptor(
+            std::function<void(net::IP_packet_deprecated)> reply, net::ipaddr_t our_ip, llarp::DnsConfig conf)
             : m_Reply{std::move(reply)}, m_OurIP{std::move(our_ip)}, m_Config{std::move(conf)}
         {}
 
         ~DnsInterceptor() override = default;
 
-        void SendTo(const SockAddr& to, const SockAddr& from, OwnedBuffer buf) const override
+        void SendTo(const SockAddr_deprecated& to, const SockAddr_deprecated& from, OwnedBuffer buf) const override
         {
-            auto pkt = net::IPPacket::make_udp(from, to, std::move(buf));
+            auto pkt = net::IP_packet_deprecated::make_udp(from, to, std::move(buf));
 
             if (pkt.empty())
                 return;
@@ -67,12 +68,12 @@ namespace llarp::handlers
 
         void Stop() override{};
 
-        std::optional<SockAddr> BoundOn() const override
+        std::optional<SockAddr_deprecated> BoundOn() const override
         {
             return std::nullopt;
         }
 
-        bool WouldLoop(const SockAddr& to, const SockAddr& from) const override
+        bool WouldLoop(const SockAddr_deprecated& to, const SockAddr_deprecated& from) const override
         {
             if constexpr (platform::is_apple)
             {
@@ -97,7 +98,7 @@ namespace llarp::handlers
     class TunDNS : public dns::Server
     {
         TunEndpoint* const m_Endpoint;
-        std::optional<SockAddr> m_QueryBind;
+        std::optional<SockAddr_deprecated> m_QueryBind;
         net::ipaddr_t m_OurIP;
 
        public:
@@ -113,7 +114,7 @@ namespace llarp::handlers
         {}
 
         std::shared_ptr<dns::PacketSource_Base> MakePacketSourceOn(
-            const SockAddr&, const llarp::DnsConfig& conf) override
+            const SockAddr_deprecated&, const llarp::DnsConfig& conf) override
         {
             auto ptr = std::make_shared<DnsInterceptor>(
                 [ep = m_Endpoint](auto pkt) {
@@ -128,8 +129,8 @@ namespace llarp::handlers
 
     TunEndpoint::TunEndpoint(Router& r) : BaseHandler{r}, _packet_router{}
     {
-        _packet_router =
-            std::make_shared<vpn::PacketRouter>([this](net::IPPacket pkt) { handle_user_packet(std::move(pkt)); });
+        _packet_router = std::make_shared<vpn::PacketRouter>(
+            [this](net::IP_packet_deprecated pkt) { handle_user_packet(std::move(pkt)); });
 
         // r->loop()->add_ticker([this] { Pump(Now()); });
     }
@@ -142,7 +143,7 @@ namespace llarp::handlers
             auto dns = std::make_shared<TunDNS>(this, _dns_config);
             _dns = dns;
 
-            _packet_router->AddUDPHandler(huint16_t{53}, [this, dns](net::IPPacket pkt) {
+            _packet_router->AddUDPHandler(huint16_t{53}, [this, dns](net::IP_packet_deprecated pkt) {
                 auto dns_pkt_src = dns->PacketSource;
                 if (const auto& reply = pkt.reply)
                     dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
@@ -163,7 +164,7 @@ namespace llarp::handlers
             if (auto vpn = router().vpn_platform())
             {
                 // get the first local address we know of
-                std::optional<SockAddr> localaddr;
+                std::optional<SockAddr_deprecated> localaddr;
                 for (auto res : _dns->GetAllResolvers())
                 {
                     if (auto ptr = res.lock())
@@ -235,7 +236,7 @@ namespace llarp::handlers
         return {};
     }
 
-    void TunEndpoint::ReconfigureDNS(std::vector<SockAddr> servers)
+    void TunEndpoint::ReconfigureDNS(std::vector<SockAddr_deprecated> servers)
     {
         if (_dns)
         {
@@ -290,7 +291,7 @@ namespace llarp::handlers
         _traffic_policy = conf.traffic_policy;
         _owned_ranges = conf.owned_ranges;
 
-        _base_address_v6 = conf.base_ipv6_addr;
+        _base_address_v6 = conf.base_ipv6_range;
 
         if (conf.path_alignment_timeout)
         {
@@ -299,13 +300,13 @@ namespace llarp::handlers
         else
             _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
 
-        for (const auto& item : conf.map_addrs)
+        for (const auto& item : conf.addr_map)
         {
             if (not MapAddress(item.second, item.first, false))
                 return false;
         }
 
-        _if_name = conf.if_name;
+        _if_name = conf._if_name;
         if (_if_name.empty())
         {
             const auto maybe = router().net().FindFreeTun();
@@ -953,7 +954,7 @@ namespace llarp::handlers
 
         if (_base_address_v6)
         {
-            IPRange v6range = _local_range;
+            IP_range_deprecated v6range = _local_range;
             v6range.addr = (*_base_address_v6) | _local_range.addr;
             LogInfo(name(), " using v6 range: ", v6range);
             info.addrs.emplace_back(v6range, AF_INET6);
@@ -1096,7 +1097,7 @@ namespace llarp::handlers
         return m_ExitIPToExitAddress.emplace(ip, exitSelectionStrat(candidates)).first->second;
     }
 
-    void TunEndpoint::handle_user_packet(net::IPPacket pkt)
+    void TunEndpoint::handle_user_packet(net::IP_packet_deprecated pkt)
     {
         huint128_t dst, src;
         if (pkt.IsV4())
@@ -1235,7 +1236,7 @@ namespace llarp::handlers
         //     PathAlignmentTimeout());
     }
 
-    bool TunEndpoint::ShouldAllowTraffic(const net::IPPacket& pkt) const
+    bool TunEndpoint::ShouldAllowTraffic(const net::IP_packet_deprecated& pkt) const
     {
         if (const auto exitPolicy = GetExitPolicy())
         {
@@ -1283,7 +1284,7 @@ namespace llarp::handlers
         //   return false;
         huint128_t src, dst;
 
-        net::IPPacket pkt;
+        net::IP_packet_deprecated pkt;
         if (not pkt.Load(buf))
             return false;
 

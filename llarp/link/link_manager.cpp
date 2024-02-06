@@ -766,7 +766,9 @@ namespace llarp
                         "and "
                         "saving RC!",
                         rid);
-                    node_db->verify_gossip_bfetch_rc(*remote);
+
+                    _router.loop()->call_soon(
+                        [this, remote_rc = *remote]() { node_db->verify_gossip_bfetch_rc(remote_rc); });
                 }
             }
         }

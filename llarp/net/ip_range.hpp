@@ -23,37 +23,38 @@ namespace
 
 namespace llarp
 {
-    struct IPRange
+    struct IP_range_deprecated
     {
         using Addr_t = huint128_t;
         huint128_t addr = {0};
         huint128_t netmask_bits = {0};
 
-        constexpr IPRange()
+        constexpr IP_range_deprecated()
         {}
-        constexpr IPRange(huint128_t address, huint128_t netmask)
+        constexpr IP_range_deprecated(huint128_t address, huint128_t netmask)
             : addr{std::move(address)}, netmask_bits{std::move(netmask)}
         {}
 
-        explicit IPRange(std::string _range)
+        explicit IP_range_deprecated(std::string _range)
         {
             if (not FromString(_range))
                 throw std::invalid_argument{"IP string '{}' cannot be parsed as IP range"_format(_range)};
         }
 
-        static constexpr IPRange V4MappedRange()
+        static constexpr IP_range_deprecated V4MappedRange()
         {
-            return IPRange{huint128_t{0x0000'ffff'0000'0000UL}, netmask_ipv6_bits(96)};
+            return IP_range_deprecated{huint128_t{0x0000'ffff'0000'0000UL}, netmask_ipv6_bits(96)};
         }
 
-        static constexpr IPRange FromIPv4(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t mask)
+        static constexpr IP_range_deprecated FromIPv4(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t mask)
         {
-            return IPRange{net::ExpandV4(ipaddr_ipv4_bits(a, b, c, d)), netmask_ipv6_bits(mask + 96)};
+            return IP_range_deprecated{net::ExpandV4(ipaddr_ipv4_bits(a, b, c, d)), netmask_ipv6_bits(mask + 96)};
         }
 
-        static inline IPRange FromIPv4(net::ipv4addr_t addr, net::ipv4addr_t netmask)
+        static inline IP_range_deprecated FromIPv4(net::ipv4addr_t addr, net::ipv4addr_t netmask)
         {
-            return IPRange{net::ExpandV4(llarp::net::ToHost(addr)), netmask_ipv6_bits(bits::count_bits(netmask) + 96)};
+            return IP_range_deprecated{
+                net::ExpandV4(llarp::net::ToHost(addr)), netmask_ipv6_bits(bits::count_bits(netmask) + 96)};
         }
 
         /// return true if this iprange is in the IPv4 mapping range for containing ipv4 addresses
@@ -81,13 +82,13 @@ namespace llarp
         }
 
         /// return true if our range and other intersect
-        constexpr bool operator*(const IPRange& other) const
+        constexpr bool operator*(const IP_range_deprecated& other) const
         {
             return Contains(other) or other.Contains(*this);
         }
 
         /// return true if the other range is inside our range
-        constexpr bool Contains(const IPRange& other) const
+        constexpr bool Contains(const IP_range_deprecated& other) const
         {
             return Contains(other.addr) and Contains(other.HighestAddr());
         }
@@ -118,13 +119,13 @@ namespace llarp
                 - huint128_t{1};
         }
 
-        bool operator<(const IPRange& other) const
+        bool operator<(const IP_range_deprecated& other) const
         {
             auto maskedA = addr & netmask_bits, maskedB = other.addr & other.netmask_bits;
             return std::tie(maskedA, netmask_bits) < std::tie(maskedB, other.netmask_bits);
         }
 
-        bool operator==(const IPRange& other) const
+        bool operator==(const IP_range_deprecated& other) const
         {
             return addr == other.addr and netmask_bits == other.netmask_bits;
         }
@@ -145,20 +146,20 @@ namespace llarp
         bool BDecode(llarp_buffer_t* buf);
 
         /// Finds a free private use range not overlapping the given ranges.
-        static std::optional<IPRange> FindPrivateRange(const std::list<IPRange>& excluding);
+        static std::optional<IP_range_deprecated> FindPrivateRange(const std::list<IP_range_deprecated>& excluding);
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<IPRange> = true;
+    constexpr inline bool IsToStringFormattable<IP_range_deprecated> = true;
 
 }  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::IPRange>
+    struct hash<llarp::IP_range_deprecated>
     {
-        size_t operator()(const llarp::IPRange& range) const
+        size_t operator()(const llarp::IP_range_deprecated& range) const
         {
             const auto str = range.to_string();
             return std::hash<std::string>{}(str);

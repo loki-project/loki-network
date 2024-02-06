@@ -16,7 +16,7 @@ namespace llarp::net
     template <typename Value_t>
     struct IPRangeMap
     {
-        using Range_t = IPRange;
+        using Range_t = IP_range_deprecated;
         using IP_t = Range_t::Addr_t;
 
         using Entry_t = std::pair<Range_t, Value_t>;

@@ -110,48 +110,48 @@ namespace llarp::net
     IPProtocol ParseIPProtocol(std::string data);
 
     /// an Packet
-    struct IPPacket
+    struct IP_packet_deprecated
     {
         static constexpr size_t _max_size = 1500;
         llarp_time_t timestamp;
         std::vector<uint8_t> _buf;
 
        public:
-        IPPacket() : IPPacket{size_t{}}
+        IP_packet_deprecated() : IP_packet_deprecated{size_t{}}
         {}
         /// create an ip packet buffer of all zeros of size sz
-        explicit IPPacket(size_t sz);
+        explicit IP_packet_deprecated(size_t sz);
         /// create an ip packet from a view
-        explicit IPPacket(byte_view_t);
+        explicit IP_packet_deprecated(byte_view_t);
         /// create an ip packet from a vector we then own
-        IPPacket(std::vector<uint8_t>&&);
+        IP_packet_deprecated(std::vector<uint8_t>&&);
 
-        ~IPPacket() = default;
+        ~IP_packet_deprecated() = default;
 
         static constexpr size_t MaxSize = _max_size;
         static constexpr size_t MinSize = 20;
 
-        [[deprecated("deprecated because of llarp_buffer_t")]] static IPPacket UDP(
+        [[deprecated("deprecated because of llarp_buffer_t")]] static IP_packet_deprecated UDP(
             nuint32_t srcaddr, nuint16_t srcport, nuint32_t dstaddr, nuint16_t dstport, const llarp_buffer_t& data)
         {
             return make_udp(srcaddr, srcport, dstaddr, dstport, data.copy());
         }
 
-        static IPPacket make_udp(
+        static IP_packet_deprecated make_udp(
             net::ipaddr_t srcaddr,
             net::port_t srcport,
             net::ipaddr_t dstaddr,
             net::port_t dstport,
             std::vector<uint8_t> udp_body);
 
-        static inline IPPacket make_udp(
-            SockAddr src, SockAddr dst, std::variant<OwnedBuffer, std::vector<uint8_t>> udp_body)
+        static inline IP_packet_deprecated make_udp(
+            SockAddr_deprecated src, SockAddr_deprecated dst, std::variant<OwnedBuffer, std::vector<uint8_t>> udp_body)
         {
             if (auto* vec = std::get_if<std::vector<uint8_t>>(&udp_body))
                 return make_udp(src.getIP(), src.port(), dst.getIP(), dst.port(), std::move(*vec));
             if (auto* buf = std::get_if<OwnedBuffer>(&udp_body))
                 return make_udp(src, dst, buf->copy());
-            return net::IPPacket{size_t{}};
+            return net::IP_packet_deprecated{size_t{}};
         }
 
         inline bool Load(const llarp_buffer_t& buf)
@@ -216,7 +216,7 @@ namespace llarp::net
 
         struct CompareSize
         {
-            bool operator()(const IPPacket& left, const IPPacket& right)
+            bool operator()(const IP_packet_deprecated& left, const IP_packet_deprecated& right)
             {
                 return left.size() < right.size();
             }
@@ -224,7 +224,7 @@ namespace llarp::net
 
         struct CompareOrder
         {
-            bool operator()(const IPPacket& left, const IPPacket& right)
+            bool operator()(const IP_packet_deprecated& left, const IP_packet_deprecated& right)
             {
                 return left.timestamp < right.timestamp;
             }
@@ -290,9 +290,9 @@ namespace llarp::net
 
         huint128_t dst4to6Lan() const;
 
-        SockAddr src() const;
+        SockAddr_deprecated src() const;
 
-        SockAddr dst() const;
+        SockAddr_deprecated dst() const;
 
         /// get destination port if applicable
         std::optional<nuint16_t> DstPort() const;
@@ -321,9 +321,9 @@ namespace llarp::net
         void ZeroSourceAddress(std::optional<nuint32_t> flowlabel = std::nullopt);
 
         /// make an icmp unreachable reply packet based of this ip packet
-        std::optional<IPPacket> MakeICMPUnreachable() const;
+        std::optional<IP_packet_deprecated> MakeICMPUnreachable() const;
 
-        std::function<void(net::IPPacket)> reply;
+        std::function<void(net::IP_packet_deprecated)> reply;
     };
 
     /// generate ip checksum

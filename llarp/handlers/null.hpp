@@ -15,7 +15,8 @@ namespace llarp::handlers
                                 public std::enable_shared_from_this<NullEndpoint>
     {
         NullEndpoint(Router& r)
-            : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, net::IPPacket pkt) {
+            : BaseHandler{r},
+              _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, net::IP_packet_deprecated pkt) {
                   var::visit(
                       [&pkt](AddressVariant_t&& from) {
                           log::error(logcat, "Unhandled traffic from {} (pkt size:{}B)", from, pkt.size());
@@ -49,8 +50,8 @@ namespace llarp::handlers
         bool MaybeHookDNS(
             std::shared_ptr<dns::PacketSource_Base> /* source */,
             const dns::Message& /* query */,
-            const SockAddr& /* to */,
-            const SockAddr& /* from */) override
+            const SockAddr_deprecated& /* to */,
+            const SockAddr_deprecated& /* from */) override
         {
             return false;
         }

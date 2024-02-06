@@ -61,9 +61,9 @@ namespace llarp
             /// unit test mocks will not call this
             static const Platform* Default_ptr();
 
-            virtual std::optional<SockAddr> AllInterfaces(SockAddr pubaddr) const = 0;
+            virtual std::optional<SockAddr_deprecated> AllInterfaces(SockAddr_deprecated pubaddr) const = 0;
 
-            inline SockAddr Wildcard(int af = AF_INET) const
+            inline SockAddr_deprecated Wildcard(int af = AF_INET) const
             {
                 if (af == AF_INET)
                 {
@@ -71,7 +71,7 @@ namespace llarp
                     addr.sin_family = AF_INET;
                     addr.sin_addr.s_addr = htonl(INADDR_ANY);
                     addr.sin_port = htons(0);
-                    return SockAddr{addr};
+                    return SockAddr_deprecated{addr};
                 }
                 if (af == AF_INET6)
                 {
@@ -79,12 +79,12 @@ namespace llarp
                     addr6.sin6_family = AF_INET6;
                     addr6.sin6_port = htons(0);
                     addr6.sin6_addr = IN6ADDR_ANY_INIT;
-                    return SockAddr{addr6};
+                    return SockAddr_deprecated{addr6};
                 }
                 throw std::invalid_argument{fmt::format("{} is not a valid address family")};
             }
 
-            inline SockAddr WildcardWithPort(port_t port, int af = AF_INET) const
+            inline SockAddr_deprecated WildcardWithPort(port_t port, int af = AF_INET) const
             {
                 auto addr = Wildcard(af);
                 addr.setPort(port);
@@ -99,8 +99,8 @@ namespace llarp
             inline bool IsLoopbackAddress(ipaddr_t ip) const
             {
                 return var::visit(
-                    [loopback6 = IPRange{huint128_t{uint128_t{0UL, 1UL}}, netmask_ipv6_bits(128)},
-                     loopback4 = IPRange::FromIPv4(127, 0, 0, 0, 8)](auto&& ip) {
+                    [loopback6 = IP_range_deprecated{huint128_t{uint128_t{0UL, 1UL}}, netmask_ipv6_bits(128)},
+                     loopback4 = IP_range_deprecated::FromIPv4(127, 0, 0, 0, 8)](auto&& ip) {
                         const auto h_ip = ToHost(ip);
                         return loopback4.Contains(h_ip) or loopback6.Contains(h_ip);
                     },
@@ -117,11 +117,12 @@ namespace llarp
             // addresses; the returned Address (if set) will have its port set to the given value.
             virtual std::optional<oxen::quic::Address> get_best_public_address(bool ipv4, uint16_t port) const = 0;
 
-            virtual std::optional<IPRange> FindFreeRange() const = 0;
+            virtual std::optional<IP_range_deprecated> FindFreeRange() const = 0;
 
             virtual std::optional<std::string> FindFreeTun() const = 0;
 
-            virtual std::optional<SockAddr> GetInterfaceAddr(std::string_view ifname, int af = AF_INET) const = 0;
+            virtual std::optional<SockAddr_deprecated> GetInterfaceAddr(
+                std::string_view ifname, int af = AF_INET) const = 0;
 
             inline std::optional<huint128_t> GetInterfaceIPv6Address(std::string_view ifname) const
             {
@@ -130,12 +131,12 @@ namespace llarp
                 return std::nullopt;
             }
 
-            inline bool IsBogon(const SockAddr& addr) const
+            inline bool IsBogon(const SockAddr_deprecated& addr) const
             {
                 return IsBogonIP(addr.asIPv6());
             }
 
-            inline bool IsBogonRange(const IPRange& range) const
+            inline bool IsBogonRange(const IP_range_deprecated& range) const
             {
                 // special case for 0.0.0.0/0
                 if (range.IsV4() and range.netmask_bits == netmask_ipv6_bits(96))
@@ -159,7 +160,7 @@ namespace llarp
             }
             inline bool IsBogonIP(const huint128_t& addr) const
             {
-                if (not IPRange::V4MappedRange().Contains(addr))
+                if (not IP_range_deprecated::V4MappedRange().Contains(addr))
                 {
                     for (const auto& v6_range : bogonRanges_v6)
                     {

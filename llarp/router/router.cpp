@@ -334,7 +334,7 @@ namespace llarp
 
         vpn::InterfaceInfo info;
 
-        info.ifname = network_config.if_name;
+        info.ifname = network_config._if_name;
 
         info.addrs.emplace_back(network_config.if_addr);
 
@@ -347,7 +347,7 @@ namespace llarp
             throw std::runtime_error{err};
         }
         if (not loop()->add_network_interface(
-                if_net, [](net::IPPacket pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
+                if_net, [](net::IP_packet_deprecated pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
         {
             auto err = "Could not create tunnel for net interface"s;
             log::error(logcat, err);

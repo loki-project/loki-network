@@ -41,7 +41,7 @@ namespace llarp::uv
 
         bool add_network_interface(
             std::shared_ptr<llarp::vpn::NetworkInterface> netif,
-            std::function<void(llarp::net::IPPacket)> handler) override;
+            std::function<void(llarp::net::IP_packet_deprecated)> handler) override;
 
         void call_soon(std::function<void(void)> f) override;
 

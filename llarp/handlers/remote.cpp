@@ -142,7 +142,7 @@ namespace llarp::handlers
 
         _use_v6 = not _ip_range.IsV4();
 
-        _if_name = networkConfig.if_name;
+        _if_name = networkConfig._if_name;
 
         if (_if_name.empty())
         {
@@ -165,7 +165,7 @@ namespace llarp::handlers
     void RemoteHandler::map_remote(
         std::string /* name */,
         std::string /* token */,
-        std::vector<IPRange> /* ranges */,
+        std::vector<IP_range_deprecated> /* ranges */,
         std::function<void(bool, std::string)> /* result_handler */)
     {
         // if (ranges.empty())

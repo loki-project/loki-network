@@ -65,11 +65,11 @@ namespace llarp::handlers
         bool MaybeHookDNS(
             std::shared_ptr<dns::PacketSource_Base> source,
             const dns::Message& query,
-            const SockAddr& to,
-            const SockAddr& from) override;
+            const SockAddr_deprecated& to,
+            const SockAddr_deprecated& from) override;
 
         // Reconfigures DNS servers and restarts libunbound with the new servers.
-        void ReconfigureDNS(std::vector<SockAddr> servers);
+        void ReconfigureDNS(std::vector<SockAddr_deprecated> servers);
 
         bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
 
@@ -118,7 +118,7 @@ namespace llarp::handlers
         bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
 
         /// we got a packet from the user
-        void handle_user_packet(llarp::net::IPPacket pkt);
+        void handle_user_packet(llarp::net::IP_packet_deprecated pkt);
 
         /// get the local interface's address
         huint128_t GetIfAddr() const /* override */;
@@ -136,7 +136,7 @@ namespace llarp::handlers
             return _traffic_policy;
         }
 
-        std::set<IPRange> GetOwnedRanges() const /* override */
+        std::set<IP_range_deprecated> GetOwnedRanges() const /* override */
         {
             return _owned_ranges;
         }
@@ -149,7 +149,7 @@ namespace llarp::handlers
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
         /// returns true otherwise
-        bool ShouldAllowTraffic(const net::IPPacket& pkt) const;
+        bool ShouldAllowTraffic(const net::IP_packet_deprecated& pkt) const;
 
         /// get a key for ip address
         std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t ip) const override;
@@ -166,7 +166,7 @@ namespace llarp::handlers
         struct WritePacket
         {
             uint64_t seqno;
-            net::IPPacket pkt;
+            net::IP_packet_deprecated pkt;
 
             bool operator>(const WritePacket& other) const
             {
@@ -243,9 +243,9 @@ namespace llarp::handlers
         /// highest ip address to allocate (host byte order)
         huint128_t _max_ip;
         /// our ip range we are using
-        llarp::IPRange _local_range;
+        llarp::IP_range_deprecated _local_range;
         /// list of strict connect addresses for hooks
-        std::vector<IpAddress> _strict_connect_addrs;
+        // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
         bool _use_v6;
         std::string _if_name;
@@ -258,7 +258,7 @@ namespace llarp::handlers
 
         std::optional<net::TrafficPolicy> _traffic_policy;
         /// ranges we advetise as reachable
-        std::set<IPRange> _owned_ranges;
+        std::set<IP_range_deprecated> _owned_ranges;
         /// how long to wait for path alignment
         llarp_time_t _path_alignment_timeout;
 

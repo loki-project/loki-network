@@ -185,7 +185,7 @@ namespace llarp::rpc
         struct request_parameters
         {
             std::string address;
-            std::vector<IPRange> ip_range;
+            std::vector<IP_range_deprecated> ip_range;
             std::string token;
         } request;
     };
@@ -226,7 +226,7 @@ namespace llarp::rpc
 
         struct request_parameters
         {
-            std::vector<IPRange> ip_range;
+            std::vector<IP_range_deprecated> ip_range;
         } request;
     };
 

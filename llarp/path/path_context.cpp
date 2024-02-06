@@ -22,12 +22,12 @@ namespace llarp::path
         return m_AllowTransit;
     }
 
-    bool PathContext::check_path_limit_hit_by_ip(const IpAddress& ip)
+    bool PathContext::check_path_limit_hit_by_ip(const Ip_address_deprecated& ip)
     {
 #ifdef TESTNET
         return false;
 #else
-        IpAddress remote = ip;
+        Ip_address_deprecated remote = ip;
         // null out the port -- we don't care about it for path limiting purposes
         remote.setPort(0);
         // try inserting remote address by ip into decaying hash set

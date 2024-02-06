@@ -8,8 +8,8 @@
 
 namespace llarp
 {
-    void to_json(nlohmann::json& j, const IPRange& ipr);
-    void from_json(const nlohmann::json& j, IPRange& ipr);
+    void to_json(nlohmann::json& j, const IP_range_deprecated& ipr);
+    void from_json(const nlohmann::json& j, IP_range_deprecated& ipr);
 }  // namespace llarp
 
 namespace nlohmann

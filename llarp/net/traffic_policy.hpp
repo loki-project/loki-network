@@ -29,7 +29,7 @@ namespace llarp::net
 
         /// returns true if an ip packet looks like it matches this protocol info
         /// returns false otherwise
-        bool MatchesPacket(const IPPacket& pkt) const;
+        bool MatchesPacket(const IP_packet_deprecated& pkt) const;
 
         bool operator<(const ProtocolInfo& other) const
         {
@@ -45,7 +45,7 @@ namespace llarp::net
     struct TrafficPolicy
     {
         /// ranges that are explicitly allowed
-        std::set<IPRange> ranges;
+        std::set<IP_range_deprecated> ranges;
 
         /// protocols that are explicity allowed
         std::set<ProtocolInfo> protocols;
@@ -58,6 +58,6 @@ namespace llarp::net
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise
-        bool AllowsTraffic(const IPPacket& pkt) const;
+        bool AllowsTraffic(const IP_packet_deprecated& pkt) const;
     };
 }  // namespace llarp::net

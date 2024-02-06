@@ -52,7 +52,7 @@ namespace llarp::service
         //   SetAuthInfoForEndpoint(exit, auth);
         // }
 
-        conf.ons_exit_map.ForEachEntry([&](const IPRange& range, const std::string& name) {
+        conf.ons_range_map.ForEachEntry([&](const IP_range_deprecated& range, const std::string& name) {
             std::optional<auth::AuthInfo> auth;
             const auto itr = conf.ons_exit_auths.find(name);
             if (itr != conf.ons_exit_auths.end())

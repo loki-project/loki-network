@@ -2,12 +2,12 @@
 
 #include "connection.hpp"
 
+#include <llarp/address/address.hpp>
 #include <llarp/constants/path.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/messages/common.hpp>
 #include <llarp/path/transit_hop.hpp>
 #include <llarp/router/router.hpp>
-// #include <llarp/router_contact.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/logging.hpp>

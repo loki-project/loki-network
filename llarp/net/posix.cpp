@@ -38,7 +38,7 @@ namespace llarp::net
             iter_all([this, &ifname](auto i) {
                 if (i and i->ifa_addr and i->ifa_addr->sa_family == AF_INET)
                 {
-                    const SockAddr addr{*i->ifa_addr};
+                    const SockAddr_deprecated addr{*i->ifa_addr};
                     if (IsLoopbackAddress(addr.getIP()))
                     {
                         ifname = i->ifa_name;
@@ -71,19 +71,19 @@ namespace llarp::net
             return found;
         }
 
-        std::optional<IPRange> FindFreeRange() const override
+        std::optional<IP_range_deprecated> FindFreeRange() const override
         {
-            std::list<IPRange> currentRanges;
+            std::list<IP_range_deprecated> currentRanges;
             iter_all([&currentRanges](auto i) {
                 if (i and i->ifa_addr and i->ifa_addr->sa_family == AF_INET)
                 {
                     ipv4addr_t addr{reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr};
                     ipv4addr_t mask{reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr};
-                    currentRanges.emplace_back(IPRange::FromIPv4(addr, mask));
+                    currentRanges.emplace_back(IP_range_deprecated::FromIPv4(addr, mask));
                 }
             });
 
-            return IPRange::FindPrivateRange(currentRanges);
+            return IP_range_deprecated::FindPrivateRange(currentRanges);
         }
 
         std::optional<int> GetInterfaceIndex(ipaddr_t) const override
@@ -105,21 +105,21 @@ namespace llarp::net
             return std::nullopt;
         }
 
-        std::optional<SockAddr> GetInterfaceAddr(std::string_view ifname, int af) const override
+        std::optional<SockAddr_deprecated> GetInterfaceAddr(std::string_view ifname, int af) const override
         {
-            std::optional<SockAddr> addr;
+            std::optional<SockAddr_deprecated> addr;
             iter_all([&addr, af, ifname = std::string{ifname}](auto i) {
                 if (addr)
                     return;
                 if (i and i->ifa_addr and i->ifa_addr->sa_family == af and i->ifa_name == ifname)
-                    addr = llarp::SockAddr{*i->ifa_addr};
+                    addr = llarp::SockAddr_deprecated{*i->ifa_addr};
             });
             return addr;
         }
 
-        std::optional<SockAddr> AllInterfaces(SockAddr fallback) const override
+        std::optional<SockAddr_deprecated> AllInterfaces(SockAddr_deprecated fallback) const override
         {
-            std::optional<SockAddr> found;
+            std::optional<SockAddr_deprecated> found;
             iter_all([fallback, &found](auto i) {
                 if (found)
                     return;
@@ -127,13 +127,13 @@ namespace llarp::net
                     return;
                 if (i->ifa_addr->sa_family != fallback.Family())
                     return;
-                SockAddr addr{*i->ifa_addr};
+                SockAddr_deprecated addr{*i->ifa_addr};
                 if (addr == fallback)
                     found = addr;
             });
 
             // 0.0.0.0 is used in our compat shim as our public ip so we check for that special case
-            const auto zero = IPRange::FromIPv4(0, 0, 0, 0, 8);
+            const auto zero = IP_range_deprecated::FromIPv4(0, 0, 0, 0, 8);
             // when we cannot find an address but we are looking for 0.0.0.0 just default to the old
             // style
             if (not found and (fallback.isIPv4() and zero.Contains(fallback.asIPv4())))
@@ -150,7 +150,7 @@ namespace llarp::net
 
                 if (not(i and i->ifa_addr))
                     return;
-                const SockAddr addr{*i->ifa_addr};
+                const SockAddr_deprecated addr{*i->ifa_addr};
                 found = addr.getIP() == ip;
             });
             return found;
@@ -172,8 +172,8 @@ namespace llarp::net
                     ent.name = i->ifa_name;
                     ent.index = if_nametoindex(i->ifa_name);
                 }
-                SockAddr addr{*i->ifa_addr};
-                SockAddr mask{*i->ifa_netmask};
+                SockAddr_deprecated addr{*i->ifa_addr};
+                SockAddr_deprecated mask{*i->ifa_netmask};
                 ent.addrs.emplace_back(addr.asIPv6(), mask.asIPv6());
             });
             std::vector<InterfaceInfo> all;

@@ -421,9 +421,11 @@ namespace llarp
             },
             [this](std::string arg) {
                 IPRange range;
-                if (not range.FromString(arg))
-                    throw std::invalid_argument{"bad ip range: '" + arg + "'"};
-                owned_ranges.insert(range);
+
+                if (not range.from_string(arg))
+                    throw std::invalid_argument{"Bad IP range passed to owned-range:{}"_format(arg)};
+
+                _owned_ranges.insert(std::move(range));
             });
 
         conf.define_option<std::string>(
@@ -468,17 +470,22 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     return;
-                service::Address exit;
+
                 IPRange range;
+                ClientAddress remote;
+
                 const auto pos = arg.find(":");
+
                 if (pos == std::string::npos)
                 {
-                    range.FromString("::/0");
+                    // TODO: this is probably not necessary as these are the default constructed values
+                    range.from_string("::/0");
                 }
-                else if (not range.FromString(arg.substr(pos + 1)))
+                else if (not range.from_string(arg.substr(pos + 1)))
                 {
                     throw std::invalid_argument("[network]:exit-node invalid ip range for exit provided");
                 }
+
                 if (pos != std::string::npos)
                 {
                     arg = arg.substr(0, pos);
@@ -486,15 +493,16 @@ namespace llarp
 
                 if (service::is_valid_name(arg))
                 {
-                    ons_exit_map.Insert(range, arg);
+                    _ons_range_map.emplace(std::move(arg), std::move(range));
                     return;
                 }
 
-                if (arg != "null" and not exit.FromString(arg))
+                if (arg != "null" and not remote.from_pubkey_addr(arg))
                 {
-                    throw std::invalid_argument{fmt::format("[network]:exit-node bad address: {}", arg)};
+                    throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
                 }
-                exit_map.Insert(range, exit);
+
+                _range_map.emplace(std::move(remote), std::move(range));
             });
 
         conf.define_option<std::string>(
@@ -515,12 +523,13 @@ namespace llarp
                 service::Address exit;
                 auth::AuthInfo auth;
                 const auto pos = arg.find(":");
+
                 if (pos == std::string::npos)
                 {
                     throw std::invalid_argument(
-                        "[network]:exit-auth invalid format, expects "
-                        "exit-address.loki:auth-code-goes-here");
+                        "[network]:exit-auth invalid format, expects exit-address.loki:auth-code-goes-here");
                 }
+
                 const auto exit_str = arg.substr(0, pos);
                 auth.token = arg.substr(pos + 1);
 
@@ -569,7 +578,7 @@ namespace llarp
                 "Interface name for lokinet traffic. If unset lokinet will look for a free name",
                 "matching 'lokitunN', starting at N=0 (e.g. lokitun0, lokitun1, ...).",
             },
-            assignment_acceptor(if_name));
+            assignment_acceptor(_if_name));
 
         conf.define_option<std::string>(
             "network",
@@ -580,7 +589,7 @@ namespace llarp
                 "lokinet will attempt to find an unused private range.",
             },
             [this](std::string arg) {
-                if (not if_addr.FromString(arg))
+                if (not _if_addr.from_string(arg))
                 {
                     throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
                 }
@@ -592,9 +601,7 @@ namespace llarp
             ClientOnly,
             Comment{
                 "For all IPv6 exit traffic you will use this as the base address bitwised or'd "
-                "with ",
-                "the v4 address in use.",
-                "To disable ipv6 set this to an empty value.",
+                "with the v4 address in use.To disable ipv6 set this to an empty value.",
                 "!!! WARNING !!! Disabling ipv6 tunneling when you have ipv6 routes WILL lead to ",
                 "de-anonymization as lokinet will no longer carry your ipv6 traffic.",
             },
@@ -602,15 +609,17 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                 {
-                    LogError(
-                        "!!! Disabling ipv6 tunneling when you have ipv6 routes WILL lead to "
-                        "de-anonymization as lokinet will no longer carry your ipv6 traffic !!!");
-                    base_ipv6_addr = std::nullopt;
+                    log::warning(
+                        logcat,
+                        "!!! Disabling ipv6 tunneling when you have ipv6 routes WILL lead to de-anonymization as "
+                        "lokinet will no longer carry your ipv6 traffic !!!");
                     return;
                 }
-                base_ipv6_addr = huint128_t{};
-                if (not base_ipv6_addr->FromString(arg))
+
+                if (not _base_ipv6_range->from_string(arg))
+                {
                     throw std::invalid_argument{fmt::format("[network]:ip6-range invalid value: '{}'", arg)};
+                }
             });
 
         // TODO: could be useful for snodes in the future, but currently only implemented for
@@ -629,33 +638,24 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     return;
-                huint128_t ip;
-                service::Address addr;
+
                 const auto pos = arg.find(":");
+
                 if (pos == std::string::npos)
                 {
-                    throw std::invalid_argument{fmt::format("[endpoint]:mapaddr invalid entry: {}", arg)};
+                    throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
                 }
-                std::string addrstr = arg.substr(0, pos);
-                std::string ipstr = arg.substr(pos + 1);
-                if (not ip.FromString(ipstr))
+
+                ClientAddress remote;
+
+                if (not remote.from_pubkey_addr(arg.substr(0, pos)))
                 {
-                    huint32_t ipv4;
-                    if (not ipv4.FromString(ipstr))
-                    {
-                        throw std::invalid_argument{fmt::format("[endpoint]:mapaddr invalid ip: {}", ipstr)};
-                    }
-                    ip = net::ExpandV4(ipv4);
+                    throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
                 }
-                if (not addr.FromString(addrstr))
-                {
-                    throw std::invalid_argument{fmt::format("[endpoint]:mapaddr invalid addresss: {}", addrstr)};
-                }
-                if (map_addrs.find(ip) != map_addrs.end())
-                {
-                    throw std::invalid_argument{fmt::format("[endpoint]:mapaddr ip already mapped: {}", ipstr)};
-                }
-                map_addrs[ip] = addr;
+
+                oxen::quic::Address addr{arg.substr(pos + 1), 0};
+
+                _addr_map.emplace(std::move(remote), std::move(addr));
             });
 
         conf.define_option<std::string>(
@@ -759,9 +759,25 @@ namespace llarp
 #endif
         };
 
-        // Default, but if we get any upstream (including upstream=, i.e. empty string) we clear it
-        constexpr Default DefaultUpstreamDNS{"9.9.9.10:53"};
-        upstream_dns.emplace_back(DefaultUpstreamDNS.val);
+        auto parse_addr_for_dns = [](const std::string& arg) {
+            std::optional<oxen::quic::Address> addr = std::nullopt;
+            std::string_view arg_v{arg}, port;
+            std::string host;
+            uint16_t p{DEFAULT_DNS_PORT};
+
+            if (auto pos = arg_v.find(':'); pos != arg_v.npos)
+            {
+                host = arg_v.substr(0, pos);
+                port = arg_v.substr(pos + 1);
+
+                if (not llarp::parse_int<uint16_t>(port, p))
+                    log::info(logcat, "Failed to parse port in arg:{}, defaulting to DNS port 53", port);
+
+                addr = oxen::quic::Address{host, p};
+            }
+
+            return addr;
+        };
 
         conf.define_option<std::string>(
             "dns",
@@ -771,17 +787,13 @@ namespace llarp
                 "Upstream resolver(s) to use as fallback for non-loki addresses.",
                 "Multiple values accepted.",
             },
-            [=, first = true](std::string arg) mutable {
-                if (first)
-                {
-                    upstream_dns.clear();
-                    first = false;
-                }
+            [this, parse_addr_for_dns](std::string arg) mutable {
                 if (not arg.empty())
                 {
-                    auto& entry = upstream_dns.emplace_back(std::move(arg));
-                    if (not entry.getPort())
-                        entry.setPort(53);
+                    if (auto maybe_addr = parse_addr_for_dns(arg))
+                        _upstream_dns.push_back(std::move(*maybe_addr));
+                    else
+                        log::warning(logcat, "Failed to parse upstream DNS resolver address:{}", arg);
                 }
             });
 
@@ -805,7 +817,15 @@ namespace llarp
             Comment{
                 "Address to bind to for sending upstream DNS requests.",
             },
-            [this](std::string arg) { query_bind = SockAddr{arg}; });
+            [this, parse_addr_for_dns](std::string arg) mutable {
+                if (not arg.empty())
+                {
+                    if (auto maybe_addr = parse_addr_for_dns(arg))
+                        _query_bind = std::move(*maybe_addr);
+                    else
+                        log::warning(logcat, "Failed to parse bind address for DNS queries:{}", arg);
+                }
+            });
 
         conf.define_option<std::string>(
             "dns",
@@ -815,8 +835,16 @@ namespace llarp
             Comment{
                 "Address to bind to for handling DNS requests.",
             },
-            [=](std::string arg) {
-                SockAddr addr{arg};
+            [this, parse_addr_for_dns](std::string arg) mutable {
+                if (not arg.empty())
+                {
+                    if (auto maybe_addr = parse_addr_for_dns(arg))
+                        _bind_addrs.push_back(std::move(*maybe_addr));
+                    else
+                        log::warning(logcat, "Failed to parse bind address for handling DNS requests:{}", arg);
+                }
+
+                SockAddr_deprecated addr{arg};
                 // set dns port if no explicit port specified
                 // explicit :0 allowed
                 if (not addr.getPort() and not ends_with(arg, ":0"))
@@ -1267,7 +1295,7 @@ namespace llarp
         if (unique_hop_netmask == 0)
             return true;
         const auto netmask = netmask_ipv6_bits(96 + unique_hop_netmask);
-        std::set<IPRange> seenRanges;
+        std::set<IP_range_deprecated> seenRanges;
         for (const auto& hop : rcs)
         {
             const auto network_addr = net::In6ToHUInt(hop.addr6()->in6().sin6_addr) & netmask;

@@ -12,7 +12,7 @@ using namespace std::literals;
 
 namespace llarp::dns::sd
 {
-    void Platform::set_resolver(unsigned int if_ndx, llarp::SockAddr dns, bool global)
+    void Platform::set_resolver(unsigned int if_ndx, llarp::SockAddr_deprecated dns, bool global)
     {
         linux::DBUS _dbus{"org.freedesktop.resolve1", "/org/freedesktop/resolve1", "org.freedesktop.resolve1.Manager"};
         // This passing address by bytes and using two separate calls for ipv4/ipv6 is gross, but

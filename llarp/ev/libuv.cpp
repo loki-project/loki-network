@@ -60,16 +60,16 @@ namespace llarp::uv
     {
         UDPHandle(uvw::Loop& loop, ReceiveFunc rf);
 
-        bool listen(const SockAddr& addr) override;
+        bool listen(const SockAddr_deprecated& addr) override;
 
-        bool send(const SockAddr& dest, const llarp_buffer_t& buf) override;
+        bool send(const SockAddr_deprecated& dest, const llarp_buffer_t& buf) override;
 
-        std::optional<SockAddr> LocalAddr() const override
+        std::optional<SockAddr_deprecated> LocalAddr() const override
         {
             if (auto addr = handle->sock<uvw::IPv4>(); not addr.ip.empty())
-                return SockAddr{addr.ip, huint16_t{static_cast<uint16_t>(addr.port)}};
+                return SockAddr_deprecated{addr.ip, huint16_t{static_cast<uint16_t>(addr.port)}};
             if (auto addr = handle->sock<uvw::IPv6>(); not addr.ip.empty())
-                return SockAddr{addr.ip, huint16_t{static_cast<uint16_t>(addr.port)}};
+                return SockAddr_deprecated{addr.ip, huint16_t{static_cast<uint16_t>(addr.port)}};
             return std::nullopt;
         }
 
@@ -218,7 +218,8 @@ namespace llarp::uv
     }
 
     bool Loop::add_network_interface(
-        std::shared_ptr<llarp::vpn::NetworkInterface> netif, std::function<void(llarp::net::IPPacket)> handler)
+        std::shared_ptr<llarp::vpn::NetworkInterface> netif,
+        std::function<void(llarp::net::IP_packet_deprecated)> handler)
     {
 #ifdef __linux__
         using event_t = uvw::PollEvent;
@@ -285,7 +286,7 @@ namespace llarp::uv
         handle->on<uvw::UDPDataEvent>([this](auto& event, auto& /*handle*/) {
             on_recv(
                 *this,
-                SockAddr{event.sender.ip, huint16_t{static_cast<uint16_t>(event.sender.port)}},
+                SockAddr_deprecated{event.sender.ip, huint16_t{static_cast<uint16_t>(event.sender.port)}},
                 OwnedBuffer{std::move(event.data), event.length});
         });
     }
@@ -295,7 +296,7 @@ namespace llarp::uv
         reset_handle(loop);
     }
 
-    bool UDPHandle::listen(const SockAddr& addr)
+    bool UDPHandle::listen(const SockAddr_deprecated& addr)
     {
         if (handle->active())
             reset_handle(handle->loop());
@@ -310,7 +311,7 @@ namespace llarp::uv
         return true;
     }
 
-    bool UDPHandle::send(const SockAddr& to, const llarp_buffer_t& buf)
+    bool UDPHandle::send(const SockAddr_deprecated& to, const llarp_buffer_t& buf)
     {
         return handle->trySend(
                    *static_cast<const sockaddr*>(to),

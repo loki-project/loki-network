@@ -22,7 +22,7 @@ namespace llarp
 {
     constexpr std::size_t event_loop_queue_size = 1024;
 
-    struct SockAddr;
+    struct SockAddr_deprecated;
     struct UDPHandle;
 
     static auto loop_cat = llarp::log::Cat("ev-loop");
@@ -47,7 +47,7 @@ namespace llarp
     {
         class Platform;
 
-        struct IPPacket;
+        struct IP_packet_deprecated;
     }  // namespace net
 
     /// distinct event loop waker upper; used to idempotently schedule a task on the next event loop
@@ -209,7 +209,8 @@ namespace llarp
         }
 
         virtual bool add_network_interface(
-            std::shared_ptr<vpn::NetworkInterface> netif, std::function<void(net::IPPacket)> packetHandler) = 0;
+            std::shared_ptr<vpn::NetworkInterface> netif,
+            std::function<void(net::IP_packet_deprecated)> packetHandler) = 0;
 
         virtual bool add_ticker(std::function<void(void)> ticker) = 0;
 
@@ -219,7 +220,7 @@ namespace llarp
 
         virtual const net::Platform* Net_ptr() const;
 
-        using UDPReceiveFunc = std::function<void(UDPHandle&, SockAddr src, llarp::OwnedBuffer buf)>;
+        using UDPReceiveFunc = std::function<void(UDPHandle&, SockAddr_deprecated src, llarp::OwnedBuffer buf)>;
 
         // Constructs a UDP socket that can be used for sending and/or receiving
         virtual std::shared_ptr<UDPHandle> make_udp(UDPReceiveFunc on_recv) = 0;

@@ -24,19 +24,19 @@ namespace llarp::rpc
         std::function<void(std::optional<dns::Message>)> func;
 
        public:
-        SockAddr dumb;
+        SockAddr_deprecated dumb;
 
         template <typename Callable>
         DummyPacketSource(Callable&& f) : func{std::forward<Callable>(f)}
         {}
 
-        bool WouldLoop(const SockAddr&, const SockAddr&) const override
+        bool WouldLoop(const SockAddr_deprecated&, const SockAddr_deprecated&) const override
         {
             return false;
         };
 
         /// send packet with src and dst address containing buf on this packet source
-        void SendTo(const SockAddr&, const SockAddr&, OwnedBuffer buf) const override
+        void SendTo(const SockAddr_deprecated&, const SockAddr_deprecated&, OwnedBuffer buf) const override
         {
             func(dns::MaybeParseDNSMessage(buf));
         }
@@ -45,7 +45,7 @@ namespace llarp::rpc
         void Stop() override{};
 
         /// returns the sockaddr we are bound on if applicable
-        std::optional<SockAddr> BoundOn() const override
+        std::optional<SockAddr_deprecated> BoundOn() const override
         {
             return std::nullopt;
         }
@@ -200,7 +200,7 @@ namespace llarp::rpc
             return;
         }
 
-        SockAddr laddr{quicconnect.request.bindAddr};
+        SockAddr_deprecated laddr{quicconnect.request.bindAddr};
 
         try
         {
@@ -260,7 +260,7 @@ namespace llarp::rpc
             auto id = 0;
             try
             {
-                SockAddr addr{quiclistener.request.remoteHost, huint16_t{quiclistener.request.port}};
+                SockAddr_deprecated addr{quiclistener.request.remoteHost, huint16_t{quiclistener.request.port}};
                 // TODO:
                 // id = quic->listen(addr);
             }

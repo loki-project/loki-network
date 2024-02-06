@@ -7,7 +7,7 @@
 
 namespace llarp::vpn
 {
-    using PacketHandlerFunc_t = std::function<void(llarp::net::IPPacket)>;
+    using PacketHandlerFunc_t = std::function<void(llarp::net::IP_packet_deprecated)>;
 
     struct Layer4Handler;
 
@@ -21,7 +21,7 @@ namespace llarp::vpn
         explicit PacketRouter(PacketHandlerFunc_t baseHandler);
 
         /// feed in an ip packet for handling
-        void HandleIPPacket(llarp::net::IPPacket pkt);
+        void HandleIPPacket(llarp::net::IP_packet_deprecated pkt);
 
         /// add a non udp packet handler using ip protocol proto
         void AddIProtoHandler(uint8_t proto, PacketHandlerFunc_t func);
@@ -37,7 +37,7 @@ namespace llarp::vpn
     {
         virtual ~Layer4Handler() = default;
 
-        virtual void HandleIPPacket(llarp::net::IPPacket pkt) = 0;
+        virtual void HandleIPPacket(llarp::net::IP_packet_deprecated pkt) = 0;
 
         virtual void AddSubHandler(nuint16_t, PacketHandlerFunc_t){};
     };

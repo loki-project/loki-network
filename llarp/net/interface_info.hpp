@@ -18,7 +18,7 @@ namespace llarp::net
         /// interface's index
         int index;
         /// the addresses owned by this interface
-        std::vector<IPRange> addrs;
+        std::vector<IP_range_deprecated> addrs;
         /// a gateway we can use if it exists
         std::optional<ipaddr_t> gateway;
 

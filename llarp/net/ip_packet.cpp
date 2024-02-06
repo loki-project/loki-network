@@ -65,7 +65,7 @@ namespace llarp::net
         return (uint32_t*)addr.s6_addr;
     }
 
-    huint128_t IPPacket::srcv6() const
+    huint128_t IP_packet_deprecated::srcv6() const
     {
         if (IsV6())
             return In6ToHUInt(HeaderV6()->srcaddr);
@@ -73,7 +73,7 @@ namespace llarp::net
         return ExpandV4(srcv4());
     }
 
-    huint128_t IPPacket::dstv6() const
+    huint128_t IP_packet_deprecated::dstv6() const
     {
         if (IsV6())
             return In6ToHUInt(HeaderV6()->dstaddr);
@@ -81,7 +81,7 @@ namespace llarp::net
         return ExpandV4(dstv4());
     }
 
-    IPPacket::IPPacket(byte_view_t view)
+    IP_packet_deprecated::IP_packet_deprecated(byte_view_t view)
     {
         if (view.size() < MinSize)
         {
@@ -92,39 +92,39 @@ namespace llarp::net
         std::copy_n(view.data(), size(), data());
     }
 
-    IPPacket::IPPacket(size_t sz)
+    IP_packet_deprecated::IP_packet_deprecated(size_t sz)
     {
         if (sz and sz < MinSize)
             throw std::invalid_argument{"buffer size is too small to hold an ip packet"};
         _buf.resize(sz);
     }
 
-    SockAddr IPPacket::src() const
+    SockAddr_deprecated IP_packet_deprecated::src() const
     {
         const auto port = SrcPort().value_or(net::port_t{});
 
         if (IsV4())
-            return SockAddr{ToNet(srcv4()), port};
+            return SockAddr_deprecated{ToNet(srcv4()), port};
         else
-            return SockAddr{ToNet(srcv6()), port};
+            return SockAddr_deprecated{ToNet(srcv6()), port};
     }
 
-    SockAddr IPPacket::dst() const
+    SockAddr_deprecated IP_packet_deprecated::dst() const
     {
         auto port = *DstPort();
         if (IsV4())
-            return SockAddr{ToNet(dstv4()), port};
+            return SockAddr_deprecated{ToNet(dstv4()), port};
         else
-            return SockAddr{ToNet(dstv6()), port};
+            return SockAddr_deprecated{ToNet(dstv6()), port};
     }
 
-    IPPacket::IPPacket(std::vector<uint8_t>&& stolen) : _buf{stolen}
+    IP_packet_deprecated::IP_packet_deprecated(std::vector<uint8_t>&& stolen) : _buf{stolen}
     {
         if (size() < MinSize)
             _buf.resize(0);
     }
 
-    auto IPPacket::ServiceProtocol() const
+    auto IP_packet_deprecated::ServiceProtocol() const
     {
         if (IsV4())
             return service::ProtocolType::TrafficV4;
@@ -134,12 +134,12 @@ namespace llarp::net
         return service::ProtocolType::Control;
     }
 
-    byte_view_t IPPacket::view() const
+    byte_view_t IP_packet_deprecated::view() const
     {
         return byte_view_t{data(), size()};
     }
 
-    std::optional<nuint16_t> IPPacket::DstPort() const
+    std::optional<nuint16_t> IP_packet_deprecated::DstPort() const
     {
         switch (IPProtocol{Header()->protocol})
         {
@@ -151,7 +151,7 @@ namespace llarp::net
         }
     }
 
-    std::optional<nuint16_t> IPPacket::SrcPort() const
+    std::optional<nuint16_t> IP_packet_deprecated::SrcPort() const
     {
         IPProtocol proto{Header()->protocol};
         switch (proto)
@@ -164,32 +164,32 @@ namespace llarp::net
         }
     }
 
-    huint32_t IPPacket::srcv4() const
+    huint32_t IP_packet_deprecated::srcv4() const
     {
         return huint32_t{ntohl(Header()->saddr)};
     }
 
-    huint32_t IPPacket::dstv4() const
+    huint32_t IP_packet_deprecated::dstv4() const
     {
         return huint32_t{ntohl(Header()->daddr)};
     }
 
-    huint128_t IPPacket::dst4to6() const
+    huint128_t IP_packet_deprecated::dst4to6() const
     {
         return ExpandV4(dstv4());
     }
 
-    huint128_t IPPacket::src4to6() const
+    huint128_t IP_packet_deprecated::src4to6() const
     {
         return ExpandV4(srcv4());
     }
 
-    huint128_t IPPacket::dst4to6Lan() const
+    huint128_t IP_packet_deprecated::dst4to6Lan() const
     {
         return ExpandV4Lan(dstv4());
     }
 
-    huint128_t IPPacket::src4to6Lan() const
+    huint128_t IP_packet_deprecated::src4to6Lan() const
     {
         return ExpandV4Lan(srcv4());
     }
@@ -377,7 +377,7 @@ namespace llarp::net
         //   check->n = 0xFFff;
     }
 
-    void IPPacket::UpdateIPv4Address(nuint32_t nSrcIP, nuint32_t nDstIP)
+    void IP_packet_deprecated::UpdateIPv4Address(nuint32_t nSrcIP, nuint32_t nDstIP)
     {
         llarp::LogDebug("set src=", nSrcIP, " dst=", nDstIP);
 
@@ -420,7 +420,7 @@ namespace llarp::net
         hdr->daddr = nDstIP.n;
     }
 
-    void IPPacket::UpdateIPv6Address(huint128_t src, huint128_t dst, std::optional<nuint32_t> flowlabel)
+    void IP_packet_deprecated::UpdateIPv6Address(huint128_t src, huint128_t dst, std::optional<nuint32_t> flowlabel)
     {
         const size_t ihs = 4 + 4 + 16 + 16;
         const auto sz = size();
@@ -510,7 +510,7 @@ namespace llarp::net
         }
     }
 
-    void IPPacket::ZeroAddresses(std::optional<nuint32_t> flowlabel)
+    void IP_packet_deprecated::ZeroAddresses(std::optional<nuint32_t> flowlabel)
     {
         if (IsV4())
         {
@@ -522,7 +522,7 @@ namespace llarp::net
         }
     }
 
-    void IPPacket::ZeroSourceAddress(std::optional<nuint32_t> flowlabel)
+    void IP_packet_deprecated::ZeroSourceAddress(std::optional<nuint32_t> flowlabel)
     {
         if (IsV4())
         {
@@ -534,14 +534,14 @@ namespace llarp::net
         }
     }
 
-    std::optional<IPPacket> IPPacket::MakeICMPUnreachable() const
+    std::optional<IP_packet_deprecated> IP_packet_deprecated::MakeICMPUnreachable() const
     {
         if (IsV4())
         {
             constexpr auto icmp_Header_size = 8;
             auto ip_Header_size = Header()->ihl * 4;
             auto pkt_size = (icmp_Header_size + ip_Header_size) * 2;
-            net::IPPacket pkt{static_cast<size_t>(pkt_size)};
+            net::IP_packet_deprecated pkt{static_cast<size_t>(pkt_size)};
 
             auto* pkt_Header = pkt.Header();
             pkt_Header->version = 4;
@@ -581,7 +581,7 @@ namespace llarp::net
         return std::nullopt;
     }
 
-    std::optional<std::pair<const char*, size_t>> IPPacket::L4Data() const
+    std::optional<std::pair<const char*, size_t>> IP_packet_deprecated::L4Data() const
     {
         const auto* hdr = Header();
         size_t l4_HeaderSize = 0;
@@ -602,7 +602,7 @@ namespace llarp::net
 
     namespace
     {
-        IPPacket make_ip4_udp(
+        IP_packet_deprecated make_ip4_udp(
             net::ipv4addr_t srcaddr,
             net::port_t srcport,
             net::ipv4addr_t dstaddr,
@@ -610,7 +610,7 @@ namespace llarp::net
             std::vector<uint8_t> udp_data)
         {
             constexpr auto pkt_overhead = constants::udp_header_bytes + constants::ip_header_min_bytes;
-            net::IPPacket pkt{udp_data.size() + pkt_overhead};
+            net::IP_packet_deprecated pkt{udp_data.size() + pkt_overhead};
 
             auto* hdr = pkt.Header();
             pkt.data()[1] = 0;
@@ -641,7 +641,7 @@ namespace llarp::net
             return pkt;
         }
     }  // namespace
-    IPPacket IPPacket::make_udp(
+    IP_packet_deprecated IP_packet_deprecated::make_udp(
         net::ipaddr_t srcaddr,
         net::port_t srcport,
         net::ipaddr_t dstaddr,
@@ -658,7 +658,7 @@ namespace llarp::net
         };
         auto fam = getfam(srcaddr);
         if (fam != getfam(dstaddr))
-            return net::IPPacket{size_t{}};
+            return net::IP_packet_deprecated{size_t{}};
         if (fam == AF_INET)
         {
             return make_ip4_udp(
@@ -669,6 +669,6 @@ namespace llarp::net
                 std::move(udp_data));
         }
         // TODO: ipv6
-        return net::IPPacket{size_t{}};
+        return net::IP_packet_deprecated{size_t{}};
     }
 }  // namespace llarp::net

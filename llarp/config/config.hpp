@@ -3,6 +3,8 @@
 #include "definition.hpp"
 #include "ini.hpp"
 
+#include <llarp/address/address.hpp>
+#include <llarp/address/ip_range.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/bootstrap.hpp>
 #include <llarp/constants/files.hpp>
@@ -37,6 +39,7 @@ namespace llarp
 
     inline const std::string QUAD_ZERO{"0.0.0.0"};
     inline constexpr uint16_t DEFAULT_LISTEN_PORT{1090};
+    inline constexpr uint16_t DEFAULT_DNS_PORT{53};
     inline constexpr int CLIENT_ROUTER_CONNECTIONS = 4;
 
     // TODO: don't use these maps. they're sloppy and difficult to follow
@@ -107,8 +110,6 @@ namespace llarp
         std::optional<bool> enable_profiling;
         bool save_profiles;
         std::set<RouterID> strict_connect;
-        std::string if_name;
-        IPRange if_addr;
 
         std::optional<fs::path> keyfile;
 
@@ -121,13 +122,9 @@ namespace llarp
         bool is_reachable = false;
 
         std::set<RouterID> snode_blacklist;
-        net::IPRangeMap<service::Address> exit_map;
-        net::IPRangeMap<std::string> ons_exit_map;
 
         std::unordered_map<service::Address, auth::AuthInfo> exit_auths;
         std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
-
-        std::unordered_map<huint128_t, service::Address> map_addrs;
 
         auth::AuthType auth_type = auth::AuthType::NONE;
         auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
@@ -139,14 +136,31 @@ namespace llarp
 
         std::vector<llarp::dns::SRVData> srv_records;
 
-        std::optional<huint128_t> base_ipv6_addr;
-
-        std::set<IPRange> owned_ranges;
         std::optional<net::TrafficPolicy> traffic_policy;
 
         std::optional<llarp_time_t> path_alignment_timeout;
 
         std::optional<fs::path> addr_map_persist_file;
+
+        /* TESTNET: Under modification */
+        std::string _if_name;
+        IPRange _if_addr;
+        std::optional<IPRange> _base_ipv6_range = std::nullopt;
+        std::unordered_map<ClientAddress, oxen::quic::Address> _addr_map;
+
+        std::unordered_map<ClientAddress, IPRange> _range_map;
+        std::unordered_map<std::string, IPRange> _ons_range_map;
+
+        std::set<IPRange> _owned_ranges;
+
+        // DEPRECATED
+        IP_range_deprecated if_addr;
+        std::optional<huint128_t> base_ipv6_range = std::nullopt;
+        std::unordered_map<huint128_t, service::Address> addr_map;
+        net::IPRangeMap<service::Address> range_map;
+        net::IPRangeMap<std::string> ons_range_map;
+        std::set<IP_range_deprecated> owned_ranges;
+        /*************************************/
 
         bool enable_route_poker;
         bool blackhole_routes;
@@ -157,10 +171,20 @@ namespace llarp
     struct DnsConfig
     {
         bool raw;
-        std::vector<SockAddr> bind_addr;
-        std::vector<SockAddr> upstream_dns;
+
         std::vector<fs::path> hostfiles;
-        std::optional<SockAddr> query_bind;
+
+        /* TESTNET: Under modification */
+        std::vector<oxen::quic::Address> _upstream_dns;
+        oxen::quic::Address _default_dns{"9.9.9.10", DEFAULT_DNS_PORT};
+        std::optional<oxen::quic::Address> _query_bind;
+        std::vector<oxen::quic::Address> _bind_addrs;
+
+        // Deprecated
+        std::vector<SockAddr_deprecated> upstream_dns;
+        std::optional<SockAddr_deprecated> query_bind;
+        std::vector<SockAddr_deprecated> bind_addr;
+        /*************************************/
 
         std::unordered_multimap<std::string, std::string> extra_opts;
 

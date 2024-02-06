@@ -110,7 +110,7 @@ namespace llarp::service
 
         /// get the ip ranges we claim to own
         /// override me
-        virtual std::set<IPRange> GetOwnedRanges() const
+        virtual std::set<IP_range_deprecated> GetOwnedRanges() const
         {
             return {};
         };

@@ -12,8 +12,10 @@ namespace llarp
     // Types can opt-in to being formatting via .to_string() by specializing this to true.  This also
     // allows scoped enums by instead looking for a call to `to_string(val)` (and so there should be
     // a ToString function in the same namespace as the scoped enum to pick it up via ADL).
-    template <typename T>
-    constexpr bool IsToStringFormattable = false;
+    // template <typename T>
+    // constexpr bool IsToStringFormattable = false;
+    template <typename T, typename SFINAE = void>
+    inline constexpr bool IsToStringFormattable = false;
 
     // e.g.:
     // template <> inline constexpr bool IsToStringFormattable<MyType> = true;

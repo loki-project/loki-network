@@ -18,14 +18,14 @@ namespace llarp
     /// As a convenience, it can produce a SockAddr for dealing with network libraries which depend
     /// sockaddr structs. However, it does not keep this as a member variable and isn't responsible
     /// for its lifetime/memory/etc.
-    struct /* [[deprecated("use llarp::SockAddr instead")]] */ IpAddress
+    struct /* [[deprecated("use llarp::SockAddr instead")]] */ Ip_address_deprecated
     {
         /// Empty constructor.
-        IpAddress() = default;
+        Ip_address_deprecated() = default;
         /// move construtor
-        IpAddress(IpAddress&&) = default;
+        Ip_address_deprecated(Ip_address_deprecated&&) = default;
         /// copy construct
-        IpAddress(const IpAddress&);
+        Ip_address_deprecated(const Ip_address_deprecated&);
 
         /// Constructor. Takes a string which can be an IPv4 or IPv6 address optionally followed by
         /// a colon and a port.
@@ -40,27 +40,27 @@ namespace llarp
         ///
         /// @param str is a string representing an IP address and optionally a port
         /// @throws std::invalid_argument if str cannot be parsed
-        IpAddress(std::string_view str);
+        Ip_address_deprecated(std::string_view str);
 
         /// Constructor. Takes an IP address (as above) and a port. The string may not contain a
         /// port.
         ///
         /// @param str is a string representing an IP address and optionally a port
         /// @throws std::invalid_argument if str cannot be parsed
-        IpAddress(std::string_view str, std::optional<uint16_t> port);
+        Ip_address_deprecated(std::string_view str, std::optional<uint16_t> port);
 
         /// Construct from a SockAddr.
         ///
         /// @param addr is an SockAddr to initialize from.
-        IpAddress(const SockAddr& addr);
+        Ip_address_deprecated(const SockAddr_deprecated& addr);
 
-        IpAddress& operator=(const sockaddr& other);
+        Ip_address_deprecated& operator=(const sockaddr& other);
 
         /// move assignment
-        IpAddress& operator=(IpAddress&& other);
+        Ip_address_deprecated& operator=(Ip_address_deprecated&& other);
 
         /// copy assignment
-        IpAddress& operator=(const IpAddress& other);
+        Ip_address_deprecated& operator=(const Ip_address_deprecated& other);
 
         /// Return the port. Returns -1 if no port has been provided.
         ///
@@ -96,7 +96,7 @@ namespace llarp
         /// Creates an instance of SockAddr representing this IpAddress.
         ///
         /// @return an instance of a SockAddr created from this IpAddress
-        SockAddr createSockAddr() const;
+        SockAddr_deprecated createSockAddr() const;
 
         /// Returns true if this IpAddress is a bogon, false otherwise
         ///
@@ -120,9 +120,9 @@ namespace llarp
         // std::hash
         // to string / stream / etc
 
-        bool operator<(const IpAddress& other) const;
+        bool operator<(const Ip_address_deprecated& other) const;
 
-        bool operator==(const IpAddress& other) const;
+        bool operator==(const Ip_address_deprecated& other) const;
 
        private:
         bool m_empty = true;
@@ -131,16 +131,16 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<IpAddress> = true;
+    constexpr inline bool IsToStringFormattable<Ip_address_deprecated> = true;
 
 }  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::IpAddress>
+    struct hash<llarp::Ip_address_deprecated>
     {
-        std::size_t operator()(const llarp::IpAddress& address) const noexcept
+        std::size_t operator()(const llarp::Ip_address_deprecated& address) const noexcept
         {
             return std::hash<std::string>{}(address.to_string());
         }

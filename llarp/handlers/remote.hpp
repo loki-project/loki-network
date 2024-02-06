@@ -28,7 +28,7 @@ namespace llarp
             net::IPRangeMap<service::Address> _ip_map;
 
             DnsConfig _dns_conf;
-            IPRange _ip_range;
+            IP_range_deprecated _ip_range;
 
             huint128_t _if_addr;
             huint128_t _next_addr;
@@ -85,14 +85,14 @@ namespace llarp
             void map_remote(
                 std::string name,
                 std::string token,
-                std::vector<IPRange> ranges,
+                std::vector<IP_range_deprecated> ranges,
                 std::function<void(bool, std::string)> result);
 
-            void map_range(IPRange range, service::Address exit);
+            void map_range(IP_range_deprecated range, service::Address exit);
 
-            void unmap_range(IPRange range);
+            void unmap_range(IP_range_deprecated range);
 
-            void unmap_range_by_remote(IPRange range, std::string exit);
+            void unmap_range_by_remote(IP_range_deprecated range, std::string exit);
         };
     }  // namespace handlers
 }  // namespace llarp

@@ -11,12 +11,12 @@ namespace llarp
         // Starts listening for incoming UDP packets on the given address. Returns true on success,
         // false if the address could not be bound. If you send without calling this first then the
         // socket will bind to a random high port on 0.0.0.0 (the "all addresses" address).
-        virtual bool listen(const SockAddr& addr) = 0;
+        virtual bool listen(const SockAddr_deprecated& addr) = 0;
 
         // Sends a packet to the given recipient, immediately.  Returns true if the send succeeded,
         // false it could not be performed (either because of error, or because it would have
         // blocked). If listen hasn't been called then a random IP/port will be used.
-        virtual bool send(const SockAddr& dest, const llarp_buffer_t& buf) = 0;
+        virtual bool send(const SockAddr_deprecated& dest, const llarp_buffer_t& buf) = 0;
 
         // Closes the listening UDP socket (if opened); this is typically called (automatically)
         // during destruction.  Does nothing if the UDP socket is already closed.
@@ -30,7 +30,7 @@ namespace llarp
         }
 
         /// returns the local address we are bound on
-        virtual std::optional<SockAddr> LocalAddr() const = 0;
+        virtual std::optional<SockAddr_deprecated> LocalAddr() const = 0;
 
         // Base class destructor
         virtual ~UDPHandle() = default;

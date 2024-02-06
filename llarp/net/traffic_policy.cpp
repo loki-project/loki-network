@@ -30,7 +30,7 @@ namespace llarp::net
             port = std::nullopt;
     }
 
-    bool ProtocolInfo::MatchesPacket(const IPPacket& pkt) const
+    bool ProtocolInfo::MatchesPacket(const IP_packet_deprecated& pkt) const
     {
         if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
             return false;
@@ -45,7 +45,7 @@ namespace llarp::net
         return true;
     }
 
-    bool TrafficPolicy::AllowsTraffic(const IPPacket& pkt) const
+    bool TrafficPolicy::AllowsTraffic(const IP_packet_deprecated& pkt) const
     {
         if (protocols.empty() and ranges.empty())
             return true;

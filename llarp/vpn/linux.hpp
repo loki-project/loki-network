@@ -97,17 +97,17 @@ namespace llarp::vpn
             return m_fd;
         }
 
-        net::IPPacket ReadNextPacket() override
+        net::IP_packet_deprecated ReadNextPacket() override
         {
             std::vector<uint8_t> pkt;
-            pkt.resize(net::IPPacket::MaxSize);
+            pkt.resize(net::IP_packet_deprecated::MaxSize);
             const auto sz = read(m_fd, pkt.data(), pkt.capacity());
             if (sz < 0)
             {
                 if (errno == EAGAIN or errno == EWOULDBLOCK)
                 {
                     errno = 0;
-                    return net::IPPacket{};
+                    return net::IP_packet_deprecated{};
                 }
                 throw std::error_code{errno, std::system_category()};
             }
@@ -115,7 +115,7 @@ namespace llarp::vpn
             return pkt;
         }
 
-        bool WritePacket(net::IPPacket pkt) override
+        bool WritePacket(net::IP_packet_deprecated pkt) override
         {
             const auto sz = write(m_fd, pkt.data(), pkt.size());
             if (sz <= 0)
@@ -303,7 +303,7 @@ namespace llarp::vpn
             }
         }
 
-        void route_via_interface(int cmd, int flags, NetworkInterface& vpn, IPRange range)
+        void route_via_interface(int cmd, int flags, NetworkInterface& vpn, IP_range_deprecated range)
         {
             const auto& info = vpn.Info();
             if (range.IsV4())
@@ -367,12 +367,12 @@ namespace llarp::vpn
             default_route_via_interface(vpn, RTM_DELROUTE, 0);
         }
 
-        void add_route_via_interface(NetworkInterface& vpn, IPRange range) override
+        void add_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) override
         {
             route_via_interface(RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, vpn, range);
         }
 
-        void delete_route_via_interface(NetworkInterface& vpn, IPRange range) override
+        void delete_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) override
         {
             route_via_interface(RTM_DELROUTE, 0, vpn, range);
         }

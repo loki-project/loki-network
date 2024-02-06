@@ -954,24 +954,20 @@ namespace llarp
     {
         if (auto maybe = get_rc(rc.router_id()))
         {
-            if (maybe->other_is_newer(rc))
-                put_rc(rc);
+            if (not maybe->other_is_newer(rc))
+                return;
         }
-        else
-        {
-            if (put_rc(rc))
-                _router.link_manager().gossip_rc(_router.local_rid(), rc);
-        }
+
+        if (put_rc(rc))
+            _router.link_manager().gossip_rc(_router.local_rid(), rc);
     }
 
     bool NodeDB::put_rc_if_newer(RemoteRC rc)
     {
         if (auto maybe = get_rc(rc.router_id()))
         {
-            if (maybe->other_is_newer(rc))
-                return put_rc(rc);
-
-            return false;
+            if (not maybe->other_is_newer(rc))
+                return false;
         }
 
         return put_rc(rc);

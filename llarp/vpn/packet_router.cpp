@@ -15,7 +15,7 @@ namespace llarp::vpn
             m_LocalPorts.emplace(localport, std::move(handler));
         }
 
-        void HandleIPPacket(llarp::net::IPPacket pkt) override
+        void HandleIPPacket(llarp::net::IP_packet_deprecated pkt) override
         {
             auto dstport = pkt.DstPort();
             if (not dstport)
@@ -38,7 +38,7 @@ namespace llarp::vpn
         explicit GenericLayer4Handler(PacketHandlerFunc_t baseHandler) : m_BaseHandler{std::move(baseHandler)}
         {}
 
-        void HandleIPPacket(llarp::net::IPPacket pkt) override
+        void HandleIPPacket(llarp::net::IP_packet_deprecated pkt) override
         {
             m_BaseHandler(std::move(pkt));
         }
@@ -47,7 +47,7 @@ namespace llarp::vpn
     PacketRouter::PacketRouter(PacketHandlerFunc_t baseHandler) : m_BaseHandler{std::move(baseHandler)}
     {}
 
-    void PacketRouter::HandleIPPacket(llarp::net::IPPacket pkt)
+    void PacketRouter::HandleIPPacket(llarp::net::IP_packet_deprecated pkt)
     {
         const auto proto = pkt.Header()->protocol;
         if (const auto itr = m_IPProtoHandler.find(proto); itr != m_IPProtoHandler.end())

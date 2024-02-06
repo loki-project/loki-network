@@ -53,16 +53,16 @@ namespace llarp::dns
 
         /// return true if traffic with source and dest addresses would cause a
         /// loop in resolution and thus should not be sent to query handlers
-        virtual bool WouldLoop(const SockAddr& to, const SockAddr& from) const = 0;
+        virtual bool WouldLoop(const SockAddr_deprecated& to, const SockAddr_deprecated& from) const = 0;
 
         /// send packet with src and dst address containing buf on this packet source
-        virtual void SendTo(const SockAddr& to, const SockAddr& from, OwnedBuffer buf) const = 0;
+        virtual void SendTo(const SockAddr_deprecated& to, const SockAddr_deprecated& from, OwnedBuffer buf) const = 0;
 
         /// stop reading packets and end operation
         virtual void Stop() = 0;
 
         /// returns the sockaddr we are bound on if applicable
-        virtual std::optional<SockAddr> BoundOn() const = 0;
+        virtual std::optional<SockAddr_deprecated> BoundOn() const = 0;
     };
 
     /// a packet source which will override the sendto function of an wrapped packet source to
@@ -70,24 +70,24 @@ namespace llarp::dns
     class PacketSource_Wrapper : public PacketSource_Base
     {
         std::weak_ptr<PacketSource_Base> m_Wrapped;
-        std::function<void(net::IPPacket)> m_WritePacket;
+        std::function<void(net::IP_packet_deprecated)> m_WritePacket;
 
        public:
         explicit PacketSource_Wrapper(
-            std::weak_ptr<PacketSource_Base> wrapped, std::function<void(net::IPPacket)> write_packet)
+            std::weak_ptr<PacketSource_Base> wrapped, std::function<void(net::IP_packet_deprecated)> write_packet)
             : m_Wrapped{wrapped}, m_WritePacket{write_packet}
         {}
 
-        bool WouldLoop(const SockAddr& to, const SockAddr& from) const override
+        bool WouldLoop(const SockAddr_deprecated& to, const SockAddr_deprecated& from) const override
         {
             if (auto ptr = m_Wrapped.lock())
                 return ptr->WouldLoop(to, from);
             return true;
         }
 
-        void SendTo(const SockAddr& to, const SockAddr& from, OwnedBuffer buf) const override
+        void SendTo(const SockAddr_deprecated& to, const SockAddr_deprecated& from, OwnedBuffer buf) const override
         {
-            m_WritePacket(net::IPPacket::make_udp(from, to, std::move(buf)));
+            m_WritePacket(net::IP_packet_deprecated::make_udp(from, to, std::move(buf)));
         }
 
         /// stop reading packets and end operation
@@ -98,7 +98,7 @@ namespace llarp::dns
         }
 
         /// returns the sockaddr we are bound on if applicable
-        std::optional<SockAddr> BoundOn() const override
+        std::optional<SockAddr_deprecated> BoundOn() const override
         {
             if (auto ptr = m_Wrapped.lock())
                 return ptr->BoundOn();
@@ -111,12 +111,15 @@ namespace llarp::dns
     class QueryJob : public QueryJob_Base, std::enable_shared_from_this<QueryJob>
     {
         std::shared_ptr<PacketSource_Base> src;
-        const SockAddr resolver;
-        const SockAddr asker;
+        const SockAddr_deprecated resolver;
+        const SockAddr_deprecated asker;
 
        public:
         explicit QueryJob(
-            std::shared_ptr<PacketSource_Base> source, const Message& query, const SockAddr& to_, const SockAddr& from_)
+            std::shared_ptr<PacketSource_Base> source,
+            const Message& query,
+            const SockAddr_deprecated& to_,
+            const SockAddr_deprecated& from_)
             : QueryJob_Base{query}, src{source}, resolver{to_}, asker{from_}
         {}
 
@@ -151,7 +154,7 @@ namespace llarp::dns
         }
 
         /// get local socket address that queries are sent from
-        virtual std::optional<SockAddr> GetLocalAddr() const
+        virtual std::optional<SockAddr_deprecated> GetLocalAddr() const
         {
             return std::nullopt;
         }
@@ -162,7 +165,7 @@ namespace llarp::dns
         /// reset the resolver state, optionally replace upstream info with new info.  The default
         /// base implementation does nothing.
         virtual void ResetResolver(
-            [[maybe_unused]] std::optional<std::vector<SockAddr>> replace_upstream = std::nullopt)
+            [[maybe_unused]] std::optional<std::vector<SockAddr_deprecated>> replace_upstream = std::nullopt)
         {}
 
         /// cancel all pending requests and cease further operation.  Default operation is a no-op.
@@ -174,8 +177,8 @@ namespace llarp::dns
         virtual bool MaybeHookDNS(
             std::shared_ptr<PacketSource_Base> source,
             const Message& query,
-            const SockAddr& to,
-            const SockAddr& from) = 0;
+            const SockAddr_deprecated& to,
+            const SockAddr_deprecated& from) = 0;
     };
 
     // Base class for DNS proxy
@@ -196,10 +199,10 @@ namespace llarp::dns
         explicit Server(std::shared_ptr<EventLoop> loop, llarp::DnsConfig conf, unsigned int netif_index);
 
         /// returns all sockaddr we have from all of our PacketSources
-        std::vector<SockAddr> BoundPacketSourceAddrs() const;
+        std::vector<SockAddr_deprecated> BoundPacketSourceAddrs() const;
 
         /// returns the first sockaddr we have on our packet sources if we have one
-        std::optional<SockAddr> FirstBoundPacketSourceAddr() const;
+        std::optional<SockAddr_deprecated> FirstBoundPacketSourceAddr() const;
 
         /// add a resolver to this packet handler, does not share ownership
         void AddResolver(std::weak_ptr<Resolver_Base> resolver);
@@ -209,7 +212,7 @@ namespace llarp::dns
 
         /// create a packet source bound on bindaddr but does not add it
         virtual std::shared_ptr<PacketSource_Base> MakePacketSourceOn(
-            const SockAddr& bindaddr, const llarp::DnsConfig& conf);
+            const SockAddr_deprecated& bindaddr, const llarp::DnsConfig& conf);
 
         /// sets up all internal binds and such and begins operation
         virtual void Start();
@@ -230,8 +233,8 @@ namespace llarp::dns
         /// returns false if we dont want to process the packet
         bool MaybeHandlePacket(
             std::shared_ptr<PacketSource_Base> pktsource,
-            const SockAddr& resolver,
-            const SockAddr& from,
+            const SockAddr_deprecated& resolver,
+            const SockAddr_deprecated& from,
             llarp::OwnedBuffer buf);
         /// set which dns mode we are in.
         /// true for intercepting all queries. false for just .loki and .snode

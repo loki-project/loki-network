@@ -23,38 +23,38 @@ namespace llarp
 {
     /// A simple SockAddr wrapper which provides a sockaddr_in (IPv4). Memory management is handled
     /// in constructor and destructor (if needed) and copying is disabled.
-    struct SockAddr
+    struct SockAddr_deprecated
     {
-        SockAddr();
+        SockAddr_deprecated();
         // IPv4 constructors:
-        SockAddr(uint8_t a, uint8_t b, uint8_t c, uint8_t d, huint16_t port = {0});
-        SockAddr(nuint32_t ip, nuint16_t port = {0});
-        SockAddr(huint32_t ip, huint16_t port = {0});
+        SockAddr_deprecated(uint8_t a, uint8_t b, uint8_t c, uint8_t d, huint16_t port = {0});
+        SockAddr_deprecated(nuint32_t ip, nuint16_t port = {0});
+        SockAddr_deprecated(huint32_t ip, huint16_t port = {0});
 
         // IPv6 (or IPv4 if given a special IPv4-mapped IPv6 addr) in host order (including port).
-        SockAddr(huint128_t ip, huint16_t port = {0});
+        SockAddr_deprecated(huint128_t ip, huint16_t port = {0});
         // IPv6 (or IPv4 if given a special IPv4-mapped IPv6 addr) in network order.  NB: port is
         // also in network order!
-        SockAddr(nuint128_t ip, nuint16_t port = {0});
+        SockAddr_deprecated(nuint128_t ip, nuint16_t port = {0});
 
         // String ctors
-        SockAddr(std::string_view addr);
-        SockAddr(std::string_view addr, huint16_t port);  // port is in native (host) order
+        SockAddr_deprecated(std::string_view addr);
+        SockAddr_deprecated(std::string_view addr, huint16_t port);  // port is in native (host) order
 
-        SockAddr(const SockAddr&);
-        SockAddr& operator=(const SockAddr&);
+        SockAddr_deprecated(const SockAddr_deprecated&);
+        SockAddr_deprecated& operator=(const SockAddr_deprecated&);
 
-        SockAddr(const sockaddr& addr);
-        SockAddr& operator=(const sockaddr& addr);
+        SockAddr_deprecated(const sockaddr& addr);
+        SockAddr_deprecated& operator=(const sockaddr& addr);
 
-        SockAddr(const sockaddr_in& addr);
-        SockAddr& operator=(const sockaddr_in& addr);
+        SockAddr_deprecated(const sockaddr_in& addr);
+        SockAddr_deprecated& operator=(const sockaddr_in& addr);
 
-        SockAddr(const sockaddr_in6& addr);
-        SockAddr& operator=(const sockaddr_in6& addr);
+        SockAddr_deprecated(const sockaddr_in6& addr);
+        SockAddr_deprecated& operator=(const sockaddr_in6& addr);
 
-        SockAddr(const in6_addr& addr);
-        SockAddr& operator=(const in6_addr& addr);
+        SockAddr_deprecated(const in6_addr& addr);
+        SockAddr_deprecated& operator=(const in6_addr& addr);
 
         explicit operator const sockaddr*() const;
         explicit operator const sockaddr_in*() const;
@@ -62,11 +62,11 @@ namespace llarp
 
         size_t sockaddr_len() const;
 
-        bool operator<(const SockAddr& other) const;
+        bool operator<(const SockAddr_deprecated& other) const;
 
-        bool operator==(const SockAddr& other) const;
+        bool operator==(const SockAddr_deprecated& other) const;
 
-        bool operator!=(const SockAddr& other) const
+        bool operator!=(const SockAddr_deprecated& other) const
         {
             return not(*this == other);
         };
@@ -165,16 +165,16 @@ namespace llarp
     };
 
     template <>
-    inline constexpr bool IsToStringFormattable<SockAddr> = true;
+    inline constexpr bool IsToStringFormattable<SockAddr_deprecated> = true;
 
 }  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::SockAddr>
+    struct hash<llarp::SockAddr_deprecated>
     {
-        size_t operator()(const llarp::SockAddr& addr) const noexcept
+        size_t operator()(const llarp::SockAddr_deprecated& addr) const noexcept
         {
             const std::hash<uint16_t> port{};
             const std::hash<llarp::huint128_t> ip{};

@@ -8,13 +8,13 @@
 
 namespace llarp::vpn
 {
-    using EgresPacketHandlerFunc = std::function<void(AddressVariant_t, net::IPPacket)>;
+    using EgresPacketHandlerFunc = std::function<void(AddressVariant_t, net::IP_packet_deprecated)>;
 
     struct EgresLayer4Handler
     {
         virtual ~EgresLayer4Handler() = default;
 
-        virtual void HandleIPPacketFrom(AddressVariant_t from, net::IPPacket pkt) = 0;
+        virtual void HandleIPPacketFrom(AddressVariant_t from, net::IP_packet_deprecated pkt) = 0;
 
         virtual void AddSubHandler(nuint16_t, EgresPacketHandlerFunc){};
         virtual void RemoveSubHandler(nuint16_t){};
@@ -30,7 +30,7 @@ namespace llarp::vpn
         explicit EgresPacketRouter(EgresPacketHandlerFunc baseHandler);
 
         /// feed in an ip packet for handling
-        void HandleIPPacketFrom(AddressVariant_t, net::IPPacket pkt);
+        void HandleIPPacketFrom(AddressVariant_t, net::IP_packet_deprecated pkt);
 
         /// add a non udp packet handler using ip protocol proto
         void AddIProtoHandler(uint8_t proto, EgresPacketHandlerFunc func);
