@@ -46,7 +46,7 @@ namespace llarp::dht
 
         ISNode(service::EncryptedIntroSet other) : introset(std::move(other))
         {
-            ID = Key_t(introset.derivedSigningKey.as_array());
+            ID = Key_t(introset.derived_signing_key.as_array());
         }
 
         StatusObject ExtractStatus() const
@@ -56,7 +56,7 @@ namespace llarp::dht
 
         bool operator<(const ISNode& other) const
         {
-            return introset.signedAt < other.introset.signedAt;
+            return introset.signed_at < other.introset.signed_at;
         }
     };
 }  // namespace llarp::dht

@@ -33,75 +33,86 @@ namespace llarp::vpn
 
     class LinuxInterface : public NetworkInterface
     {
-        const int m_fd;
+        const int _fd;
 
        public:
-        LinuxInterface(InterfaceInfo info) : NetworkInterface{std::move(info)}, m_fd{::open("/dev/net/tun", O_RDWR)}
-
+        LinuxInterface(InterfaceInfo info) : NetworkInterface{std::move(info)}, _fd{::open("/dev/net/tun", O_RDWR)}
         {
-            if (m_fd == -1)
+            if (_fd == -1)
                 throw std::runtime_error("cannot open /dev/net/tun " + std::string{strerror(errno)});
 
             ifreq ifr{};
             in6_ifreq ifr6{};
+
             ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
-            std::copy_n(m_Info.ifname.c_str(), std::min(m_Info.ifname.size(), sizeof(ifr.ifr_name)), ifr.ifr_name);
-            if (::ioctl(m_fd, TUNSETIFF, &ifr) == -1)
+            std::copy_n(_info.ifname.c_str(), std::min(_info.ifname.size(), sizeof(ifr.ifr_name)), ifr.ifr_name);
+
+            if (::ioctl(_fd, TUNSETIFF, &ifr) == -1)
                 throw std::runtime_error("cannot set interface name: " + std::string{strerror(errno)});
+
             IOCTL control{AF_INET};
 
             control.ioctl(SIOCGIFFLAGS, &ifr);
             const int flags = ifr.ifr_flags;
-            control.ioctl(SIOCGIFINDEX, &ifr);
-            m_Info.index = ifr.ifr_ifindex;
 
-            for (const auto& ifaddr : m_Info.addrs)
+            control.ioctl(SIOCGIFINDEX, &ifr);
+            _info.index = ifr.ifr_ifindex;
+
+            for (const auto& ifaddr : _info.addrs)
             {
+                auto& range = ifaddr.range;
+
                 if (ifaddr.fam == AF_INET)
                 {
                     ifr.ifr_addr.sa_family = AF_INET;
-                    const nuint32_t addr = ToNet(net::TruncateV6(ifaddr.range.addr));
-                    ((sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr = addr.n;
+                    auto in4 = range.address().in4();
+                    std::memcpy(
+                        &((sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr, &in4.sin_addr.s_addr, sizeof(sockaddr));
+
                     control.ioctl(SIOCSIFADDR, &ifr);
 
-                    const nuint32_t mask = ToNet(net::TruncateV6(ifaddr.range.netmask_bits));
-                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr = mask.n;
+                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
+                        oxenc::load_host_to_big<unsigned int>(&range.mask());
                     control.ioctl(SIOCSIFNETMASK, &ifr);
                 }
                 if (ifaddr.fam == AF_INET6)
                 {
-                    ifr6.addr = net::HUIntToIn6(ifaddr.range.addr);
-                    ifr6.prefixlen = llarp::bits::count_bits(ifaddr.range.netmask_bits);
-                    ifr6.ifindex = m_Info.index;
+                    auto in6 = range.address().in6();
+
+                    std::memcpy(&ifr6.addr, &in6.sin6_addr, sizeof(in6.sin6_addr));
+
+                    ifr6.prefixlen = llarp::bits::count_bits(range.mask());
+                    ifr6.ifindex = _info.index;
                     try
                     {
                         IOCTL{AF_INET6}.ioctl(SIOCSIFADDR, &ifr6);
                     }
-                    catch (std::exception& ex)
+                    catch (const std::exception& e)
                     {
-                        LogError("we are not allowed to use IPv6 on this system: ", ex.what());
+                        log::error(logcat, "IPv6 not allowed on this system: {}", e.what());
                     }
                 }
             }
+
             ifr.ifr_flags = static_cast<short>(flags | IFF_UP | IFF_NO_PI);
             control.ioctl(SIOCSIFFLAGS, &ifr);
         }
 
-        virtual ~LinuxInterface()
+        ~LinuxInterface() override
         {
-            ::close(m_fd);
+            ::close(_fd);
         }
 
         int PollFD() const override
         {
-            return m_fd;
+            return _fd;
         }
 
         net::IP_packet_deprecated ReadNextPacket() override
         {
             std::vector<uint8_t> pkt;
             pkt.resize(net::IP_packet_deprecated::MaxSize);
-            const auto sz = read(m_fd, pkt.data(), pkt.capacity());
+            const auto sz = read(_fd, pkt.data(), pkt.capacity());
             if (sz < 0)
             {
                 if (errno == EAGAIN or errno == EWOULDBLOCK)
@@ -117,7 +128,7 @@ namespace llarp::vpn
 
         bool WritePacket(net::IP_packet_deprecated pkt) override
         {
-            const auto sz = write(m_fd, pkt.data(), pkt.size());
+            const auto sz = write(_fd, pkt.data(), pkt.size());
             if (sz <= 0)
                 return false;
             return sz == static_cast<ssize_t>(pkt.size());
@@ -170,7 +181,7 @@ namespace llarp::vpn
             unsigned char bitlen;
             unsigned char data[sizeof(struct in6_addr)];
 
-            _inet_addr(oxen::quic::Address& addr)
+            _inet_addr(oxen::quic::Address addr)
             {
                 const auto& v4 = addr.is_ipv4();
 
@@ -303,10 +314,10 @@ namespace llarp::vpn
             }
         }
 
-        void route_via_interface(int cmd, int flags, NetworkInterface& vpn, IP_range_deprecated range)
+        void route_via_interface(int cmd, int flags, NetworkInterface& vpn, IPRange range)
         {
             const auto& info = vpn.Info();
-            if (range.IsV4())
+            if (range.is_ipv4())
             {
                 const auto maybe = Net().GetInterfaceAddr(info.ifname);
                 if (not maybe)
@@ -314,18 +325,20 @@ namespace llarp::vpn
 
                 const auto gateway = var::visit([](auto&& ip) { return _inet_addr{ip}; }, maybe->getIP());
 
-                const _inet_addr addr{
-                    ToNet(net::TruncateV6(range.addr)), bits::count_bits(net::TruncateV6(range.netmask_bits))};
+                const _inet_addr addr{range.address()};
 
                 make_route(cmd, flags, addr, gateway, GatewayMode::eUpperDefault, info.index);
             }
             else
             {
                 const auto maybe = Net().GetInterfaceIPv6Address(info.ifname);
+
                 if (not maybe)
                     throw std::runtime_error{"we dont have our own network interface?"};
+
                 const _inet_addr gateway{ToNet(*maybe), 128};
-                const _inet_addr addr{ToNet(range.addr), bits::count_bits(range.netmask_bits)};
+                const _inet_addr addr{range.address()};
+
                 make_route(cmd, flags, addr, gateway, GatewayMode::eUpperDefault, info.index);
             }
         }
@@ -367,12 +380,12 @@ namespace llarp::vpn
             default_route_via_interface(vpn, RTM_DELROUTE, 0);
         }
 
-        void add_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) override
+        void add_route_via_interface(NetworkInterface& vpn, IPRange range) override
         {
             route_via_interface(RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, vpn, range);
         }
 
-        void delete_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) override
+        void delete_route_via_interface(NetworkInterface& vpn, IPRange range) override
         {
             route_via_interface(RTM_DELROUTE, 0, vpn, range);
         }

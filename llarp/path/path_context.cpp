@@ -6,10 +6,7 @@
 
 namespace llarp::path
 {
-    static constexpr auto DefaultPathBuildLimit = 500ms;
-
-    PathContext::PathContext(Router* router)
-        : _router(router), m_AllowTransit(false), path_limits(DefaultPathBuildLimit)
+    PathContext::PathContext(Router* router) : _router(router), m_AllowTransit(false)
     {}
 
     void PathContext::allow_transit()
@@ -20,20 +17,6 @@ namespace llarp::path
     bool PathContext::is_transit_allowed() const
     {
         return m_AllowTransit;
-    }
-
-    bool PathContext::check_path_limit_hit_by_ip(const Ip_address_deprecated& ip)
-    {
-#ifdef TESTNET
-        return false;
-#else
-        Ip_address_deprecated remote = ip;
-        // null out the port -- we don't care about it for path limiting purposes
-        remote.setPort(0);
-        // try inserting remote address by ip into decaying hash set
-        // if it cannot insert it has hit a limit
-        return not path_limits.Insert(remote);
-#endif
     }
 
     const std::shared_ptr<EventLoop>& PathContext::loop()
@@ -153,9 +136,6 @@ namespace llarp::path
 
     void PathContext::ExpirePaths(llarp_time_t now)
     {
-        // decay limits
-        path_limits.Decay(now);
-
         {
             auto itr = transit_hops.begin();
             while (itr != transit_hops.end())

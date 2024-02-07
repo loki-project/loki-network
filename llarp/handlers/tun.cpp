@@ -289,9 +289,9 @@ namespace llarp::handlers
 
         _dns_config = dnsConf;
         _traffic_policy = conf.traffic_policy;
-        _owned_ranges = conf.owned_ranges;
+        _owned_ranges = conf._owned_ranges;
 
-        _base_address_v6 = conf.base_ipv6_range;
+        _base_address_v6 = conf._base_ipv6_range;
 
         if (conf.path_alignment_timeout)
         {
@@ -307,70 +307,88 @@ namespace llarp::handlers
         }
 
         _if_name = conf._if_name;
+
         if (_if_name.empty())
         {
             const auto maybe = router().net().FindFreeTun();
+
             if (not maybe.has_value())
                 throw std::runtime_error("cannot find free interface name");
+
             _if_name = *maybe;
         }
 
-        _local_range = conf.if_addr;
-        if (!_local_range.addr.h)
+        _local_range = conf._if_addr;
+
+        if (!_local_range.address().is_addressable())
         {
-            const auto maybe = router().net().FindFreeRange();
+            const auto maybe = router().net().find_free_range();
+
             if (not maybe.has_value())
             {
                 throw std::runtime_error("cannot find free address range");
             }
+
             _local_range = *maybe;
         }
 
-        _local_ip = _local_range.addr;
-        _use_v6 = false;
+        _local_ip = _local_range.address();
+        _use_v6 = not _local_range.is_ipv4();
 
         _persisting_addr_file = conf.addr_map_persist_file;
+
         if (_persisting_addr_file)
         {
             const auto& file = *_persisting_addr_file;
+
             if (fs::exists(file))
             {
-                bool shouldLoadFile = true;
+                bool load_file = true;
                 {
                     constexpr auto LastModifiedWindow = 1min;
                     const auto lastmodified = fs::last_write_time(file);
                     const auto now = decltype(lastmodified)::clock::now();
+
                     if (now < lastmodified or now - lastmodified > LastModifiedWindow)
                     {
-                        shouldLoadFile = false;
+                        load_file = false;
                     }
                 }
+
                 std::vector<char> data;
-                if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary);
-                    maybe and shouldLoadFile)
+
+                if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary); maybe and load_file)
                 {
-                    LogInfo(name(), " loading address map file from ", file);
+                    log::info(logcat, "{} loading persisting address map file from path:{}", name(), file);
+
                     maybe->seekg(0, std::ios_base::end);
                     const size_t len = maybe->tellg();
+
                     maybe->seekg(0, std::ios_base::beg);
                     data.resize(len);
-                    LogInfo(name(), " reading ", len, " bytes");
+
+                    log::debug(logcat, "{} reading {}B", name(), len);
+
                     maybe->read(data.data(), data.size());
                 }
                 else
                 {
-                    if (shouldLoadFile)
+                    auto err = "{} could not load persisting address map file from path:{} --"_format(name(), file);
+
+                    log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
+
+                    if (load_file)
                     {
-                        LogInfo(name(), " address map file ", file, " does not exist, so we won't load it");
+                        log::info(logcat, "{} NOT FOUND", err);
                     }
                     else
-                        LogInfo(name(), " address map file ", file, " not loaded because it's stale");
+                        log::info(logcat, "{} STALE", err);
                 }
                 if (not data.empty())
                 {
                     std::string_view bdata{data.data(), data.size()};
 
-                    LogDebug(name(), " parsing address map data: ", bdata);
+                    log::trace(logcat, "{} parsing address map data: {}", name(), bdata);
 
                     const auto parsed = oxenc::bt_deserialize<oxenc::bt_dict>(bdata);
 
@@ -954,7 +972,7 @@ namespace llarp::handlers
 
         if (_base_address_v6)
         {
-            IP_range_deprecated v6range = _local_range;
+            IPRange v6range = _local_range;
             v6range.addr = (*_base_address_v6) | _local_range.addr;
             LogInfo(name(), " using v6 range: ", v6range);
             info.addrs.emplace_back(v6range, AF_INET6);

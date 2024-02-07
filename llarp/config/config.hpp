@@ -37,7 +37,6 @@ namespace llarp
     using SectionValues = llarp::ConfigParser::SectionValues;
     using ConfigMap = llarp::ConfigParser::ConfigMap;
 
-    inline const std::string QUAD_ZERO{"0.0.0.0"};
     inline constexpr uint16_t DEFAULT_LISTEN_PORT{1090};
     inline constexpr uint16_t DEFAULT_DNS_PORT{53};
     inline constexpr int CLIENT_ROUTER_CONNECTIONS = 4;
@@ -93,8 +92,7 @@ namespace llarp
     {
         /// in our hops what netmask will we use for unique ips for hops
         /// i.e. 32 for every hop unique ip, 24 unique /24 per hop, etc
-        ///
-        int unique_hop_netmask;
+        uint8_t unique_hop_netmask;
 
         /// set of countrys to exclude from path building (2 char country code)
         std::unordered_set<std::string> exclude_countries;
@@ -105,6 +103,8 @@ namespace llarp
         bool check_rcs(const std::set<RemoteRC>& hops) const;
     };
 
+    /** TODO: unfuck the config in regards to tun mapping vs exit/service mapping
+     */
     struct NetworkConfig
     {
         std::optional<bool> enable_profiling;
@@ -154,12 +154,12 @@ namespace llarp
         std::set<IPRange> _owned_ranges;
 
         // DEPRECATED
-        IP_range_deprecated if_addr;
-        std::optional<huint128_t> base_ipv6_range = std::nullopt;
+        // IP_range_deprecated if_addr;
+        // std::optional<huint128_t> base_ipv6_range = std::nullopt;
         std::unordered_map<huint128_t, service::Address> addr_map;
         net::IPRangeMap<service::Address> range_map;
         net::IPRangeMap<std::string> ons_range_map;
-        std::set<IP_range_deprecated> owned_ranges;
+        // std::set<IP_range_deprecated> owned_ranges;
         /*************************************/
 
         bool enable_route_poker;

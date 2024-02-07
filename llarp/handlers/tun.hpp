@@ -136,7 +136,7 @@ namespace llarp::handlers
             return _traffic_policy;
         }
 
-        std::set<IP_range_deprecated> GetOwnedRanges() const /* override */
+        std::set<IPRange> get_owned_ranges() const /* override */
         {
             return _owned_ranges;
         }
@@ -231,26 +231,28 @@ namespace llarp::handlers
 
         DnsConfig _dns_config;
 
+        // TODO: change the IP's to the variant IP type in address/ip_range.hpp
+
         /// maps ip address to timestamp last active
         std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
         /// our ip address (host byte order)
-        huint128_t _local_ip;
+        oxen::quic::Address _local_ip;
         /// our network interface's ipv6 address
-        huint128_t _local_ipv6;
+        IPRange _local_ipv6;
 
         /// next ip address to allocate (host byte order)
-        huint128_t _next_ip;
+        IPRange _next_ip;
         /// highest ip address to allocate (host byte order)
-        huint128_t _max_ip;
+        IPRange _max_ip;
         /// our ip range we are using
-        llarp::IP_range_deprecated _local_range;
+        IPRange _local_range;
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
         bool _use_v6;
         std::string _if_name;
 
-        std::optional<huint128_t> _base_address_v6;
+        std::optional<IPRange> _base_address_v6;
 
         std::shared_ptr<vpn::NetworkInterface> _net_if;
 
@@ -258,7 +260,7 @@ namespace llarp::handlers
 
         std::optional<net::TrafficPolicy> _traffic_policy;
         /// ranges we advetise as reachable
-        std::set<IP_range_deprecated> _owned_ranges;
+        std::set<IPRange> _owned_ranges;
         /// how long to wait for path alignment
         llarp_time_t _path_alignment_timeout;
 

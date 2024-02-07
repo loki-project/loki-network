@@ -52,14 +52,15 @@ namespace llarp::service
         //   SetAuthInfoForEndpoint(exit, auth);
         // }
 
-        conf.ons_range_map.ForEachEntry([&](const IP_range_deprecated& range, const std::string& name) {
-            std::optional<auth::AuthInfo> auth;
-            const auto itr = conf.ons_exit_auths.find(name);
-            if (itr != conf.ons_exit_auths.end())
-                auth = itr->second;
-            (void)range;
-            // _startup_ons_mappings[name] = std::make_pair(range, auth);
-        });
+        // TODO: move this to remote exit handler
+        // conf.ons_range_map.ForEachEntry([&](const IP_range_deprecated& range, const std::string& name) {
+        //     std::optional<auth::AuthInfo> auth;
+        //     const auto itr = conf.ons_exit_auths.find(name);
+        //     if (itr != conf.ons_exit_auths.end())
+        //         auth = itr->second;
+        //     (void)range;
+        //     _startup_ons_mappings[name] = std::make_pair(range, auth);
+        // });
 
         // return _state->Configure(conf);
         return true;

@@ -62,7 +62,7 @@ namespace llarp::path
 
         void reject_transit();
 
-        bool check_path_limit_hit_by_ip(const Ip_address_deprecated& ip);
+        // bool check_path_limit_hit_by_ip(const Ip_address_deprecated& ip);
 
         bool is_transit_allowed() const;
 
@@ -107,6 +107,5 @@ namespace llarp::path
         std::unordered_map<TransitHopID, std::shared_ptr<TransitHop>> transit_hops;
         std::unordered_map<HopID, std::shared_ptr<Path>> own_paths;
         bool m_AllowTransit;
-        util::DecayingHashSet<Ip_address_deprecated> path_limits;
     };
 }  // namespace llarp::path

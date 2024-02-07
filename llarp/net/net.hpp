@@ -7,6 +7,7 @@
 #include "net_int.hpp"
 #include "uint128.hpp"
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/util/bits.hpp>
 #include <llarp/util/mem.hpp>
 
@@ -117,7 +118,7 @@ namespace llarp
             // addresses; the returned Address (if set) will have its port set to the given value.
             virtual std::optional<oxen::quic::Address> get_best_public_address(bool ipv4, uint16_t port) const = 0;
 
-            virtual std::optional<IP_range_deprecated> FindFreeRange() const = 0;
+            virtual std::optional<IPRange> find_free_range() const = 0;
 
             virtual std::optional<std::string> FindFreeTun() const = 0;
 

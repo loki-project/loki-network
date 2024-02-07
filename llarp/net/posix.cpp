@@ -71,19 +71,22 @@ namespace llarp::net
             return found;
         }
 
-        std::optional<IP_range_deprecated> FindFreeRange() const override
+        std::optional<IPRange> find_free_range() const override
         {
-            std::list<IP_range_deprecated> currentRanges;
-            iter_all([&currentRanges](auto i) {
+            std::list<IPRange> current_ranges;
+
+            iter_all([&current_ranges](auto i) {
                 if (i and i->ifa_addr and i->ifa_addr->sa_family == AF_INET)
                 {
-                    ipv4addr_t addr{reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr};
-                    ipv4addr_t mask{reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr};
-                    currentRanges.emplace_back(IP_range_deprecated::FromIPv4(addr, mask));
+                    oxen::quic::Address addr{i->ifa_addr};
+                    uint8_t m = reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr;
+                    // ipv4addr_t addr{reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr};
+                    // ipv4addr_t mask{reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr};
+                    current_ranges.emplace_back(std::move(addr), std::move(m));
                 }
             });
-
-            return IP_range_deprecated::FindPrivateRange(currentRanges);
+            // TODO:
+            return IPRange::find_private_range(current_ranges);
         }
 
         std::optional<int> GetInterfaceIndex(ipaddr_t) const override

@@ -336,7 +336,7 @@ namespace llarp
 
         info.ifname = network_config._if_name;
 
-        info.addrs.emplace_back(network_config.if_addr);
+        info.addrs.emplace_back(network_config._if_addr);
 
         auto if_net = vpn_platform()->CreateInterface(std::move(info), this);
 

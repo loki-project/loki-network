@@ -164,7 +164,7 @@ namespace llarp::service
         // set timestamp
         // TODO: round to nearest 1000 ms
         i.time_signed = now;
-        encrypted.signedAt = now;
+        encrypted.signed_at = now;
         // set service info
         i.address_keys = pub;
         // set public encryption key
@@ -175,7 +175,7 @@ namespace llarp::service
         const SharedSecret k{i.address_keys.Addr()};
         crypto::xchacha20(reinterpret_cast<uint8_t*>(bte.data()), bte.size(), k, encrypted.nonce);
 
-        std::memcpy(encrypted.introsetPayload.data(), bte.data(), bte.size());
+        std::memcpy(encrypted.introset_payload.data(), bte.data(), bte.size());
 
         if (not encrypted.Sign(derivedSignKey))
             return std::nullopt;

@@ -950,18 +950,6 @@ namespace llarp
         return false;
     }
 
-    void NodeDB::verify_gossip_bfetch_rc(const RemoteRC& rc)
-    {
-        if (auto maybe = get_rc(rc.router_id()))
-        {
-            if (not maybe->other_is_newer(rc))
-                return;
-        }
-
-        if (put_rc(rc))
-            _router.link_manager().gossip_rc(_router.local_rid(), rc);
-    }
-
     bool NodeDB::put_rc_if_newer(RemoteRC rc)
     {
         if (auto maybe = get_rc(rc.router_id()))

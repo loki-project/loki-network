@@ -648,7 +648,7 @@ namespace llarp::handlers
         ip_range = networkConfig.if_addr;
         if (!ip_range.addr.h)
         {
-            const auto maybe = router->net().FindFreeRange();
+            const auto maybe = router->net().find_free_range();
             if (not maybe.has_value())
                 throw std::runtime_error("cannot find free interface range");
             ip_range = *maybe;

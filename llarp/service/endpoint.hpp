@@ -108,13 +108,6 @@ namespace llarp::service
             return std::nullopt;
         };
 
-        /// get the ip ranges we claim to own
-        /// override me
-        virtual std::set<IP_range_deprecated> GetOwnedRanges() const
-        {
-            return {};
-        };
-
         void reset_path_state() override;
 
         /// loop (via router)

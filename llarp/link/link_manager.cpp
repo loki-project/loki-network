@@ -760,15 +760,16 @@ namespace llarp
 
                 if (auto itr = registered.find(rid); itr != registered.end())
                 {
-                    log::critical(
-                        logcat,
-                        "Bootstrap node confirmed RID:{} is registered; approving fetch request "
-                        "and "
-                        "saving RC!",
-                        rid);
-
-                    _router.loop()->call_soon(
-                        [this, remote_rc = *remote]() { node_db->verify_gossip_bfetch_rc(remote_rc); });
+                    _router.loop()->call_soon([this, remote_rc = *remote]() {
+                        if (node_db->verify_store_gossip_rc(remote_rc))
+                        {
+                            log::critical(
+                                logcat,
+                                "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
+                                remote_rc.router_id());
+                            gossip_rc(_router.local_rid(), remote_rc);
+                        }
+                    });
                 }
             }
         }

@@ -26,7 +26,7 @@ namespace llarp
         return true;
     }
 
-    std::pair<std::string, uint16_t> parse_addr(std::string_view addr, std::optional<uint16_t> default_port)
+    inline std::pair<std::string, uint16_t> parse_addr(std::string_view addr, std::optional<uint16_t> default_port)
     {
         std::pair<std::string, uint16_t> result;
 

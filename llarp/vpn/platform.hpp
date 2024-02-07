@@ -2,8 +2,8 @@
 
 #include "i_packet_io.hpp"
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/net/ip_packet.hpp>
-#include <llarp/net/ip_range.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxenc/variant.h>
@@ -20,10 +20,11 @@ namespace llarp::vpn
 {
     struct InterfaceAddress
     {
-        constexpr InterfaceAddress(IP_range_deprecated r, int f = AF_INET) : range{std::move(r)}, fam{f}
+        InterfaceAddress(IPRange r) : range{std::move(r)}, fam{range.is_ipv4() ? AF_INET : AF_INET6}
         {}
-        IP_range_deprecated range;
+        IPRange range;
         int fam;
+
         bool operator<(const InterfaceAddress& other) const
         {
             return std::tie(range, fam) < std::tie(other.range, other.fam);
@@ -34,16 +35,12 @@ namespace llarp::vpn
     {
         std::string ifname;
         unsigned int index;
-        huint32_t dnsaddr;
         std::vector<InterfaceAddress> addrs;
 
         /// get address number N
-        inline net::ipaddr_t operator[](size_t idx) const
+        inline oxen::quic::Address operator[](size_t idx) const
         {
-            const auto& range = addrs[idx].range;
-            if (range.IsV4())
-                return ToNet(net::TruncateV6(range.addr));
-            return ToNet(range.addr);
+            return addrs[idx].range.address();
         }
     };
 
@@ -51,17 +48,17 @@ namespace llarp::vpn
     class NetworkInterface : public I_Packet_IO
     {
        protected:
-        InterfaceInfo m_Info;
+        InterfaceInfo _info;
 
        public:
-        NetworkInterface(InterfaceInfo info) : m_Info{std::move(info)}
+        NetworkInterface(InterfaceInfo info) : _info{std::move(info)}
         {}
         NetworkInterface(const NetworkInterface&) = delete;
         NetworkInterface(NetworkInterface&&) = delete;
 
         const InterfaceInfo& Info() const
         {
-            return m_Info;
+            return _info;
         }
 
         /// idempotently wake up the upper layers as needed (platform dependant)
@@ -91,9 +88,9 @@ namespace llarp::vpn
 
         virtual void delete_default_route_via_interface(NetworkInterface& vpn) = 0;
 
-        virtual void add_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) = 0;
+        virtual void add_route_via_interface(NetworkInterface& vpn, IPRange range) = 0;
 
-        virtual void delete_route_via_interface(NetworkInterface& vpn, IP_range_deprecated range) = 0;
+        virtual void delete_route_via_interface(NetworkInterface& vpn, IPRange range) = 0;
 
         virtual std::vector<oxen::quic::Address> get_non_interface_gateways(NetworkInterface& vpn) = 0;
 

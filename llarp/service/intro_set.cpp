@@ -12,11 +12,11 @@ namespace llarp::service
         std::string enc_payload,
         std::string nonce,
         std::string s)
-        : signedAt{signed_at},
-          introsetPayload{reinterpret_cast<uint8_t*>(enc_payload.data()), enc_payload.size()},
+        : signed_at{signed_at},
+          introset_payload{reinterpret_cast<uint8_t*>(enc_payload.data()), enc_payload.size()},
           nonce{reinterpret_cast<uint8_t*>(nonce.data())}
     {
-        derivedSigningKey = PubKey::make_from_hex(signing_key);
+        derived_signing_key = PubKey::make_from_hex(signing_key);
         sig.from_string(std::move(s));
     }
 
@@ -26,10 +26,10 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{bt_payload};
 
-            derivedSigningKey = PubKey::make_from_hex(btdc.require<std::string>("d"));
+            derived_signing_key = PubKey::make_from_hex(btdc.require<std::string>("d"));
             nonce.from_string(btdc.require<std::string>("n"));
-            signedAt = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
-            introsetPayload = btdc.require<ustring>("x");
+            signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
+            introset_payload = btdc.require<ustring>("x");
             sig.from_string(btdc.require<std::string>("z"));
         }
         catch (...)
@@ -40,8 +40,8 @@ namespace llarp::service
 
     StatusObject EncryptedIntroSet::ExtractStatus() const
     {
-        const auto sz = introsetPayload.size();
-        return {{"location", derivedSigningKey.to_string()}, {"signedAt", to_json(signedAt)}, {"size", sz}};
+        const auto sz = introset_payload.size();
+        return {{"location", derived_signing_key.to_string()}, {"signedAt", to_json(signed_at)}, {"size", sz}};
     }
 
     std::string EncryptedIntroSet::bt_encode() const
@@ -50,11 +50,11 @@ namespace llarp::service
 
         try
         {
-            btdp.append("d", derivedSigningKey.ToView());
+            btdp.append("d", derived_signing_key.ToView());
             btdp.append("n", nonce.ToView());
-            btdp.append("s", signedAt.count());
+            btdp.append("s", signed_at.count());
             btdp.append(
-                "x", std::string_view{reinterpret_cast<const char*>(introsetPayload.data()), introsetPayload.size()});
+                "x", std::string_view{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()});
             btdp.append("z", sig.ToView());
         }
         catch (...)
@@ -75,17 +75,17 @@ namespace llarp::service
                 return false;
             if (strbuf.sz > MAX_INTROSET_SIZE)
                 return false;
-            introsetPayload.resize(strbuf.sz);
-            std::copy_n(strbuf.base, strbuf.sz, introsetPayload.data());
+            introset_payload.resize(strbuf.sz);
+            std::copy_n(strbuf.base, strbuf.sz, introset_payload.data());
             return true;
         }
-        if (not BEncodeMaybeReadDictEntry("d", derivedSigningKey, read, key, buf))
+        if (not BEncodeMaybeReadDictEntry("d", derived_signing_key, read, key, buf))
             return false;
 
         if (not BEncodeMaybeReadDictEntry("n", nonce, read, key, buf))
             return false;
 
-        if (not BEncodeMaybeReadDictInt("s", signedAt, read, key, buf))
+        if (not BEncodeMaybeReadDictInt("s", signed_at, read, key, buf))
             return false;
 
         if (not BEncodeMaybeReadDictEntry("z", sig, read, key, buf))
@@ -95,24 +95,24 @@ namespace llarp::service
 
     bool EncryptedIntroSet::OtherIsNewer(const EncryptedIntroSet& other) const
     {
-        return signedAt < other.signedAt;
+        return signed_at < other.signed_at;
     }
 
     std::string EncryptedIntroSet::to_string() const
     {
         return fmt::format(
             "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]",
-            derivedSigningKey,
+            derived_signing_key,
             nonce,
-            signedAt.count(),
-            introsetPayload.size(),
+            signed_at.count(),
+            introset_payload.size(),
             sig);
     }
 
     IntroSet EncryptedIntroSet::decrypt(const PubKey& root) const
     {
         SharedSecret k(root);
-        std::string payload{reinterpret_cast<const char*>(introsetPayload.data()), introsetPayload.size()};
+        std::string payload{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()};
 
         crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce);
 
@@ -121,13 +121,13 @@ namespace llarp::service
 
     bool EncryptedIntroSet::IsExpired(llarp_time_t now) const
     {
-        return now >= signedAt + path::DEFAULT_LIFETIME;
+        return now >= signed_at + path::DEFAULT_LIFETIME;
     }
 
     bool EncryptedIntroSet::Sign(const PrivateKey& k)
     {
-        signedAt = llarp::time_now_ms();
-        if (not k.to_pubkey(derivedSigningKey))
+        signed_at = llarp::time_now_ms();
+        if (not k.to_pubkey(derived_signing_key))
             return false;
         sig.Zero();
         auto bte = bt_encode();
@@ -147,7 +147,7 @@ namespace llarp::service
         copy.sig.Zero();
 
         auto bte = copy.bt_encode();
-        return crypto::verify(derivedSigningKey, reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);
+        return crypto::verify(derived_signing_key, reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);
     }
 
     bool EncryptedIntroSet::verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig)

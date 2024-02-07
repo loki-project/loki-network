@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/handlers/remote.hpp>
@@ -27,11 +28,12 @@ namespace llarp
             std::string _name;
             net::IPRangeMap<service::Address> _ip_map;
 
-            DnsConfig _dns_conf;
-            IP_range_deprecated _ip_range;
+            DnsConfig _dns_config;
+            NetworkConfig _net_config;
 
-            huint128_t _if_addr;
-            huint128_t _next_addr;
+            IPRange _ip_range;
+            IPRange _if_addr;
+            IPRange _next_addr;
 
             std::string _if_name;
 
@@ -53,7 +55,7 @@ namespace llarp
                 return _use_v6;
             }
 
-            huint128_t if_addr() const
+            IPRange if_addr() const
             {
                 return _if_addr;
             }
@@ -85,14 +87,14 @@ namespace llarp
             void map_remote(
                 std::string name,
                 std::string token,
-                std::vector<IP_range_deprecated> ranges,
+                std::vector<IPRange> ranges,
                 std::function<void(bool, std::string)> result);
 
-            void map_range(IP_range_deprecated range, service::Address exit);
+            void map_range(IPRange range, service::Address exit);
 
-            void unmap_range(IP_range_deprecated range);
+            void unmap_range(IPRange range);
 
-            void unmap_range_by_remote(IP_range_deprecated range, std::string exit);
+            void unmap_range_by_remote(IPRange range, std::string exit);
         };
     }  // namespace handlers
 }  // namespace llarp

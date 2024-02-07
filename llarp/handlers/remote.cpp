@@ -5,7 +5,6 @@
 
 namespace llarp::handlers
 {
-
     RemoteHandler::RemoteHandler(std::string name, Router& r)
         : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}, _name{std::move(name)}
     {}
@@ -120,7 +119,8 @@ namespace llarp::handlers
         }
           */
 
-        _dns_conf = dnsConfig;
+        _dns_config = dnsConfig;
+        _net_config = networkConfig;
 
         // TODO: this should be in router
         // if (networkConfig.endpoint_type == "null")
@@ -128,31 +128,40 @@ namespace llarp::handlers
         //   should_init_tun = false;
         // }
 
-        _ip_range = networkConfig.if_addr;
+        _ip_range = _net_config._if_addr;
 
-        if (!_ip_range.addr.h)
+        if (!_ip_range.address().is_addressable())
         {
-            const auto maybe = _router.net().FindFreeRange();
+            const auto maybe = _router.net().find_free_range();
             if (not maybe.has_value())
                 throw std::runtime_error("cannot find free interface range");
             _ip_range = *maybe;
         }
 
-        _next_addr = _if_addr = _ip_range.addr;
+        _next_addr = _if_addr = _ip_range;
 
-        _use_v6 = not _ip_range.IsV4();
+        _use_v6 = not _ip_range.is_ipv4();
 
-        _if_name = networkConfig._if_name;
+        _if_name = _net_config._if_name;
 
         if (_if_name.empty())
         {
             const auto maybe = _router.net().FindFreeTun();
+
             if (not maybe.has_value())
                 throw std::runtime_error("cannot find free interface name");
+
             _if_name = *maybe;
         }
 
         log::info(logcat, "{} set ifname to {}", name(), _if_name);
+
+        for (const auto& addr : _net_config._addr_map)
+        {
+            (void)addr;
+            // TODO: here is where we should map remote services and exits, but first we need
+            // to unfuck the config
+        }
 
         // if (auto* quic = GetQUICTunnel())
         // {
@@ -165,7 +174,7 @@ namespace llarp::handlers
     void RemoteHandler::map_remote(
         std::string /* name */,
         std::string /* token */,
-        std::vector<IP_range_deprecated> /* ranges */,
+        std::vector<IPRange> /* ranges */,
         std::function<void(bool, std::string)> /* result_handler */)
     {
         // if (ranges.empty())

@@ -104,21 +104,27 @@ add_dependencies(lokinet-utils genversion)
 # Addressing and event loop files used by lokinet-core and other libraries
 # needed by rpc/ link/ service/ config/ path/ dht/
 lokinet_add_library(lokinet-time-place
+  address/address.cpp
+  address/ip_range.cpp
+  address/keys.cpp
+
   ev/ev.cpp
   ev/libuv.cpp
+
   net/ip.cpp
-  net/ip_address.cpp
   net/ip_packet.cpp
-  net/ip_range.cpp
+  # net/ip_address.cpp
+  # net/ip_range.cpp
   net/net_int.cpp
   net/sock_addr.cpp
-  router_contact.cpp
+
+  router_contact.cpp    # TODO: move these + router_id.cpp to lokinet-core-utils..?
   router_contact_local.cpp
   router_contact_remote.cpp
   router_id.cpp
   router_version.cpp  # to be deleted shortly
+
   service/address.cpp
-  # service/intro_set.cpp
   service/tag.cpp
 )
 
@@ -223,7 +229,7 @@ lokinet_add_library(lokinet-config
 lokinet_add_library(lokinet-path
   path/abstracthophandler.cpp
   path/path.cpp
-  path/path_context.cpp
+  # path/path_context.cpp
   path/pathhandler.cpp
   path/transit_hop.cpp
 )

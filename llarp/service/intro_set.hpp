@@ -4,9 +4,9 @@
 #include "intro.hpp"
 #include "types.hpp"
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
-#include <llarp/net/ip_range.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/util/bencode.hpp>
 #include <llarp/util/time.hpp>
@@ -40,7 +40,7 @@ namespace llarp::service
         std::vector<ProtocolType> supported_protocols;
         /// aonnuce that these ranges are reachable via our endpoint
         /// only set when we support exit traffic ethertype is supported
-        std::set<IP_range_deprecated> owned_ranges;
+        std::set<IPRange> owned_ranges;
 
         /// policies about traffic that we are willing to carry
         /// a protocol/range whitelist or blacklist
@@ -103,9 +103,9 @@ namespace llarp::service
     /// public version of the introset that is encrypted
     struct EncryptedIntroSet
     {
-        PubKey derivedSigningKey;
-        llarp_time_t signedAt = 0s;
-        ustring introsetPayload;
+        PubKey derived_signing_key;
+        llarp_time_t signed_at = 0s;
+        ustring introset_payload;
         SymmNonce nonce;
         Signature sig;
 
@@ -151,13 +151,13 @@ namespace llarp::service
 
     inline bool operator<(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
     {
-        return lhs.derivedSigningKey < rhs.derivedSigningKey;
+        return lhs.derived_signing_key < rhs.derived_signing_key;
     }
 
     inline bool operator==(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
     {
-        return std::tie(lhs.signedAt, lhs.derivedSigningKey, lhs.nonce, lhs.sig)
-            == std::tie(rhs.signedAt, rhs.derivedSigningKey, rhs.nonce, rhs.sig);
+        return std::tie(lhs.signed_at, lhs.derived_signing_key, lhs.nonce, lhs.sig)
+            == std::tie(rhs.signed_at, rhs.derived_signing_key, rhs.nonce, rhs.sig);
     }
 
     inline bool operator!=(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)

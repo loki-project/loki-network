@@ -2,8 +2,8 @@
 
 #include "rpc_request_decorators.hpp"
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/config/config.hpp>
-#include <llarp/net/ip_range.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/service/address.hpp>
 #include <llarp/service/endpoint.hpp>
@@ -175,9 +175,9 @@ namespace llarp::rpc
         MapExit()
         {
             if constexpr (platform::supports_ipv6)
-                request.ip_range.emplace_back("::/0");
+                request.ip_range.emplace_back("::"s, 0);
             else
-                request.ip_range.emplace_back("0.0.0.0/0");
+                request.ip_range.emplace_back("0.0.0.0"s, 0);
         }
 
         static constexpr auto name = "map_exit"sv;
@@ -185,7 +185,7 @@ namespace llarp::rpc
         struct request_parameters
         {
             std::string address;
-            std::vector<IP_range_deprecated> ip_range;
+            std::vector<IPRange> ip_range;
             std::string token;
         } request;
     };
@@ -217,16 +217,16 @@ namespace llarp::rpc
         UnmapExit()
         {
             if constexpr (platform::supports_ipv6)
-                request.ip_range.emplace_back("::/0");
+                request.ip_range.emplace_back("::", 0);
             else
-                request.ip_range.emplace_back("0.0.0.0/0");
+                request.ip_range.emplace_back("0.0.0.0", 0);
         }
 
         static constexpr auto name = "unmap_exit"sv;
 
         struct request_parameters
         {
-            std::vector<IP_range_deprecated> ip_range;
+            std::vector<IPRange> ip_range;
         } request;
     };
 

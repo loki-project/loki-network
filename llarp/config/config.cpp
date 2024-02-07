@@ -420,12 +420,10 @@ namespace llarp
                 "    owned-range=10.0.0.0/24",
             },
             [this](std::string arg) {
-                IPRange range;
-
-                if (not range.from_string(arg))
+                if (auto range = IPRange::from_string(arg))
+                    _owned_ranges.insert(std::move(*range));
+                else
                     throw std::invalid_argument{"Bad IP range passed to owned-range:{}"_format(arg)};
-
-                _owned_ranges.insert(std::move(range));
             });
 
         conf.define_option<std::string>(
@@ -471,20 +469,17 @@ namespace llarp
                 if (arg.empty())
                     return;
 
-                IPRange range;
+                std::optional<IPRange> range;
                 ClientAddress remote;
 
                 const auto pos = arg.find(":");
 
-                if (pos == std::string::npos)
-                {
-                    // TODO: this is probably not necessary as these are the default constructed values
-                    range.from_string("::/0");
-                }
-                else if (not range.from_string(arg.substr(pos + 1)))
-                {
+                std::string input = (pos == std::string::npos) ? "::/0"s : arg.substr(pos + 1);
+
+                range = IPRange::from_string(std::move(input));
+
+                if (not range.has_value())
                     throw std::invalid_argument("[network]:exit-node invalid ip range for exit provided");
-                }
 
                 if (pos != std::string::npos)
                 {
@@ -493,7 +488,7 @@ namespace llarp
 
                 if (service::is_valid_name(arg))
                 {
-                    _ons_range_map.emplace(std::move(arg), std::move(range));
+                    _ons_range_map.emplace(std::move(arg), std::move(*range));
                     return;
                 }
 
@@ -502,7 +497,7 @@ namespace llarp
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
                 }
 
-                _range_map.emplace(std::move(remote), std::move(range));
+                _range_map.emplace(std::move(remote), std::move(*range));
             });
 
         conf.define_option<std::string>(
@@ -1252,12 +1247,12 @@ namespace llarp
         (void)params;
 
         constexpr Default DefaultUniqueCIDR{32};
-        conf.define_option<int>(
+        conf.define_option<uint8_t>(
             "paths",
             "unique-range-size",
             DefaultUniqueCIDR,
             ClientOnly,
-            [=](int arg) {
+            [=](uint8_t arg) {
                 if (arg == 0)
                 {
                     unique_hop_netmask = arg;
@@ -1294,16 +1289,15 @@ namespace llarp
     {
         if (unique_hop_netmask == 0)
             return true;
-        const auto netmask = netmask_ipv6_bits(96 + unique_hop_netmask);
-        std::set<IP_range_deprecated> seenRanges;
+
+        std::set<IPRange> seen_ranges;
+
         for (const auto& hop : rcs)
         {
-            const auto network_addr = net::In6ToHUInt(hop.addr6()->in6().sin6_addr) & netmask;
-            if (auto [it, inserted] = seenRanges.emplace(network_addr, netmask); not inserted)
-            {
+            if (auto [it, b] = seen_ranges.emplace(hop.addr(), unique_hop_netmask); not b)
                 return false;
-            }
         }
+
         return true;
     }
 

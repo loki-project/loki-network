@@ -523,8 +523,6 @@ namespace llarp
         /// returns true if the rc was inserted
         bool put_rc_if_newer(RemoteRC rc);
 
-        void verify_gossip_bfetch_rc(const RemoteRC& rc);
-
         bool verify_store_gossip_rc(const RemoteRC& rc);
     };
 }  // namespace llarp
