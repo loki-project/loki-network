@@ -12,6 +12,9 @@ using namespace std::chrono_literals;
 
 namespace llarp
 {
+    // Libevent uses µs precision
+    using loop_time = std::chrono::microseconds;
+
     using rc_time = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>;
 
     rc_time time_point_now();
@@ -23,7 +26,7 @@ namespace llarp
     Duration_t uptime();
 
     /// convert to milliseconds
-    uint64_t ToMS(Duration_t duration);
+    uint64_t to_milliseconds(Duration_t duration);
 
     nlohmann::json to_json(const Duration_t& t);
 
@@ -35,6 +38,19 @@ namespace llarp
     // Makes a duration human readable.  This always has full millisecond precision, but formats up
     // to hours. E.g. "-4h04m12.123s" or "1234h00m09.876s.
     std::string to_string(Duration_t t);
+
+    timeval loop_time_to_timeval(loop_time t)
+    {
+        return timeval{.tv_sec = t / 1s, .tv_usec = (t % 1s) / 1us};
+    }
+
+    std::chrono::nanoseconds get_timestamp();
+
+    template <typename unit_t>
+    auto get_timestamp()
+    {
+        return std::chrono::duration_cast<unit_t>(get_timestamp());
+    }
 
 }  // namespace llarp
 

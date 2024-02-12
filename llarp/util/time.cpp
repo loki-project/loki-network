@@ -19,7 +19,17 @@ namespace llarp
         const static auto started_at_steady = std::chrono::steady_clock::now();
     }  // namespace
 
-    uint64_t ToMS(Duration_t ms)
+    std::chrono::steady_clock::time_point get_time()
+    {
+        return std::chrono::steady_clock::now();
+    }
+
+    std::chrono::nanoseconds get_timestamp()
+    {
+        return std::chrono::steady_clock::now().time_since_epoch();
+    }
+
+    uint64_t to_milliseconds(Duration_t ms)
     {
         return ms.count();
     }
@@ -46,7 +56,7 @@ namespace llarp
 
     nlohmann::json to_json(const Duration_t& t)
     {
-        return ToMS(t);
+        return to_milliseconds(t);
     }
 
     static auto extract_h_m_s_ms(const Duration_t& dur)

@@ -8,12 +8,12 @@
 
 namespace llarp
 {
-    std::shared_ptr<EventLoop> EventLoop::create(size_t queueLength)
+    std::shared_ptr<EvLoop_deprecated> EvLoop_deprecated::create(size_t queueLength)
     {
-        return std::make_shared<llarp::uv::Loop>(queueLength);
+        return std::make_shared<llarp::uv::uvwLoop>(queueLength);
     }
 
-    const net::Platform* EventLoop::Net_ptr() const
+    const net::Platform* EvLoop_deprecated::net_ptr() const
     {
         return net::Platform::Default_ptr();
     }

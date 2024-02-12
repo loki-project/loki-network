@@ -27,12 +27,12 @@ namespace llarp::handlers
             // r->loop()->add_ticker([this] { Pump(Now()); });
         }
 
-        vpn::NetworkInterface* GetVPNInterface() override
+        vpn::NetworkInterface* get_vpn_interface() override
         {
             return nullptr;
         }
 
-        int Rank() const override
+        int rank() const override
         {
             return 0;
         }
@@ -42,12 +42,12 @@ namespace llarp::handlers
             return "null"s;
         }
 
-        std::string_view ResolverName() const override
+        std::string_view resolver_name() const override
         {
             return "lokinet";
         }
 
-        bool MaybeHookDNS(
+        bool maybe_hook_dns(
             std::shared_ptr<dns::PacketSource_Base> /* source */,
             const dns::Message& /* query */,
             const SockAddr_deprecated& /* to */,
@@ -56,7 +56,7 @@ namespace llarp::handlers
             return false;
         }
 
-        bool SetupNetworking() override
+        bool setup_networking() override
         {
             return true;
         }
@@ -69,7 +69,7 @@ namespace llarp::handlers
             return true;
         }
 
-        bool HandleInboundPacket(
+        bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t) override
         {
             LogTrace("Inbound ", t, " packet (", buf.sz, "B) on convo ", tag);
@@ -113,27 +113,27 @@ namespace llarp::handlers
             return true;
         }
 
-        std::string GetIfName() const override
+        std::string get_if_name() const override
         {
             return "";
         }
 
-        bool SupportsV6() const override
+        bool supports_ipv6() const override
         {
             return false;
         }
 
-        huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID>) override
+        huint128_t get_ip_for_addr(std::variant<service::Address, RouterID>) override
         {
             return {0};
         }
 
-        std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t) const override
+        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t) const override
         {
             return std::nullopt;
         }
 
-        vpn::EgresPacketRouter* EgresPacketRouter() override
+        vpn::EgresPacketRouter* egres_packet_router() override
         {
             return _packet_router.get();
         }

@@ -217,7 +217,7 @@ namespace llarp::service
     struct AsyncFrameDecrypt
     {
         std::shared_ptr<path::Path> path;
-        std::shared_ptr<EventLoop> loop;
+        std::shared_ptr<EvLoop_deprecated> loop;
         std::shared_ptr<ProtocolMessage> msg;
         const Identity& m_LocalIdentity;
         Endpoint* handler;
@@ -225,7 +225,7 @@ namespace llarp::service
         const Introduction fromIntro;
 
         AsyncFrameDecrypt(
-            std::shared_ptr<EventLoop> l,
+            std::shared_ptr<EvLoop_deprecated> l,
             const Identity& localIdent,
             Endpoint* h,
             std::shared_ptr<ProtocolMessage> m,
@@ -352,7 +352,7 @@ namespace llarp::service
     };
 
     bool ProtocolFrameMessage::AsyncDecryptAndVerify(
-        std::shared_ptr<EventLoop> loop,
+        std::shared_ptr<EvLoop_deprecated> loop,
         std::shared_ptr<path::Path> recvPath,
         const Identity& localIdent,
         Endpoint* handler,

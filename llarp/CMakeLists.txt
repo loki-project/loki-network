@@ -112,7 +112,7 @@ lokinet_add_library(lokinet-time-place
   ev/libuv.cpp
 
   net/ip.cpp
-  net/ip_packet.cpp
+  net/ip_packet_old.cpp
   # net/ip_address.cpp
   # net/ip_range.cpp
   net/net_int.cpp

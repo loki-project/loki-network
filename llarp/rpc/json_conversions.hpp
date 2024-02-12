@@ -2,14 +2,17 @@
 
 #include "json_binary_proxy.hpp"
 
-#include <llarp/net/ip_range.hpp>
+#include <llarp/address/ip_range.hpp>
+#include <llarp/util/logging.hpp>
 
 #include <nlohmann/json_fwd.hpp>
 
 namespace llarp
 {
-    void to_json(nlohmann::json& j, const IP_range_deprecated& ipr);
-    void from_json(const nlohmann::json& j, IP_range_deprecated& ipr);
+    static auto logcat = log::Cat("RPC");
+
+    void to_json(nlohmann::json& j, const IPRange& ipr);
+    void from_json(const nlohmann::json& j, IPRange& ipr);
 }  // namespace llarp
 
 namespace nlohmann

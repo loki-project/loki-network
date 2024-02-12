@@ -3,7 +3,7 @@
 #include "i_packet_io.hpp"
 
 #include <llarp/address/ip_range.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxenc/variant.h>
@@ -73,11 +73,11 @@ namespace llarp::vpn
         AbstractRouteManager(AbstractRouteManager&&) = delete;
         virtual ~AbstractRouteManager() = default;
 
-        virtual const llarp::net::Platform* Net_ptr() const;
+        virtual const llarp::net::Platform* net_ptr() const;
 
         inline const llarp::net::Platform& Net() const
         {
-            return *Net_ptr();
+            return *net_ptr();
         }
 
         virtual void add_route(oxen::quic::Address ip, oxen::quic::Address gateway) = 0;

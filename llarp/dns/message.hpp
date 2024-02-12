@@ -50,30 +50,30 @@ namespace llarp
 
             StatusObject ToJSON() const override;
 
-            void AddNXReply(RR_TTL_t ttl = 1);
+            void add_nx_reply(RR_TTL_t ttl = 1);
 
-            void AddServFail(RR_TTL_t ttl = 30);
+            void add_srv_fail(RR_TTL_t ttl = 30);
 
-            void AddMXReply(std::string name, uint16_t priority, RR_TTL_t ttl = 1);
+            void add_mx_reply(std::string name, uint16_t priority, RR_TTL_t ttl = 1);
 
-            void AddCNAMEReply(std::string name, RR_TTL_t ttl = 1);
+            void add_CNAME_reply(std::string name, RR_TTL_t ttl = 1);
 
-            void AddINReply(llarp::huint128_t addr, bool isV6, RR_TTL_t ttl = 1);
+            void add_IN_reply(llarp::huint128_t addr, bool isV6, RR_TTL_t ttl = 1);
 
-            void AddAReply(std::string name, RR_TTL_t ttl = 1);
+            void add_reply(std::string name, RR_TTL_t ttl = 1);
 
-            void AddSRVReply(std::vector<SRVData> records, RR_TTL_t ttl = 1);
+            void add_srv_reply(std::vector<SRVData> records, RR_TTL_t ttl = 1);
 
-            void AddNSReply(std::string name, RR_TTL_t ttl = 1);
+            void add_ns_reply(std::string name, RR_TTL_t ttl = 1);
 
-            void AddTXTReply(std::string value, RR_TTL_t ttl = 1);
+            void add_txt_reply(std::string value, RR_TTL_t ttl = 1);
 
             bool Encode(llarp_buffer_t* buf) const override;
 
             bool Decode(llarp_buffer_t* buf) override;
 
             // Wrapper around Encode that encodes into a new buffer and returns it
-            [[nodiscard]] OwnedBuffer ToBuffer() const;
+            [[nodiscard]] OwnedBuffer to_buffer() const;
 
             std::string to_string() const;
 
@@ -85,7 +85,7 @@ namespace llarp
             std::vector<ResourceRecord> additional;
         };
 
-        std::optional<Message> MaybeParseDNSMessage(llarp_buffer_t buf);
+        std::optional<Message> maybe_parse_dns_msg(llarp_buffer_t buf);
     }  // namespace dns
 
     template <>

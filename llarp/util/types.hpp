@@ -14,7 +14,7 @@ namespace llarp
     using namespace oxen::log::literals;
 
     /// convert to milliseconds
-    uint64_t ToMS(Duration_t duration);
+    uint64_t to_milliseconds(Duration_t duration);
 
     using DateClock_t = std::chrono::system_clock;
     using TimePoint_t = DateClock_t::time_point;

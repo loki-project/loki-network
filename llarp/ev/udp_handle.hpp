@@ -1,12 +1,15 @@
-#include "../util/buffer.hpp"
+#pragma once
+
 #include "ev.hpp"
+
+#include <llarp/util/buffer.hpp>
 
 namespace llarp
 {
     // Base type for UDP handling; constructed via EventLoop::make_udp().
-    struct UDPHandle
+    struct UDPHandle_deprecated
     {
-        using ReceiveFunc = EventLoop::UDPReceiveFunc;
+        using ReceiveFunc = EvLoop_deprecated::UDPReceiveFunc;
 
         // Starts listening for incoming UDP packets on the given address. Returns true on success,
         // false if the address could not be bound. If you send without calling this first then the
@@ -24,6 +27,7 @@ namespace llarp
 
         // Returns the file descriptor of the socket, if available.  This generally exists only
         // after listen() has been called, and never exists on Windows.
+        // UNUSED AS FUCK
         virtual std::optional<int> file_descriptor()
         {
             return std::nullopt;
@@ -33,10 +37,10 @@ namespace llarp
         virtual std::optional<SockAddr_deprecated> LocalAddr() const = 0;
 
         // Base class destructor
-        virtual ~UDPHandle() = default;
+        virtual ~UDPHandle_deprecated() = default;
 
        protected:
-        explicit UDPHandle(ReceiveFunc on_recv) : on_recv{std::move(on_recv)}
+        explicit UDPHandle_deprecated(ReceiveFunc on_recv) : on_recv{std::move(on_recv)}
         {
             // It makes no sense at all to use this with a null receive function:
             assert(this->on_recv);

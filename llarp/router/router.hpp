@@ -83,7 +83,7 @@ namespace llarp
     {
         friend class NodeDB;
 
-        explicit Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
+        explicit Router(std::shared_ptr<EvLoop_deprecated> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
 
         ~Router() = default;
 
@@ -130,7 +130,7 @@ namespace llarp
         // TunEndpoint or NullEndpoint, depending on lokinet configuration
         std::unique_ptr<handlers::BaseHandler> _api;
 
-        std::shared_ptr<EventLoop> _loop;
+        std::shared_ptr<EvLoop_deprecated> _loop;
         std::shared_ptr<vpn::Platform> _vpn;
         path::PathContext paths;
         SecretKey _identity;
@@ -293,7 +293,7 @@ namespace llarp
             return _router_profiling;
         }
 
-        const std::shared_ptr<EventLoop>& loop() const
+        const std::shared_ptr<EvLoop_deprecated>& loop() const
         {
             return _loop;
         }

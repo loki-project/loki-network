@@ -93,7 +93,7 @@ namespace llarp
 
         virtual link::TunnelManager* GetQUICTunnel() = 0;
 
-        virtual const std::shared_ptr<EventLoop>& loop() = 0;
+        virtual const std::shared_ptr<EvLoop_deprecated>& loop() = 0;
 
         // virtual void send_to(service::SessionTag tag, std::string payload) = 0;
     };

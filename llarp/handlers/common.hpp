@@ -46,30 +46,30 @@ namespace llarp::handlers
 
         service::Identity _identity;
 
-        virtual vpn::NetworkInterface* GetVPNInterface() = 0;
+        virtual vpn::NetworkInterface* get_vpn_interface() = 0;
 
-        virtual std::string GetIfName() const = 0;
+        virtual std::string get_if_name() const = 0;
 
-        virtual bool SupportsV6() const = 0;
+        virtual bool supports_ipv6() const = 0;
 
         virtual bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) = 0;
 
-        virtual bool SetupNetworking() = 0;
+        virtual bool setup_networking() = 0;
 
         virtual void load_key_file(std::optional<fs::path> p, Router& r);
 
-        virtual vpn::EgresPacketRouter* EgresPacketRouter()
+        virtual vpn::EgresPacketRouter* egres_packet_router()
         {
             return nullptr;
         };
 
-        virtual huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID>) = 0;
+        virtual huint128_t get_ip_for_addr(std::variant<service::Address, RouterID>) = 0;
 
         /// get a key for ip address
-        virtual std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t ip) const = 0;
+        virtual std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t ip) const = 0;
 
         /// handle packet io from service node or hidden service to frontend
-        virtual bool HandleInboundPacket(
+        virtual bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) = 0;
     };
 }  // namespace llarp::handlers

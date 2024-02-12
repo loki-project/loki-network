@@ -1,4 +1,5 @@
 #pragma once
+
 #include "ev.hpp"
 #include "udp_handle.hpp"
 
@@ -15,14 +16,14 @@ namespace llarp::uv
     class UVWakeup;
     class UVRepeater;
 
-    class Loop : public llarp::EventLoop
+    class uvwLoop : public llarp::EvLoop_deprecated
     {
        public:
         using Callback = std::function<void()>;
 
-        Loop(size_t queue_size);
+        uvwLoop(size_t queue_size);
 
-        virtual void run() override;
+        void run() override;
 
         bool running() const override;
 
@@ -47,9 +48,9 @@ namespace llarp::uv
 
         std::shared_ptr<llarp::EventLoopWakeup> make_waker(std::function<void()> callback) override;
 
-        std::shared_ptr<EventLoopRepeater> make_repeater() override;
+        std::shared_ptr<EvLoopRepeater_deprecated> make_repeater() override;
 
-        virtual std::shared_ptr<llarp::UDPHandle> make_udp(UDPReceiveFunc on_recv) override;
+        std::shared_ptr<llarp::UDPHandle_deprecated> make_udp(UDPReceiveFunc on_recv) override;
 
         void FlushLogic();
 

@@ -19,7 +19,7 @@ namespace llarp
     {
         struct ConfigGenParameters_impl : public ConfigGenParameters
         {
-            const llarp::net::Platform* Net_ptr() const override
+            const llarp::net::Platform* net_ptr() const override
             {
                 return llarp::net::Platform::Default_ptr();
             }
@@ -834,17 +834,12 @@ namespace llarp
                 if (not arg.empty())
                 {
                     if (auto maybe_addr = parse_addr_for_dns(arg))
+                    {
                         _bind_addrs.push_back(std::move(*maybe_addr));
+                    }
                     else
                         log::warning(logcat, "Failed to parse bind address for handling DNS requests:{}", arg);
                 }
-
-                SockAddr_deprecated addr{arg};
-                // set dns port if no explicit port specified
-                // explicit :0 allowed
-                if (not addr.getPort() and not ends_with(arg, ":0"))
-                    addr.setPort(53);
-                bind_addr.emplace_back(addr);
             });
 
         conf.define_option<fs::path>(
@@ -890,7 +885,7 @@ namespace llarp
                 "consistent outgoing port for which firewall rules can be configured.",
             });
 
-        const auto* net_ptr = params.Net_ptr();
+        const auto* net_ptr = params.net_ptr();
 
         conf.define_option<std::string>(
             "bind",

@@ -78,7 +78,7 @@ namespace llarp
 
             AddressVariant_t local_address() const override;
 
-            const std::shared_ptr<EventLoop>& loop() override;
+            const std::shared_ptr<EvLoop_deprecated>& loop() override;
 
             void srv_records_changed() override;
 

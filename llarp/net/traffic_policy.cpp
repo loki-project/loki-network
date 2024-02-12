@@ -11,20 +11,22 @@ namespace llarp::net
         protocol = ParseIPProtocol(std::string{parts[0]});
         if (parts.size() == 2)
         {
-            huint16_t portHost{};
+            uint16_t port_host{};
+
             std::string portStr{parts[1]};
             std::string protoName = IPProtocolName(protocol);
+
             if (const auto* serv = ::getservbyname(portStr.c_str(), protoName.c_str()))
             {
-                portHost.h = serv->s_port;
+                port_host = serv->s_port;
             }
-            else if (const auto portInt = std::stoi(portStr); portInt > 0)
+            else if (const auto port_int = std::stoi(portStr); port_int > 0)
             {
-                portHost.h = portInt;
+                port_host = port_int;
             }
             else
                 throw std::invalid_argument{"invalid port in protocol info: " + portStr};
-            port = ToNet(portHost);
+            port = port_host;
         }
         else
             port = std::nullopt;
@@ -37,6 +39,7 @@ namespace llarp::net
 
         if (not port)
             return true;
+
         if (const auto maybe = pkt.DstPort())
         {
             return *port == *maybe;
@@ -73,7 +76,9 @@ namespace llarp::net
     bool ProtocolInfo::BDecode(llarp_buffer_t* buf)
     {
         port = std::nullopt;
+
         std::vector<uint64_t> vals;
+
         if (not bencode_read_list(
                 [&vals](llarp_buffer_t* buf, bool more) {
                     if (more)
@@ -99,7 +104,8 @@ namespace llarp::net
         {
             if (vals[1] > 65536)
                 return false;
-            port = ToNet(huint16_t{static_cast<uint16_t>(vals[1])});
+
+            port = vals[1];
         }
         return true;
     }
@@ -109,7 +115,7 @@ namespace llarp::net
         try
         {
             btlp.append(static_cast<uint8_t>(protocol));
-            btlp.append(ToHost(*port).h);
+            btlp.append(port);
         }
         catch (...)
         {
@@ -123,7 +129,7 @@ namespace llarp::net
         {
             oxenc::bt_list_consumer btlc{std::move(buf)};
             protocol = static_cast<IPProtocol>(btlc.consume_integer<uint8_t>());
-            port->FromString(btlc.consume_string());
+            port = btlc.consume_integer<uint16_t>();
         }
         catch (...)
         {
@@ -196,7 +202,7 @@ namespace llarp::net
             {"protocol", static_cast<uint32_t>(protocol)},
         };
         if (port)
-            status["port"] = ToHost(*port).h;
+            status["port"] = *port;
         return status;
     }
 

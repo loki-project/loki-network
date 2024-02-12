@@ -143,7 +143,7 @@ namespace llarp::dns
         return StatusObject{{"questions", ques}, {"answers", ans}};
     }
 
-    OwnedBuffer Message::ToBuffer() const
+    OwnedBuffer Message::to_buffer() const
     {
         std::array<uint8_t, 1500> tmp;
         llarp_buffer_t buf{tmp};
@@ -152,7 +152,7 @@ namespace llarp::dns
         return OwnedBuffer::copy_used(buf);
     }
 
-    void Message::AddServFail(RR_TTL_t)
+    void Message::add_srv_fail(RR_TTL_t)
     {
         if (questions.size())
         {
@@ -169,7 +169,7 @@ namespace llarp::dns
         return setbits | flags_QR | flags_AA | flags_RA;
     }
 
-    void Message::AddINReply(llarp::huint128_t ip, bool isV6, RR_TTL_t ttl)
+    void Message::add_IN_reply(llarp::huint128_t ip, bool isV6, RR_TTL_t ttl)
     {
         if (questions.size())
         {
@@ -194,7 +194,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddAReply(std::string name, RR_TTL_t ttl)
+    void Message::add_reply(std::string name, RR_TTL_t ttl)
     {
         if (questions.size())
         {
@@ -218,7 +218,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddNSReply(std::string name, RR_TTL_t ttl)
+    void Message::add_ns_reply(std::string name, RR_TTL_t ttl)
     {
         if (not questions.empty())
         {
@@ -242,7 +242,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddCNAMEReply(std::string name, RR_TTL_t ttl)
+    void Message::add_CNAME_reply(std::string name, RR_TTL_t ttl)
     {
         if (questions.size())
         {
@@ -266,7 +266,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddMXReply(std::string name, uint16_t priority, RR_TTL_t ttl)
+    void Message::add_mx_reply(std::string name, uint16_t priority, RR_TTL_t ttl)
     {
         if (questions.size())
         {
@@ -291,7 +291,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddSRVReply(std::vector<SRVData> records, RR_TTL_t ttl)
+    void Message::add_srv_reply(std::vector<SRVData> records, RR_TTL_t ttl)
     {
         hdr_fields = reply_flags(hdr_fields);
 
@@ -301,7 +301,7 @@ namespace llarp::dns
         {
             if (not srv.IsValid())
             {
-                AddNXReply();
+                add_nx_reply();
                 return;
             }
 
@@ -335,7 +335,7 @@ namespace llarp::dns
 
             if (not EncodeNameTo(&buf, target))
             {
-                AddNXReply();
+                add_nx_reply();
                 return;
             }
 
@@ -345,7 +345,7 @@ namespace llarp::dns
         }
     }
 
-    void Message::AddTXTReply(std::string str, RR_TTL_t ttl)
+    void Message::add_txt_reply(std::string str, RR_TTL_t ttl)
     {
         auto& rec = answers.emplace_back();
         rec.rr_name = questions[0].qname;
@@ -370,7 +370,7 @@ namespace llarp::dns
         std::copy_n(buf.base, buf.sz, rec.rData.data());
     }
 
-    void Message::AddNXReply(RR_TTL_t)
+    void Message::add_nx_reply(RR_TTL_t)
     {
         if (questions.size())
         {
@@ -399,7 +399,7 @@ namespace llarp::dns
             fmt::format("{}", fmt::join(additional, ",")));
     }
 
-    std::optional<Message> MaybeParseDNSMessage(llarp_buffer_t buf)
+    std::optional<Message> maybe_parse_dns_msg(llarp_buffer_t buf)
     {
         MessageHeader hdr{};
         if (not hdr.Decode(&buf))

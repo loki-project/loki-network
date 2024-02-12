@@ -14,7 +14,7 @@
 
 namespace llarp::vpn
 {
-    const llarp::net::Platform* AbstractRouteManager::Net_ptr() const
+    const llarp::net::Platform* AbstractRouteManager::net_ptr() const
     {
         return llarp::net::Platform::Default_ptr();
     }

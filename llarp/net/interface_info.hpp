@@ -1,7 +1,6 @@
 #pragma once
 
-#include "ip_range.hpp"
-
+#include <llarp/address/ip_range.hpp>
 #include <llarp/util/formattable.hpp>
 
 #include <optional>
@@ -13,14 +12,18 @@ namespace llarp::net
     /// info about a network interface lokinet does not own
     struct InterfaceInfo
     {
+       private:
+        // TODO: is this needed?
+        /// a gateway we can use if it exists
+        std::optional<ip_net> _gateway;
+
+       public:
         /// human readable name of interface
         std::string name;
         /// interface's index
         int index;
         /// the addresses owned by this interface
-        std::vector<IP_range_deprecated> addrs;
-        /// a gateway we can use if it exists
-        std::optional<ipaddr_t> gateway;
+        std::vector<IPRange> addrs;
 
         std::string to_string() const;
     };

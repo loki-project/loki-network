@@ -87,7 +87,7 @@ namespace llarp::path
 
         void AddOwnPath(std::shared_ptr<PathHandler> set, std::shared_ptr<Path> p);
 
-        const std::shared_ptr<EventLoop>& loop();
+        const std::shared_ptr<EvLoop_deprecated>& loop();
 
         const SecretKey& EncryptionSecretKey();
 

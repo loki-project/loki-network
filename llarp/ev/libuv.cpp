@@ -10,7 +10,7 @@
 
 namespace llarp::uv
 {
-    std::shared_ptr<uvw::Loop> Loop::MaybeGetUVWLoop()
+    std::shared_ptr<uvw::Loop> uvwLoop::MaybeGetUVWLoop()
     {
         return m_Impl;
     }
@@ -36,7 +36,7 @@ namespace llarp::uv
         }
     };
 
-    class UVRepeater final : public EventLoopRepeater
+    class UVRepeater final : public EvLoopRepeater_deprecated
     {
         std::shared_ptr<uvw::TimerHandle> timer;
 
@@ -56,9 +56,9 @@ namespace llarp::uv
         }
     };
 
-    struct UDPHandle final : llarp::UDPHandle
+    struct UDPHandle_uvw final : llarp::UDPHandle_deprecated
     {
-        UDPHandle(uvw::Loop& loop, ReceiveFunc rf);
+        UDPHandle_uvw(uvw::Loop& loop, ReceiveFunc rf);
 
         bool listen(const SockAddr_deprecated& addr) override;
 
@@ -73,6 +73,7 @@ namespace llarp::uv
             return std::nullopt;
         }
 
+        // UNUSED AS FUCK
         std::optional<int> file_descriptor() override
         {
 #ifndef _WIN32
@@ -84,7 +85,7 @@ namespace llarp::uv
 
         void close() override;
 
-        ~UDPHandle() override;
+        ~UDPHandle_uvw() override;
 
        private:
         std::shared_ptr<uvw::UDPHandle> handle;
@@ -92,7 +93,7 @@ namespace llarp::uv
         void reset_handle(uvw::Loop& loop);
     };
 
-    void Loop::FlushLogic()
+    void uvwLoop::FlushLogic()
     {
         llarp::LogTrace("Loop::FlushLogic() start");
         while (not m_LogicCalls.empty())
@@ -103,13 +104,13 @@ namespace llarp::uv
         llarp::LogTrace("Loop::FlushLogic() end");
     }
 
-    void Loop::tick_event_loop()
+    void uvwLoop::tick_event_loop()
     {
         llarp::LogTrace("ticking event loop.");
         FlushLogic();
     }
 
-    Loop::Loop(size_t queue_size) : llarp::EventLoop{}, m_LogicCalls{queue_size}
+    uvwLoop::uvwLoop(size_t queue_size) : llarp::EvLoop_deprecated{}, m_LogicCalls{queue_size}
     {
         if (!(m_Impl = uvw::Loop::create()))
             throw std::runtime_error{"Failed to construct libuv loop"};
@@ -130,12 +131,12 @@ namespace llarp::uv
         m_WakeUp->on<uvw::AsyncEvent>([this](const auto&, auto&) { tick_event_loop(); });
     }
 
-    bool Loop::running() const
+    bool uvwLoop::running() const
     {
         return m_Run.load();
     }
 
-    void Loop::run()
+    void uvwLoop::run()
     {
         llarp::LogTrace("Loop::run_loop()");
         m_EventLoopThreadID = std::this_thread::get_id();
@@ -145,15 +146,15 @@ namespace llarp::uv
         llarp::LogInfo("we have stopped");
     }
 
-    void Loop::wakeup()
+    void uvwLoop::wakeup()
     {
         m_WakeUp->send();
     }
 
-    std::shared_ptr<llarp::UDPHandle> Loop::make_udp(UDPReceiveFunc on_recv)
+    std::shared_ptr<llarp::UDPHandle_deprecated> uvwLoop::make_udp(UDPReceiveFunc on_recv)
     {
-        return std::static_pointer_cast<llarp::UDPHandle>(
-            std::make_shared<llarp::uv::UDPHandle>(*m_Impl, std::move(on_recv)));
+        return std::static_pointer_cast<llarp::UDPHandle_deprecated>(
+            std::make_shared<llarp::uv::UDPHandle_uvw>(*m_Impl, std::move(on_recv)));
     }
 
     static void setup_oneshot_timer(uvw::Loop& loop, llarp_time_t delay, std::function<void()> callback)
@@ -167,7 +168,7 @@ namespace llarp::uv
         timer->start(delay, 0ms);
     }
 
-    void Loop::call_later(llarp_time_t delay_ms, std::function<void(void)> callback)
+    void uvwLoop::call_later(llarp_time_t delay_ms, std::function<void(void)> callback)
     {
         llarp::LogTrace("Loop::call_after_delay()");
 #ifdef TESTNET_SPEED
@@ -190,7 +191,7 @@ namespace llarp::uv
         }
     }
 
-    void Loop::stop()
+    void uvwLoop::stop()
     {
         if (m_Run)
         {
@@ -209,7 +210,7 @@ namespace llarp::uv
         }
     }
 
-    bool Loop::add_ticker(std::function<void(void)> func)
+    bool uvwLoop::add_ticker(std::function<void(void)> func)
     {
         auto check = m_Impl->resource<uvw::CheckHandle>();
         check->on<uvw::CheckEvent>([f = std::move(func)](auto&, auto&) { f(); });
@@ -217,7 +218,7 @@ namespace llarp::uv
         return true;
     }
 
-    bool Loop::add_network_interface(
+    bool uvwLoop::add_network_interface(
         std::shared_ptr<llarp::vpn::NetworkInterface> netif,
         std::function<void(llarp::net::IP_packet_deprecated)> handler)
     {
@@ -259,7 +260,7 @@ namespace llarp::uv
         return true;
     }
 
-    void Loop::call_soon(std::function<void(void)> f)
+    void uvwLoop::call_soon(std::function<void(void)> f)
     {
         if (not m_EventLoopThreadID.has_value())
         {
@@ -278,7 +279,7 @@ namespace llarp::uv
 
     // Sets `handle` to a new uvw UDP handle, first initiating a close and then disowning the handle
     // if already set, allocating the resource, and setting the receive event on it.
-    void UDPHandle::reset_handle(uvw::Loop& loop)
+    void UDPHandle_uvw::reset_handle(uvw::Loop& loop)
     {
         if (handle)
             handle->close();
@@ -291,12 +292,12 @@ namespace llarp::uv
         });
     }
 
-    llarp::uv::UDPHandle::UDPHandle(uvw::Loop& loop, ReceiveFunc rf) : llarp::UDPHandle{std::move(rf)}
+    llarp::uv::UDPHandle_uvw::UDPHandle_uvw(uvw::Loop& loop, ReceiveFunc rf) : llarp::UDPHandle_deprecated{std::move(rf)}
     {
         reset_handle(loop);
     }
 
-    bool UDPHandle::listen(const SockAddr_deprecated& addr)
+    bool UDPHandle_uvw::listen(const SockAddr_deprecated& addr)
     {
         if (handle->active())
             reset_handle(handle->loop());
@@ -311,7 +312,7 @@ namespace llarp::uv
         return true;
     }
 
-    bool UDPHandle::send(const SockAddr_deprecated& to, const llarp_buffer_t& buf)
+    bool UDPHandle_uvw::send(const SockAddr_deprecated& to, const llarp_buffer_t& buf)
     {
         return handle->trySend(
                    *static_cast<const sockaddr*>(to),
@@ -320,29 +321,29 @@ namespace llarp::uv
             >= 0;
     }
 
-    void UDPHandle::close()
+    void UDPHandle_uvw::close()
     {
         handle->close();
         handle.reset();
     }
 
-    UDPHandle::~UDPHandle()
+    UDPHandle_uvw::~UDPHandle_uvw()
     {
         close();
     }
 
-    std::shared_ptr<llarp::EventLoopWakeup> Loop::make_waker(std::function<void()> callback)
+    std::shared_ptr<llarp::EventLoopWakeup> uvwLoop::make_waker(std::function<void()> callback)
     {
         return std::static_pointer_cast<llarp::EventLoopWakeup>(
             std::make_shared<UVWakeup>(*m_Impl, std::move(callback)));
     }
 
-    std::shared_ptr<EventLoopRepeater> Loop::make_repeater()
+    std::shared_ptr<EvLoopRepeater_deprecated> uvwLoop::make_repeater()
     {
-        return std::static_pointer_cast<EventLoopRepeater>(std::make_shared<UVRepeater>(*m_Impl));
+        return std::static_pointer_cast<EvLoopRepeater_deprecated>(std::make_shared<UVRepeater>(*m_Impl));
     }
 
-    bool Loop::inEventLoop() const
+    bool uvwLoop::inEventLoop() const
     {
         if (m_EventLoopThreadID)
             return *m_EventLoopThreadID == std::this_thread::get_id();

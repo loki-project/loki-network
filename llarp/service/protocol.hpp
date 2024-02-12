@@ -103,7 +103,7 @@ namespace llarp
             bool Sign(const Identity& localIdent);
 
             bool AsyncDecryptAndVerify(
-                std::shared_ptr<EventLoop> loop,
+                std::shared_ptr<EvLoop_deprecated> loop,
                 std::shared_ptr<path::Path> fromPath,
                 const Identity& localIdent,
                 Endpoint* handler,

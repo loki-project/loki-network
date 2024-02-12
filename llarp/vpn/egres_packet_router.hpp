@@ -1,6 +1,6 @@
 #pragma once
 #include <llarp/endpoint_base.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/net/net_int.hpp>
 
 #include <functional>

@@ -5,7 +5,7 @@
 #include <llarp/dns/server.hpp>
 #include <llarp/ev/ev.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/service/handler.hpp>
 #include <llarp/service/types.hpp>
@@ -42,7 +42,7 @@ namespace llarp::handlers
         TunEndpoint(Router& r);
         ~TunEndpoint() override;
 
-        vpn::NetworkInterface* GetVPNInterface() override
+        vpn::NetworkInterface* get_vpn_interface() override
         {
             return _net_if.get();
         }
@@ -52,54 +52,54 @@ namespace llarp::handlers
             return "tun"s;
         }
 
-        int Rank() const override
+        int rank() const override
         {
             return 0;
         }
 
-        std::string_view ResolverName() const override
+        std::string_view resolver_name() const override
         {
             return "lokinet";
         }
 
-        bool MaybeHookDNS(
+        bool maybe_hook_dns(
             std::shared_ptr<dns::PacketSource_Base> source,
             const dns::Message& query,
             const SockAddr_deprecated& to,
             const SockAddr_deprecated& from) override;
 
         // Reconfigures DNS servers and restarts libunbound with the new servers.
-        void ReconfigureDNS(std::vector<SockAddr_deprecated> servers);
+        void reconfigure_dns(std::vector<oxen::quic::Address> servers);
 
         bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
 
-        std::string GetIfName() const override;
+        std::string get_if_name() const override;
 
         StatusObject ExtractStatus() const;
 
         // std::unordered_map<std::string, std::string>
         // NotifyParams() const override;
 
-        bool SupportsV6() const override;
+        bool supports_ipv6() const override;
 
-        bool ShouldHookDNSMessage(const dns::Message& msg) const;
+        bool should_hook_dns_message(const dns::Message& msg) const;
 
-        bool HandleHookedDNSMessage(dns::Message query, std::function<void(dns::Message)> sendreply);
+        bool handle_hooked_dns_message(dns::Message query, std::function<void(dns::Message)> sendreply);
 
-        void TickTun(llarp_time_t now);
+        void tick_tun(llarp_time_t now);
 
-        bool MapAddress(const service::Address& remote, huint128_t ip, bool SNode);
+        bool map_address(const service::Address& remote, oxen::quic::Address ip, bool SNode);
 
-        bool Start();
+        bool start();
 
         bool stop();
 
-        bool IsSNode() const;
+        bool is_snode() const;
 
         /// set up tun interface, blocking
-        bool SetupTun();
+        bool setup_tun();
 
-        void SetupDNS();
+        void setup_dns();
 
         /// overrides Endpoint
         // std::shared_ptr<dns::Server> DNS() const override
@@ -108,10 +108,10 @@ namespace llarp::handlers
         // };
 
         /// overrides Endpoint
-        bool SetupNetworking() override;
+        bool setup_networking() override;
 
         /// overrides Endpoint
-        bool HandleInboundPacket(
+        bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) override;
 
         /// handle inbound traffic
@@ -120,18 +120,19 @@ namespace llarp::handlers
         /// we got a packet from the user
         void handle_user_packet(llarp::net::IP_packet_deprecated pkt);
 
+        // TODO: change this to the new IP type after changing the member
         /// get the local interface's address
-        huint128_t GetIfAddr() const /* override */;
+        oxen::quic::Address get_if_addr() const /* override */;
 
         /// we have an interface addr
-        bool HasIfAddr() const /* override */
+        bool has_if_addr() const /* override */
         {
             return true;
         }
 
-        bool HasLocalIP(const huint128_t& ip) const;
+        bool has_local_ip(const huint128_t& ip) const;
 
-        std::optional<net::TrafficPolicy> GetExitPolicy() const /* override */
+        std::optional<net::TrafficPolicy> get_traffic_policy() const /* override */
         {
             return _traffic_policy;
         }
@@ -141,7 +142,7 @@ namespace llarp::handlers
             return _owned_ranges;
         }
 
-        llarp_time_t PathAlignmentTimeout() const /* override */
+        llarp_time_t get_path_alignment_timeout() const /* override */
         {
             return _path_alignment_timeout;
         }
@@ -149,18 +150,18 @@ namespace llarp::handlers
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
         /// returns true otherwise
-        bool ShouldAllowTraffic(const net::IP_packet_deprecated& pkt) const;
+        bool is_allowing_traffic(const net::IP_packet_deprecated& pkt) const;
 
         /// get a key for ip address
-        std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t ip) const override;
+        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t ip) const override;
 
-        bool HasAddress(const AlignedBuffer<32>& addr) const
+        bool has_mapped_address(const AlignedBuffer<32>& addr) const
         {
-            return m_AddrToIP.find(addr) != m_AddrToIP.end();
+            return _addr_to_ip.find(addr) != _addr_to_ip.end();
         }
 
         /// get ip address for key unconditionally
-        huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID> addr) override;
+        huint128_t get_ip_for_addr(std::variant<service::Address, RouterID> addr) override;
 
        protected:
         struct WritePacket
@@ -175,40 +176,42 @@ namespace llarp::handlers
         };
 
         /// return true if we have a remote loki address for this ip address
-        bool HasRemoteForIP(huint128_t ipv4) const;
+        bool is_ip_mapped(huint128_t ipv4) const;
 
         /// mark this address as active
-        void MarkIPActive(huint128_t ip);
+        void mark_ip_active(huint128_t ip);
 
         /// mark this address as active forever
-        void MarkIPActiveForever(huint128_t ip);
+        void mark_ip_active_forever(huint128_t ip);
 
         /// flush writing ip packets to interface
-        void FlushWrite();
+        void flush_write();
 
+        // TONUKE: errythang buddy
         /// maps ip to key (host byte order)
-        std::unordered_map<huint128_t, AlignedBuffer<32>> m_IPToAddr;
+        std::unordered_map<huint128_t, AlignedBuffer<32>> _ip_to_addr;
         /// maps key to ip (host byte order)
-        std::unordered_map<AlignedBuffer<32>, huint128_t> m_AddrToIP;
+        std::unordered_map<AlignedBuffer<32>, huint128_t> _addr_to_ip;
 
         /// maps key to true if key is a service node, maps key to false if key is
         /// a hidden service
-        std::unordered_map<AlignedBuffer<32>, bool> m_SNodes;
+        // TONUKE: this stupid POS
+        std::unordered_map<AlignedBuffer<32>, bool> _is_snode_map;
 
         /// maps ip address to an exit endpoint, useful when we have multiple exits on a range
-        std::unordered_map<huint128_t, service::Address> m_ExitIPToExitAddress;
+        std::unordered_map<huint128_t, service::Address> _exit_to_ip;
 
        private:
         /// given an ip address that is not mapped locally find the address it shall be forwarded to
         /// optionally provide a custom selection strategy, if none is provided it will choose a
         /// random entry from the available choices
         /// return std::nullopt if we cannot route this address to an exit
-        std::optional<service::Address> ObtainExitAddressFor(
+        std::optional<service::Address> get_exit_address_for_ip(
             huint128_t ip,
             std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat = nullptr);
 
         template <typename Addr_t, typename Endpoint_t>
-        void SendDNSReply(
+        void send_dns_reply(
             Addr_t addr,
             Endpoint_t ctx,
             std::shared_ptr<dns::Message> query,
@@ -217,12 +220,12 @@ namespace llarp::handlers
         {
             if (ctx)
             {
-                huint128_t ip = ObtainIPForAddr(addr);
+                huint128_t ip = get_ip_for_addr(addr);
                 query->answers.clear();
-                query->AddINReply(ip, sendIPv6);
+                query->add_IN_reply(ip, sendIPv6);
             }
             else
-                query->AddNXReply();
+                query->add_nx_reply();
             reply(*query);
         }
 
@@ -252,20 +255,20 @@ namespace llarp::handlers
         bool _use_v6;
         std::string _if_name;
 
-        std::optional<IPRange> _base_address_v6;
+        std::optional<IPRange> _base_address_v6 = std::nullopt;
 
         std::shared_ptr<vpn::NetworkInterface> _net_if;
 
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
-        std::optional<net::TrafficPolicy> _traffic_policy;
+        std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
         /// ranges we advetise as reachable
         std::set<IPRange> _owned_ranges;
         /// how long to wait for path alignment
         llarp_time_t _path_alignment_timeout;
 
         /// a file to load / store the ephemeral address map to
-        std::optional<fs::path> _persisting_addr_file;
+        std::optional<fs::path> _persisting_addr_file = std::nullopt;
 
         /// for raw packet dns
         std::shared_ptr<vpn::I_Packet_IO> _raw_DNS;

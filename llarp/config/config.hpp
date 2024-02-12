@@ -56,7 +56,7 @@ namespace llarp
         fs::path default_data_dir;
 
         /// get network platform (virtual for unit test mocks)
-        virtual const llarp::net::Platform* Net_ptr() const = 0;
+        virtual const llarp::net::Platform* net_ptr() const = 0;
     };
 
     struct RouterConfig
@@ -181,8 +181,8 @@ namespace llarp
         std::vector<oxen::quic::Address> _bind_addrs;
 
         // Deprecated
-        std::vector<SockAddr_deprecated> upstream_dns;
-        std::optional<SockAddr_deprecated> query_bind;
+        // std::vector<SockAddr_deprecated> upstream_dns;
+        // std::optional<SockAddr_deprecated> query_bind;
         std::vector<SockAddr_deprecated> bind_addr;
         /*************************************/
 

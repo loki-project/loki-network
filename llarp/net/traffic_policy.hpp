@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ip_packet.hpp"
+#include "ip_packet_old.hpp"
 #include "ip_range.hpp"
 
 #include <llarp/util/types.hpp>
@@ -16,8 +16,8 @@ namespace llarp::net
     {
         /// ip protocol byte of this protocol
         IPProtocol protocol;
-        /// the layer 3 port if applicable
-        std::optional<nuint16_t> port;
+        /// the layer 3 port IN HOST ORDER FFS
+        std::optional<uint16_t> port;
 
         ProtocolInfo(std::string buf);
 

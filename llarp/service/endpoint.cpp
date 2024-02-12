@@ -1075,7 +1075,7 @@ namespace llarp::service
     //       < requiredPaths;
     // }
 
-    const std::shared_ptr<EventLoop>& Endpoint::loop()
+    const std::shared_ptr<EvLoop_deprecated>& Endpoint::loop()
     {
         return router().loop();
     }

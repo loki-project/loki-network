@@ -1,5 +1,5 @@
 #pragma once
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/util/types.hpp>
 
 #include <functional>

@@ -2,7 +2,7 @@
 
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/path/pathhandler.hpp>
 #include <llarp/service/types.hpp>
 

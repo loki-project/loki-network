@@ -59,7 +59,7 @@ namespace llarp
         if (!loop)
         {
             auto jobQueueSize = std::max(event_loop_queue_size, config->router.job_que_size);
-            loop = EventLoop::create(jobQueueSize);
+            loop = EvLoop_deprecated::create(jobQueueSize);
         }
 
         router = makeRouter(loop);
@@ -75,7 +75,7 @@ namespace llarp
             nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
-    std::shared_ptr<Router> Context::makeRouter(const std::shared_ptr<EventLoop>& loop)
+    std::shared_ptr<Router> Context::makeRouter(const std::shared_ptr<EvLoop_deprecated>& loop)
     {
         return std::make_shared<Router>(loop, makeVPNPlatform());
     }
@@ -104,6 +104,7 @@ namespace llarp
         llarp::LogInfo("running mainloop");
 
         loop->run();
+
         if (closeWaiter)
         {
             closeWaiter->set_value();

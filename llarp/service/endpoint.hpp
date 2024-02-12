@@ -112,7 +112,7 @@ namespace llarp::service
 
         /// loop (via router)
         /// use when sending any data on a path
-        const std::shared_ptr<EventLoop>& loop() override;
+        const std::shared_ptr<EvLoop_deprecated>& loop() override;
 
         virtual bool Start();
 

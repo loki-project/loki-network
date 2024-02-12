@@ -83,7 +83,7 @@ namespace llarp::handlers
         return _router.local_rid();
     }
 
-    const std::shared_ptr<EventLoop>& RemoteHandler::loop()
+    const std::shared_ptr<EvLoop_deprecated>& RemoteHandler::loop()
     {
         return _router.loop();
     }

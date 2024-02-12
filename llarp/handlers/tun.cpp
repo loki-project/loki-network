@@ -24,13 +24,13 @@ namespace llarp::handlers
 {
     static auto logcat = log::Cat("tun");
 
-    bool TunEndpoint::MaybeHookDNS(
+    bool TunEndpoint::maybe_hook_dns(
         std::shared_ptr<dns::PacketSource_Base> source,
         const dns::Message& query,
         const SockAddr_deprecated& to,
         const SockAddr_deprecated& from)
     {
-        if (not ShouldHookDNSMessage(query))
+        if (not should_hook_dns_message(query))
             return false;
 
         auto job = std::make_shared<dns::QueryJob>(source, query, to, from);
@@ -45,35 +45,36 @@ namespace llarp::handlers
     /// (windows/macos/ios/android ... aka everything that is not linux... funny that)
     class DnsInterceptor : public dns::PacketSource_Base
     {
-        std::function<void(net::IP_packet_deprecated)> m_Reply;
-        net::ipaddr_t m_OurIP;
-        llarp::DnsConfig m_Config;
+        // TODO: refactor this with deprecating IP_packet_deprecated
+        std::function<void(net::IP_packet_deprecated)> _hook;
+        oxen::quic::Address _our_ip;  // maybe should be an IP type...?
+        llarp::DnsConfig _config;
 
        public:
         explicit DnsInterceptor(
-            std::function<void(net::IP_packet_deprecated)> reply, net::ipaddr_t our_ip, llarp::DnsConfig conf)
-            : m_Reply{std::move(reply)}, m_OurIP{std::move(our_ip)}, m_Config{std::move(conf)}
+            std::function<void(net::IP_packet_deprecated)> reply, oxen::quic::Address our_ip, llarp::DnsConfig conf)
+            : _hook{std::move(reply)}, _our_ip{std::move(our_ip)}, _config{std::move(conf)}
         {}
 
         ~DnsInterceptor() override = default;
 
-        void SendTo(const SockAddr_deprecated& to, const SockAddr_deprecated& from, OwnedBuffer buf) const override
+        void send_to(const SockAddr_deprecated& to, const SockAddr_deprecated& from, OwnedBuffer buf) const override
         {
             auto pkt = net::IP_packet_deprecated::make_udp(from, to, std::move(buf));
 
             if (pkt.empty())
                 return;
-            m_Reply(std::move(pkt));
+            _hook(std::move(pkt));
         }
 
-        void Stop() override{};
+        void stop() override{};
 
-        std::optional<SockAddr_deprecated> BoundOn() const override
+        std::optional<SockAddr_deprecated> bound_on() const override
         {
             return std::nullopt;
         }
 
-        bool WouldLoop(const SockAddr_deprecated& to, const SockAddr_deprecated& from) const override
+        bool would_loop(const oxen::quic::Address& to, const oxen::quic::Address& from) const override
         {
             if constexpr (platform::is_apple)
             {
@@ -83,9 +84,9 @@ namespace llarp::handlers
                 // vanilla WouldLoop won't work for us).  However when active the mac also only
                 // queries the main tunnel IP for DNS, so we consider anything else to be
                 // upstream-bound DNS to let it through the tunnel.
-                return to.getIP() != m_OurIP;
+                return to != _our_ip;
             }
-            else if (auto maybe_addr = m_Config.query_bind)
+            else if (auto maybe_addr = _config._query_bind)
             {
                 const auto& addr = *maybe_addr;
                 // omit traffic to and from our dns socket
@@ -97,32 +98,30 @@ namespace llarp::handlers
 
     class TunDNS : public dns::Server
     {
-        TunEndpoint* const m_Endpoint;
-        std::optional<SockAddr_deprecated> m_QueryBind;
-        net::ipaddr_t m_OurIP;
+        TunEndpoint* const _tun;
+        std::optional<oxen::quic::Address> _query_bind;
+        oxen::quic::Address _our_ip;
 
        public:
-        std::shared_ptr<dns::PacketSource_Base> PacketSource;
+        std::shared_ptr<dns::PacketSource_Base> pkt_source;
 
-        virtual ~TunDNS() = default;
+        ~TunDNS() override = default;
 
         explicit TunDNS(TunEndpoint* ep, const llarp::DnsConfig& conf)
             : dns::Server{ep->router().loop(), conf, 0},
-              m_Endpoint{ep},
-              m_QueryBind{conf.query_bind},
-              m_OurIP{ToNet(ep->GetIfAddr())}
+              _tun{ep},
+              _query_bind{conf._query_bind},
+              _our_ip{ep->get_if_addr()}
         {}
 
-        std::shared_ptr<dns::PacketSource_Base> MakePacketSourceOn(
-            const SockAddr_deprecated&, const llarp::DnsConfig& conf) override
+        std::shared_ptr<dns::PacketSource_Base> make_packet_source_on(
+            const oxen::quic::Address&, const llarp::DnsConfig& conf) override
         {
             auto ptr = std::make_shared<DnsInterceptor>(
-                [ep = m_Endpoint](auto pkt) {
-                    ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0);
-                },
-                m_OurIP,
+                [ep = _tun](auto pkt) { ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0); },
+                _our_ip,
                 conf);
-            PacketSource = ptr;
+            pkt_source = ptr;
             return ptr;
         }
     };
@@ -135,19 +134,21 @@ namespace llarp::handlers
         // r->loop()->add_ticker([this] { Pump(Now()); });
     }
 
-    void TunEndpoint::SetupDNS()
+    void TunEndpoint::setup_dns()
     {
-        const auto& info = GetVPNInterface()->Info();
+        const auto& info = get_vpn_interface()->Info();
         if (_dns_config.raw)
         {
             auto dns = std::make_shared<TunDNS>(this, _dns_config);
             _dns = dns;
 
             _packet_router->AddUDPHandler(huint16_t{53}, [this, dns](net::IP_packet_deprecated pkt) {
-                auto dns_pkt_src = dns->PacketSource;
+                auto dns_pkt_src = dns->pkt_source;
+
                 if (const auto& reply = pkt.reply)
                     dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
-                if (dns->MaybeHandlePacket(std::move(dns_pkt_src), pkt.dst(), pkt.src(), *pkt.L4OwnedBuffer()))
+
+                if (dns->maybe_handle_packet(std::move(dns_pkt_src), pkt.dst(), pkt.src(), *pkt.L4OwnedBuffer()))
                     return;
 
                 handle_user_packet(std::move(pkt));
@@ -156,20 +157,22 @@ namespace llarp::handlers
         else
             _dns = std::make_shared<dns::Server>(router().loop(), _dns_config, info.index);
 
-        _dns->AddResolver(weak_from_this());
-        _dns->Start();
+        _dns->add_resolver(weak_from_this());
+        _dns->start();
 
         if (_dns_config.raw)
         {
             if (auto vpn = router().vpn_platform())
             {
                 // get the first local address we know of
-                std::optional<SockAddr_deprecated> localaddr;
-                for (auto res : _dns->GetAllResolvers())
+                std::optional<oxen::quic::Address> localaddr;
+
+                for (auto res : _dns->get_all_resolvers())
                 {
                     if (auto ptr = res.lock())
                     {
-                        localaddr = ptr->GetLocalAddr();
+                        localaddr = ptr->get_local_addr();
+
                         if (localaddr)
                             break;
                     }
@@ -236,14 +239,14 @@ namespace llarp::handlers
         return {};
     }
 
-    void TunEndpoint::ReconfigureDNS(std::vector<SockAddr_deprecated> servers)
+    void TunEndpoint::reconfigure_dns(std::vector<oxen::quic::Address> servers)
     {
         if (_dns)
         {
-            for (auto weak : _dns->GetAllResolvers())
+            for (auto weak : _dns->get_all_resolvers())
             {
                 if (auto ptr = weak.lock())
-                    ptr->ResetResolver(servers);
+                    ptr->reset_resolver(servers);
             }
         }
     }
@@ -300,9 +303,9 @@ namespace llarp::handlers
         else
             _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
 
-        for (const auto& item : conf.addr_map)
+        for (const auto& item : conf._addr_map)
         {
-            if (not MapAddress(item.second, item.first, false))
+            if (not map_address(item.second, item.first, false))
                 return false;
         }
 
@@ -428,22 +431,22 @@ namespace llarp::handlers
                         }
                         if (const auto* loki = std::get_if<service::Address>(&addr))
                         {
-                            m_IPToAddr.emplace(ip, loki->data());
-                            m_AddrToIP.emplace(loki->data(), ip);
-                            m_SNodes[*loki] = false;
+                            _ip_to_addr.emplace(ip, loki->data());
+                            _addr_to_ip.emplace(loki->data(), ip);
+                            _is_snode_map[*loki] = false;
                             LogInfo(name(), " remapped ", ip, " to ", *loki);
                         }
                         if (const auto* snode = std::get_if<RouterID>(&addr))
                         {
-                            m_IPToAddr.emplace(ip, snode->data());
-                            m_AddrToIP.emplace(snode->data(), ip);
-                            m_SNodes[*snode] = true;
+                            _ip_to_addr.emplace(ip, snode->data());
+                            _addr_to_ip.emplace(snode->data(), ip);
+                            _is_snode_map[*snode] = true;
                             LogInfo(name(), " remapped ", ip, " to ", *snode);
                         }
                         if (_next_ip < ip)
                             _next_ip = ip;
                         // make sure we dont unmap this guy
-                        MarkIPActive(ip);
+                        mark_ip_active(ip);
                     }
                 }
             }
@@ -463,9 +466,9 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::HasLocalIP(const huint128_t& ip) const
+    bool TunEndpoint::has_local_ip(const huint128_t& ip) const
     {
-        return m_IPToAddr.find(ip) != m_IPToAddr.end();
+        return _ip_to_addr.find(ip) != _ip_to_addr.end();
     }
 
     static bool is_random_snode(const dns::Message& msg)
@@ -487,18 +490,18 @@ namespace llarp::handlers
         return msg;
     }
 
-    std::optional<std::variant<service::Address, RouterID>> TunEndpoint::ObtainAddrForIP(huint128_t ip) const
+    std::optional<std::variant<service::Address, RouterID>> TunEndpoint::get_addr_for_ip(huint128_t ip) const
     {
-        auto itr = m_IPToAddr.find(ip);
-        if (itr == m_IPToAddr.end())
+        auto itr = _ip_to_addr.find(ip);
+        if (itr == _ip_to_addr.end())
             return std::nullopt;
-        if (m_SNodes.at(itr->second))
+        if (_is_snode_map.at(itr->second))
             return RouterID{itr->second.as_array()};
         else
             return service::Address{itr->second.as_array()};
     }
 
-    bool TunEndpoint::HandleHookedDNSMessage(dns::Message msg, std::function<void(dns::Message)> reply)
+    bool TunEndpoint::handle_hooked_dns_message(dns::Message msg, std::function<void(dns::Message)> reply)
     {
         (void)msg;
         (void)reply;
@@ -880,13 +883,13 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::SupportsV6() const
+    bool TunEndpoint::supports_ipv6() const
     {
         return _use_v6;
     }
 
     // FIXME: pass in which question it should be addressing
-    bool TunEndpoint::ShouldHookDNSMessage(const dns::Message& msg) const
+    bool TunEndpoint::should_hook_dns_message(const dns::Message& msg) const
     {
         llarp::service::Address addr;
         if (msg.questions.size() == 1)
@@ -915,10 +918,11 @@ namespace llarp::handlers
         return false;
     }
 
-    bool TunEndpoint::MapAddress(const service::Address& addr, huint128_t ip, bool SNode)
+    bool TunEndpoint::map_address(const service::Address& addr, oxen::quic::Address ip, bool SNode)
     {
-        auto itr = m_IPToAddr.find(ip);
-        if (itr != m_IPToAddr.end())
+        auto itr = _ip_to_addr.find(ip);
+
+        if (itr != _ip_to_addr.end())
         {
             llarp::LogWarn(ip, " already mapped to ", service::Address(itr->second.as_array()).to_string());
             return false;
@@ -926,14 +930,14 @@ namespace llarp::handlers
         llarp::LogInfo(name() + " map ", addr.to_string(), " to ", ip);
 
         m_IPToAddr[ip] = addr;
-        m_AddrToIP[addr] = ip;
-        m_SNodes[addr] = SNode;
-        MarkIPActiveForever(ip);
+        _addr_to_ip[addr] = ip;
+        _is_snode_map[addr] = SNode;
+        mark_ip_active_forever(ip);
         // MarkAddressOutbound(addr);
         return true;
     }
 
-    std::string TunEndpoint::GetIfName() const
+    std::string TunEndpoint::get_if_name() const
     {
 #ifdef _WIN32
         return net::TruncateV6(GetIfAddr()).to_string();
@@ -942,18 +946,18 @@ namespace llarp::handlers
 #endif
     }
 
-    bool TunEndpoint::Start()
+    bool TunEndpoint::start()
     {
-        return SetupNetworking();
+        return setup_networking();
     }
 
-    bool TunEndpoint::IsSNode() const
+    bool TunEndpoint::is_snode() const
     {
         // TODO : implement me
         return false;
     }
 
-    bool TunEndpoint::SetupTun()
+    bool TunEndpoint::setup_tun()
     {
         _next_ip = _local_ip;
         _max_ip = _local_range.HighestAddr();
@@ -962,7 +966,7 @@ namespace llarp::handlers
 
         const service::Address ourAddr = _identity.pub.Addr();
 
-        if (not MapAddress(ourAddr, GetIfAddr(), false))
+        if (not map_address(ourAddr, get_if_addr(), false))
         {
             return false;
         }
@@ -1019,9 +1023,9 @@ namespace llarp::handlers
         }
 
         LogInfo(name(), " setting up dns...");
-        SetupDNS();
+        setup_dns();
         // loop()->call_soon([this]() { router().route_poker()->set_dns_mode(false); });
-        return HasAddress(ourAddr);
+        return has_mapped_address(ourAddr);
     }
 
     // std::unordered_map<std::string, std::string>
@@ -1038,10 +1042,10 @@ namespace llarp::handlers
     //   return env;
     // }
 
-    bool TunEndpoint::SetupNetworking()
+    bool TunEndpoint::setup_networking()
     {
         llarp::LogInfo("Set Up networking for ", name());
-        return SetupTun();
+        return setup_tun();
     }
 
     bool TunEndpoint::stop()
@@ -1073,16 +1077,16 @@ namespace llarp::handlers
             // }
         }
         if (_dns)
-            _dns->Stop();
+            _dns->stop();
         return true;
         // return llarp::service::Endpoint::Stop();
     }
 
-    std::optional<service::Address> TunEndpoint::ObtainExitAddressFor(
+    std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
         huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
     {
         // is it already mapped? return the mapping
-        if (auto itr = m_ExitIPToExitAddress.find(ip); itr != m_ExitIPToExitAddress.end())
+        if (auto itr = _exit_to_ip.find(ip); itr != _exit_to_ip.end())
             return itr->second;
 
         // const auto& net = router().net();
@@ -1112,7 +1116,7 @@ namespace llarp::handlers
         //   };
         // }
         // map the exit and return the endpoint we mapped it to
-        return m_ExitIPToExitAddress.emplace(ip, exitSelectionStrat(candidates)).first->second;
+        return _exit_to_ip.emplace(ip, exitSelectionStrat(candidates)).first->second;
     }
 
     void TunEndpoint::handle_user_packet(net::IP_packet_deprecated pkt)
@@ -1143,13 +1147,13 @@ namespace llarp::handlers
         //   dst = net::ExpandV4(net::TruncateV6(dst));
         // }
 
-        auto itr = m_IPToAddr.find(dst);
+        auto itr = _ip_to_addr.find(dst);
 
-        if (itr == m_IPToAddr.end())
+        if (itr == _ip_to_addr.end())
         {
             service::Address addr{};
 
-            if (auto maybe = ObtainExitAddressFor(dst))
+            if (auto maybe = get_exit_address_for_ip(dst))
                 addr = *maybe;
             else
             {
@@ -1254,9 +1258,9 @@ namespace llarp::handlers
         //     PathAlignmentTimeout());
     }
 
-    bool TunEndpoint::ShouldAllowTraffic(const net::IP_packet_deprecated& pkt) const
+    bool TunEndpoint::is_allowing_traffic(const net::IP_packet_deprecated& pkt) const
     {
-        if (const auto exitPolicy = GetExitPolicy())
+        if (const auto exitPolicy = get_traffic_policy())
         {
             if (not exitPolicy->AllowsTraffic(pkt))
                 return false;
@@ -1265,7 +1269,7 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::HandleInboundPacket(
+    bool TunEndpoint::handle_inbound_packet(
         const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t seqno)
     {
         LogTrace("Inbound ", t, " packet (", buf.sz, "B) on convo ", tag);
@@ -1399,12 +1403,12 @@ namespace llarp::handlers
         return true;
     }
 
-    huint128_t TunEndpoint::GetIfAddr() const
+    oxen::quic::Address TunEndpoint::get_if_addr() const
     {
         return _local_ip;
     }
 
-    huint128_t TunEndpoint::ObtainIPForAddr(std::variant<service::Address, RouterID> addr)
+    huint128_t TunEndpoint::get_ip_for_addr(std::variant<service::Address, RouterID> addr)
     {
         llarp_time_t now = llarp::time_now_ms();
         huint128_t nextIP = {0};
@@ -1420,11 +1424,11 @@ namespace llarp::handlers
 
         {
             // previously allocated address
-            auto itr = m_AddrToIP.find(ident);
-            if (itr != m_AddrToIP.end())
+            auto itr = _addr_to_ip.find(ident);
+            if (itr != _addr_to_ip.end())
             {
                 // mark ip active
-                MarkIPActive(itr->second);
+                mark_ip_active(itr->second);
                 return itr->second;
             }
         }
@@ -1434,14 +1438,14 @@ namespace llarp::handlers
             do
             {
                 nextIP = ++_next_ip;
-            } while (m_IPToAddr.find(nextIP) != m_IPToAddr.end() && _next_ip < _max_ip);
+            } while (_ip_to_addr.find(nextIP) != _ip_to_addr.end() && _next_ip < _max_ip);
             if (nextIP < _max_ip)
             {
-                m_AddrToIP[ident] = nextIP;
-                m_IPToAddr[nextIP] = ident;
-                m_SNodes[ident] = snode;
+                _addr_to_ip[ident] = nextIP;
+                _ip_to_addr[nextIP] = ident;
+                _is_snode_map[ident] = snode;
                 var::visit([&](auto&& remote) { llarp::LogInfo(name(), " mapped ", remote, " to ", nextIP); }, addr);
-                MarkIPActive(nextIP);
+                mark_ip_active(nextIP);
                 return nextIP;
             }
         }
@@ -1466,9 +1470,9 @@ namespace llarp::handlers
             ++itr;
         }
         // remap address
-        m_IPToAddr[oldest.first] = ident;
-        m_AddrToIP[ident] = oldest.first;
-        m_SNodes[ident] = snode;
+        _ip_to_addr[oldest.first] = ident;
+        _addr_to_ip[ident] = oldest.first;
+        _is_snode_map[ident] = snode;
         nextIP = oldest.first;
 
         // mark ip active
@@ -1477,18 +1481,18 @@ namespace llarp::handlers
         return nextIP;
     }
 
-    bool TunEndpoint::HasRemoteForIP(huint128_t ip) const
+    bool TunEndpoint::is_ip_mapped(huint128_t ip) const
     {
-        return m_IPToAddr.find(ip) != m_IPToAddr.end();
+        return _ip_to_addr.find(ip) != _ip_to_addr.end();
     }
 
-    void TunEndpoint::MarkIPActive(huint128_t ip)
+    void TunEndpoint::mark_ip_active(huint128_t ip)
     {
         llarp::LogDebug(name(), " address ", ip, " is active");
         _ip_activity[ip] = std::max(llarp::time_now_ms(), _ip_activity[ip]);
     }
 
-    void TunEndpoint::MarkIPActiveForever(huint128_t ip)
+    void TunEndpoint::mark_ip_active_forever(huint128_t ip)
     {
         _ip_activity[ip] = std::numeric_limits<llarp_time_t>::max();
     }

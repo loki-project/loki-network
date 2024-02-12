@@ -6,7 +6,7 @@
 #include <llarp/config/config.hpp>
 #include <llarp/constants/apple.hpp>
 #include <llarp/ev/libuv.hpp>
-#include <llarp/net/ip_packet.hpp>
+#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>

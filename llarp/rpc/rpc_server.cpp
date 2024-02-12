@@ -30,22 +30,22 @@ namespace llarp::rpc
         DummyPacketSource(Callable&& f) : func{std::forward<Callable>(f)}
         {}
 
-        bool WouldLoop(const SockAddr_deprecated&, const SockAddr_deprecated&) const override
+        bool would_loop(const SockAddr_deprecated&, const SockAddr_deprecated&) const override
         {
             return false;
         };
 
         /// send packet with src and dst address containing buf on this packet source
-        void SendTo(const SockAddr_deprecated&, const SockAddr_deprecated&, OwnedBuffer buf) const override
+        void send_to(const SockAddr_deprecated&, const SockAddr_deprecated&, OwnedBuffer buf) const override
         {
-            func(dns::MaybeParseDNSMessage(buf));
+            func(dns::maybe_parse_dns_msg(buf));
         }
 
         /// stop reading packets and end operation
-        void Stop() override{};
+        void stop() override{};
 
         /// returns the sockaddr we are bound on if applicable
-        std::optional<SockAddr_deprecated> BoundOn() const override
+        std::optional<SockAddr_deprecated> bound_on() const override
         {
             return std::nullopt;
         }
@@ -487,7 +487,7 @@ namespace llarp::rpc
                 else
                     SetJSONError("No response from DNS", dnsquery.response);
             });
-            if (not dns->MaybeHandlePacket(packet_src, packet_src->dumb, packet_src->dumb, msg.ToBuffer()))
+            if (not dns->maybe_handle_packet(packet_src, packet_src->dumb, packet_src->dumb, msg.to_buffer()))
                 SetJSONError("DNS query not accepted by endpoint", dnsquery.response);
         }
         else

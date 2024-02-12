@@ -2,6 +2,7 @@
 
 #include <llarp/net/interface_info.hpp>
 #include <llarp/util/buffer.hpp>
+#include <llarp/util/logging.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
 
@@ -23,9 +24,9 @@ namespace llarp
     constexpr std::size_t event_loop_queue_size = 1024;
 
     struct SockAddr_deprecated;
-    struct UDPHandle;
+    struct UDPHandle_deprecated;
 
-    static auto loop_cat = llarp::log::Cat("ev-loop");
+    static auto loop_cat = log::Cat("ev-loop");
 
     template <typename... T>
     void loop_trace_log(
@@ -67,21 +68,19 @@ namespace llarp
     };
 
     /// holds a repeated task on the event loop; the task is removed on destruction
-    class EventLoopRepeater
+    class EvLoopRepeater_deprecated
     {
        public:
         // Destructor: if the task has been started then it is removed from the event loop.  Note
         // that it is possible for a task to fire *after* destruction of this container;
         // destruction only initiates removal of the periodic task.
-        virtual ~EventLoopRepeater() = default;
+        virtual ~EvLoopRepeater_deprecated() = default;
 
         // Starts the repeater to call `task` every `every` period.
         virtual void start(llarp_time_t every, std::function<void()> task) = 0;
     };
 
-    // this (nearly!) abstract base class
-    // is overriden for each platform
-    class EventLoop
+    class EvLoop_deprecated
     {
        public:
         // Runs the event loop. This does not return until sometime after `stop()` is called (and so
@@ -216,14 +215,14 @@ namespace llarp
 
         virtual void stop() = 0;
 
-        virtual ~EventLoop() = default;
+        virtual ~EvLoop_deprecated() = default;
 
-        virtual const net::Platform* Net_ptr() const;
+        virtual const net::Platform* net_ptr() const;
 
-        using UDPReceiveFunc = std::function<void(UDPHandle&, SockAddr_deprecated src, llarp::OwnedBuffer buf)>;
+        using UDPReceiveFunc = std::function<void(UDPHandle_deprecated&, oxen::quic::Address src, llarp::OwnedBuffer buf)>;
 
         // Constructs a UDP socket that can be used for sending and/or receiving
-        virtual std::shared_ptr<UDPHandle> make_udp(UDPReceiveFunc on_recv) = 0;
+        virtual std::shared_ptr<UDPHandle_deprecated> make_udp(UDPReceiveFunc on_recv) = 0;
 
         /// Make a thread-safe event loop waker (an "async" in libuv terminology) on this event
         /// loop; you can call `->Trigger()` on the returned shared pointer to fire the callback at
@@ -234,10 +233,10 @@ namespace llarp
         // Initializes a new repeated task object. Note that the task is not actually added to the
         // event loop until you call start() on the returned object.  Typically invoked via
         // call_every.
-        virtual std::shared_ptr<EventLoopRepeater> make_repeater() = 0;
+        virtual std::shared_ptr<EvLoopRepeater_deprecated> make_repeater() = 0;
 
         // Constructs and initializes a new default (libuv) event loop
-        static std::shared_ptr<EventLoop> create(size_t queueLength = event_loop_queue_size);
+        static std::shared_ptr<EvLoop_deprecated> create(size_t queueLength = event_loop_queue_size);
 
         // Returns true if called from within the event loop thread, false otherwise.
         virtual bool inEventLoop() const = 0;

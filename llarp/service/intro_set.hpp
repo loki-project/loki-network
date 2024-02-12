@@ -45,7 +45,7 @@ namespace llarp::service
         /// policies about traffic that we are willing to carry
         /// a protocol/range whitelist or blacklist
         /// only set when we support exit traffic ethertype
-        std::optional<net::TrafficPolicy> exit_policy;
+        std::optional<net::TrafficPolicy> exit_policy = std::nullopt;
 
         Signature signature;
         uint64_t version = llarp::constants::proto_version;

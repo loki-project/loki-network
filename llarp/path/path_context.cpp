@@ -19,7 +19,7 @@ namespace llarp::path
         return m_AllowTransit;
     }
 
-    const std::shared_ptr<EventLoop>& PathContext::loop()
+    const std::shared_ptr<EvLoop>& PathContext::loop()
     {
         return _router->loop();
     }
