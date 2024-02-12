@@ -50,8 +50,8 @@ namespace llarp::handlers
         bool maybe_hook_dns(
             std::shared_ptr<dns::PacketSource_Base> /* source */,
             const dns::Message& /* query */,
-            const SockAddr_deprecated& /* to */,
-            const SockAddr_deprecated& /* from */) override
+            const oxen::quic::Address& /* to */,
+            const oxen::quic::Address& /* from */) override
         {
             return false;
         }

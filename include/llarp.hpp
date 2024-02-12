@@ -46,44 +46,44 @@ namespace llarp
         Context();
         virtual ~Context() = default;
 
-        void Setup(const RuntimeOptions& opts);
+        void setup(const RuntimeOptions& opts);
 
-        int Run(const RuntimeOptions& opts);
+        int run(const RuntimeOptions& opts);
 
-        void HandleSignal(int sig);
+        void handle_signal(int sig);
 
         /// Configure given the specified config.
-        void Configure(std::shared_ptr<Config> conf);
+        void configure(std::shared_ptr<Config> conf);
 
         /// handle SIGHUP
-        void Reload();
+        void reload();
 
-        bool IsUp() const;
+        bool is_up() const;
 
-        bool LooksAlive() const;
+        bool looks_alive() const;
 
-        bool IsStopping() const;
+        bool is_stopping() const;
 
         /// close async
-        void CloseAsync();
+        void close_async();
 
         /// wait until closed and done
-        void Wait();
+        void wait();
 
         /// call a function in logic thread
         /// return true if queued for calling
         /// return false if not queued for calling
-        bool CallSafe(std::function<void(void)> f);
+        bool call_safe(std::function<void(void)> f);
 
         /// Creates a router. Can be overridden to allow a different class of router
         /// to be created instead. Defaults to llarp::Router.
-        virtual std::shared_ptr<Router> makeRouter(const std::shared_ptr<EvLoop_deprecated>& loop);
+        virtual std::shared_ptr<Router> make_router(const std::shared_ptr<EvLoop_deprecated>& loop);
 
         /// create the nodedb given our current configs
-        virtual std::shared_ptr<NodeDB> makeNodeDB();
+        virtual std::shared_ptr<NodeDB> make_nodedb();
 
         /// create the vpn platform for use in creating network interfaces
-        virtual std::shared_ptr<llarp::vpn::Platform> makeVPNPlatform();
+        virtual std::shared_ptr<llarp::vpn::Platform> make_vpn_platform();
 
         int androidFD = -1;
 
@@ -91,9 +91,9 @@ namespace llarp
         std::shared_ptr<Config> config = nullptr;
 
        private:
-        void SigINT();
+        void sigINT();
 
-        void Close();
+        void close();
 
         std::unique_ptr<std::promise<void>> closeWaiter;
     };

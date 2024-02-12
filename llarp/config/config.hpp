@@ -144,7 +144,7 @@ namespace llarp
 
         /* TESTNET: Under modification */
         std::string _if_name;
-        IPRange _if_addr;
+        IPRange _local_if_range;
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
         std::unordered_map<ClientAddress, oxen::quic::Address> _addr_map;
 
@@ -183,7 +183,7 @@ namespace llarp
         // Deprecated
         // std::vector<SockAddr_deprecated> upstream_dns;
         // std::optional<SockAddr_deprecated> query_bind;
-        std::vector<SockAddr_deprecated> bind_addr;
+        // std::vector<SockAddr_deprecated> bind_addr;
         /*************************************/
 
         std::unordered_multimap<std::string, std::string> extra_opts;

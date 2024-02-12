@@ -18,7 +18,6 @@
 
 namespace llarp
 {
-    using byte_view_t = std::basic_string_view<uint8_t>;
     using ustring = std::basic_string<uint8_t>;
     using ustring_view = std::basic_string_view<uint8_t>;
     using bstring = std::basic_string<std::byte>;
@@ -243,13 +242,13 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     std::vector<uint8_t> copy() const;
 
     /// get a read-only view over the entire region
-    llarp::byte_view_t view_all() const
+    llarp::ustring_view view_all() const
     {
         return {base, sz};
     }
 
     /// get a read-only view over the remaining/unused region
-    llarp::byte_view_t view_remaining() const
+    llarp::ustring_view view_remaining() const
     {
         return {cur, size_left()};
     }
@@ -258,7 +257,7 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     /// view.
     bool startswith(std::string_view prefix_str) const
     {
-        llarp::byte_view_t prefix{reinterpret_cast<const uint8_t*>(prefix_str.data()), prefix_str.size()};
+        llarp::ustring_view prefix{reinterpret_cast<const uint8_t*>(prefix_str.data()), prefix_str.size()};
         return view_remaining().substr(0, prefix.size()) == prefix;
     }
 

@@ -2,14 +2,24 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("UDP");
+
     inline constexpr size_t MAX_BATCH =
 #if defined(OXEN_LIBQUIC_UDP_SENDMMSG) || defined(OXEN_LIBQUIC_UDP_GSO)
-            24;
+        24;
 #else
-            1;
+        1;
 #endif
 
-    io_result UDPHandle::_send_impl(const oxen::quic::Path& path, std::byte* buf, size_t* bufsize, uint8_t ecn, size_t& n_pkts)
+    UDPHandle::UDPHandle(loop_ptr ev, const oxen::quic::Address& bind, udp_pkt_hook cb)
+    {
+        socket = std::make_unique<UDPSocket>(ev.get(), bind, std::move(cb));
+
+        _local = socket->address();
+    }
+
+    io_result UDPHandle::_send_impl(
+        const oxen::quic::Path& path, std::byte* buf, size_t* bufsize, uint8_t ecn, size_t& n_pkts)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
@@ -53,13 +63,14 @@ namespace llarp
             // non-error on *partial* success).
             return io_result{EAGAIN};
         }
-        
+
         n_pkts = 0;
 
         return ret;
     }
 
-    void UDPHandle::_send_or_queue(const oxen::quic::Path& path, std::vector<std::byte> buf, uint8_t ecn, std::function<void(io_result)> callback)
+    void UDPHandle::_send_or_queue(
+        const oxen::quic::Path& path, std::vector<std::byte> buf, uint8_t ecn, std::function<void(io_result)> callback)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
@@ -84,4 +95,4 @@ namespace llarp
         else if (callback)
             callback({});
     }
-}   //  namespace llarp
+}  //  namespace llarp

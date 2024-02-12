@@ -14,6 +14,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("config");
+
     using namespace config;
     namespace
     {
@@ -584,7 +586,7 @@ namespace llarp
                 "lokinet will attempt to find an unused private range.",
             },
             [this](std::string arg) {
-                if (not _if_addr.from_string(arg))
+                if (not _local_if_range.from_string(arg))
                 {
                     throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
                 }

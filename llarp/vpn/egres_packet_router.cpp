@@ -20,7 +20,7 @@ namespace llarp::vpn
             m_LocalPorts.erase(localport);
         }
 
-        void HandleIPPacketFrom(AddressVariant_t from, net::IP_packet_deprecated pkt) override
+        void HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt) override
         {
             if (auto dstPort = pkt.DstPort())
             {
@@ -41,7 +41,7 @@ namespace llarp::vpn
         explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : m_BaseHandler{std::move(baseHandler)}
         {}
 
-        void HandleIPPacketFrom(AddressVariant_t from, net::IP_packet_deprecated pkt) override
+        void HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt) override
         {
             m_BaseHandler(std::move(from), std::move(pkt));
         }
@@ -50,7 +50,7 @@ namespace llarp::vpn
     EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : m_BaseHandler{std::move(baseHandler)}
     {}
 
-    void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, net::IP_packet_deprecated pkt)
+    void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt)
     {
         const auto proto = pkt.Header()->protocol;
         if (const auto itr = m_IPProtoHandler.find(proto); itr != m_IPProtoHandler.end())

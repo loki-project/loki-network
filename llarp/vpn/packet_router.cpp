@@ -4,72 +4,73 @@ namespace llarp::vpn
 {
     struct UDPPacketHandler : public Layer4Handler
     {
-        PacketHandlerFunc_t m_BaseHandler;
-        std::unordered_map<nuint16_t, PacketHandlerFunc_t> m_LocalPorts;
+        udp_pkt_hook _base_handler;
+        std::unordered_map<uint16_t, udp_pkt_hook> _port_mapped_handlers;
 
-        explicit UDPPacketHandler(PacketHandlerFunc_t baseHandler) : m_BaseHandler{std::move(baseHandler)}
+        explicit UDPPacketHandler(udp_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)}
         {}
 
-        void AddSubHandler(nuint16_t localport, PacketHandlerFunc_t handler) override
+        void add_sub_handler(uint16_t localport, udp_pkt_hook handler) override
         {
-            m_LocalPorts.emplace(localport, std::move(handler));
+            _port_mapped_handlers.emplace(localport, std::move(handler));
         }
 
-        void HandleIPPacket(llarp::net::IP_packet_deprecated pkt) override
+        void handle_ip_packet(UDPPacket pkt) override
         {
-            auto dstport = pkt.DstPort();
+            auto dstport = pkt.path.remote.port();
+
             if (not dstport)
             {
-                m_BaseHandler(std::move(pkt));
+                _base_handler(std::move(pkt));
                 return;
             }
 
-            if (auto itr = m_LocalPorts.find(*dstport); itr != m_LocalPorts.end())
+            if (auto itr = _port_mapped_handlers.find(dstport); itr != _port_mapped_handlers.end())
                 itr->second(std::move(pkt));
             else
-                m_BaseHandler(std::move(pkt));
+                _base_handler(std::move(pkt));
         }
     };
 
     struct GenericLayer4Handler : public Layer4Handler
     {
-        PacketHandlerFunc_t m_BaseHandler;
+        udp_pkt_hook _base_handler;
 
-        explicit GenericLayer4Handler(PacketHandlerFunc_t baseHandler) : m_BaseHandler{std::move(baseHandler)}
+        explicit GenericLayer4Handler(udp_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)}
         {}
 
-        void HandleIPPacket(llarp::net::IP_packet_deprecated pkt) override
+        void handle_ip_packet(UDPPacket pkt) override
         {
-            m_BaseHandler(std::move(pkt));
+            _base_handler(std::move(pkt));
         }
     };
 
-    PacketRouter::PacketRouter(PacketHandlerFunc_t baseHandler) : m_BaseHandler{std::move(baseHandler)}
+    PacketRouter::PacketRouter(udp_pkt_hook baseHandler) : _handler{std::move(baseHandler)}
     {}
 
-    void PacketRouter::HandleIPPacket(llarp::net::IP_packet_deprecated pkt)
+    void PacketRouter::handle_ip_packet(UDPPacket pkt)
     {
         const auto proto = pkt.Header()->protocol;
-        if (const auto itr = m_IPProtoHandler.find(proto); itr != m_IPProtoHandler.end())
+        if (const auto itr = _ip_proto_handler.find(proto); itr != _ip_proto_handler.end())
             itr->second->HandleIPPacket(std::move(pkt));
         else
-            m_BaseHandler(std::move(pkt));
+            _handler(std::move(pkt));
     }
 
-    void PacketRouter::AddUDPHandler(huint16_t localport, PacketHandlerFunc_t func)
+    void PacketRouter::add_udp_handler(uint16_t localport, udp_pkt_hook func)
     {
         constexpr uint8_t udp_proto = 0x11;
 
-        if (m_IPProtoHandler.find(udp_proto) == m_IPProtoHandler.end())
+        if (_ip_proto_handler.find(udp_proto) == _ip_proto_handler.end())
         {
-            m_IPProtoHandler.emplace(udp_proto, std::make_unique<UDPPacketHandler>(m_BaseHandler));
+            _ip_proto_handler.emplace(udp_proto, std::make_unique<UDPPacketHandler>(_handler));
         }
-        m_IPProtoHandler[udp_proto]->AddSubHandler(ToNet(localport), func);
+        _ip_proto_handler[udp_proto]->add_sub_handler(localport, func);
     }
 
-    void PacketRouter::AddIProtoHandler(uint8_t proto, PacketHandlerFunc_t func)
+    void PacketRouter::add_ip_proto_handler(uint8_t proto, udp_pkt_hook func)
     {
-        m_IPProtoHandler[proto] = std::make_unique<GenericLayer4Handler>(std::move(func));
+        _ip_proto_handler[proto] = std::make_unique<GenericLayer4Handler>(std::move(func));
     }
 
 }  // namespace llarp::vpn

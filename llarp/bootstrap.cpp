@@ -6,6 +6,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("Bootstrap");
+
     bool BootstrapList::bt_decode(std::string_view buf)
     {
         const auto& f = buf.front();

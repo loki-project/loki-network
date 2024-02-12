@@ -6,7 +6,7 @@
 
 #include <llarp/crypto/encrypted.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/ev/ev.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/path/pathhandler.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/util/bencode.hpp>
@@ -103,7 +103,6 @@ namespace llarp
             bool Sign(const Identity& localIdent);
 
             bool AsyncDecryptAndVerify(
-                std::shared_ptr<EvLoop_deprecated> loop,
                 std::shared_ptr<path::Path> fromPath,
                 const Identity& localIdent,
                 Endpoint* handler,
@@ -122,7 +121,7 @@ namespace llarp
 
             void clear()
             {
-                cipher.Zero();
+                cipher.zero();
                 enc.Clear();
                 path_id.zero();
                 convo_tag.zero();

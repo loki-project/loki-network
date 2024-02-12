@@ -18,6 +18,7 @@ namespace llarp::dns
 
         Question(Question&& other);
         Question(const Question& other);
+
         bool Encode(llarp_buffer_t* buf) const override;
 
         bool Decode(llarp_buffer_t* buf) override;

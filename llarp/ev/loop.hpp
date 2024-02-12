@@ -12,15 +12,6 @@
 
 namespace llarp
 {
-    static auto logcat = log::Cat("EventLoop");
-
-    // Bring this up from libquic
-    using event_ptr = oxen::quic::event_ptr;
-    // shared_ptr containing the actual libev loop
-    using loop_ptr = std::shared_ptr<::event_base>;
-    // Libevent callbacks
-    using event_hook = std::function<void()>;
-
     namespace vpn
     {
         class NetworkInterface;
@@ -44,11 +35,15 @@ namespace llarp
     class EventLoop
     {
        public:
-        EventLoop();
-        EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+        static std::shared_ptr<EventLoop> make();
+        static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+
         ~EventLoop();
 
        private:
+        EventLoop();
+        EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+
         std::shared_ptr<oxen::quic::Loop> _loop;
         event_ptr _ticker;
 
@@ -71,11 +66,9 @@ namespace llarp
             return _loop->in_event_loop();
         }
 
-        
-
         bool add_ticker(std::function<void()> ticker);
 
-        bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif);
+        bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler);
 
         template <typename Callable>
         void call(Callable&& f, source_location src = source_location::current())
@@ -102,12 +95,15 @@ namespace llarp
             auto repeater = make_repeater();
             // grab the reference before giving ownership of the repeater to the lambda
             auto& r = *repeater;
-            r.start(loop(), interval, [rep =  std::move(repeater), owner = std::move(caller), func = std::move(f)]() mutable {
-                if (auto ptr = owner.lock())
-                    func();
-                else
-                    rep.reset();
-            });
+            r.start(
+                loop(),
+                interval,
+                [rep = std::move(repeater), owner = std::move(caller), func = std::move(f)]() mutable {
+                    if (auto ptr = owner.lock())
+                        func();
+                    else
+                        rep.reset();
+                });
         }
 
         template <typename T, typename... Args>

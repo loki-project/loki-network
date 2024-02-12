@@ -219,7 +219,8 @@ namespace llarp
 
         virtual const net::Platform* net_ptr() const;
 
-        using UDPReceiveFunc = std::function<void(UDPHandle_deprecated&, oxen::quic::Address src, llarp::OwnedBuffer buf)>;
+        using UDPReceiveFunc =
+            std::function<void(UDPHandle_deprecated&, oxen::quic::Address src, llarp::OwnedBuffer buf)>;
 
         // Constructs a UDP socket that can be used for sending and/or receiving
         virtual std::shared_ptr<UDPHandle_deprecated> make_udp(UDPReceiveFunc on_recv) = 0;

@@ -1,6 +1,9 @@
 #pragma once
-#include <llarp/net/sock_addr.hpp>
+
+#include <llarp/address/types.hpp>
 #include <llarp/util/logging.hpp>
+
+#include <oxen/quic.hpp>
 
 #include <memory>
 #include <stdexcept>
@@ -27,7 +30,7 @@ namespace llarp::dns
         /// then put through if_nametoindex(). \param dns -- the listening address of the lokinet
         /// DNS server \param global -- whether to set up lokinet for all DNS queries (true) or just
         /// .loki & .snode addresses (false).
-        virtual void set_resolver(unsigned int if_index, llarp::SockAddr_deprecated dns, bool global) = 0;
+        virtual void set_resolver(unsigned int if_index, oxen::quic::Address dns, bool global) = 0;
     };
 
     /// a dns platform does silently does nothing, successfully
@@ -35,7 +38,7 @@ namespace llarp::dns
     {
        public:
         ~Null_Platform() override = default;
-        void set_resolver(unsigned int, llarp::SockAddr_deprecated, bool) override
+        void set_resolver(unsigned int, oxen::quic::Address, bool) override
         {}
     };
 
@@ -50,6 +53,6 @@ namespace llarp::dns
         void add_impl(std::unique_ptr<I_Platform> impl);
 
         /// try all owned platforms to set the resolver, throws if none of them work
-        void set_resolver(unsigned int if_index, llarp::SockAddr_deprecated dns, bool global) override;
+        void set_resolver(unsigned int if_index, oxen::quic::Address dns, bool global) override;
     };
 }  // namespace llarp::dns

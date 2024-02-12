@@ -83,7 +83,7 @@ namespace llarp::handlers
         return _router.local_rid();
     }
 
-    const std::shared_ptr<EvLoop_deprecated>& RemoteHandler::loop()
+    const std::shared_ptr<EventLoop>& RemoteHandler::loop()
     {
         return _router.loop();
     }
@@ -128,7 +128,7 @@ namespace llarp::handlers
         //   should_init_tun = false;
         // }
 
-        _ip_range = _net_config._if_addr;
+        _ip_range = _net_config._local_if_range;
 
         if (!_ip_range.address().is_addressable())
         {

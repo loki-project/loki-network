@@ -22,6 +22,7 @@ namespace llarp::vpn
     {
         InterfaceAddress(IPRange r) : range{std::move(r)}, fam{range.is_ipv4() ? AF_INET : AF_INET6}
         {}
+
         IPRange range;
         int fam;
 
@@ -37,10 +38,9 @@ namespace llarp::vpn
         unsigned int index;
         std::vector<InterfaceAddress> addrs;
 
-        /// get address number N
-        inline oxen::quic::Address operator[](size_t idx) const
+        inline IPRange operator[](size_t idx) const
         {
-            return addrs[idx].range.address();
+            return addrs[idx].range;
         }
     };
 
@@ -134,7 +134,7 @@ namespace llarp::vpn
         /// interfaces on the system
         virtual std::shared_ptr<I_Packet_IO> create_packet_io(
             [[maybe_unused]] unsigned int ifindex,
-            [[maybe_unused]] const std::optional<SockAddr_deprecated>& dns_upstream_src)
+            [[maybe_unused]] const std::optional<oxen::quic::Address>& dns_upstream_src)
         {
             throw std::runtime_error{"raw packet io is unimplemented"};
         }

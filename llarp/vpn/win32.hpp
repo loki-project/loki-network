@@ -57,7 +57,7 @@ namespace llarp::win32
         std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router* router) override;
 
         std::shared_ptr<I_Packet_IO> create_packet_io(
-            unsigned int ifindex, const std::optional<SockAddr>& dns_upstream_src) override;
+            unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src) override;
 
         AbstractRouteManager& RouteManager() override
         {

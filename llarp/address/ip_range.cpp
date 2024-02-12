@@ -79,6 +79,17 @@ namespace llarp
         return ret;
     }
 
+    std::optional<ip> IPRange::get_ip()
+    {
+        if (auto maybe_v4 = get_ipv4())
+            return *maybe_v4;
+
+        if (auto maybe_v6 = get_ipv6())
+            return *maybe_v6;
+
+        return std::nullopt;
+    }
+
     bool IPRange::contains(const IPRange& other) const
     {
         if (is_ipv4() ^ other.is_ipv4())

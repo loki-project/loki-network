@@ -32,23 +32,24 @@ namespace llarp::net
             port = std::nullopt;
     }
 
-    bool ProtocolInfo::MatchesPacket(const IP_packet_deprecated& pkt) const
+    // DISCUSS: wtf is this
+    bool ProtocolInfo::MatchesPacket(const IPPacket&) const
     {
-        if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
-            return false;
+        // if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
+        //     return false;
 
         if (not port)
             return true;
 
-        if (const auto maybe = pkt.DstPort())
-        {
-            return *port == *maybe;
-        }
+        // if (const auto maybe = pkt.DstPort())
+        // {
+        //     return *port == *maybe;
+        // }
         // we can't tell what the port is but the protocol matches and that's good enough
         return true;
     }
 
-    bool TrafficPolicy::AllowsTraffic(const IP_packet_deprecated& pkt) const
+    bool TrafficPolicy::AllowsTraffic(const IPPacket& pkt) const
     {
         if (protocols.empty() and ranges.empty())
             return true;

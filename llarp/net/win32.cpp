@@ -49,7 +49,7 @@ namespace llarp::net
         {
             for (auto* addr = a->FirstUnicastAddress; addr; addr = addr->Next)
             {
-                SockAddr saddr{*addr->Address.lpSockaddr};
+                oxen::quic::Address saddr{*addr->Address.lpSockaddr};
                 LogDebug(fmt::format("'{}' has address '{}'", a->AdapterName, saddr));
                 if (saddr.getIP() == ip)
                     return true;
@@ -62,7 +62,7 @@ namespace llarp::net
         {
             for (auto* addr = a->FirstUnicastAddress; addr; addr = addr->Next)
             {
-                SockAddr saddr{*addr->Address.lpSockaddr};
+                oxen::quic::Address saddr{*addr->Address.lpSockaddr};
                 if (saddr.Family() == af)
                     return true;
             }
@@ -70,12 +70,14 @@ namespace llarp::net
         }
 
        public:
-        std::optional<int> GetInterfaceIndex(ipaddr_t ip) const override
+        std::optional<int> get_interface_index(ip ip) const override
         {
             std::optional<int> found;
             int af{AF_INET};
-            if (std::holds_alternative<ipv6addr_t>(ip))
+
+            if (std::holds_alternative<ipv6>(ip))
                 af = AF_INET6;
+
             iter_adapters(
                 [&found, ip, this](auto* adapter) {
                     if (found)
@@ -89,12 +91,14 @@ namespace llarp::net
                     }
                 },
                 af);
+
             return found;
         }
 
-        std::optional<llarp::SockAddr> GetInterfaceAddr(std::string_view name, int af) const override
+        std::optional<oxen::quic::Address> get_interface_addr(std::string_view name, int af) const override
         {
-            std::optional<SockAddr> found;
+            std::optional<oxen::quic::Address> found;
+
             iter_adapters([name = std::string{name}, af, &found, this](auto* a) {
                 if (found)
                     return;
@@ -102,15 +106,17 @@ namespace llarp::net
                     return;
 
                 if (adapter_has_fam(a, af))
-                    found = SockAddr{*a->FirstUnicastAddress->Address.lpSockaddr};
+                    found = oxen::quic::Address{*a->FirstUnicastAddress->Address.lpSockaddr};
             });
+
             return found;
         }
 
-        std::optional<SockAddr> AllInterfaces(SockAddr fallback) const override
+        std::optional<oxen::quic::Address> all_interfaces(oxen::quic::Address fallback) const override
         {
+            (void)fallback;
             // windows seems to not give a shit about source address
-            return fallback.isIPv6() ? SockAddr{"[::]"} : SockAddr{"0.0.0.0"};
+            return oxen::quic::Address{};
         }
 
         std::optional<std::string> FindFreeTun() const override
@@ -124,34 +130,40 @@ namespace llarp::net
             return std::nullopt;
         }
 
-        std::optional<IPRange> FindFreeRange() const override
+        std::optional<IPRange> find_free_range() const override
         {
             std::list<IPRange> currentRanges;
+
             iter_adapters([&currentRanges](auto* i) {
                 for (auto* addr = i->FirstUnicastAddress; addr; addr = addr->Next)
                 {
-                    SockAddr saddr{*addr->Address.lpSockaddr};
-                    currentRanges.emplace_back(
-                        saddr.asIPv6(),
-                        ipaddr_netmask_bits(addr->OnLinkPrefixLength, addr->Address.lpSockaddr->sa_family));
+                    oxen::quic::Address saddr{*addr->Address.lpSockaddr};
+
+                    bool is_ipv6 = addr->Address.lpSockaddr->sa_family == AF_INET6 ? true : false;
+
+                    // TOFIX: wtf is this
+                    uint8_t m = is_ipv6 ? reinterpret_cast<sockaddr_in6*>(*addr->Address.lpSockaddr)->sin6_addr.s6_addr
+                                        : reinterpret_cast<sockaddr_in*>(*addr->Address.lpSockaddr)->sin_addr.s_addr;
+
+                    currentRanges.emplace_back(std::move(saddr), m);
                 }
             });
 
             return IPRange::FindPrivateRange(currentRanges);
         }
 
-        std::string LoopbackInterfaceName() const override
+        std::string loopback_interface_name() const override
         {
             // todo: implement me? does windows even have a loopback?
             return "";
         }
 
-        bool HasInterfaceAddress(ipaddr_t ip) const override
+        bool has_interface_address(ip ip) const override
         {
             return GetInterfaceIndex(ip) != std::nullopt;
         }
 
-        std::vector<InterfaceInfo> AllNetworkInterfaces() const override
+        std::vector<InterfaceInfo> all_network_interfaces() const override
         {
             std::vector<InterfaceInfo> all;
             for (int af : {AF_INET, AF_INET6})

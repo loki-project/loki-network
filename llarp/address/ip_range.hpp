@@ -1,18 +1,13 @@
 #pragma once
 
+#include "types.hpp"
+
 #include <llarp/util/formattable.hpp>
 
-#include <oxen/quic.hpp>
 #include <oxenc/bt_serialize.h>
 
 namespace llarp
 {
-    using ipv4 = oxen::quic::ipv4;
-    using ipv6 = oxen::quic::ipv6;
-    using ipv4_net = oxen::quic::ipv4_net;
-    using ipv6_net = oxen::quic::ipv6_net;
-    using ip_net = std::variant<ipv4_net, ipv6_net>;
-
     struct IPRange
     {
        private:
@@ -64,10 +59,7 @@ namespace llarp
 
         std::optional<ipv6> get_ipv6() const;
 
-        const ip_net& ip() const
-        {
-            return _ip;
-        }
+        std::optional<ip> get_ip();
 
         const uint8_t& mask() const
         {

@@ -13,11 +13,11 @@ namespace llarp::net
     struct InterfaceInfo
     {
        private:
+       public:
         // TODO: is this needed?
         /// a gateway we can use if it exists
         std::optional<ip_net> _gateway;
 
-       public:
         /// human readable name of interface
         std::string name;
         /// interface's index

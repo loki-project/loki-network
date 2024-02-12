@@ -11,6 +11,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("RC");
+
     void RouterContact::bt_verify(oxenc::bt_dict_consumer& btdc, bool reject_expired) const
     {
         btdc.require_signature("~", [this, reject_expired](ustring_view msg, ustring_view sig) {
@@ -20,10 +22,7 @@ namespace llarp
             if (reject_expired and is_expired(time_now_ms()))
                 throw std::runtime_error{"Rejecting expired RemoteRC!"};
 
-            // TODO: revisit if this is needed; detail from previous implementation
-            const auto* net = net::Platform::Default_ptr();
-
-            if (net->IsBogon(addr().in4()) and BLOCK_BOGONS)
+            if (not addr().is_public() and BLOCK_BOGONS)
             {
                 auto err = "Unable to verify expired RemoteRC address!";
                 log::info(logcat, err);

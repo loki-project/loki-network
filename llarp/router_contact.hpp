@@ -20,8 +20,6 @@
 
 namespace llarp
 {
-    static auto logcat = log::Cat("RC");
-
     static inline constexpr size_t NETID_SIZE{8};
 
     /// On the wire we encode the data as a dict containing:

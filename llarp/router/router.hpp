@@ -11,7 +11,7 @@
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/ev/ev.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/exit/endpoint.hpp>
 #include <llarp/exit/handler.hpp>
 #include <llarp/path/path_context.hpp>
@@ -83,7 +83,7 @@ namespace llarp
     {
         friend class NodeDB;
 
-        explicit Router(std::shared_ptr<EvLoop_deprecated> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
+        explicit Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
 
         ~Router() = default;
 
@@ -104,10 +104,9 @@ namespace llarp
         LocalRC router_contact;
         std::shared_ptr<oxenmq::OxenMQ> _lmq;
         path::BuildLimiter _pathbuild_limiter;
-        std::shared_ptr<EventLoopWakeup> loop_wakeup;
 
-        std::atomic<bool> is_stopping{false};
-        std::atomic<bool> is_running{false};
+        std::atomic<bool> _is_stopping{false};
+        std::atomic<bool> _is_running{false};
 
         int _outbound_udp_socket{-1};
         bool _is_service_node{false};
@@ -130,7 +129,7 @@ namespace llarp
         // TunEndpoint or NullEndpoint, depending on lokinet configuration
         std::unique_ptr<handlers::BaseHandler> _api;
 
-        std::shared_ptr<EvLoop_deprecated> _loop;
+        std::shared_ptr<EventLoop> _loop;
         std::shared_ptr<vpn::Platform> _vpn;
         path::PathContext paths;
         SecretKey _identity;
@@ -293,7 +292,7 @@ namespace llarp
             return _router_profiling;
         }
 
-        const std::shared_ptr<EvLoop_deprecated>& loop() const
+        const std::shared_ptr<EventLoop>& loop() const
         {
             return _loop;
         }
@@ -365,7 +364,7 @@ namespace llarp
             _router_close_cb = hook;
         }
 
-        bool LooksAlive() const
+        bool looks_alive() const
         {
             const llarp_time_t current = now();
             return current <= _last_tick || (current - _last_tick) <= llarp_time_t{30000};
@@ -376,10 +375,6 @@ namespace llarp
             return _route_poker;
         }
 
-        void TriggerPump();
-
-        void PumpLL();
-
         std::string status_line();
 
         std::optional<RouterID> GetRandomGoodRouter();
@@ -388,7 +383,7 @@ namespace llarp
         /// return true on success
         bool init_service_node();
 
-        bool IsRunning() const;
+        bool is_running() const;
 
         /// return true if we are running in service node mode
         bool is_service_node() const;
@@ -451,7 +446,7 @@ namespace llarp
             return llarp::time_now_ms();
         }
 
-        void ConnectToRandomRouters(int N);
+        void connect_to_random(int N);
 
         /// count the number of unique service nodes connected via pubkey
         size_t num_router_connections() const;

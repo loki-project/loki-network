@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/dns/server.hpp>
 #include <llarp/ev/ev.hpp>
 #include <llarp/net/ip.hpp>
@@ -65,8 +66,8 @@ namespace llarp::handlers
         bool maybe_hook_dns(
             std::shared_ptr<dns::PacketSource_Base> source,
             const dns::Message& query,
-            const SockAddr_deprecated& to,
-            const SockAddr_deprecated& from) override;
+            const oxen::quic::Address& to,
+            const oxen::quic::Address& from) override;
 
         // Reconfigures DNS servers and restarts libunbound with the new servers.
         void reconfigure_dns(std::vector<oxen::quic::Address> servers);
@@ -118,7 +119,7 @@ namespace llarp::handlers
         bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
 
         /// we got a packet from the user
-        void handle_user_packet(llarp::net::IP_packet_deprecated pkt);
+        void handle_user_packet(llarp::IPPacket pkt);
 
         // TODO: change this to the new IP type after changing the member
         /// get the local interface's address
@@ -150,7 +151,7 @@ namespace llarp::handlers
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
         /// returns true otherwise
-        bool is_allowing_traffic(const net::IP_packet_deprecated& pkt) const;
+        bool is_allowing_traffic(const IPPacket& pkt) const;
 
         /// get a key for ip address
         std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t ip) const override;
@@ -167,7 +168,7 @@ namespace llarp::handlers
         struct WritePacket
         {
             uint64_t seqno;
-            net::IP_packet_deprecated pkt;
+            IPPacket pkt;
 
             bool operator>(const WritePacket& other) const
             {
@@ -240,6 +241,7 @@ namespace llarp::handlers
         std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
         /// our ip address (host byte order)
         oxen::quic::Address _local_ip;
+        ip local_ip_v;
         /// our network interface's ipv6 address
         IPRange _local_ipv6;
 
@@ -255,7 +257,7 @@ namespace llarp::handlers
         bool _use_v6;
         std::string _if_name;
 
-        std::optional<IPRange> _base_address_v6 = std::nullopt;
+        std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
         std::shared_ptr<vpn::NetworkInterface> _net_if;
 

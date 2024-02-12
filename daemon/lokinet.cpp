@@ -4,6 +4,7 @@
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/ev/ev.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/util/exceptions.hpp>
 // #include <llarp/util/logging.hpp>
 #include <llarp/util/lokinet_init.h>
@@ -71,8 +72,9 @@ namespace
     void handle_signal(int sig)
     {
         llarp::log::info(logcat, "Handling signal {}", sig);
+
         if (ctx)
-            ctx->loop->call([sig] { ctx->HandleSignal(sig); });
+            ctx->_loop->call([sig]() { ctx->handle_signal(sig); });
         else
             std::cerr << "Received signal " << sig << ", but have no context yet. Ignoring!" << std::endl;
     }
@@ -476,7 +478,7 @@ namespace
         do
         {
             // do periodic non lokinet related tasks here
-            if (ctx and ctx->IsUp() and not ctx->LooksAlive())
+            if (ctx and ctx->is_up() and not ctx->looks_alive())
             {
                 auto deadlock_cat = llarp::log::Cat("deadlock");
                 llarp::log::critical(deadlock_cat, "Router is deadlocked!");
@@ -541,7 +543,7 @@ namespace
             fs::current_path(conf->router.data_dir);
 
             ctx = std::make_shared<llarp::Context>();
-            ctx->Configure(std::move(conf));
+            ctx->configure(std::move(conf));
 
             signal(SIGINT, handle_signal);
             signal(SIGTERM, handle_signal);
@@ -553,7 +555,7 @@ namespace
 
             try
             {
-                ctx->Setup(opts);
+                ctx->setup(opts);
             }
             catch (llarp::util::bind_socket_error& ex)
             {
@@ -569,7 +571,7 @@ namespace
             }
             llarp::util::SetThreadName("llarp-mainloop");
 
-            auto result = ctx->Run(opts);
+            auto result = ctx->run(opts);
             exit_code.set_value(result);
         }
         catch (const std::exception& e)

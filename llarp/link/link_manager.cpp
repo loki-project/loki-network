@@ -28,14 +28,9 @@ namespace llarp
         secret.resize(32);
 
         crypto_generichash_blake2b_state st;
-        crypto_generichash_blake2b_init(
-                &st,
-                static_shared_key.data(),
-                static_shared_key.size(),
-                secret.size());
+        crypto_generichash_blake2b_init(&st, static_shared_key.data(), static_shared_key.size(), secret.size());
         crypto_generichash_blake2b_update(&st, sk.data(), sk.size());
-        crypto_generichash_blake2b_final(
-                &st, reinterpret_cast<unsigned char*>(secret.data()), secret.size());
+        crypto_generichash_blake2b_final(&st, reinterpret_cast<unsigned char*>(secret.data()), secret.size());
 
         return static_secret{std::move(secret)};
     }
@@ -640,7 +635,7 @@ namespace llarp
         node_db = _router.node_db();
     }
 
-    void LinkManager::connect_to_random(int num_conns, bool client_only)
+    void LinkManager::connect_to_random(size_t num_conns, bool client_only)
     {
         auto filter = [this, client_only](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();

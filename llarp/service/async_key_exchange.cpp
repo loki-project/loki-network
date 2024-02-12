@@ -10,15 +10,13 @@
 namespace llarp::service
 {
     AsyncKeyExchange::AsyncKeyExchange(
-        std::shared_ptr<EventLoop> l,
         ServiceInfo r,
         const Identity& localident,
         const PQPubKey& introsetPubKey,
         const Introduction& remote,
         Endpoint* h,
         const SessionTag& t)
-        : loop(std::move(l)),
-          m_remote(std::move(r)),
+        : m_remote(std::move(r)),
           m_LocalIdentity(localident),
           introPubKey(introsetPubKey),
           remoteIntro(remote),

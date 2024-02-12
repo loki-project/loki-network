@@ -3,6 +3,7 @@
 #include "dns.hpp"
 #include "srv_data.hpp"
 
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/net/ip.hpp>
 #include <llarp/util/buffer.hpp>
 
@@ -143,13 +144,13 @@ namespace llarp::dns
         return StatusObject{{"questions", ques}, {"answers", ans}};
     }
 
-    OwnedBuffer Message::to_buffer() const
+    std::vector<uint8_t> Message::to_buffer() const
     {
-        std::array<uint8_t, 1500> tmp;
+        std::vector<uint8_t> tmp;
         llarp_buffer_t buf{tmp};
         if (not Encode(&buf))
             throw std::runtime_error("cannot encode dns message");
-        return OwnedBuffer::copy_used(buf);
+        return tmp;
     }
 
     void Message::add_srv_fail(RR_TTL_t)
@@ -399,15 +400,18 @@ namespace llarp::dns
             fmt::format("{}", fmt::join(additional, ",")));
     }
 
-    std::optional<Message> maybe_parse_dns_msg(llarp_buffer_t buf)
+    std::optional<Message> maybe_parse_dns_msg(IPPacket m)
     {
         MessageHeader hdr{};
+        llarp_buffer_t buf{m.uview()};
+
         if (not hdr.Decode(&buf))
             return std::nullopt;
 
         Message msg{hdr};
         if (not msg.Decode(&buf))
             return std::nullopt;
+
         return msg;
     }
 }  // namespace llarp::dns

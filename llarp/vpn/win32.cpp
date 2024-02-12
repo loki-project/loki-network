@@ -65,16 +65,16 @@ namespace llarp::win32
         std::set<oxen::quic::Address> gateways;
 
         const auto ifaddr = vpn.Info()[0];
-        for (const auto& iface : Net().AllNetworkInterfaces())
+        for (const auto& iface : Net().all_network_interfaces())
         {
-            if (not iface.gateway)
+            if (not iface._gateway)
                 continue;
 
             bool b = true;
 
             for (const auto& range : iface.addrs)
             {
-                if (not range.Contains(ifaddr))
+                if (not range.contains(ifaddr))
                     b = false;
             }
             // TODO: FIXME
@@ -111,7 +111,7 @@ namespace llarp::win32
     }
 
     std::shared_ptr<I_Packet_IO> VPNPlatform::create_packet_io(
-        unsigned int ifindex, const std::optional<SockAddr>& dns_upstream_src)
+        unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src)
     {
         // we only want do this on all interfaes with windivert
         if (ifindex)

@@ -7,7 +7,7 @@ namespace llarp::dns
         m_Impls.emplace_back(std::move(impl));
     }
 
-    void Multi_Platform::set_resolver(unsigned int index, llarp::SockAddr_deprecated dns, bool global)
+    void Multi_Platform::set_resolver(unsigned int index, oxen::quic::Address dns, bool global)
     {
         if (m_Impls.empty())
             return;

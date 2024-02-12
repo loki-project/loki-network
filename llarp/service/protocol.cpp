@@ -217,7 +217,6 @@ namespace llarp::service
     struct AsyncFrameDecrypt
     {
         std::shared_ptr<path::Path> path;
-        std::shared_ptr<EvLoop_deprecated> loop;
         std::shared_ptr<ProtocolMessage> msg;
         const Identity& m_LocalIdentity;
         Endpoint* handler;
@@ -225,18 +224,12 @@ namespace llarp::service
         const Introduction fromIntro;
 
         AsyncFrameDecrypt(
-            std::shared_ptr<EvLoop_deprecated> l,
             const Identity& localIdent,
             Endpoint* h,
             std::shared_ptr<ProtocolMessage> m,
             const ProtocolFrameMessage& f,
             const Introduction& recvIntro)
-            : loop(std::move(l)),
-              msg(std::move(m)),
-              m_LocalIdentity(localIdent),
-              handler(h),
-              frame(f),
-              fromIntro(recvIntro)
+            : msg(std::move(m)), m_LocalIdentity(localIdent), handler(h), frame(f), fromIntro(recvIntro)
         {}
 
         static void Work(std::shared_ptr<AsyncFrameDecrypt> self)
@@ -352,7 +345,6 @@ namespace llarp::service
     };
 
     bool ProtocolFrameMessage::AsyncDecryptAndVerify(
-        std::shared_ptr<EvLoop_deprecated> loop,
         std::shared_ptr<path::Path> recvPath,
         const Identity& localIdent,
         Endpoint* handler,
@@ -363,7 +355,7 @@ namespace llarp::service
         if (convo_tag.is_zero())
         {
             // we need to dh
-            auto dh = std::make_shared<AsyncFrameDecrypt>(loop, localIdent, handler, msg, *this, recvPath->intro);
+            auto dh = std::make_shared<AsyncFrameDecrypt>(localIdent, handler, msg, *this, recvPath->intro);
             dh->path = recvPath;
             handler->router().queue_work([dh = std::move(dh)] { return AsyncFrameDecrypt::Work(dh); });
             return true;
@@ -394,7 +386,7 @@ namespace llarp::service
         // }
 
         v->frame = *this;
-        auto callback = [loop, hook](std::shared_ptr<ProtocolMessage> msg) {
+        auto callback = [loop = handler->loop(), hook](std::shared_ptr<ProtocolMessage> msg) {
             if (hook)
             {
                 loop->call([msg, hook]() { hook(msg); });

@@ -12,17 +12,18 @@ using namespace std::literals;
 
 namespace llarp::dns::sd
 {
-    void Platform::set_resolver(unsigned int if_ndx, llarp::SockAddr_deprecated dns, bool global)
+    void Platform::set_resolver(unsigned int if_ndx, oxen::quic::Address dns, bool global)
     {
         linux::DBUS _dbus{"org.freedesktop.resolve1", "/org/freedesktop/resolve1", "org.freedesktop.resolve1.Manager"};
         // This passing address by bytes and using two separate calls for ipv4/ipv6 is gross, but
         // the alternative is to build up a bunch of crap with va_args, which is slightly more
         // gross.
-        const bool isStandardDNSPort = dns.getPort() == 53;
-        if (dns.isIPv6())
+        const bool isStandardDNSPort = dns.port() == 53;
+        if (dns.is_ipv6())
         {
-            auto ipv6 = dns.getIPv6();
+            ipv6 ipv6{dns.in6().sin6_addr.s6_addr};
             static_assert(sizeof(ipv6) == 16);
+
             auto* a = reinterpret_cast<const uint8_t*>(&ipv6);
             if (isStandardDNSPort)
             {
@@ -52,16 +53,17 @@ namespace llarp::dns::sd
               a[0], a[1], a[2],  a[3],  a[4],  a[5],  a[6],  a[7],
               a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15], // yuck
                             // clang-format on
-                    (uint16_t)dns.getPort(),
+                    dns.port(),
                     nullptr  // dns server name (for TLS SNI which we don't care about)
                 );
             }
         }
         else
         {
-            auto ipv4 = dns.getIPv4();
-            static_assert(sizeof(ipv4) == 4);
+            ipv4 ipv4{oxenc::big_to_host<uint32_t>(dns.in4().sin_addr.s_addr)};
+
             auto* a = reinterpret_cast<const uint8_t*>(&ipv4);
+
             if (isStandardDNSPort)
             {
                 _dbus(
@@ -88,7 +90,7 @@ namespace llarp::dns::sd
                     // clang-format off
               a[0], a[1], a[2], a[3], // yuck
                            // clang-format on
-                    (uint16_t)dns.getPort(),
+                    dns.port(),
                     nullptr  // dns server name (for TLS SNI which we don't care about)
                 );
             }

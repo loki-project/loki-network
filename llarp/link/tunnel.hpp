@@ -50,7 +50,7 @@ namespace llarp::link
     class TunnelManager
     {
        public:
-        using ListenHandler = std::function<std::optional<SockAddr_deprecated>(
+        using ListenHandler = std::function<std::optional<oxen::quic::Address>(
             std::string_view lokinet_addr,  // The remote's full lokinet address
             uint16_t port                   // The requested port the tunnel wants to reach
             )>;
@@ -79,7 +79,7 @@ namespace llarp::link
 
         /// Simple wrapper around `listen(...)` that adds a handler that accepts all incoming
         /// connections trying to tunnel to port `port` and maps them to `localhost:port`.
-        int listen(SockAddr_deprecated port);
+        int listen(oxen::quic::Address port);
 
         /// Removes an incoming connection handler; takes the ID returned by `listen()`.
         void forget(int id);
@@ -118,11 +118,11 @@ namespace llarp::link
         ///
         /// TODO: add a callback to invoke when QUIC connection succeeds or fails.
         /// TODO: add a plain C wrapper around this
-        std::pair<SockAddr_deprecated, uint16_t> open(
+        std::pair<oxen::quic::Address, uint16_t> open(
             std::string_view remote_addr,
             uint16_t port,
             OpenCallback on_open = {},
-            SockAddr_deprecated bind_addr = {127, 0, 0, 1});
+            oxen::quic::Address bind_addr = {"127.0.0.1", 0});
 
         /// Start closing an outgoing tunnel; takes the ID returned by `open()`.  Note that an
         /// existing established tunneled connections will not be forcibly closed; this simply stops
@@ -195,7 +195,7 @@ namespace llarp::link
         bool continue_connecting(
             uint16_t pseudo_port, bool step_success, std::string_view step_name, std::string_view addr);
 
-        void make_client(const SockAddr_deprecated& remote, std::pair<const uint16_t, ClientTunnel>& row);
+        void make_client(const oxen::quic::Address& remote, std::pair<const uint16_t, ClientTunnel>& row);
 
         void flush_pending_incoming(ClientTunnel& ct);
 
@@ -211,7 +211,7 @@ namespace llarp::link
         // is a server).  This checks handlers to see whether the stream is allowed and, if so,
         // returns a SockAddr containing the IP/port the tunnel should map to.  Returns nullopt if
         // the connection should be rejected.
-        std::optional<SockAddr_deprecated> allow_connection(std::string_view lokinet_addr, uint16_t port);
+        std::optional<oxen::quic::Address> allow_connection(std::string_view lokinet_addr, uint16_t port);
 
         // Incoming stream handlers
         std::map<int, ListenHandler> incoming_handlers_;

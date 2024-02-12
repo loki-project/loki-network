@@ -24,19 +24,19 @@ namespace llarp::rpc
         std::function<void(std::optional<dns::Message>)> func;
 
        public:
-        SockAddr_deprecated dumb;
+        oxen::quic::Address dumb;
 
         template <typename Callable>
         DummyPacketSource(Callable&& f) : func{std::forward<Callable>(f)}
         {}
 
-        bool would_loop(const SockAddr_deprecated&, const SockAddr_deprecated&) const override
+        bool would_loop(const oxen::quic::Address&, const oxen::quic::Address&) const override
         {
             return false;
         };
 
         /// send packet with src and dst address containing buf on this packet source
-        void send_to(const SockAddr_deprecated&, const SockAddr_deprecated&, OwnedBuffer buf) const override
+        void send_to(const oxen::quic::Address&, const oxen::quic::Address&, IPPacket buf) const override
         {
             func(dns::maybe_parse_dns_msg(buf));
         }
@@ -45,7 +45,7 @@ namespace llarp::rpc
         void stop() override{};
 
         /// returns the sockaddr we are bound on if applicable
-        std::optional<SockAddr_deprecated> bound_on() const override
+        std::optional<oxen::quic::Address> bound_on() const override
         {
             return std::nullopt;
         }
@@ -132,7 +132,7 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Halt& halt)
     {
-        if (not m_Router.IsRunning())
+        if (not m_Router.is_running())
         {
             SetJSONError("Router is not running", halt.response);
             return;
@@ -150,8 +150,8 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Status& status)
     {
-        (m_Router.IsRunning()) ? SetJSONResponse(m_Router.ExtractStatus(), status.response)
-                               : SetJSONError("Router is not yet ready", status.response);
+        (m_Router.is_running()) ? SetJSONResponse(m_Router.ExtractStatus(), status.response)
+                                : SetJSONError("Router is not yet ready", status.response);
     }
 
     void RPCServer::invoke(GetStatus& getstatus)
@@ -161,21 +161,22 @@ namespace llarp::rpc
 
     void RPCServer::invoke(QuicConnect& quicconnect)
     {
-        if (quicconnect.request.port == 0 and quicconnect.request.closeID == 0)
+        auto& req = quicconnect.request;
+
+        if (req.port == 0 and req.closeID == 0)
         {
             SetJSONError("Port not provided", quicconnect.response);
             return;
         }
 
-        if (quicconnect.request.remoteHost.empty() and quicconnect.request.closeID == 0)
+        if (req.remoteHost.empty() and req.closeID == 0)
         {
             SetJSONError("Host not provided", quicconnect.response);
             return;
         }
 
-        auto endpoint = (quicconnect.request.endpoint.empty())
-            ? GetEndpointByName(m_Router, "default")
-            : GetEndpointByName(m_Router, quicconnect.request.endpoint);
+        auto endpoint =
+            (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router, req.endpoint);
 
         if (not endpoint)
         {
@@ -187,26 +188,25 @@ namespace llarp::rpc
 
         if (not quic)
         {
-            SetJSONError(
-                "No quic interface available on endpoint " + quicconnect.request.endpoint, quicconnect.response);
+            SetJSONError("No quic interface available on endpoint " + req.endpoint, quicconnect.response);
             return;
         }
 
-        if (quicconnect.request.closeID)
+        if (req.closeID)
         {
             // TODO:
-            // quic->forget(quicconnect.request.closeID);
+            // quic->forget(req.closeID);
             SetJSONResponse("OK", quicconnect.response);
             return;
         }
 
-        SockAddr_deprecated laddr{quicconnect.request.bindAddr};
+        oxen::quic::Address laddr{req.bindAddr, req.port};
 
         try
         {
             // TODO:
             // auto [addr, id] = quic->open(
-            //     quicconnect.request.remoteHost, quicconnect.request.port, [](auto&&) {}, laddr);
+            //     req.remoteHost, req.port, [](auto&&) {}, laddr);
 
             StatusObject status;
             // status["addr"] = addr.to_string();
@@ -222,15 +222,16 @@ namespace llarp::rpc
 
     void RPCServer::invoke(QuicListener& quiclistener)
     {
-        if (quiclistener.request.port == 0 and quiclistener.request.closeID == 0)
+        auto req = quiclistener.request;
+
+        if (req.port == 0 and req.closeID == 0)
         {
             SetJSONError("Invalid arguments", quiclistener.response);
             return;
         }
 
-        auto endpoint = (quiclistener.request.endpoint.empty())
-            ? GetEndpointByName(m_Router, "default")
-            : GetEndpointByName(m_Router, quiclistener.request.endpoint);
+        auto endpoint =
+            (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router, req.endpoint);
 
         if (not endpoint)
         {
@@ -242,25 +243,24 @@ namespace llarp::rpc
 
         if (not quic)
         {
-            SetJSONError(
-                "No quic interface available on endpoint " + quiclistener.request.endpoint, quiclistener.response);
+            SetJSONError("No quic interface available on endpoint " + req.endpoint, quiclistener.response);
             return;
         }
 
-        if (quiclistener.request.closeID)
+        if (req.closeID)
         {
             // TODO:
-            // quic->forget(quiclistener.request.closeID);
+            // quic->forget(req.closeID);
             SetJSONResponse("OK", quiclistener.response);
             return;
         }
 
-        if (quiclistener.request.port)
+        if (req.port)
         {
             auto id = 0;
             try
             {
-                SockAddr_deprecated addr{quiclistener.request.remoteHost, huint16_t{quiclistener.request.port}};
+                oxen::quic::Address addr{req.remoteHost, req.port};
                 // TODO:
                 // id = quic->listen(addr);
             }
@@ -274,12 +274,11 @@ namespace llarp::rpc
             result["id"] = id;
             std::string localAddress;
             var::visit([&](auto&& addr) { localAddress = addr.to_string(); }, endpoint->local_address());
-            result["addr"] = localAddress + ":" + std::to_string(quiclistener.request.port);
+            result["addr"] = localAddress + ":" + std::to_string(req.port);
 
-            if (not quiclistener.request.srvProto.empty())
+            if (not req.srvProto.empty())
             {
-                auto srvData = dns::SRVData::fromTuple(
-                    std::make_tuple(quiclistener.request.srvProto, 1, 1, quiclistener.request.port, ""));
+                auto srvData = dns::SRVData::fromTuple(std::make_tuple(req.srvProto, 1, 1, req.port, ""));
                 endpoint->put_srv_record(std::move(srvData));
             }
 
@@ -487,7 +486,7 @@ namespace llarp::rpc
                 else
                     SetJSONError("No response from DNS", dnsquery.response);
             });
-            if (not dns->maybe_handle_packet(packet_src, packet_src->dumb, packet_src->dumb, msg.to_buffer()))
+            if (not dns->maybe_handle_packet(packet_src, packet_src->dumb, packet_src->dumb, IPPacket{msg.to_buffer()}))
                 SetJSONError("DNS query not accepted by endpoint", dnsquery.response);
         }
         else

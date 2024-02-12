@@ -12,7 +12,7 @@ using namespace std::literals;
 
 namespace llarp::dns::nm
 {
-    void Platform::set_resolver(unsigned int, llarp::SockAddr_deprecated, bool)
+    void Platform::set_resolver(unsigned int, oxen::quic::Address, bool)
     {
         // todo: implement me eventually
     }

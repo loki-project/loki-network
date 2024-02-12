@@ -81,7 +81,7 @@ namespace llarp::net
         return ExpandV4(dstv4());
     }
 
-    IP_packet_deprecated::IP_packet_deprecated(byte_view_t view)
+    IP_packet_deprecated::IP_packet_deprecated(ustring_view view)
     {
         if (view.size() < MinSize)
         {
@@ -134,9 +134,9 @@ namespace llarp::net
         return service::ProtocolType::Control;
     }
 
-    byte_view_t IP_packet_deprecated::view() const
+    ustring_view IP_packet_deprecated::view() const
     {
-        return byte_view_t{data(), size()};
+        return ustring_view{data(), size()};
     }
 
     std::optional<nuint16_t> IP_packet_deprecated::DstPort() const

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ip_packet_old.hpp"
 #include "ip_range.hpp"
 
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
@@ -29,7 +29,7 @@ namespace llarp::net
 
         /// returns true if an ip packet looks like it matches this protocol info
         /// returns false otherwise
-        bool MatchesPacket(const IP_packet_deprecated& pkt) const;
+        bool MatchesPacket(const IPPacket& pkt) const;
 
         bool operator<(const ProtocolInfo& other) const
         {
@@ -58,6 +58,6 @@ namespace llarp::net
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise
-        bool AllowsTraffic(const IP_packet_deprecated& pkt) const;
+        bool AllowsTraffic(const IPPacket& pkt) const;
     };
 }  // namespace llarp::net

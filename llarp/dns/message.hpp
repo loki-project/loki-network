@@ -6,6 +6,8 @@
 
 namespace llarp
 {
+    struct IPPacket;
+
     namespace dns
     {
         struct SRVData;
@@ -73,7 +75,7 @@ namespace llarp
             bool Decode(llarp_buffer_t* buf) override;
 
             // Wrapper around Encode that encodes into a new buffer and returns it
-            [[nodiscard]] OwnedBuffer to_buffer() const;
+            std::vector<uint8_t> to_buffer() const;
 
             std::string to_string() const;
 
@@ -85,7 +87,7 @@ namespace llarp
             std::vector<ResourceRecord> additional;
         };
 
-        std::optional<Message> maybe_parse_dns_msg(llarp_buffer_t buf);
+        std::optional<Message> maybe_parse_dns_msg(IPPacket msg);
     }  // namespace dns
 
     template <>

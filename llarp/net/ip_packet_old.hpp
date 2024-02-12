@@ -122,7 +122,7 @@ namespace llarp::net
         /// create an ip packet buffer of all zeros of size sz
         explicit IP_packet_deprecated(size_t sz);
         /// create an ip packet from a view
-        explicit IP_packet_deprecated(byte_view_t);
+        explicit IP_packet_deprecated(ustring_view);
         /// create an ip packet from a vector we then own
         IP_packet_deprecated(std::vector<uint8_t>&&);
 
@@ -212,7 +212,7 @@ namespace llarp::net
             return _buf.empty();
         }
 
-        byte_view_t view() const;
+        ustring_view view() const;
 
         struct CompareSize
         {

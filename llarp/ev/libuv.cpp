@@ -292,7 +292,8 @@ namespace llarp::uv
         });
     }
 
-    llarp::uv::UDPHandle_uvw::UDPHandle_uvw(uvw::Loop& loop, ReceiveFunc rf) : llarp::UDPHandle_deprecated{std::move(rf)}
+    llarp::uv::UDPHandle_uvw::UDPHandle_uvw(uvw::Loop& loop, ReceiveFunc rf)
+        : llarp::UDPHandle_deprecated{std::move(rf)}
     {
         reset_handle(loop);
     }

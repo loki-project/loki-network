@@ -5,7 +5,7 @@
 
 #include <llarp/constants/apple.hpp>
 #include <llarp/constants/platform.hpp>
-#include <llarp/ev/udp_handle.hpp>
+#include <llarp/ev/udp.hpp>
 
 #include <oxen/log.hpp>
 #include <unbound.h>
@@ -31,22 +31,24 @@ namespace llarp::dns
     class UDPReader : public PacketSource_Base, public std::enable_shared_from_this<UDPReader>
     {
         Server& _dns;
-        std::shared_ptr<llarp::UDPHandle_deprecated> _udp;
+        std::unique_ptr<UDPHandle> _udp;
         oxen::quic::Address _local_addr;
 
        public:
-        explicit UDPReader(Server& dns, const std::shared_ptr<EvLoop_deprecated>& loop, oxen::quic::Address bindaddr)
-            : _dns{dns}
+        explicit UDPReader(Server& dns, const loop_ptr& loop, oxen::quic::Address bind) : _dns{dns}
         {
-            _udp = loop->make_udp([&](auto&, oxen::quic::Address src, llarp::OwnedBuffer buf) {
+            _udp = std::make_unique<UDPHandle>(loop, bind, [&](UDPPacket pkt) {
+                auto& src = pkt.path.local;
+
                 if (src == _local_addr)
                     return;
-                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, std::move(buf)))
+
+                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
                 {
                     log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
                 }
             });
-            _udp->listen(bindaddr);
+
             if (auto maybe_addr = bound_on())
             {
                 _local_addr = *maybe_addr;
@@ -55,19 +57,25 @@ namespace llarp::dns
                 throw std::runtime_error{"cannot find which address our dns socket is bound on"};
         }
 
-        std::optional<SockAddr_deprecated> bound_on() const override
+        std::optional<oxen::quic::Address> bound_on() const override
         {
-            return _udp->LocalAddr();
+            return _udp->bind();
         }
 
-        bool would_loop(const SockAddr_deprecated& to, const SockAddr_deprecated&) const override
+        bool would_loop(const oxen::quic::Address& to, const oxen::quic::Address&) const override
         {
             return to != _local_addr;
         }
 
-        void send_to(const SockAddr_deprecated& to, const SockAddr_deprecated&, llarp::OwnedBuffer buf) const override
+        void send_to(const oxen::quic::Address& to, const oxen::quic::Address&, IPPacket data) const override
         {
-            _udp->send(to, std::move(buf));
+            _udp->send(to, data.give());
+        }
+
+        void send_to(
+            const oxen::quic::Address& to, const oxen::quic::Address&, std::vector<uint8_t> data) const override
+        {
+            _udp->send(to, std::move(data));
         }
 
         void stop() override
@@ -83,16 +91,16 @@ namespace llarp::dns
         class Query : public QueryJob_Base, public std::enable_shared_from_this<Query>
         {
             std::shared_ptr<PacketSource_Base> src;
-            SockAddr_deprecated resolverAddr;
-            SockAddr_deprecated askerAddr;
+            oxen::quic::Address resolverAddr;
+            oxen::quic::Address askerAddr;
 
            public:
             explicit Query(
                 std::weak_ptr<Resolver> parent_,
                 Message query,
                 std::shared_ptr<PacketSource_Base> pktsrc,
-                SockAddr_deprecated toaddr,
-                SockAddr_deprecated fromaddr)
+                oxen::quic::Address toaddr,
+                oxen::quic::Address fromaddr)
                 : QueryJob_Base{std::move(query)},
                   src{std::move(pktsrc)},
                   resolverAddr{std::move(toaddr)},
@@ -102,7 +110,7 @@ namespace llarp::dns
             std::weak_ptr<Resolver> parent;
             int id{};
 
-            void send_reply(llarp::OwnedBuffer replyBuf) override;
+            void send_reply(std::vector<uint8_t> buf) override;
         };
 
         /// Resolver_Base that uses libunbound
@@ -151,8 +159,8 @@ namespace llarp::dns
 
                 log::trace(logcat, "queueing dns response from libunbound to userland");
 
-                // rewrite response
-                OwnedBuffer pkt{(const uint8_t*)result->answer_packet, (size_t)result->answer_len};
+                IPPacket pkt{
+                    reinterpret_cast<const uint8_t*>(result->answer_packet), static_cast<size_t>(result->answer_len)};
                 llarp_buffer_t buf{pkt};
                 MessageHeader hdr;
                 hdr.Decode(&buf);
@@ -161,7 +169,7 @@ namespace llarp::dns
                 hdr.Encode(&buf);
 
                 // send reply
-                query->send_reply(std::move(pkt));
+                query->send_reply(std::move(pkt).give());
             }
 
             void add_upstream_resolver(const oxen::quic::Address& dns)
@@ -444,8 +452,8 @@ namespace llarp::dns
             bool maybe_hook_dns(
                 std::shared_ptr<PacketSource_Base> source,
                 const Message& query,
-                const SockAddr_deprecated& to,
-                const SockAddr_deprecated& from) override
+                const oxen::quic::Address& to,
+                const oxen::quic::Address& from) override
             {
                 auto tmp = std::make_shared<Query>(weak_from_this(), query, source, to, from);
                 // no questions, send fail
@@ -518,22 +526,24 @@ namespace llarp::dns
             }
         };
 
-        void Query::send_reply(llarp::OwnedBuffer replyBuf)
+        void Query::send_reply(std::vector<uint8_t> data)
         {
             if (_done.test_and_set())
                 return;
+
             auto parent_ptr = parent.lock();
+
             if (parent_ptr)
             {
                 parent_ptr->call(
-                    [self = shared_from_this(), parent_ptr = std::move(parent_ptr), buf = replyBuf.copy()] {
+                    [self = shared_from_this(), parent_ptr = std::move(parent_ptr), buf = std::move(data)] {
                         log::trace(
                             logcat,
                             "forwarding dns response from libunbound to userland (resolverAddr: {}, "
                             "askerAddr: {})",
                             self->resolverAddr,
                             self->askerAddr);
-                        self->src->send_to(self->askerAddr, self->resolverAddr, OwnedBuffer::copy_from(buf));
+                        self->src->send_to(self->askerAddr, self->resolverAddr, IPPacket{std::move(buf)});
                         // remove query
                         parent_ptr->remove_pending(self);
                     });
@@ -598,9 +608,10 @@ namespace llarp::dns
         return std::make_shared<libunbound::Resolver>(_loop, _conf);
     }
 
-    std::vector<SockAddr_deprecated> Server::bound_packet_source_addrs() const
+    std::vector<oxen::quic::Address> Server::bound_packet_source_addrs() const
     {
-        std::vector<SockAddr_deprecated> addrs;
+        std::vector<oxen::quic::Address> addrs;
+
         for (const auto& src : _packet_sources)
         {
             if (auto ptr = src.lock())
@@ -610,7 +621,7 @@ namespace llarp::dns
         return addrs;
     }
 
-    std::optional<SockAddr_deprecated> Server::first_bound_packet_source_addr() const
+    std::optional<oxen::quic::Address> Server::first_bound_packet_source_addr() const
     {
         for (const auto& src : _packet_sources)
         {
@@ -671,7 +682,7 @@ namespace llarp::dns
         std::shared_ptr<PacketSource_Base> ptr,
         const oxen::quic::Address& to,
         const oxen::quic::Address& from,
-        llarp::OwnedBuffer buf)
+        IPPacket buf)
     {
         // dont process to prevent feedback loop
         if (ptr->would_loop(to, from))

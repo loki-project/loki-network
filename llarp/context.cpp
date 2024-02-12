@@ -5,6 +5,7 @@
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/ev/ev.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/link/link_manager.hpp>
 #include <llarp/router/router.hpp>
@@ -21,15 +22,15 @@
 
 namespace llarp
 {
-    bool Context::CallSafe(std::function<void(void)> f)
+    bool Context::call_safe(std::function<void(void)> f)
     {
-        if (!loop)
+        if (!_loop)
             return false;
-        loop->call_soon(std::move(f));
+        _loop->call_soon(std::move(f));
         return true;
     }
 
-    void Context::Configure(std::shared_ptr<Config> conf)
+    void Context::configure(std::shared_ptr<Config> conf)
     {
         if (nullptr != config.get())
             throw std::runtime_error{"Config already exists"};
@@ -37,17 +38,17 @@ namespace llarp
         config = std::move(conf);
     }
 
-    bool Context::IsUp() const
+    bool Context::is_up() const
     {
-        return router && router->IsRunning();
+        return router && router->is_running();
     }
 
-    bool Context::LooksAlive() const
+    bool Context::looks_alive() const
     {
-        return router && router->LooksAlive();
+        return router && router->looks_alive();
     }
 
-    void Context::Setup(const RuntimeOptions& opts)
+    void Context::setup(const RuntimeOptions& opts)
     {
         /// Call one of the Configure() methods before calling Setup()
         if (not config)
@@ -56,31 +57,37 @@ namespace llarp
         if (opts.showBanner)
             llarp::LogInfo(fmt::format("{}", llarp::LOKINET_VERSION_FULL));
 
-        if (!loop)
+        // TODO: configurable job queue size?
+        if (!_loop)
         {
-            auto jobQueueSize = std::max(event_loop_queue_size, config->router.job_que_size);
-            loop = EvLoop_deprecated::create(jobQueueSize);
+            _loop = EventLoop::make();
         }
 
-        router = makeRouter(loop);
-        nodedb = makeNodeDB();
+        // if (!loop)
+        // {
+        //     auto jobQueueSize = std::max(event_loop_queue_size, config->router.job_que_size);
+        //     loop = EvLoop_deprecated::create(jobQueueSize);
+        // }
+
+        router = make_router(loop);
+        nodedb = make_nodedb();
 
         if (!router->configure(config, nodedb))
             throw std::runtime_error{"Failed to configure router"};
     }
 
-    std::shared_ptr<NodeDB> Context::makeNodeDB()
+    std::shared_ptr<NodeDB> Context::make_nodedb()
     {
         return std::make_shared<NodeDB>(
             nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
-    std::shared_ptr<Router> Context::makeRouter(const std::shared_ptr<EvLoop_deprecated>& loop)
+    std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EvLoop_deprecated>& loop)
     {
-        return std::make_shared<Router>(loop, makeVPNPlatform());
+        return std::make_shared<Router>(loop, make_vpn_platform());
     }
 
-    std::shared_ptr<vpn::Platform> Context::makeVPNPlatform()
+    std::shared_ptr<vpn::Platform> Context::make_vpn_platform()
     {
         auto plat = vpn::MakeNativePlatform(this);
         if (plat == nullptr)
@@ -88,7 +95,7 @@ namespace llarp
         return plat;
     }
 
-    int Context::Run(const RuntimeOptions&)
+    int Context::run(const RuntimeOptions&)
     {
         if (router == nullptr)
         {
@@ -109,26 +116,26 @@ namespace llarp
         {
             closeWaiter->set_value();
         }
-        Close();
+        close();
         return 0;
     }
 
-    void Context::CloseAsync()
+    void Context::close_async()
     {
         /// already closing
-        if (IsStopping())
+        if (is_stopping())
             return;
 
-        loop->call([this]() { HandleSignal(SIGTERM); });
+        loop->call([this]() { handle_signal(SIGTERM); });
         closeWaiter = std::make_unique<std::promise<void>>();
     }
 
-    bool Context::IsStopping() const
+    bool Context::is_stopping() const
     {
         return closeWaiter.operator bool();
     }
 
-    void Context::Wait()
+    void Context::wait()
     {
         if (closeWaiter)
         {
@@ -137,25 +144,25 @@ namespace llarp
         }
     }
 
-    void Context::HandleSignal(int sig)
+    void Context::handle_signal(int sig)
     {
         llarp::log::debug(logcat, "Handling signal {}", sig);
         if (sig == SIGINT || sig == SIGTERM)
         {
-            SigINT();
+            sigINT();
         }
 #ifndef _WIN32
         if (sig == SIGHUP)
         {
-            Reload();
+            reload();
         }
 #endif
     }
 
-    void Context::Reload()
+    void Context::reload()
     {}
 
-    void Context::SigINT()
+    void Context::sigINT()
     {
         if (router)
         {
@@ -165,7 +172,7 @@ namespace llarp
         }
     }
 
-    void Context::Close()
+    void Context::close()
     {
         llarp::LogDebug("free config");
         config.reset();

@@ -15,7 +15,7 @@ namespace llarp
             Simulation();
 
             llarp::CryptoManager m_CryptoManager;
-            std::shared_ptr<EventLoop> m_NetLoop;
+            // std::shared_ptr<EventLoop> m_NetLoop;
 
             std::unordered_map<std::string, Node_ptr> m_Nodes;
 

@@ -39,7 +39,7 @@ static constexpr std::chrono::milliseconds ROUTER_TICK_INTERVAL = 250ms;
 
 namespace llarp
 {
-    Router::Router(std::shared_ptr<EvLoop_deprecated> loop, std::shared_ptr<vpn::Platform> vpnPlatform)
+    Router::Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform)
         : _route_poker{std::make_shared<RoutePoker>(*this)},
           _next_explore_at{std::chrono::steady_clock::now()},
           _lmq{std::make_shared<oxenmq::OxenMQ>()},
@@ -53,12 +53,11 @@ namespace llarp
     {
         // for lokid, so we don't close the connection when syncing the whitelist
         _lmq->MAX_MSG_SIZE = -1;
-        loop_wakeup = _loop->make_waker([]() {});
     }
 
     StatusObject Router::ExtractStatus() const
     {
-        if (not is_running)
+        if (not _is_running)
             StatusObject{{"running", false}};
 
         return StatusObject{
@@ -191,11 +190,6 @@ namespace llarp
             return maybe->router_id();
 
         return std::nullopt;
-    }
-
-    void Router::TriggerPump()
-    {
-        loop_wakeup->Trigger();
     }
 
     bool Router::send_data_message(const RouterID& remote, std::string payload)
@@ -336,7 +330,7 @@ namespace llarp
 
         info.ifname = network_config._if_name;
 
-        info.addrs.emplace_back(network_config._if_addr);
+        info.addrs.emplace_back(network_config._local_if_range);
 
         auto if_net = vpn_platform()->CreateInterface(std::move(info), this);
 
@@ -347,7 +341,7 @@ namespace llarp
             throw std::runtime_error{err};
         }
         if (not loop()->add_network_interface(
-                if_net, [](net::IP_packet_deprecated pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
+                if_net, [](UDPPacket pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
         {
             auto err = "Could not create tunnel for net interface"s;
             log::error(logcat, err);
@@ -580,11 +574,14 @@ namespace llarp
     void Router::close()
     {
         log::info(logcat, "closing");
+
         if (_router_close_cb)
             _router_close_cb();
+
         log::debug(logcat, "stopping mainloop");
+
         _loop->stop();
-        is_running.store(false);
+        _is_running.store(false);
     }
 
     bool Router::have_snode_whitelist() const
@@ -699,7 +696,7 @@ namespace llarp
 
     void Router::Tick()
     {
-        if (is_stopping)
+        if (_is_stopping)
             return;
 
         const bool is_snode = is_service_node();
@@ -933,7 +930,7 @@ namespace llarp
     {
         log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        if (is_running || is_stopping)
+        if (_is_running || _is_stopping)
             return false;
 
         router_contact =
@@ -984,7 +981,7 @@ namespace llarp
 
         _route_poker->start();
 
-        is_running.store(true);
+        _is_running.store(true);
 
         _started_at = now();
 
@@ -993,7 +990,7 @@ namespace llarp
             // do service node testing if we are in service node whitelist mode
             _loop->call_every(consensus::REACHABILITY_TESTING_TIMER_INTERVAL, weak_from_this(), [this] {
                 // dont run tests if we are not running or we are stopping
-                if (not is_running)
+                if (not _is_running)
                     return;
                 // dont run tests if we think we should not test other routers
                 // this occurs when we are deregistered or do not have the service node list
@@ -1053,12 +1050,12 @@ namespace llarp
         }
 
         llarp::sys::service_manager->ready();
-        return is_running;
+        return _is_running;
     }
 
-    bool Router::IsRunning() const
+    bool Router::is_running() const
     {
-        return is_running;
+        return _is_running;
     }
 
     llarp_time_t Router::Uptime() const
@@ -1094,12 +1091,12 @@ namespace llarp
 
     void Router::stop_immediately()
     {
-        if (!is_running)
+        if (!_is_running)
             return;
-        if (is_stopping)
+        if (_is_stopping)
             return;
 
-        is_stopping.store(true);
+        _is_stopping.store(true);
         if (log::get_level_default() != log::Level::off)
             log::reset_level(log::Level::info);
         LogWarn("stopping router hard");
@@ -1110,18 +1107,18 @@ namespace llarp
 
     void Router::stop()
     {
-        if (!is_running)
+        if (!_is_running)
         {
             log::debug(logcat, "Stop called, but not running");
             return;
         }
-        if (is_stopping)
+        if (_is_stopping)
         {
             log::debug(logcat, "Stop called, but already stopping");
             return;
         }
 
-        is_stopping.store(true);
+        _is_stopping.store(true);
 
         if (auto level = log::get_level_default(); level > log::Level::info and level != log::Level::off)
             log::reset_level(log::Level::info);
@@ -1142,7 +1139,7 @@ namespace llarp
         return _path_build_count++;
     }
 
-    void Router::ConnectToRandomRouters(int _want)
+    void Router::connect_to_random(int _want)
     {
         const size_t want = _want;
         auto connected = num_router_connections();
