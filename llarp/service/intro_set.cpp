@@ -129,7 +129,7 @@ namespace llarp::service
         signed_at = llarp::time_now_ms();
         if (not k.to_pubkey(derived_signing_key))
             return false;
-        sig.Zero();
+        sig.zero();
         auto bte = bt_encode();
 
         if (not crypto::sign(sig, k, reinterpret_cast<uint8_t*>(bte.data()), bte.size()))
@@ -144,7 +144,7 @@ namespace llarp::service
             return false;
 
         EncryptedIntroSet copy(*this);
-        copy.sig.Zero();
+        copy.sig.zero();
 
         auto bte = copy.bt_encode();
         return crypto::verify(derived_signing_key, reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);
@@ -441,7 +441,7 @@ namespace llarp::service
     {
         IntroSet copy;
         copy = *this;
-        copy.signature.Zero();
+        copy.signature.zero();
 
         auto bte = copy.bt_encode();
 

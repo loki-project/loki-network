@@ -38,6 +38,8 @@ namespace llarp
     using inbound_alpns = oxen::quic::opt::inbound_alpns;
     using outbound_alpns = oxen::quic::opt::outbound_alpns;
 
+    using static_secret = oxen::quic::opt::static_secret;
+
     inline const keep_alive ROUTER_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 
@@ -258,6 +260,8 @@ namespace llarp
         int client_router_connections = 4;
 
        private:
+
+
         // DHT messages
         void handle_find_name(std::string_view body, std::function<void(std::string)> respond);      // relay
         void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay

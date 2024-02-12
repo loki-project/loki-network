@@ -988,7 +988,7 @@ namespace llarp
             visit_all([&rc, compare](const auto& otherRC) {
                 const auto& rid = rc.router_id();
 
-                if (rid.IsZero() || compare(dht::Key_t{otherRC.router_id()}, dht::Key_t{rid}))
+                if (rid.is_zero() || compare(dht::Key_t{otherRC.router_id()}, dht::Key_t{rid}))
                 {
                     rc = otherRC;
                     return;

@@ -65,7 +65,7 @@ namespace llarp
         return BDecode(&buf);
     }
 
-    bool SecretKey::Recalculate()
+    bool SecretKey::recalculate()
     {
         PrivateKey key;
         PubKey pubkey;

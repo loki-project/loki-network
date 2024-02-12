@@ -16,7 +16,7 @@ namespace llarp::dht
 
         RCNode()
         {
-            ID.Zero();
+            ID.zero();
         }
 
         RCNode(const RouterContact& other) : rc(other), ID(other.router_id())
@@ -41,7 +41,7 @@ namespace llarp::dht
 
         ISNode()
         {
-            ID.Zero();
+            ID.zero();
         }
 
         ISNode(service::EncryptedIntroSet other) : introset(std::move(other))

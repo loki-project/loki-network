@@ -85,7 +85,7 @@ namespace llarp
 
             std::optional<HopID> current_hop_id() const
             {
-                if (_current_hop_id.IsZero())
+                if (_current_hop_id.is_zero())
                     return std::nullopt;
 
                 return _current_hop_id;

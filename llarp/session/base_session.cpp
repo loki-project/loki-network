@@ -130,7 +130,7 @@ namespace llarp::session
 
     bool BaseSession::is_ready() const
     {
-        if (_current_hop_id.IsZero())
+        if (_current_hop_id.is_zero())
             return false;
 
         const size_t expect = (1 + (num_paths_desired / 2));

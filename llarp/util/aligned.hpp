@@ -45,7 +45,7 @@ namespace llarp
 
         AlignedBuffer()
         {
-            Zero();
+            zero();
         }
 
         explicit AlignedBuffer(const uint8_t* data)
@@ -162,7 +162,7 @@ namespace llarp
             return _data.data();
         }
 
-        bool IsZero() const
+        bool is_zero() const
         {
             const uint64_t* ptr = reinterpret_cast<const uint64_t*>(data());
             for (size_t idx = 0; idx < SIZE / sizeof(uint64_t); idx++)
@@ -173,7 +173,7 @@ namespace llarp
             return true;
         }
 
-        void Zero()
+        void zero()
         {
             _data.fill(0);
         }

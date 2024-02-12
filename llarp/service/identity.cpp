@@ -45,11 +45,11 @@ namespace llarp::service
 
     void Identity::Clear()
     {
-        signkey.Zero();
-        enckey.Zero();
-        pq.Zero();
-        derivedSignKey.Zero();
-        vanity.Zero();
+        signkey.zero();
+        enckey.zero();
+        pq.zero();
+        derivedSignKey.zero();
+        vanity.zero();
     }
 
     void Identity::regenerate_keys()
@@ -133,15 +133,15 @@ namespace llarp::service
         bt_decode(buf);
 
         // ensure that the encryption key is set
-        if (enckey.IsZero())
+        if (enckey.is_zero())
             crypto::encryption_keygen(enckey);
 
         // also ensure the ntru key is set
-        if (pq.IsZero())
+        if (pq.is_zero())
             crypto::pqe_keygen(pq);
 
         std::optional<VanityNonce> van;
-        if (!vanity.IsZero())
+        if (!vanity.is_zero())
             van = vanity;
         // update pubkeys
         pub.Update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey), van);

@@ -21,12 +21,12 @@ namespace llarp::path
             do
             {
                 hops[idx].txID.Randomize();
-            } while (hops[idx].txID.IsZero());
+            } while (hops[idx].txID.is_zero());
 
             do
             {
                 hops[idx].rxID.Randomize();
-            } while (hops[idx].rxID.IsZero());
+            } while (hops[idx].rxID.is_zero());
         }
 
         for (size_t idx = 0; idx < hsz - 1; ++idx)

@@ -37,7 +37,7 @@ namespace llarp::service
 
         const PubKey& EncryptionPublicKey() const
         {
-            if (_cached_addr.IsZero())
+            if (_cached_addr.is_zero())
             {
                 CalculateAddress(_cached_addr.as_array());
             }
@@ -71,7 +71,7 @@ namespace llarp::service
 
         const Address& Addr() const
         {
-            if (_cached_addr.IsZero())
+            if (_cached_addr.is_zero())
             {
                 CalculateAddress(_cached_addr.as_array());
             }

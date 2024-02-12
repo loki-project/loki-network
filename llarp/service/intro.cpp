@@ -82,8 +82,8 @@ namespace llarp::service
 
     void Introduction::Clear()
     {
-        router.Zero();
-        path_id.Zero();
+        router.zero();
+        path_id.zero();
         latency = 0s;
         expiry = 0s;
     }

@@ -12,7 +12,7 @@ namespace llarp::service
 {
     ProtocolMessage::ProtocolMessage()
     {
-        tag.Zero();
+        tag.zero();
     }
 
     ProtocolMessage::ProtocolMessage(const SessionTag& t) : tag(t)
@@ -178,7 +178,7 @@ namespace llarp::service
 
     bool ProtocolFrameMessage::Sign(const Identity& localIdent)
     {
-        sig.Zero();
+        sig.zero();
         std::array<uint8_t, MAX_PROTOCOL_MESSAGE_SIZE> tmp;
         llarp_buffer_t buf(tmp);
         // encode
@@ -202,7 +202,7 @@ namespace llarp::service
         // put encrypted buffer
         std::memcpy(enc.data(), bte1.data(), bte1.size());
         // zero out signature
-        sig.Zero();
+        sig.zero();
 
         auto bte2 = bt_encode();
         // sign
@@ -360,7 +360,7 @@ namespace llarp::service
     {
         auto msg = std::make_shared<ProtocolMessage>();
         msg->handler = handler;
-        if (convo_tag.IsZero())
+        if (convo_tag.is_zero())
         {
             // we need to dh
             auto dh = std::make_shared<AsyncFrameDecrypt>(loop, localIdent, handler, msg, *this, recvPath->intro);
@@ -440,7 +440,7 @@ namespace llarp::service
     bool ProtocolFrameMessage::Verify(const ServiceInfo& svc) const
     {
         ProtocolFrameMessage copy(*this);
-        copy.sig.Zero();
+        copy.sig.zero();
 
         auto bte = copy.bt_encode();
         return svc.verify(reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);

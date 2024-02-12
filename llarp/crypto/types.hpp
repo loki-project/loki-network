@@ -58,11 +58,11 @@ namespace llarp
         explicit SecretKey(const AlignedBuffer<32>& seed)
         {
             std::copy(seed.begin(), seed.end(), begin());
-            Recalculate();
+            recalculate();
         }
 
         /// recalculate public component
-        bool Recalculate();
+        bool recalculate();
 
         std::string_view to_string() const
         {

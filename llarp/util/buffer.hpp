@@ -29,6 +29,21 @@ namespace llarp
         return {reinterpret_cast<const unsigned char*>(str), len};
     }
 
+    inline ustring_view operator""_usv(const char* str, size_t len) noexcept
+    {
+        return {reinterpret_cast<const unsigned char*>(str), len};
+    }
+
+    inline bstring_view operator""_bsv(const char* str, size_t len) noexcept
+    {
+        return {reinterpret_cast<const std::byte*>(str), len};
+    }
+
+    inline bstring operator""_bs(const char* str, size_t len) noexcept
+    {
+        return {reinterpret_cast<const std::byte*>(str), len};
+    }
+
     // Helper function to switch between string_view and ustring_view
     inline ustring_view to_usv(std::string_view v)
     {

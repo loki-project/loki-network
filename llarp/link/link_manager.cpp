@@ -12,6 +12,7 @@
 #include <llarp/router/router.hpp>
 
 #include <oxenc/bt_producer.h>
+#include <sodium/crypto_generichash_blake2b.h>
 
 #include <algorithm>
 #include <exception>
@@ -19,6 +20,26 @@
 
 namespace llarp
 {
+    static ustring_view static_shared_key = "Lokinet static shared secret key"_usv;
+
+    static static_secret make_static_secret(const SecretKey& sk)
+    {
+        ustring secret;
+        secret.resize(32);
+
+        crypto_generichash_blake2b_state st;
+        crypto_generichash_blake2b_init(
+                &st,
+                static_shared_key.data(),
+                static_shared_key.size(),
+                secret.size());
+        crypto_generichash_blake2b_update(&st, sk.data(), sk.size());
+        crypto_generichash_blake2b_final(
+                &st, reinterpret_cast<unsigned char*>(secret.data()), secret.size());
+
+        return static_secret{std::move(secret)};
+    }
+
     namespace link
     {
         Endpoint::Endpoint(std::shared_ptr<oxen::quic::Endpoint> ep, LinkManager& lm)
@@ -233,6 +254,7 @@ namespace llarp
         */
         auto e = quic->endpoint(
             _router.listen_addr(),
+            make_static_secret(_router.identity()),
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
             [this](oxen::quic::dgram_interface& di, bstring dgram) { recv_data_message(di, dgram); },
@@ -1383,7 +1405,7 @@ namespace llarp
             hop->info.txID.from_string(tx_id);
             hop->info.rxID.from_string(rx_id);
 
-            if (hop->info.txID.IsZero() || hop->info.rxID.IsZero())
+            if (hop->info.txID.is_zero() || hop->info.rxID.is_zero())
             {
                 log::warning(link_cat, "Invalid PathID; PathIDs must be non-zero");
                 m.respond(PathBuildMessage::BAD_PATHID, true);

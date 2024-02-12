@@ -46,7 +46,7 @@ namespace llarp
                 if (buf)
                     memcpy(_buf.data(), buf, sz);
                 else
-                    _buf.Zero();
+                    _buf.zero();
             }
             else
                 _sz = 0;

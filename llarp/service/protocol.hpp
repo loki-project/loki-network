@@ -124,10 +124,10 @@ namespace llarp
             {
                 cipher.Zero();
                 enc.Clear();
-                path_id.Zero();
-                convo_tag.Zero();
-                nonce.Zero();
-                sig.Zero();
+                path_id.zero();
+                convo_tag.zero();
+                nonce.zero();
+                sig.zero();
                 flag = 0;
             }
 

@@ -87,7 +87,7 @@ namespace llarp
 
         // TODO: transport key (currently done in LinkLayer)
         auto transkey_gen = [](llarp::SecretKey& key) {
-            key.Zero();
+            key.zero();
             crypto::encryption_keygen(key);
         };
 

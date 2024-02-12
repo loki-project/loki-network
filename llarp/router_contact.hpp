@@ -217,7 +217,7 @@ namespace llarp
         {
             _addr = oxen::quic::Address{};
             _addr6.reset();
-            _router_id.Zero();
+            _router_id.zero();
             _timestamp = {};
             _router_version.fill(0);
             _signature.clear();
@@ -297,7 +297,7 @@ namespace llarp
         {
             _addr = oxen::quic::Address{};
             _addr6.reset();
-            _router_id.Zero();
+            _router_id.zero();
             _timestamp = {};
             _router_version.fill(0);
         }

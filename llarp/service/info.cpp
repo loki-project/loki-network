@@ -55,13 +55,13 @@ namespace llarp::service
         btdp.append("e", enckey.ToView());
         btdp.append("s", signkey.ToView());
 
-        if (not vanity.IsZero())
+        if (not vanity.is_zero())
             btdp.append("x", vanity.ToView());
     }
 
     std::string ServiceInfo::Name() const
     {
-        if (_cached_addr.IsZero())
+        if (_cached_addr.is_zero())
         {
             Address addr;
             CalculateAddress(addr.as_array());
@@ -78,7 +78,7 @@ namespace llarp::service
 
     bool ServiceInfo::UpdateAddr()
     {
-        if (_cached_addr.IsZero())
+        if (_cached_addr.is_zero())
         {
             return CalculateAddress(_cached_addr.as_array());
         }

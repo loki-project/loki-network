@@ -264,12 +264,12 @@ namespace llarp
             _identity = _key_manager->identity_key;
         }
 
-        if (_identity.IsZero())
+        if (_identity.is_zero())
         {
             log::critical(logcat, "FUCK @ line:{}", __LINE__);
             return false;
         }
-        if (_encryption.IsZero())
+        if (_encryption.is_zero())
         {
             log::critical(logcat, "FUCK @ line:{}", __LINE__);
             return false;
