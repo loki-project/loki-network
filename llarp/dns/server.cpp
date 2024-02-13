@@ -117,7 +117,7 @@ namespace llarp::dns
         class Resolver final : public Resolver_Base, public std::enable_shared_from_this<Resolver>
         {
             ub_ctx* m_ctx = nullptr;
-            std::weak_ptr<EvLoop_deprecated> _loop;
+            std::weak_ptr<EventLoop> _loop;
 #ifdef _WIN32
             // windows is dumb so we do ub mainloop in a thread
             std::thread runner;
@@ -139,7 +139,7 @@ namespace llarp::dns
 
             const net::Platform* net_ptr() const
             {
-                return _loop.lock()->net_ptr();
+                return llarp::net::Platform::Default_ptr();
             }
 
             static void callback(void* data, int err, ub_result* _result)
@@ -313,7 +313,7 @@ namespace llarp::dns
             llarp::DnsConfig m_conf;
 
            public:
-            explicit Resolver(const std::shared_ptr<EvLoop_deprecated>& loop, llarp::DnsConfig conf)
+            explicit Resolver(const std::shared_ptr<EventLoop>& loop, llarp::DnsConfig conf)
                 : _loop{loop}, m_conf{std::move(conf)}
             {
                 up(m_conf);
@@ -384,13 +384,14 @@ namespace llarp::dns
 #else
                 if (auto loop = _loop.lock())
                 {
-                    if (auto loop_ptr = loop->MaybeGetUVWLoop())
-                    {
-                        _poller = loop_ptr->resource<uvw::PollHandle>(ub_fd(m_ctx));
-                        _poller->on<uvw::PollEvent>([this](auto&, auto&) { ub_process(m_ctx); });
-                        _poller->start(uvw::PollHandle::Event::READABLE);
-                        return;
-                    }
+                    // TODO: replace uvw shim shit with new libev stuff
+                    // if (auto loop_ptr = loop->MaybeGetUVWLoop())
+                    // {
+                    //     _poller = loop_ptr->resource<uvw::PollHandle>(ub_fd(m_ctx));
+                    //     _poller->on<uvw::PollEvent>([this](auto&, auto&) { ub_process(m_ctx); });
+                    //     _poller->start(uvw::PollHandle::Event::READABLE);
+                    //     return;
+                    // }
                 }
                 throw std::runtime_error{"no uvw loop"};
 #endif
@@ -553,7 +554,7 @@ namespace llarp::dns
         }
     }  // namespace libunbound
 
-    Server::Server(std::shared_ptr<EvLoop_deprecated> loop, llarp::DnsConfig conf, unsigned int netif)
+    Server::Server(std::shared_ptr<EventLoop> loop, llarp::DnsConfig conf, unsigned int netif)
         : _loop{std::move(loop)}, _conf{std::move(conf)}, _platform{create_platform()}, m_NetIfIndex{std::move(netif)}
     {}
 
@@ -590,7 +591,7 @@ namespace llarp::dns
     std::shared_ptr<PacketSource_Base> Server::make_packet_source_on(
         const oxen::quic::Address& addr, const llarp::DnsConfig&)
     {
-        return std::make_shared<UDPReader>(*this, _loop, addr);
+        return std::make_shared<UDPReader>(*this, _loop->loop(), addr);
     }
 
     std::shared_ptr<Resolver_Base> Server::make_default_resolver()

@@ -101,6 +101,31 @@ namespace llarp
         return get_ipv6_net()->contains(*other.get_ipv6());
     }
 
+    bool IPRange::contains(const ipv4& other) const
+    {
+        if (not is_ipv4())
+            return false;
+
+        return get_ipv4_net()->contains(other);
+    }
+
+    bool IPRange::contains(const ipv6& other) const
+    {
+        if (is_ipv4())
+            return false;
+
+        return get_ipv6_net()->contains(other);
+    }
+
+    bool IPRange::contains(const ip& other) const
+    {
+        if (auto maybe_v4 = std::get_if<ipv4>(&other))
+            return contains(*maybe_v4);
+        if (auto maybe_v6 = std::get_if<ipv6>(&other))
+            return contains(*maybe_v6);
+        return false;
+    }
+
     std::optional<IPRange> IPRange::find_private_range(const std::list<IPRange>& excluding)
     {
         auto filter = [&excluding](const IPRange& range) -> bool {

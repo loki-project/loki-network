@@ -1,8 +1,8 @@
 #pragma once
 
+#include <llarp/address/ip_range.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/endpoint_base.hpp>
-#include <llarp/net/ip_range_map.hpp>
 #include <llarp/path/abstracthophandler.hpp>
 #include <llarp/service/types.hpp>
 #include <llarp/util/time.hpp>
@@ -28,6 +28,6 @@ namespace llarp::exit
             return weak_from_this();
         }
 
-        net::IPRangeMap<service::Address> _exit_map;
+        std::unordered_map<IPRange, service::Address> _exit_map;
     };
 }  // namespace llarp::exit

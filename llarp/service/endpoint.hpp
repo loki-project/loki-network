@@ -6,7 +6,6 @@
 
 #include <llarp/dns/server.hpp>
 #include <llarp/endpoint_base.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/net/ip_range_map.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/path/pathhandler.hpp>

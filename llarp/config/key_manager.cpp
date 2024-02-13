@@ -8,6 +8,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("keymanager");
+
     KeyManager::KeyManager() : is_initialized(false), backup_keys(false)
     {}
 

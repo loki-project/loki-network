@@ -19,17 +19,18 @@ namespace llarp
 
     class EventLoop;
 
-    struct Repeater
+    struct EventHandler
     {
         event_ptr ev;
         timeval interval;
         std::function<void()> f;
+        bool repeat = false;
 
-        Repeater() = default;
+        EventHandler() = default;
 
-        ~Repeater();
+        ~EventHandler();
 
-        void start(const loop_ptr& _loop, loop_time _interval, std::function<void()> task);
+        void start(const loop_ptr& _loop, loop_time _interval, std::function<void()> task, bool repeat = false);
     };
 
     class EventLoop
@@ -38,22 +39,17 @@ namespace llarp
         static std::shared_ptr<EventLoop> make();
         static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
-        ~EventLoop();
-
-       private:
         EventLoop();
         EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+
+        ~EventLoop();
 
         std::shared_ptr<oxen::quic::Loop> _loop;
         event_ptr _ticker;
 
-        // Libevent doesn't allow for lambda captures, so callbacks passed to ::call_later
-        // are set here in structs to be called and then reset
-        event_hook one_off = nullptr;
-
         void add_oneshot_event(loop_time delay, std::function<void()> hook);
 
-        std::shared_ptr<Repeater> make_repeater();
+        std::shared_ptr<EventHandler> make_handler();
 
        public:
         const loop_ptr& loop() const
@@ -92,18 +88,19 @@ namespace llarp
         template <typename Callable>
         void call_every(loop_time interval, std::weak_ptr<void> caller, Callable f)
         {
-            auto repeater = make_repeater();
+            auto handler = make_handler();
             // grab the reference before giving ownership of the repeater to the lambda
-            auto& r = *repeater;
-            r.start(
+            auto& h = *handler;
+            h.start(
                 loop(),
                 interval,
-                [rep = std::move(repeater), owner = std::move(caller), func = std::move(f)]() mutable {
+                [hndlr = std::move(handler), owner = std::move(caller), func = std::move(f)]() mutable {
                     if (auto ptr = owner.lock())
                         func();
                     else
-                        rep.reset();
-                });
+                        hndlr.reset();
+                },
+                true);
         }
 
         template <typename T, typename... Args>
@@ -129,10 +126,6 @@ namespace llarp
             };
         }
 
-        void halt_events();
-
         void stop(bool immediate = false);
-
-        void start();
     };
 }  //  namespace llarp

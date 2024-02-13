@@ -20,4 +20,9 @@ namespace llarp::handlers
             throw std::runtime_error{err};
         }
     }
+
+    const std::shared_ptr<EventLoop>& BaseHandler::loop() const
+    {
+        return _router.loop();
+    }
 }  // namespace llarp::handlers

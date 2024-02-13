@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 
+#include <llarp/address/address.hpp>
 #include <llarp/address/ip_range.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/endpoint_base.hpp>
@@ -26,7 +27,7 @@ namespace llarp
         {
            protected:
             std::string _name;
-            net::IPRangeMap<service::Address> _ip_map;
+            std::unordered_map<RemoteAddr, oxen::quic::Address> _ip_map;
 
             DnsConfig _dns_config;
             NetworkConfig _net_config;

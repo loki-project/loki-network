@@ -3,7 +3,6 @@
 // #include <llarp/constants/files.hpp>
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/util/exceptions.hpp>
 // #include <llarp/util/logging.hpp>

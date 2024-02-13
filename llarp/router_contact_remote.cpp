@@ -11,6 +11,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("RC");
+
     RemoteRC::RemoteRC(oxenc::bt_dict_consumer btdc)
     {
         try

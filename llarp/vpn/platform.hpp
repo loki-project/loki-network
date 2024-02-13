@@ -2,8 +2,9 @@
 
 #include "i_packet_io.hpp"
 
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/address/ip_range.hpp>
-#include <llarp/net/ip_packet_old.hpp>
+#include <llarp/net/net.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxenc/variant.h>

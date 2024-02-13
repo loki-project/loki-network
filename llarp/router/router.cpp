@@ -5,7 +5,6 @@
 #include <llarp/constants/time.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/node.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/handlers/common.hpp>
 #include <llarp/handlers/null.hpp>
 #include <llarp/handlers/tun.hpp>

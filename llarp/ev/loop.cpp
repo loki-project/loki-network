@@ -4,28 +4,30 @@ namespace llarp
 {
     static auto logcat = log::Cat("EventLoop");
 
-    void Repeater::start(const loop_ptr& _loop, loop_time _interval, std::function<void()> task)
+    void EventHandler::start(const loop_ptr& _loop, loop_time _interval, std::function<void()> task, bool _repeat)
     {
         f = std::move(task);
         interval = loop_time_to_timeval(_interval);
+        repeat = _repeat;
 
         ev.reset(event_new(
             _loop.get(),
             -1,
             0,
             [](evutil_socket_t, short, void* s) {
-                auto& self = *static_cast<Repeater*>(s);
+                auto& self = *static_cast<EventHandler*>(s);
                 // execute callback
                 self.f();
-                // reset timer
-                event_add(self.ev.get(), &self.interval);
+                // should repeat?
+                if (self.repeat)
+                    event_add(self.ev.get(), &self.interval);
             },
             this));
 
         event_add(ev.get(), &interval);
     }
 
-    Repeater::~Repeater()
+    EventHandler::~EventHandler()
     {
         ev.reset();
         f = nullptr;
@@ -50,39 +52,31 @@ namespace llarp
 
     bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler)
     {
+        (void)netif;
+        (void)handler;
+
 #ifdef __linux__
         //
 #else
         //
 #endif
+        return true;
     }
 
     void EventLoop::add_oneshot_event(loop_time delay, std::function<void()> hook)
     {
-        auto tv = loop_time_to_timeval(delay);
+        auto handler = make_handler();
+        auto& h = *handler;
 
-        one_off = std::move(hook);
-
-        event_base_once(
-            loop().get(),
-            -1,
-            0,
-            [](evutil_socket_t, short, void* self) {
-                auto& ev = *static_cast<EventLoop*>(self);
-
-                if (ev.one_off)
-                {
-                    ev.one_off();
-                    ev.one_off = nullptr;
-                }
-            },
-            this,
-            &tv);
+        h.start(loop(), delay, [hdnlr = std::move(handler), func = std::move(hook)]() mutable {
+            func();
+            hdnlr.reset();
+        });
     }
 
-    std::shared_ptr<Repeater> EventLoop::make_repeater()
+    std::shared_ptr<EventHandler> EventLoop::make_handler()
     {
-        return std::make_shared<Repeater>();
+        return std::make_shared<EventHandler>();
     }
 
     void EventLoop::call_later(loop_time delay, std::function<void()> hook)
@@ -102,6 +96,11 @@ namespace llarp
                     add_oneshot_event(updated_delay, std::move(func));
             });
         }
+    }
+
+    void EventLoop::stop(bool immediate)
+    {
+        _loop->shutdown(immediate);
     }
 
 }  //  namespace llarp

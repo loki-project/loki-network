@@ -4,7 +4,6 @@
 #include <llarp/config/config.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/link/link_manager.hpp>
@@ -55,21 +54,20 @@ namespace llarp
             throw std::runtime_error{"Cannot call Setup() on context without a Config"};
 
         if (opts.showBanner)
-            llarp::LogInfo(fmt::format("{}", llarp::LOKINET_VERSION_FULL));
+            log::info(logcat, "{}", llarp::LOKINET_VERSION_FULL);
 
         // TODO: configurable job queue size?
         if (!_loop)
         {
+            log::info(logcat, "Initializing event loop...");
             _loop = EventLoop::make();
+            log::debug(logcat, "Event loop initialized!");
         }
 
-        // if (!loop)
-        // {
-        //     auto jobQueueSize = std::max(event_loop_queue_size, config->router.job_que_size);
-        //     loop = EvLoop_deprecated::create(jobQueueSize);
-        // }
+        log::info(logcat, "Making main router...");
+        router = make_router(_loop);
 
-        router = make_router(loop);
+        log::info(logcat, "Making local nodeDB instance...");
         nodedb = make_nodedb();
 
         if (!router->configure(config, nodedb))
@@ -82,7 +80,7 @@ namespace llarp
             nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
-    std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EvLoop_deprecated>& loop)
+    std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EventLoop>& loop)
     {
         return std::make_shared<Router>(loop, make_vpn_platform());
     }
@@ -100,17 +98,12 @@ namespace llarp
         if (router == nullptr)
         {
             // we are not set up so we should die
-            llarp::LogError("cannot run non configured context");
+            log::error(logcat, "ERROR cannot run non-configured context!");
             return 1;
         }
 
         if (not router->run())
             return 2;
-
-        // run net io thread
-        llarp::LogInfo("running mainloop");
-
-        loop->run();
 
         if (closeWaiter)
         {
@@ -126,7 +119,7 @@ namespace llarp
         if (is_stopping())
             return;
 
-        loop->call([this]() { handle_signal(SIGTERM); });
+        _loop->call([this]() { handle_signal(SIGTERM); });
         closeWaiter = std::make_unique<std::promise<void>>();
     }
 
@@ -146,7 +139,7 @@ namespace llarp
 
     void Context::handle_signal(int sig)
     {
-        llarp::log::debug(logcat, "Handling signal {}", sig);
+        log::debug(logcat, "Handling signal {}", sig);
         if (sig == SIGINT || sig == SIGTERM)
         {
             sigINT();
@@ -166,7 +159,7 @@ namespace llarp
     {
         if (router)
         {
-            llarp::log::error(logcat, "Handling SIGINT");
+            log::error(logcat, "Handling SIGINT");
             /// async stop router on sigint
             router->stop();
         }
@@ -174,17 +167,17 @@ namespace llarp
 
     void Context::close()
     {
-        llarp::LogDebug("free config");
+        log::debug(logcat, "Freeing config");
         config.reset();
 
-        llarp::LogDebug("free nodedb");
+        log::debug(logcat, "Freeing local nodeDB");
         nodedb.reset();
 
-        llarp::LogDebug("free router");
+        log::debug(logcat, "Freeing main router");
         router.reset();
 
-        llarp::LogDebug("free loop");
-        loop.reset();
+        log::debug(logcat, "Freeing event loop");
+        _loop.reset();
     }
 
     Context::Context()

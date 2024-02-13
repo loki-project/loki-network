@@ -10,7 +10,6 @@
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/platform.hpp>
 #include <llarp/dns/dns.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
@@ -106,17 +105,20 @@ namespace llarp::handlers
         ~TunDNS() override = default;
 
         explicit TunDNS(TunEndpoint* ep, const llarp::DnsConfig& conf)
-            : dns::Server{ep->router().loop(), conf, 0},
-              _tun{ep},
-              _query_bind{conf._query_bind},
-              _our_ip{ep->get_if_addr()}
+            : dns::Server{ep->router().loop(), conf, 0}, _tun{ep}, _query_bind{conf._query_bind}
+        // TOFIX:
+        //   _our_ip{ep->get_if_addr(), _query_bind ? _query_bind->port() : 0}
         {}
 
         std::shared_ptr<dns::PacketSource_Base> make_packet_source_on(
             const oxen::quic::Address&, const llarp::DnsConfig& conf) override
         {
+            (void)_tun;
             auto ptr = std::make_shared<DnsInterceptor>(
-                [ep = _tun](auto pkt) { ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0); },
+                [](UDPPacket pkt) {
+                    (void)pkt;
+                    // ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0);
+                },
                 _our_ip,
                 conf);
             pkt_source = ptr;
@@ -143,13 +145,17 @@ namespace llarp::handlers
             _packet_router->add_udp_handler(uint16_t{53}, [this, dns](UDPPacket pkt) {
                 auto dns_pkt_src = dns->pkt_source;
 
-                if (const auto& reply = pkt.reply)
-                    dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
+                // TODO: pkts dont have reply callbacks now
+                // if (const auto& reply = pkt.reply)
+                //     dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
 
-                if (dns->maybe_handle_packet(std::move(dns_pkt_src), pkt.dst(), pkt.src(), *pkt.L4OwnedBuffer()))
+                auto& pkt_path = pkt.path;
+
+                if (dns->maybe_handle_packet(
+                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
                     return;
 
-                handle_user_packet(IPPacket::from_udp(std::move(pkt)));
+                handle_user_packet(IPPacket::from_udp(pkt));
             });
         }
         else
@@ -303,8 +309,9 @@ namespace llarp::handlers
 
         for (const auto& item : conf._addr_map)
         {
-            if (not map_address(item.second, item.first, false))
-                return false;
+            (void)item;
+            // if (not map_address(item.second, item.first, false))
+            //     return false;
         }
 
         _if_name = conf._if_name;
@@ -335,10 +342,16 @@ namespace llarp::handlers
 
         _use_v6 = not _local_range.is_ipv4();
 
-        local_ip_v = _local_range.get_ip().value();
+        _local_addr = _local_range.address();
 
-        _local_ip = _local_range.address();
+        if (_use_v6)
+            _local_ip = _local_addr.to_ipv6();
+        else
+            _local_ip = _local_addr.to_ipv4();
 
+        // TODO: move all this parsing to the config
+        // DISCUSS: what format do we expect these to be bt-encoded in? If strings, then must make
+        // string ctors for ipv4/ipv6 types to load directly into and pass to IPRange::contains(...)
         _persisting_addr_file = conf.addr_map_persist_file;
 
         if (_persisting_addr_file)
@@ -398,19 +411,21 @@ namespace llarp::handlers
 
                     for (const auto& [key, value] : parsed)
                     {
-                        huint128_t ip{};
-                        if (not ip.FromString(key))
-                        {
-                            LogWarn(name(), " malformed IP in addr map data: ", key);
-                            continue;
-                        }
+                        ip ip{};
+
+                        // if (not ip.FromString(key))
+                        // {
+                        //     LogWarn(name(), " malformed IP in addr map data: ", key);
+                        //     continue;
+                        // }
                         if (_local_ip == ip)
                             continue;
-                        if (not _local_range.Contains(ip))
+                        if (not _local_range.contains(ip))
                         {
                             LogWarn(name(), " out of range IP in addr map data: ", ip);
                             continue;
                         }
+
                         AddressVariant_t addr;
 
                         if (const auto* str = std::get_if<std::string>(&value))
@@ -467,7 +482,7 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::has_local_ip(const huint128_t& ip) const
+    bool TunEndpoint::has_local_ip(const ip& ip) const
     {
         return _ip_to_addr.find(ip) != _ip_to_addr.end();
     }
@@ -491,11 +506,13 @@ namespace llarp::handlers
         return msg;
     }
 
-    std::optional<std::variant<service::Address, RouterID>> TunEndpoint::get_addr_for_ip(huint128_t ip) const
+    std::optional<std::variant<service::Address, RouterID>> TunEndpoint::get_addr_for_ip(ip ip) const
     {
         auto itr = _ip_to_addr.find(ip);
+
         if (itr == _ip_to_addr.end())
             return std::nullopt;
+
         if (_is_snode_map.at(itr->second))
             return RouterID{itr->second.as_array()};
         else
@@ -905,7 +922,7 @@ namespace llarp::handlers
             if (msg.questions[0].qtype == llarp::dns::qTypePTR)
             {
                 if (auto ip = dns::DecodePTR(msg.questions[0].qname))
-                    return _local_range.Contains(*ip);
+                    return _local_range.contains(*ip);
                 return false;
             }
         }
@@ -919,10 +936,10 @@ namespace llarp::handlers
         return false;
     }
 
-    bool TunEndpoint::map_address(const service::Address& addr, oxen::quic::Address ip, bool SNode)
+    bool TunEndpoint::map_address(const service::Address& addr, ip ip, bool SNode)
     {
         auto itr = _ip_to_addr.find(ip);
-
+        (void)SNode;
         if (itr != _ip_to_addr.end())
         {
             llarp::LogWarn(ip, " already mapped to ", service::Address(itr->second.as_array()).to_string());
@@ -930,10 +947,10 @@ namespace llarp::handlers
         }
         llarp::LogInfo(name() + " map ", addr.to_string(), " to ", ip);
 
-        m_IPToAddr[ip] = addr;
-        _addr_to_ip[addr] = ip;
-        _is_snode_map[addr] = SNode;
-        mark_ip_active_forever(ip);
+        // m_IPToAddr[ip] = addr;
+        // _addr_to_ip[addr] = ip;
+        // _is_snode_map[addr] = SNode;
+        // mark_ip_active_forever(ip);
         // MarkAddressOutbound(addr);
         return true;
     }
@@ -961,7 +978,7 @@ namespace llarp::handlers
     bool TunEndpoint::setup_tun()
     {
         _next_ip = _local_ip;
-        _max_ip = _local_range.HighestAddr();
+        // _max_ip = _local_range.HighestAddr();
         llarp::LogInfo(name(), " set ", _if_name, " to have address ", _local_ip);
         llarp::LogInfo(name(), " allocated up to ", _max_ip, " on range ", _local_range);
 
@@ -977,10 +994,8 @@ namespace llarp::handlers
 
         if (_base_ipv6_range)
         {
-            IPRange v6range = _local_range;
-            v6range.addr = (*_base_ipv6_range) | _local_range.addr;
-            LogInfo(name(), " using v6 range: ", v6range);
-            info.addrs.emplace_back(v6range, AF_INET6);
+            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+            info.addrs.emplace_back(*_base_ipv6_range);
         }
 
         info.ifname = _if_name;
@@ -1000,8 +1015,9 @@ namespace llarp::handlers
         _if_name = _net_if->Info().ifname;
         LogInfo(name(), " got network interface ", _if_name);
 
-        auto handle_packet = [netif = _net_if, pktrouter = _packet_router](auto pkt) {
-            pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
+        auto handle_packet = [netif = _net_if, pktrouter = _packet_router](UDPPacket pkt) {
+            // TODO: packets used to have reply hooks
+            // pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
             pktrouter->handle_ip_packet(std::move(pkt));
         };
 
@@ -1011,12 +1027,13 @@ namespace llarp::handlers
             return false;
         }
 
-        _local_ipv6 =
-            llarp::huint128_t{llarp::uint128_t{0xfd2e'6c6f'6b69'0000, llarp::net::TruncateV6(_local_range.addr).h}};
+        _local_ipv6 = _local_range.is_ipv4()
+            ? oxen::quic::Address{_local_range.address().to_ipv6(), _local_range.address().port()}
+            : _local_range.address();
 
         if constexpr (not llarp::platform::is_apple)
         {
-            if (auto maybe = router().net().GetInterfaceIPv6Address(_if_name))
+            if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
             {
                 _local_ipv6 = *maybe;
                 log::info(logcat, "{} has ipv6 address:{}", name(), _local_ipv6);
@@ -1025,7 +1042,7 @@ namespace llarp::handlers
 
         log::info(logcat, "{} setting up DNS...", name());
         setup_dns();
-        _loop()->call_soon([this]() { router().route_poker()->set_dns_mode(false); });
+        // loop()->call_soon([this]() { router().route_poker()->set_dns_mode(false); });
         return has_mapped_address(ourAddr);
     }
 
@@ -1056,6 +1073,7 @@ namespace llarp::handlers
             _net_if->Stop();
         if (_raw_DNS)
             _raw_DNS->Stop();
+
         // save address map if applicable
         if (_persisting_addr_file and not platform::is_android)
         {
@@ -1077,195 +1095,195 @@ namespace llarp::handlers
             //   maybe->write(data.data(), data.size());
             // }
         }
+
         if (_dns)
             _dns->stop();
+
         return true;
         // return llarp::service::Endpoint::Stop();
     }
 
-    std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
-        huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
-    {
-        // is it already mapped? return the mapping
-        if (auto itr = _exit_to_ip.find(ip); itr != _exit_to_ip.end())
-            return itr->second;
+    // std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
+    //     huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
+    // {
+    //     // is it already mapped? return the mapping
+    //     if (auto itr = _exit_to_ip.find(ip); itr != _exit_to_ip.end())
+    //         return itr->second;
 
-        // const auto& net = router().net();
-        // const bool is_bogon = net.IsBogonIP(ip);
-        // build up our candidates to choose
+    //     const auto& net = router().net();
+    //     const bool is_bogon = net.IsBogonIP(ip);
+    //     build up our candidates to choose
 
-        std::unordered_set<service::Address> candidates;
-        // for (const auto& entry : _exit_map.FindAllEntries(ip))
-        // {
-        //   // in the event the exit's range is a bogon range, make sure the ip is located in that
-        //   range
-        //   // to allow it
-        //   if ((is_bogon and net.IsBogonRange(entry.first) and entry.first.Contains(ip))
-        //       or entry.first.Contains(ip))
-        //     candidates.emplace(entry.second);
-        // }
-        // // no candidates? bail.
-        // if (candidates.empty())
-        //   return std::nullopt;
-        // if (not exitSelectionStrat)
-        // {
-        //   // default strat to random choice
-        //   exitSelectionStrat = [](auto candidates) {
-        //     auto itr = candidates.begin();
-        //     std::advance(itr, llarp::randint() % candidates.size());
-        //     return *itr;
-        //   };
-        // }
-        // map the exit and return the endpoint we mapped it to
-        return _exit_to_ip.emplace(ip, exitSelectionStrat(candidates)).first->second;
-    }
+    //     std::unordered_set<service::Address> candidates;
+    //     for (const auto& entry : _exit_map.FindAllEntries(ip))
+    //     {
+    //       // in the event the exit's range is a bogon range, make sure the ip is located in that
+    //       range
+    //       // to allow it
+    //       if ((is_bogon and net.IsBogonRange(entry.first) and entry.first.Contains(ip))
+    //           or entry.first.Contains(ip))
+    //         candidates.emplace(entry.second);
+    //     }
+    //     // no candidates? bail.
+    //     if (candidates.empty())
+    //       return std::nullopt;
+    //     if (not exitSelectionStrat)
+    //     {
+    //       // default strat to random choice
+    //       exitSelectionStrat = [](auto candidates) {
+    //         auto itr = candidates.begin();
+    //         std::advance(itr, llarp::randint() % candidates.size());
+    //         return *itr;
+    //       };
+    //     }
+    //     // map the exit and return the endpoint we mapped it to
+    //     return _exit_to_ip.emplace(ip, exitSelectionStrat(candidates)).first->second;
+    // }
 
     void TunEndpoint::handle_user_packet(IPPacket pkt)
     {
-        huint128_t dst, src;
-        if (pkt.IsV4())
-        {
-            dst = pkt.dst4to6();
-            src = pkt.src4to6();
-        }
-        else
-        {
-            dst = pkt.dstv6();
-            src = pkt.srcv6();
-        }
-
-        if constexpr (llarp::platform::is_apple)
-        {
-            if (dst == _local_ip)
-            {
-                handle_write_ip_packet(pkt.ConstBuffer(), src, dst, 0);
-                return;
-            }
-        }
-
-        // if (_state->is_exit_enabled)
+        (void)pkt;
+        // huint128_t dst, src;
+        // if (pkt.IsV4())
         // {
-        //   dst = net::ExpandV4(net::TruncateV6(dst));
-        // }
-
-        auto itr = _ip_to_addr.find(dst);
-
-        if (itr == _ip_to_addr.end())
-        {
-            service::Address addr{};
-
-            if (auto maybe = get_exit_address_for_ip(dst))
-                addr = *maybe;
-            else
-            {
-                // send icmp unreachable as we dont have any exits for this ip
-                if (const auto icmp = pkt.MakeICMPUnreachable())
-                    handle_write_ip_packet(icmp->ConstBuffer(), dst, src, 0);
-
-                return;
-            }
-
-            std::function<void(void)> extra_cb;
-
-            // if (not HasFlowToService(addr))
-            // {
-            //   extra_cb = [poker = router().route_poker()]() { poker->put_up(); };
-            // }
-
-            // pkt.ZeroSourceAddress();
-            // MarkAddressOutbound(addr);
-
-            // EnsurePathToService(
-            //     addr,
-            //     [pkt, extra_cb, this](service::Address addr, service::OutboundContext* ctx)
-            //     mutable {
-            //       if (ctx)
-            //       {
-            //         if (extra_cb)
-            //           extra_cb();
-            //         ctx->send_packet_to_remote(pkt.to_string());
-            //         router().TriggerPump();
-            //         return;
-            //       }
-            //       LogWarn("cannot ensure path to exit ", addr, " so we drop some packets");
-            //     },
-            //     PathAlignmentTimeout());
-            return;
-        }
-        std::variant<service::Address, RouterID> to;
-        service::ProtocolType type{};
-        // if (m_SNodes.at(itr->second))
-        // {
-        //   to = RouterID{itr->second.as_array()};
-        //   type = service::ProtocolType::TrafficV4;
+        //     dst = pkt.dst4to6();
+        //     src = pkt.src4to6();
         // }
         // else
         // {
-        //   to = service::Address{itr->second.as_array()};
-        //   type = _state->is_exit_enabled and src != m_OurIP ? service::ProtocolType::Exit
-        //                                                     : pkt.ServiceProtocol();
+        //     dst = pkt.dstv6();
+        //     src = pkt.srcv6();
         // }
 
-        // prepare packet for insertion into network
-        // this includes clearing IP addresses, recalculating checksums, etc
-        // this does not happen for exits because the point is they don't rewrite addresses
-        // TODO: can we fix this shit
-        //  - clear addresses if it is our local TUN address, invariant of protocoltype
-        if (type != service::ProtocolType::Exit)
-        {
-            if (pkt.IsV4())
-                pkt.UpdateIPv4Address({0}, {0});
-            else
-                pkt.UpdateIPv6Address({0}, {0});
-        }
-        // try sending it on an existing convotag
-        // this succeds for inbound convos, probably.
-        // if (auto maybe = GetBestConvoTagFor(to))
+        // if constexpr (llarp::platform::is_apple)
         // {
-        //   if (send_to(*maybe, pkt.to_string()))
-        //   {
-        //     MarkIPActive(dst);
-        //     router().TriggerPump();
-        //     return;
-        //   }
+        //     if (dst == _local_ip)
+        //     {
+        //         handle_write_ip_packet(pkt.ConstBuffer(), src, dst, 0);
+        //         return;
+        //     }
         // }
-        // // try establishing a path to this guy
-        // // will fail if it's an inbound convo
-        // EnsurePathTo(
-        //     to,
-        //     [pkt, dst, to, this](auto maybe) mutable {
-        //       if (not maybe)
-        //       {
-        //         var::visit(
-        //             [this](auto&& addr) {
-        //               LogWarn(name(), " failed to ensure path to ", addr, " no convo tag found");
-        //             },
-        //             to);
-        //       }
-        //       if (send_to(*maybe, pkt.to_string()))
-        //       {
-        //         MarkIPActive(dst);
-        //         router().TriggerPump();
-        //       }
-        //       else
-        //       {
-        //         var::visit(
-        //             [this](auto&& addr) {
-        //               LogWarn(name(), " failed to send to ", addr, ", SendToOrQueue failed");
-        //             },
-        //             to);
-        //       }
-        //     },
-        //     PathAlignmentTimeout());
+
+        // // if (_state->is_exit_enabled)
+        // // {
+        // //   dst = net::ExpandV4(net::TruncateV6(dst));
+        // // }
+
+        // auto itr = _ip_to_addr.find(dst);
+
+        // if (itr == _ip_to_addr.end())
+        // {
+        //     service::Address addr{};
+
+        //     if (auto maybe = get_exit_address_for_ip(dst))
+        //         addr = *maybe;
+        //     else
+        //     {
+        //         // send icmp unreachable as we dont have any exits for this ip
+        //         if (const auto icmp = pkt.MakeICMPUnreachable())
+        //             handle_write_ip_packet(icmp->ConstBuffer(), dst, src, 0);
+
+        //         return;
+        //     }
+
+        //     std::function<void(void)> extra_cb;
+
+        //     // if (not HasFlowToService(addr))
+        //     // {
+        //     //   extra_cb = [poker = router().route_poker()]() { poker->put_up(); };
+        //     // }
+
+        //     // pkt.ZeroSourceAddress();
+        //     // MarkAddressOutbound(addr);
+
+        //     // EnsurePathToService(
+        //     //     addr,
+        //     //     [pkt, extra_cb, this](service::Address addr, service::OutboundContext* ctx)
+        //     //     mutable {
+        //     //       if (ctx)
+        //     //       {
+        //     //         if (extra_cb)
+        //     //           extra_cb();
+        //     //         ctx->send_packet_to_remote(pkt.to_string());
+        //     //         router().TriggerPump();
+        //     //         return;
+        //     //       }
+        //     //       LogWarn("cannot ensure path to exit ", addr, " so we drop some packets");
+        //     //     },
+        //     //     PathAlignmentTimeout());
+        //     return;
+        // }
+        // std::variant<service::Address, RouterID> to;
+        // service::ProtocolType type{};
+        // // if (m_SNodes.at(itr->second))
+        // // {
+        // //   to = RouterID{itr->second.as_array()};
+        // //   type = service::ProtocolType::TrafficV4;
+        // // }
+        // // else
+        // // {
+        // //   to = service::Address{itr->second.as_array()};
+        // //   type = _state->is_exit_enabled and src != m_OurIP ? service::ProtocolType::Exit
+        // //                                                     : pkt.ServiceProtocol();
+        // // }
+
+        // // prepare packet for insertion into network
+        // // this includes clearing IP addresses, recalculating checksums, etc
+        // // this does not happen for exits because the point is they don't rewrite addresses
+        // // TODO: can we fix this shit
+        // //  - clear addresses if it is our local TUN address, invariant of protocoltype
+        // if (type != service::ProtocolType::Exit)
+        // {
+        //     if (pkt.IsV4())
+        //         pkt.UpdateIPv4Address({0}, {0});
+        //     else
+        //         pkt.UpdateIPv6Address({0}, {0});
+        // }
+        // // try sending it on an existing convotag
+        // // this succeds for inbound convos, probably.
+        // // if (auto maybe = GetBestConvoTagFor(to))
+        // // {
+        // //   if (send_to(*maybe, pkt.to_string()))
+        // //   {
+        // //     MarkIPActive(dst);
+        // //     router().TriggerPump();
+        // //     return;
+        // //   }
+        // // }
+        // // // try establishing a path to this guy
+        // // // will fail if it's an inbound convo
+        // // EnsurePathTo(
+        // //     to,
+        // //     [pkt, dst, to, this](auto maybe) mutable {
+        // //       if (not maybe)
+        // //       {
+        // //         var::visit(
+        // //             [this](auto&& addr) {
+        // //               LogWarn(name(), " failed to ensure path to ", addr, " no convo tag found");
+        // //             },
+        // //             to);
+        // //       }
+        // //       if (send_to(*maybe, pkt.to_string()))
+        // //       {
+        // //         MarkIPActive(dst);
+        // //         router().TriggerPump();
+        // //       }
+        // //       else
+        // //       {
+        // //         var::visit(
+        // //             [this](auto&& addr) {
+        // //               LogWarn(name(), " failed to send to ", addr, ", SendToOrQueue failed");
+        // //             },
+        // //             to);
+        // //       }
+        // //     },
+        // //     PathAlignmentTimeout());
     }
 
-    bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
+    bool TunEndpoint::is_allowing_traffic(const UDPPacket& pkt) const
     {
-        if (const auto exitPolicy = get_traffic_policy())
-        {
-            if (not exitPolicy->AllowsTraffic(pkt))
-                return false;
-        }
+        if (auto exitPolicy = get_traffic_policy())
+            return exitPolicy->allow_ip_traffic(pkt);
 
         return true;
     }
@@ -1308,7 +1326,7 @@ namespace llarp::handlers
         huint128_t src, dst;
 
         IPPacket pkt;
-        if (not pkt.Load(buf))
+        if (not pkt.load(buf.base))
             return false;
 
         // if (_state->is_exit_enabled)
@@ -1383,18 +1401,20 @@ namespace llarp::handlers
         write.seqno = seqno;
         auto& pkt = write.pkt;
         // load
-        if (!pkt.Load(buf))
+        if (!pkt.load(buf.underlying.base))
         {
             return false;
         }
-        if (pkt.IsV4())
-        {
-            pkt.UpdateIPv4Address(xhtonl(net::TruncateV6(src)), xhtonl(net::TruncateV6(dst)));
-        }
-        else if (pkt.IsV6())
-        {
-            pkt.UpdateIPv6Address(src, dst);
-        }
+        // if (pkt.IsV4())
+        // {
+        //     pkt.UpdateIPv4Address(xhtonl(net::TruncateV6(src)), xhtonl(net::TruncateV6(dst)));
+        // }
+        // else if (pkt.IsV6())
+        // {
+        //     pkt.UpdateIPv6Address(src, dst);
+        // }
+        (void)src;
+        (void)dst;
 
         // TODO: send this along but without a fucking huint182_t
         // m_NetworkToUserPktQueue.push(std::move(write));
@@ -1404,51 +1424,52 @@ namespace llarp::handlers
         return true;
     }
 
-    oxen::quic::Address TunEndpoint::get_if_addr() const
+    ip TunEndpoint::get_if_addr() const
     {
         return _local_ip;
     }
 
-    huint128_t TunEndpoint::get_ip_for_addr(std::variant<service::Address, RouterID> addr)
+    ip TunEndpoint::get_ip_for_addr(std::variant<service::Address, RouterID> addr)
     {
         llarp_time_t now = llarp::time_now_ms();
-        huint128_t nextIP = {0};
-        AlignedBuffer<32> ident{};
-        bool snode = false;
+        (void)addr;
+        // huint128_t nextIP = {0};
+        // AlignedBuffer<32> ident{};
+        // bool snode = false;
 
-        var::visit([&ident](auto&& val) { ident = val.data(); }, addr);
+        // var::visit([&ident](auto&& val) { ident = val.data(); }, addr);
 
-        if (std::get_if<RouterID>(&addr))
-        {
-            snode = true;
-        }
+        // if (std::get_if<RouterID>(&addr))
+        // {
+        //     snode = true;
+        // }
 
-        {
-            // previously allocated address
-            auto itr = _addr_to_ip.find(ident);
-            if (itr != _addr_to_ip.end())
-            {
-                // mark ip active
-                mark_ip_active(itr->second);
-                return itr->second;
-            }
-        }
+        // {
+        //     // previously allocated address
+        //     auto itr = _addr_to_ip.find(ident);
+        //     if (itr != _addr_to_ip.end())
+        //     {
+        //         // mark ip active
+        //         mark_ip_active(itr->second);
+        //         return itr->second;
+        //     }
+        // }
         // allocate new address
         if (_next_ip < _max_ip)
         {
-            do
-            {
-                nextIP = ++_next_ip;
-            } while (_ip_to_addr.find(nextIP) != _ip_to_addr.end() && _next_ip < _max_ip);
-            if (nextIP < _max_ip)
-            {
-                _addr_to_ip[ident] = nextIP;
-                _ip_to_addr[nextIP] = ident;
-                _is_snode_map[ident] = snode;
-                var::visit([&](auto&& remote) { llarp::LogInfo(name(), " mapped ", remote, " to ", nextIP); }, addr);
-                mark_ip_active(nextIP);
-                return nextIP;
-            }
+            // do
+            // {
+            //     nextIP = ++_next_ip;
+            // } while (_ip_to_addr.find(nextIP) != _ip_to_addr.end() && _next_ip < _max_ip);
+            // if (nextIP < _max_ip)
+            // {
+            //     _addr_to_ip[ident] = nextIP;
+            //     _ip_to_addr[nextIP] = ident;
+            //     _is_snode_map[ident] = snode;
+            //     var::visit([&](auto&& remote) { llarp::LogInfo(name(), " mapped ", remote, " to ", nextIP); }, addr);
+            //     mark_ip_active(nextIP);
+            //     return nextIP;
+            // }
         }
 
         // we are full
@@ -1471,31 +1492,35 @@ namespace llarp::handlers
             ++itr;
         }
         // remap address
-        _ip_to_addr[oldest.first] = ident;
-        _addr_to_ip[ident] = oldest.first;
-        _is_snode_map[ident] = snode;
-        nextIP = oldest.first;
+        // _ip_to_addr[oldest.first] = ident;
+        // _addr_to_ip[ident] = oldest.first;
+        // _is_snode_map[ident] = snode;
+        // nextIP = oldest.first;
 
-        // mark ip active
-        _ip_activity[nextIP] = std::max(_ip_activity[nextIP], now);
+        // // mark ip active
+        // _ip_activity[nextIP] = std::max(_ip_activity[nextIP], now);
 
-        return nextIP;
+        // return nextIP;
+        return {};
     }
 
-    bool TunEndpoint::is_ip_mapped(huint128_t ip) const
+    bool TunEndpoint::is_ip_mapped(ip ip) const
     {
         return _ip_to_addr.find(ip) != _ip_to_addr.end();
     }
 
-    void TunEndpoint::mark_ip_active(huint128_t ip)
+    void TunEndpoint::mark_ip_active(ip ip)
     {
-        llarp::LogDebug(name(), " address ", ip, " is active");
-        _ip_activity[ip] = std::max(llarp::time_now_ms(), _ip_activity[ip]);
+        log::debug(logcat, "{} marking address {} active", name(), ip);
+        // _ip_activity[ip] =
+        // std::max(llarp::time_now_ms(), _ip_activity[ip]);
     }
 
-    void TunEndpoint::mark_ip_active_forever(huint128_t ip)
+    void TunEndpoint::mark_ip_active_forever(ip ip)
     {
-        _ip_activity[ip] = std::numeric_limits<llarp_time_t>::max();
+        log::debug(logcat, "{} marking address {} perpetually active", name(), ip);
+        // _ip_activity[ip] =
+        //     std::numeric_limits<llarp_time_t>::max();
     }
 
     TunEndpoint::~TunEndpoint() = default;

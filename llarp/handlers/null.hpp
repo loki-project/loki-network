@@ -15,8 +15,7 @@ namespace llarp::handlers
                                 public std::enable_shared_from_this<NullEndpoint>
     {
         NullEndpoint(Router& r)
-            : BaseHandler{r},
-              _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, net::IP_packet_deprecated pkt) {
+            : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, IPPacket pkt) {
                   var::visit(
                       [&pkt](AddressVariant_t&& from) {
                           log::error(logcat, "Unhandled traffic from {} (pkt size:{}B)", from, pkt.size());
@@ -123,12 +122,12 @@ namespace llarp::handlers
             return false;
         }
 
-        huint128_t get_ip_for_addr(std::variant<service::Address, RouterID>) override
+        ip get_ip_for_addr(std::variant<service::Address, RouterID>) override
         {
-            return {0};
+            return {};
         }
 
-        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t) const override
+        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip) const override
         {
             return std::nullopt;
         }

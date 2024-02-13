@@ -4,9 +4,12 @@
 
 namespace llarp
 {
+    struct IPPacket;
+
     using UDPPacket = oxen::quic::Packet;
 
     using udp_pkt_hook = oxen::quic::UDPSocket::receive_callback_t;
+    using ip_pkt_hook = std::function<void(IPPacket)>;
 
     using UDPSocket = oxen::quic::UDPSocket;
 

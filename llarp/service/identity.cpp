@@ -5,6 +5,8 @@
 
 namespace llarp::service
 {
+    static auto logcat = log::Cat("Identity");
+
     std::string Identity::bt_encode() const
     {
         oxenc::bt_dict_producer btdp;

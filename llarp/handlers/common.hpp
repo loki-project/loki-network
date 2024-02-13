@@ -2,7 +2,7 @@
 
 #include <llarp/auth/auth.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/net/ip_range_map.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/service/address.hpp>
 #include <llarp/service/identity.hpp>
@@ -42,6 +42,8 @@ namespace llarp::handlers
             return _router;
         }
 
+        const std::shared_ptr<EventLoop>& loop() const;
+
         virtual ~BaseHandler() = default;
 
         service::Identity _identity;
@@ -63,10 +65,10 @@ namespace llarp::handlers
             return nullptr;
         };
 
-        virtual huint128_t get_ip_for_addr(std::variant<service::Address, RouterID>) = 0;
+        virtual ip get_ip_for_addr(std::variant<service::Address, RouterID>) = 0;
 
         /// get a key for ip address
-        virtual std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t ip) const = 0;
+        virtual std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip ip) const = 0;
 
         /// handle packet io from service node or hidden service to frontend
         virtual bool handle_inbound_packet(

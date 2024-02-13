@@ -4,61 +4,63 @@ namespace llarp::vpn
 {
     struct EgresUDPPacketHandler : public EgresLayer4Handler
     {
-        EgresPacketHandlerFunc m_BaseHandler;
-        std::unordered_map<nuint16_t, EgresPacketHandlerFunc> m_LocalPorts;
+        EgresPacketHandlerFunc _handler;
+        std::unordered_map<uint16_t, EgresPacketHandlerFunc> _ports;
 
-        explicit EgresUDPPacketHandler(EgresPacketHandlerFunc baseHandler) : m_BaseHandler{std::move(baseHandler)}
+        explicit EgresUDPPacketHandler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
         {}
 
-        void AddSubHandler(nuint16_t localport, EgresPacketHandlerFunc handler) override
+        void AddSubHandler(uint16_t localport, EgresPacketHandlerFunc handler) override
         {
-            m_LocalPorts.emplace(std::move(localport), std::move(handler));
+            _ports.emplace(std::move(localport), std::move(handler));
         }
 
-        void RemoveSubHandler(nuint16_t localport) override
+        void RemoveSubHandler(uint16_t localport) override
         {
-            m_LocalPorts.erase(localport);
+            _ports.erase(localport);
         }
 
-        void HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt) override
+        void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
         {
-            if (auto dstPort = pkt.DstPort())
+            auto ip_pkt = IPPacket::from_udp(std::move(pkt));
+
+            if (auto dstPort = pkt.path.remote.port())
             {
-                if (auto itr = m_LocalPorts.find(*dstPort); itr != m_LocalPorts.end())
+                if (auto itr = _ports.find(dstPort); itr != _ports.end())
                 {
-                    itr->second(std::move(from), std::move(pkt));
+                    itr->second(std::move(from), std::move(ip_pkt));
                     return;
                 }
             }
-            m_BaseHandler(std::move(from), std::move(pkt));
+            _handler(std::move(from), std::move(ip_pkt));
         }
     };
 
     struct EgresGenericLayer4Handler : public EgresLayer4Handler
     {
-        EgresPacketHandlerFunc m_BaseHandler;
+        EgresPacketHandlerFunc _handler;
 
-        explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : m_BaseHandler{std::move(baseHandler)}
+        explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
         {}
 
-        void HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt) override
+        void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
         {
-            m_BaseHandler(std::move(from), std::move(pkt));
+            _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
         }
     };
 
-    EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : m_BaseHandler{std::move(baseHandler)}
+    EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
     {}
 
-    void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, IPPacket pkt)
+    void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt)
     {
-        const auto proto = pkt.Header()->protocol;
-        if (const auto itr = m_IPProtoHandler.find(proto); itr != m_IPProtoHandler.end())
-        {
-            itr->second->HandleIPPacketFrom(std::move(from), std::move(pkt));
-        }
-        else
-            m_BaseHandler(std::move(from), std::move(pkt));
+        // const auto proto = pkt.Header()->protocol;
+        // if (const auto itr = _proto_handlers.find(proto); itr != _proto_handlers.end())
+        // {
+        //     itr->second->HandleIPPacketFrom(std::move(from), std::move(pkt));
+        // }
+        // else
+        _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
     }
 
     namespace
@@ -66,25 +68,25 @@ namespace llarp::vpn
         constexpr uint8_t udp_proto = 0x11;
     }
 
-    void EgresPacketRouter::AddUDPHandler(huint16_t localport, EgresPacketHandlerFunc func)
+    void EgresPacketRouter::AddUDPHandler(uint16_t localport, EgresPacketHandlerFunc func)
     {
-        if (m_IPProtoHandler.find(udp_proto) == m_IPProtoHandler.end())
+        if (_proto_handlers.find(udp_proto) == _proto_handlers.end())
         {
-            m_IPProtoHandler.emplace(udp_proto, std::make_unique<EgresUDPPacketHandler>(m_BaseHandler));
+            _proto_handlers.emplace(udp_proto, std::make_unique<EgresUDPPacketHandler>(_handler));
         }
-        m_IPProtoHandler[udp_proto]->AddSubHandler(ToNet(localport), std::move(func));
+        _proto_handlers[udp_proto]->AddSubHandler(localport, std::move(func));
     }
 
     void EgresPacketRouter::AddIProtoHandler(uint8_t proto, EgresPacketHandlerFunc func)
     {
-        m_IPProtoHandler[proto] = std::make_unique<EgresGenericLayer4Handler>(std::move(func));
+        _proto_handlers[proto] = std::make_unique<EgresGenericLayer4Handler>(std::move(func));
     }
 
-    void EgresPacketRouter::RemoveUDPHandler(huint16_t localport)
+    void EgresPacketRouter::RemoveUDPHandler(uint16_t localport)
     {
-        if (auto itr = m_IPProtoHandler.find(udp_proto); itr != m_IPProtoHandler.end())
+        if (auto itr = _proto_handlers.find(udp_proto); itr != _proto_handlers.end())
         {
-            itr->second->RemoveSubHandler(ToNet(localport));
+            itr->second->RemoveSubHandler(localport);
         }
     }
 

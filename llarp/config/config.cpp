@@ -6,7 +6,6 @@
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/sock_addr.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/util/file.hpp>
 
@@ -718,12 +717,9 @@ namespace llarp
             ClientOnly,
             Default{fs::path{params.default_data_dir / "addrmap.dat"}},
             Comment{
-                "If given this specifies a file in which to record mapped local tunnel addresses "
-                "so",
-                "the same local address will be used for the same lokinet address on reboot.  If "
-                "this",
-                "is not specified then the local IP of remote lokinet targets will not persist "
-                "across",
+                "If given this specifies a file in which to record mapped local tunnel addresses so",
+                "the same local address will be used for the same lokinet address on reboot. If this",
+                "is not specified then the local IP of remote lokinet targets will not persist across",
                 "restarts of lokinet.",
             },
             [this](fs::path arg) {
@@ -1244,21 +1240,16 @@ namespace llarp
         (void)params;
 
         constexpr Default DefaultUniqueCIDR{32};
-        conf.define_option<uint8_t>(
+        conf.define_option<int>(
             "paths",
             "unique-range-size",
             DefaultUniqueCIDR,
             ClientOnly,
-            [=](uint8_t arg) {
-                if (arg == 0)
-                {
-                    unique_hop_netmask = arg;
-                }
-                else if (arg > 32 or arg < 4)
-                {
+            [=](int arg) {
+                if (arg > 32 or arg < 4)
                     throw std::invalid_argument{"[paths]:unique-range-size must be between 4 and 32"};
-                }
-                unique_hop_netmask = arg;
+
+                unique_hop_netmask = static_cast<uint8_t>(arg);
             },
             Comment{
                 "Netmask for router path selection; each router must be from a distinct IPv4 "

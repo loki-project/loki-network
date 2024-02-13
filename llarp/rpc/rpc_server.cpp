@@ -19,7 +19,7 @@
 namespace llarp::rpc
 {
     // Fake packet source that serializes repsonses back into dns
-    class DummyPacketSource : public dns::PacketSource_Base
+    class DummyPacketSource final : public dns::PacketSource_Base
     {
         std::function<void(std::optional<dns::Message>)> func;
 

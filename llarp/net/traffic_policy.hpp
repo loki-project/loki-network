@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ip_range.hpp"
-
 #include <llarp/address/ip_packet.hpp>
+#include <llarp/address/ip_range.hpp>
 #include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
@@ -11,6 +10,21 @@
 
 namespace llarp::net
 {
+    // Copied over from llarp/net/ip_packet_old.hpp...
+    // TODO: do we fucking need this?
+    enum class IPProtocol : uint8_t
+    {
+        ICMP = 0x01,
+        IGMP = 0x02,
+        IPIP = 0x04,
+        TCP = 0x06,
+        UDP = 0x11,
+        GRE = 0x2F,
+        ICMP6 = 0x3A,
+        OSFP = 0x59,
+        PGM = 0x71,
+    };
+
     /// information about an IP protocol
     struct ProtocolInfo
     {
@@ -29,7 +43,7 @@ namespace llarp::net
 
         /// returns true if an ip packet looks like it matches this protocol info
         /// returns false otherwise
-        bool MatchesPacket(const IPPacket& pkt) const;
+        bool matches_packet_proto(const UDPPacket& pkt) const;
 
         bool operator<(const ProtocolInfo& other) const
         {
@@ -45,7 +59,7 @@ namespace llarp::net
     struct TrafficPolicy
     {
         /// ranges that are explicitly allowed
-        std::set<IP_range_deprecated> ranges;
+        std::set<IPRange> ranges;
 
         /// protocols that are explicity allowed
         std::set<ProtocolInfo> protocols;
@@ -58,6 +72,6 @@ namespace llarp::net
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise
-        bool AllowsTraffic(const IPPacket& pkt) const;
+        bool allow_ip_traffic(const UDPPacket& pkt) const;
     };
 }  // namespace llarp::net

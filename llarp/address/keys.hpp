@@ -1,6 +1,7 @@
 #pragma once
 
-#include <llarp/crypto/types.hpp>
+#include <llarp/crypto/constants.hpp>
+#include <llarp/util/aligned.hpp>
 
 /** TODO:
     - re-configure string_view and ustring_view methods after deprecating RouterID
@@ -17,15 +18,22 @@ namespace llarp
 
         explicit PublicKey(const uint8_t* data) : AlignedBuffer<PUBKEYSIZE>{data}
         {}
-
         explicit PublicKey(const std::array<uint8_t, PUBKEYSIZE>& data) : AlignedBuffer<PUBKEYSIZE>{data}
         {}
-
         explicit PublicKey(ustring_view data) : AlignedBuffer<PUBKEYSIZE>{data.data()}
         {}
-
         explicit PublicKey(std::string_view data) : PublicKey{to_usv(data)}
         {}
+        PublicKey(const PublicKey& other) : PublicKey{other.data()}
+        {}
+        PublicKey(PublicKey&& other) : PublicKey{other.data()}
+        {}
+
+        PublicKey& operator=(const PublicKey& other);
+
+        bool operator<(const PublicKey& other) const;
+        bool operator==(const PublicKey& other) const;
+        bool operator!=(const PublicKey& other) const;
     };
 
     struct RelayPubKey final : public PublicKey
@@ -39,6 +47,8 @@ namespace llarp
         explicit RelayPubKey(ustring_view data) : PublicKey{data.data()}
         {}
         explicit RelayPubKey(std::string_view data) : RelayPubKey{to_usv(data)}
+        {}
+        explicit RelayPubKey(const RelayPubKey& other) : RelayPubKey{other.data()}
         {}
 
         std::string to_string() const;
@@ -61,6 +71,8 @@ namespace llarp
         explicit ClientPubKey(ustring_view data) : PublicKey{data.data()}
         {}
         explicit ClientPubKey(std::string_view data) : ClientPubKey{to_usv(data)}
+        {}
+        explicit ClientPubKey(const ClientPubKey& other) : ClientPubKey{other.data()}
         {}
 
         std::string to_string() const;

@@ -71,6 +71,16 @@ namespace llarp
         return UDPPacket{oxen::quic::Path{std::move(src), std::move(dest)}, bview()};
     }
 
+    bool IPPacket::load(ustring_view data)
+    {
+        return load(data.data(), data.size());
+    }
+
+    bool IPPacket::load(std::string_view data)
+    {
+        return load(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    }
+
     bool IPPacket::load(std::vector<uint8_t> data)
     {
         return load(data.data(), data.size());

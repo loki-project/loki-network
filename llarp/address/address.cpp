@@ -24,6 +24,75 @@ namespace llarp
         return ret;
     };
 
+    RemoteAddr& RemoteAddr::operator=(RemoteAddr&& other)
+    {
+        _pubkey = std::move(other._pubkey);
+        _name = std::move(other._name);
+        _tld = std::move(other._tld);
+        return *this;
+    }
+
+    bool RemoteAddr::operator<(const RemoteAddr& other) const
+    {
+        return std::tie(_pubkey, _name, _tld) < std::tie(other._pubkey, other._name, other._tld);
+    }
+
+    bool RemoteAddr::operator==(const RemoteAddr& other) const
+    {
+        return _pubkey == other._pubkey and _name == other._name && _tld == other._tld;
+    }
+
+    bool RemoteAddr::operator!=(const RemoteAddr& other) const
+    {
+        return not(*this == other);
+    }
+
+    RelayAddress& RelayAddress::operator=(RelayAddress&& other)
+    {
+        _pubkey = std::move(other._pubkey);
+        _name = std::move(other._name);
+        _tld = std::move(other._tld);
+        return *this;
+    }
+
+    bool RelayAddress::operator<(const RelayAddress& other) const
+    {
+        return std::tie(_pubkey, _name, _tld) < std::tie(other._pubkey, other._name, other._tld);
+    }
+
+    bool RelayAddress::operator==(const RelayAddress& other) const
+    {
+        return _pubkey == other._pubkey and _name == other._name && _tld == other._tld;
+    }
+
+    bool RelayAddress::operator!=(const RelayAddress& other) const
+    {
+        return not(*this == other);
+    }
+
+    ClientAddress& ClientAddress::operator=(ClientAddress&& other)
+    {
+        _pubkey = std::move(other._pubkey);
+        _name = std::move(other._name);
+        _tld = std::move(other._tld);
+        return *this;
+    }
+
+    bool ClientAddress::operator<(const ClientAddress& other) const
+    {
+        return std::tie(_pubkey, _name, _tld) < std::tie(other._pubkey, other._name, other._tld);
+    }
+
+    bool ClientAddress::operator==(const ClientAddress& other) const
+    {
+        return _pubkey == other._pubkey and _name == other._name && _tld == other._tld;
+    }
+
+    bool ClientAddress::operator!=(const ClientAddress& other) const
+    {
+        return not(*this == other);
+    }
+
     bool RelayAddress::from_pubkey_addr(std::string arg)
     {
         if (auto maybe_addr = parse_addr_string(arg, TLD::RELAY))

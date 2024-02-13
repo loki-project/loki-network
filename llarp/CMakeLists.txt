@@ -105,18 +105,21 @@ add_dependencies(lokinet-utils genversion)
 # needed by rpc/ link/ service/ config/ path/ dht/
 lokinet_add_library(lokinet-time-place
   address/address.cpp
+  address/ip_packet.cpp
   address/ip_range.cpp
   address/keys.cpp
 
-  ev/ev.cpp
-  ev/libuv.cpp
+  ev/udp.cpp
+  ev/loop.cpp
+  # ev/ev.cpp
+  # ev/libuv.cpp
 
   net/ip.cpp
-  net/ip_packet_old.cpp
+  # net/ip_packet_old.cpp
   # net/ip_address.cpp
   # net/ip_range.cpp
   net/net_int.cpp
-  net/sock_addr.cpp
+  # net/sock_addr.cpp
 
   router_contact.cpp    # TODO: move these + router_id.cpp to lokinet-core-utils..?
   router_contact_local.cpp

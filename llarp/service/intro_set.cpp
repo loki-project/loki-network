@@ -6,6 +6,8 @@
 
 namespace llarp::service
 {
+    static auto logcat = log::Cat("EncIntro");
+
     EncryptedIntroSet::EncryptedIntroSet(
         std::string signing_key,
         std::chrono::milliseconds signed_at,
@@ -34,7 +36,7 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: EncryptedIntroSet failed to bt encode contents!");
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
         }
     }
 
@@ -59,7 +61,7 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: EncryptedIntroSet failed to bt encode contents!");
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
         }
 
         return std::move(btdp).str();
@@ -239,7 +241,8 @@ namespace llarp::service
 
         if (key.startswith("r"))
         {
-            return BEncodeReadSet(owned_ranges, buf);
+            // TOFIX: GO FUCK YOURSELF
+            // return BEncodeReadSet(owned_ranges, buf);
         }
 
         if (key.startswith("s"))
@@ -340,7 +343,7 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: EncryptedIntroSet failed to bt encode contents!");
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
         }
     }
 
@@ -395,7 +398,7 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: IntroSet failed to bt encode contents!");
+            log::critical(logcat, "Error: IntroSet failed to bt encode contents!");
         }
 
         return std::move(btdp).str();

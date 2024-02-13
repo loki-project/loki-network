@@ -10,8 +10,6 @@
 #include <llarp/constants/files.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
-#include <llarp/net/ip_address.hpp>
-#include <llarp/net/ip_range_map.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/net/net_int.hpp>
 #include <llarp/net/traffic_policy.hpp>
@@ -140,6 +138,7 @@ namespace llarp
 
         std::optional<llarp_time_t> path_alignment_timeout;
 
+        // TODO: if this is provided, we should parse it in the config
         std::optional<fs::path> addr_map_persist_file;
 
         /* TESTNET: Under modification */
@@ -157,8 +156,8 @@ namespace llarp
         // IP_range_deprecated if_addr;
         // std::optional<huint128_t> base_ipv6_range = std::nullopt;
         std::unordered_map<huint128_t, service::Address> addr_map;
-        net::IPRangeMap<service::Address> range_map;
-        net::IPRangeMap<std::string> ons_range_map;
+        // net::IPRangeMap<service::Address> range_map;
+        // net::IPRangeMap<std::string> ons_range_map;
         // std::set<IP_range_deprecated> owned_ranges;
         /*************************************/
 

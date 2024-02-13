@@ -1,6 +1,5 @@
 #include "name.hpp"
 
-#include <llarp/net/ip.hpp>
 #include <llarp/net/net_bits.hpp>
 #include <llarp/util/str.hpp>
 
@@ -62,22 +61,27 @@ namespace llarp::dns
         return true;
     }
 
-    std::optional<huint128_t> DecodePTR(std::string_view name)
+    std::optional<ip> DecodePTR(std::string_view name)
     {
         bool isV6 = false;
         auto pos = name.find(".in-addr.arpa");
+
         if (pos == std::string::npos)
         {
             pos = name.find(".ip6.arpa");
             isV6 = true;
         }
+
         if (pos == std::string::npos)
             return std::nullopt;
+
         name = name.substr(0, pos + 1);
         const auto numdots = std::count(name.begin(), name.end(), '.');
+
         if (numdots == 4 && !isV6)
         {
             std::array<uint8_t, 4> q;
+
             for (int i = 3; i >= 0; i--)
             {
                 pos = name.find('.');
@@ -85,7 +89,8 @@ namespace llarp::dns
                     return std::nullopt;
                 name.remove_prefix(pos + 1);
             }
-            return net::ExpandV4(llarp::ipaddr_ipv4_bits(q[0], q[1], q[2], q[3]));
+
+            return ipv4(q[0], q[1], q[2], q[3]);
         }
         if (numdots == 32 && name.size() == 64 && isV6)
         {
@@ -93,6 +98,7 @@ namespace llarp::dns
             // "badcfe1032...", then decode the hex string to bytes.
             std::array<char, 32> in;
             auto in_pos = in.data();
+
             for (size_t i = 0; i < 64; i += 4)
             {
                 if (not(oxenc::is_hex_digit(name[i]) and name[i + 1] == '.' and oxenc::is_hex_digit(name[i + 2])
@@ -103,17 +109,18 @@ namespace llarp::dns
                 *in_pos++ = name[i + 2];
                 *in_pos++ = name[i];
             }
+
             assert(in_pos == in.data() + in.size());
-            huint128_t ip;
-            static_assert(in.size() == 2 * sizeof(ip.h));
+
             // our string right now is the little endian representation, so load it as such on
             // little endian, or in reverse on big endian.
             if constexpr (oxenc::little_endian)
-                oxenc::from_hex(in.begin(), in.end(), reinterpret_cast<uint8_t*>(&ip.h));
+            {
+                auto hex = oxenc::from_hex(in.begin(), in.end());
+                return ipv6{reinterpret_cast<const unsigned char*>(hex.data())};
+            }
             else
-                oxenc::from_hex(in.rbegin(), in.rend(), reinterpret_cast<uint8_t*>(&ip.h));
-
-            return ip;
+                return ipv6{reinterpret_cast<const unsigned char*>(in.data())};
         }
         return std::nullopt;
     }

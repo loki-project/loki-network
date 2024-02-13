@@ -5,6 +5,36 @@
 
 namespace llarp::net
 {
+    static auto logcat = log::Cat("TrafficPolicy");
+
+    // Two functions copied over from llarp/net/ip_packet_old.hpp
+    std::string IPProtocolName(IPProtocol proto)
+    {
+        if (const auto* ent = ::getprotobynumber(static_cast<uint8_t>(proto)))
+        {
+            return ent->p_name;
+        }
+
+        throw std::invalid_argument{
+            "cannot determine protocol name for ip proto '" + std::to_string(static_cast<int>(proto)) + "'"};
+    }
+
+    IPProtocol ParseIPProtocol(std::string data)
+    {
+        if (const auto* ent = ::getprotobyname(data.c_str()))
+        {
+            return static_cast<IPProtocol>(ent->p_proto);
+        }
+
+        if (starts_with(data, "0x"))
+        {
+            if (const int intVal = std::stoi(data.substr(2), nullptr, 16); intVal > 0)
+                return static_cast<IPProtocol>(intVal);
+        }
+
+        throw std::invalid_argument{"no such ip protocol: '" + data + "'"};
+    }
+
     ProtocolInfo::ProtocolInfo(std::string_view data)
     {
         const auto parts = split(data, "/");
@@ -33,7 +63,7 @@ namespace llarp::net
     }
 
     // DISCUSS: wtf is this
-    bool ProtocolInfo::MatchesPacket(const IPPacket&) const
+    bool ProtocolInfo::matches_packet_proto(const UDPPacket&) const
     {
         // if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
         //     return false;
@@ -49,27 +79,35 @@ namespace llarp::net
         return true;
     }
 
-    bool TrafficPolicy::AllowsTraffic(const IPPacket& pkt) const
+    bool TrafficPolicy::allow_ip_traffic(const UDPPacket& pkt) const
     {
         if (protocols.empty() and ranges.empty())
             return true;
 
         for (const auto& proto : protocols)
         {
-            if (proto.MatchesPacket(pkt))
+            if (proto.matches_packet_proto(pkt))
                 return true;
         }
+
+        auto& dest = pkt.path.remote;
+        ipv4 addrv4{oxenc::big_to_host<uint32_t>(dest.in4().sin_addr.s_addr)};
+        ipv6 addrv6{dest.in6().sin6_addr.s6_addr};
+
+        auto is_ipv4 = dest.is_ipv4();
+
         for (const auto& range : ranges)
         {
-            huint128_t dst;
-            if (pkt.IsV6())
-                dst = pkt.dstv6();
-            else if (pkt.IsV4())
-                dst = pkt.dst4to6();
+            if (is_ipv4)
+            {
+                if (range.contains(addrv4))
+                    return true;
+            }
             else
-                return false;
-            if (range.Contains(dst))
-                return true;
+            {
+                if (range.contains(addrv6))
+                    return true;
+            }
         }
         return false;
     }
@@ -120,7 +158,7 @@ namespace llarp::net
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: ProtocolInfo failed to bt encode contents!");
+            log::critical(logcat, "Error: ProtocolInfo failed to bt encode contents!");
         }
     }
 
@@ -134,7 +172,7 @@ namespace llarp::net
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: ProtocolInfo failed to bt encode contents!");
+            log::critical(logcat, "Error: ProtocolInfo failed to bt encode contents!");
         }
     }
 
@@ -152,7 +190,7 @@ namespace llarp::net
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: TrafficPolicy failed to populate with bt encoded contents");
+            log::critical(logcat, "Error: TrafficPolicy failed to populate with bt encoded contents");
         }
     }
 
@@ -174,7 +212,7 @@ namespace llarp::net
         }
         catch (...)
         {
-            log::critical(net_cat, "Error: TrafficPolicy failed to bt encode contents!");
+            log::critical(logcat, "Error: TrafficPolicy failed to bt encode contents!");
         }
     }
 
@@ -186,11 +224,13 @@ namespace llarp::net
                     return true;
                 if (key->startswith("p"))
                 {
-                    return BEncodeReadSet(protocols, buffer);
+                    // TOFIX: GFY here as well
+                    // return BEncodeReadSet(protocols, buffer);
                 }
                 if (key->startswith("r"))
                 {
-                    return BEncodeReadSet(ranges, buffer);
+                    // TOFIX: GFY here as well
+                    // return BEncodeReadSet(ranges, buffer);
                 }
                 return bencode_discard(buffer);
             },

@@ -10,6 +10,8 @@ using oxenc::bt_dict_producer;
 
 namespace llarp
 {
+    static auto logcat = log::Cat("profiling");
+
     RouterProfile::RouterProfile(bt_dict_consumer dict)
     {
         BDecode(std::move(dict));

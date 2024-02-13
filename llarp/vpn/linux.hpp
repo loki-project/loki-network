@@ -183,6 +183,8 @@ namespace llarp::vpn
             unsigned char bitlen;
             unsigned char data[sizeof(struct in6_addr)];
 
+            _inet_addr() = default;
+
             _inet_addr(oxen::quic::Address addr)
             {
                 const auto& v4 = addr.is_ipv4();
@@ -190,6 +192,24 @@ namespace llarp::vpn
                 family = (v4) ? AF_INET : AF_INET6;
                 bitlen = (v4) ? 32 : 128;
                 std::memcpy(data, addr.host().data(), (v4) ? 4 : 16);
+            }
+
+            _inet_addr(ipv4 v4)
+            {
+                family = AF_INET;
+                bitlen = 32;
+
+                auto bigly = oxenc::host_to_big<uint32_t>(v4.addr);
+                inet_ntop(AF_INET, &bigly, reinterpret_cast<char*>(data), sizeof(struct in6_addr));
+            }
+
+            _inet_addr(ipv6 v6)
+            {
+                family = AF_INET6;
+                bitlen = 128;
+
+                auto bigly = oxenc::host_to_big<uint64_t>(v6.hi);
+                inet_ntop(AF_INET6, &bigly, reinterpret_cast<char*>(data), sizeof(struct in6_addr));
             }
 
             _inet_addr(net::ipv4addr_t addr, size_t bits = 32)
@@ -322,12 +342,13 @@ namespace llarp::vpn
             if (range.is_ipv4())
             {
                 const auto maybe = Net().get_interface_addr(info.ifname);
+
                 if (not maybe)
                     throw std::runtime_error{"we dont have our own network interface?"};
 
-                const auto gateway = var::visit([](auto&& ip) { return _inet_addr{ip}; }, maybe->getIP());
-
                 const _inet_addr addr{range.address()};
+
+                _inet_addr gateway = (maybe->is_ipv4()) ? _inet_addr{maybe->to_ipv4()} : _inet_addr{maybe->to_ipv6()};
 
                 make_route(cmd, flags, addr, gateway, GatewayMode::eUpperDefault, info.index);
             }
@@ -345,6 +366,20 @@ namespace llarp::vpn
             }
         }
 
+        void make_route(int cmd, int flags, oxen::quic::Address ip, llarp::ip gateway)
+        {
+            _inet_addr g;
+            if (auto maybe_v4 = std::get_if<ipv4>(&gateway))
+                g = _inet_addr{*maybe_v4};
+            else
+            {
+                auto v6 = std::get_if<ipv6>(&gateway);
+                g = _inet_addr{*v6};
+            }
+
+            make_route(cmd, flags, _inet_addr{ip}, std::move(g), GatewayMode::eFirstHop, 0);
+        }
+
         void make_route(int cmd, int flags, oxen::quic::Address ip, oxen::quic::Address gateway)
         {
             make_route(cmd, flags, _inet_addr{ip}, _inet_addr{gateway}, GatewayMode::eFirstHop, 0);
@@ -357,7 +392,7 @@ namespace llarp::vpn
                 throw std::runtime_error{"failed to make netlink socket"};
         }
 
-        ~LinuxRouteManager()
+        ~LinuxRouteManager() override
         {
             close(fd);
         }

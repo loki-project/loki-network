@@ -23,6 +23,31 @@ namespace llarp
 
     struct RemoteAddr
     {
+       public:
+        RemoteAddr() = default;
+
+        explicit RemoteAddr(PublicKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
+            : _pubkey{std::move(pk)}, _name{std::move(n)}, _tld{tld}
+        {}
+        RemoteAddr(const RemoteAddr& other) : RemoteAddr{other._pubkey, other._tld, other._name}
+        {}
+        RemoteAddr(RemoteAddr&& other)
+            : RemoteAddr{std::move(other._pubkey), std::move(other._tld), std::move(other._name)}
+        {}
+        RemoteAddr& operator=(const RemoteAddr& other) = default;
+        RemoteAddr& operator=(RemoteAddr&& other);
+
+        bool operator<(const RemoteAddr& other) const;
+        bool operator==(const RemoteAddr& other) const;
+        bool operator!=(const RemoteAddr& other) const;
+
+        virtual ~RemoteAddr() = default;
+
+        std::string to_string() const
+        {
+            return remote_name();
+        }
+
        protected:
         PublicKey _pubkey;
         std::optional<std::string> _name = std::nullopt;
@@ -43,22 +68,11 @@ namespace llarp
             return name() + tld();
         }
 
-        explicit RemoteAddr(PublicKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
-            : _pubkey{std::move(pk)}, _name{std::move(n)}, _tld{tld}
-        {}
-
         /// This function currently assumes the remote address string is a pubkey, rather than
         /// an ONS name (TODO:)
-        virtual bool from_pubkey_addr(std::string arg) = 0;
-
-       public:
-        RemoteAddr() = default;
-
-        virtual ~RemoteAddr() = default;
-
-        std::string to_string() const
+        virtual bool from_pubkey_addr(std::string)
         {
-            return remote_name();
+            return true;
         }
     };
 
@@ -69,6 +83,18 @@ namespace llarp
         explicit RelayAddress(RelayPubKey rpk, std::optional<std::string> n = std::nullopt)
             : RemoteAddr{std::move(rpk), TLD::RELAY, std::move(n)}
         {}
+        RelayAddress(const RelayAddress& other) : RemoteAddr{other._pubkey, TLD::RELAY, other._name}
+        {}
+        RelayAddress(RelayAddress&& other) : RemoteAddr{std::move(other._pubkey), TLD::RELAY, std::move(other._name)}
+        {}
+        RelayAddress& operator=(const RelayAddress& other) = default;
+        RelayAddress& operator=(RelayAddress&& other);
+
+        bool operator<(const RelayAddress& other) const;
+        bool operator==(const RelayAddress& other) const;
+        bool operator!=(const RelayAddress& other) const;
+
+        ~RelayAddress() override = default;
 
         bool from_pubkey_addr(std::string arg) override;
     };
@@ -80,6 +106,18 @@ namespace llarp
         explicit ClientAddress(ClientPubKey cpk, std::optional<std::string> n = std::nullopt)
             : RemoteAddr{std::move(cpk), TLD::CLIENT, std::move(n)}
         {}
+        ClientAddress(const ClientAddress& other) : RemoteAddr{other._pubkey, TLD::RELAY, other._name}
+        {}
+        ClientAddress(ClientAddress&& other) : RemoteAddr{std::move(other._pubkey), TLD::RELAY, std::move(other._name)}
+        {}
+        ClientAddress& operator=(const ClientAddress& other) = default;
+        ClientAddress& operator=(ClientAddress&& other);
+
+        bool operator<(const ClientAddress& other) const;
+        bool operator==(const ClientAddress& other) const;
+        bool operator!=(const ClientAddress& other) const;
+
+        ~ClientAddress() override = default;
 
         bool from_pubkey_addr(std::string arg) override;
     };

@@ -52,6 +52,10 @@ namespace llarp
             return _buf.empty();
         }
 
+        bool load(ustring_view data);
+
+        bool load(std::string_view data);
+
         bool load(std::vector<uint8_t> data);
 
         bool load(const uint8_t* buf, size_t len);

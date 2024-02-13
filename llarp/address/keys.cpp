@@ -9,6 +9,27 @@ namespace llarp
         return oxenc::to_hex(begin(), end());
     }
 
+    PublicKey& PublicKey::operator=(const PublicKey& other)
+    {
+        std::memcpy(begin(), other.begin(), PUBKEYSIZE);
+        return *this;
+    }
+
+    bool PublicKey::operator<(const PublicKey& other) const
+    {
+        return as_array() < other.as_array();
+    }
+
+    bool PublicKey::operator==(const PublicKey& other) const
+    {
+        return as_array() == other.as_array();
+    }
+
+    bool PublicKey::operator!=(const PublicKey& other) const
+    {
+        return !(*this == other);
+    }
+
     std::string RelayPubKey::to_string() const
     {
         return oxenc::to_hex(begin(), end());

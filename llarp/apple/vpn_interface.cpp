@@ -10,25 +10,25 @@ namespace llarp::apple
     VPNInterface::VPNInterface(
         Context& ctx, packet_write_callback packet_writer, on_readable_callback on_readable, Router* router)
         : vpn::NetworkInterface{{}},
-          m_PacketWriter{std::move(packet_writer)},
-          m_OnReadable{std::move(on_readable)},
+          _pkt_writer{std::move(packet_writer)},
+          _on_readable{std::move(on_readable)},
           _router{router}
     {
-        ctx.loop->call_soon([this] { m_OnReadable(*this); });
+        ctx._loop->call_soon([this] { _on_readable(*this); });
     }
 
     bool VPNInterface::OfferReadPacket(const llarp_buffer_t& buf)
     {
-        llarp::net::IPPacket pkt;
-        if (!pkt.Load(buf))
+        IPPacket pkt;
+        if (!pkt.load(buf.copy()))
             return false;
-        m_ReadQueue.tryPushBack(std::move(pkt));
+        _read_que.tryPushBack(std::move(pkt));
         return true;
     }
 
     void VPNInterface::MaybeWakeUpperLayers() const
     {
-        _router->TriggerPump();
+        //
     }
 
     int VPNInterface::PollFD() const
@@ -36,18 +36,21 @@ namespace llarp::apple
         return -1;
     }
 
-    net::IPPacket VPNInterface::ReadNextPacket()
+    IPPacket VPNInterface::ReadNextPacket()
     {
-        net::IPPacket pkt{};
-        if (not m_ReadQueue.empty())
-            pkt = m_ReadQueue.popFront();
+        IPPacket pkt{};
+        if (not _read_que.empty())
+            pkt = _read_que.popFront();
         return pkt;
     }
 
-    bool VPNInterface::WritePacket(net::IPPacket pkt)
+    bool VPNInterface::WritePacket(IPPacket pkt)
     {
-        int af_family = pkt.IsV6() ? AF_INET6 : AF_INET;
-        return m_PacketWriter(af_family, pkt.data(), pkt.size());
+        // TODO: replace this with IPPacket::to_udp
+        (void)pkt;
+        // int af_family = pkt() ? AF_INET6 : AF_INET;
+        // return _pkt_writer(af_family, pkt.data(), pkt.size());
+        return true;
     }
 
 }  // namespace llarp::apple

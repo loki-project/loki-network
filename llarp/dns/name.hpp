@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/net/net_int.hpp>
+#include <llarp/address/types.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <optional>
@@ -14,7 +14,7 @@ namespace llarp::dns
     /// encode name to buffer
     bool EncodeNameTo(llarp_buffer_t* buf, std::string_view name);
 
-    std::optional<huint128_t> DecodePTR(std::string_view name);
+    std::optional<ip> DecodePTR(std::string_view name);
 
     bool NameIsReserved(std::string_view name);
 

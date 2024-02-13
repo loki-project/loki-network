@@ -22,6 +22,8 @@ namespace llarp
 
        public:
         IPRange() = default;
+        explicit IPRange(std::string a) : IPRange{a, 0}
+        {}
         explicit IPRange(std::string a, uint8_t m)
             : _addr{std::move(a), 0}, _mask{m}, _is_ipv4{_addr.is_ipv4()}, _ip{init_ip()}
         {}
@@ -45,6 +47,12 @@ namespace llarp
         static std::optional<IPRange> from_string(std::string arg);
 
         bool contains(const IPRange& other) const;
+
+        bool contains(const ipv4& other) const;
+
+        bool contains(const ipv6& other) const;
+
+        bool contains(const ip& other) const;
 
         bool is_ipv4() const
         {
@@ -95,3 +103,20 @@ namespace llarp
     template <>
     inline constexpr bool IsToStringFormattable<IPRange> = true;
 }  //  namespace llarp
+
+namespace std
+{
+    template <>
+    struct hash<llarp::IPRange>
+    {
+        size_t operator()(const llarp::IPRange& r) const
+        {
+            auto& addr = r.address();
+            auto& m = r.mask();
+
+            if (r.is_ipv4())
+                return hash<llarp::ipv4>{}(addr.to_ipv4().to_base(m));
+            return hash<llarp::ipv6>{}(addr.to_ipv6().to_base(m));
+        }
+    };
+}  //  namespace std

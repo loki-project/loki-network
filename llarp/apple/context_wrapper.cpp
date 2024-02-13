@@ -3,10 +3,10 @@
 #include "context.hpp"
 #include "vpn_interface.hpp"
 
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/constants/apple.hpp>
 #include <llarp/ev/libuv.hpp>
-#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>
@@ -59,7 +59,7 @@ void* llarp_apple_init(llarp_apple_config* appleconf)
         auto& range = config->network.if_addr;
         if (!range.addr.h)
         {
-            if (auto maybe = llarp::net::Platform::Default_ptr()->FindFreeRange())
+            if (auto maybe = llarp::net::Platform::Default_ptr()->find_free_range())
                 range = *maybe;
             else
                 throw std::runtime_error{"Could not find any free IP range"};

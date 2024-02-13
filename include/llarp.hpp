@@ -14,9 +14,7 @@ namespace llarp
     {
         class Platform;
     }
-    // Deprecated
-    class EvLoop_deprecated;
-    // New loop
+
     class EventLoop;
     struct Config;
     struct RouterContact;
@@ -39,7 +37,6 @@ namespace llarp
     struct Context
     {
         std::shared_ptr<Router> router = nullptr;
-        std::shared_ptr<EvLoop_deprecated> loop = nullptr;
         std::shared_ptr<EventLoop> _loop = nullptr;
         std::shared_ptr<NodeDB> nodedb = nullptr;
 
@@ -77,7 +74,7 @@ namespace llarp
 
         /// Creates a router. Can be overridden to allow a different class of router
         /// to be created instead. Defaults to llarp::Router.
-        virtual std::shared_ptr<Router> make_router(const std::shared_ptr<EvLoop_deprecated>& loop);
+        virtual std::shared_ptr<Router> make_router(const std::shared_ptr<EventLoop>& loop);
 
         /// create the nodedb given our current configs
         virtual std::shared_ptr<NodeDB> make_nodedb();

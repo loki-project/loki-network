@@ -24,23 +24,23 @@ namespace llarp::apple
 
         int PollFD() const override;
 
-        net::IPPacket ReadNextPacket() override;
+        IPPacket ReadNextPacket() override;
 
-        bool WritePacket(net::IPPacket pkt) override;
+        bool WritePacket(IPPacket pkt) override;
 
         void MaybeWakeUpperLayers() const override;
 
        private:
         // Function for us to call when we have a packet to emit.  Should return true if the packet
         // was handed off to the OS successfully.
-        packet_write_callback m_PacketWriter;
+        packet_write_callback _pkt_writer;
 
         // Called when we are ready to start reading packets
-        on_readable_callback m_OnReadable;
+        on_readable_callback _on_readable;
 
         static inline constexpr auto PacketQueueSize = 1024;
 
-        thread::Queue<net::IPPacket> m_ReadQueue{PacketQueueSize};
+        thread::Queue<IPPacket> _read_que{PacketQueueSize};
 
         Router* const _router;
     };

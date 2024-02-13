@@ -63,7 +63,10 @@ namespace llarp::dns
         /// two overrides, lets see which is more useful and drop ze ozzzerrrr
         virtual void send_to(const oxen::quic::Address& to, const oxen::quic::Address& from, IPPacket data) const = 0;
         virtual void send_to(
-            const oxen::quic::Address& to, const oxen::quic::Address& from, std::vector<uint8_t> data) const = 0;
+            const oxen::quic::Address& to, const oxen::quic::Address& from, std::vector<uint8_t> data) const
+        {
+            send_to(to, from, IPPacket{data.data(), data.size()});
+        }
 
         /// stop reading packets and end operation
         virtual void stop() = 0;

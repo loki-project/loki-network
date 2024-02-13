@@ -13,18 +13,18 @@ namespace llarp::vpn
 
     class PacketRouter
     {
-        udp_pkt_hook _handler;
+        ip_pkt_hook _handler;
         std::unordered_map<uint8_t, std::unique_ptr<Layer4Handler>> _ip_proto_handler;
 
        public:
         /// baseHandler will be called if no other handlers matches a packet
-        explicit PacketRouter(udp_pkt_hook baseHandler);
+        explicit PacketRouter(ip_pkt_hook baseHandler);
 
         /// feed in an ip packet for handling
         void handle_ip_packet(UDPPacket pkt);
 
         /// add a non udp packet handler using ip protocol proto
-        void add_ip_proto_handler(uint8_t proto, udp_pkt_hook func);
+        void add_ip_proto_handler(uint8_t proto, ip_pkt_hook func);
 
         /// helper that adds a udp packet handler for UDP destinted for localport
         void add_udp_handler(uint16_t port, udp_pkt_hook func);

@@ -5,7 +5,7 @@
 #include "pathhandler.hpp"
 #include "transit_hop.hpp"
 
-#include <llarp/ev/ev.hpp>
+#include <llarp/ev/loop.hpp>
 #include <llarp/net/ip_address.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
@@ -87,7 +87,7 @@ namespace llarp::path
 
         void AddOwnPath(std::shared_ptr<PathHandler> set, std::shared_ptr<Path> p);
 
-        const std::shared_ptr<EvLoop_deprecated>& loop();
+        const std::shared_ptr<EventLoop>& loop();
 
         const SecretKey& EncryptionSecretKey();
 

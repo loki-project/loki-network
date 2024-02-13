@@ -4,9 +4,7 @@
 
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/ip_packet_old.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/service/handler.hpp>
 #include <llarp/service/types.hpp>
@@ -89,7 +87,7 @@ namespace llarp::handlers
 
         void tick_tun(llarp_time_t now);
 
-        bool map_address(const service::Address& remote, oxen::quic::Address ip, bool SNode);
+        bool map_address(const service::Address& remote, ip ip, bool SNode);
 
         bool start();
 
@@ -123,7 +121,7 @@ namespace llarp::handlers
 
         // TODO: change this to the new IP type after changing the member
         /// get the local interface's address
-        oxen::quic::Address get_if_addr() const /* override */;
+        ip get_if_addr() const /* override */;
 
         /// we have an interface addr
         bool has_if_addr() const /* override */
@@ -131,7 +129,7 @@ namespace llarp::handlers
             return true;
         }
 
-        bool has_local_ip(const huint128_t& ip) const;
+        bool has_local_ip(const ip& ip) const;
 
         std::optional<net::TrafficPolicy> get_traffic_policy() const /* override */
         {
@@ -151,10 +149,10 @@ namespace llarp::handlers
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
         /// returns true otherwise
-        bool is_allowing_traffic(const IPPacket& pkt) const;
+        bool is_allowing_traffic(const UDPPacket& pkt) const;
 
         /// get a key for ip address
-        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(huint128_t ip) const override;
+        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip ip) const override;
 
         bool has_mapped_address(const AlignedBuffer<32>& addr) const
         {
@@ -162,7 +160,7 @@ namespace llarp::handlers
         }
 
         /// get ip address for key unconditionally
-        huint128_t get_ip_for_addr(std::variant<service::Address, RouterID> addr) override;
+        ip get_ip_for_addr(std::variant<service::Address, RouterID> addr) override;
 
        protected:
         struct WritePacket
@@ -177,22 +175,23 @@ namespace llarp::handlers
         };
 
         /// return true if we have a remote loki address for this ip address
-        bool is_ip_mapped(huint128_t ipv4) const;
+        bool is_ip_mapped(ip ipv4) const;
 
         /// mark this address as active
-        void mark_ip_active(huint128_t ip);
+        void mark_ip_active(ip ip);
 
         /// mark this address as active forever
-        void mark_ip_active_forever(huint128_t ip);
+        void mark_ip_active_forever(ip ip);
 
         /// flush writing ip packets to interface
         void flush_write();
 
         // TONUKE: errythang buddy
         /// maps ip to key (host byte order)
-        std::unordered_map<huint128_t, AlignedBuffer<32>> _ip_to_addr;
+        std::unordered_map<ip, AlignedBuffer<32>> _ip_to_addr;
+
         /// maps key to ip (host byte order)
-        std::unordered_map<AlignedBuffer<32>, huint128_t> _addr_to_ip;
+        std::unordered_map<AlignedBuffer<32>, ip> _addr_to_ip;
 
         /// maps key to true if key is a service node, maps key to false if key is
         /// a hidden service
@@ -207,9 +206,11 @@ namespace llarp::handlers
         /// optionally provide a custom selection strategy, if none is provided it will choose a
         /// random entry from the available choices
         /// return std::nullopt if we cannot route this address to an exit
-        std::optional<service::Address> get_exit_address_for_ip(
-            huint128_t ip,
-            std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat = nullptr);
+
+        // TODO: MOVE THIS TO EXIT/HANDLER
+        // std::optional<service::Address> get_exit_address_for_ip(
+        //     huint128_t ip,
+        //     std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat = nullptr);
 
         template <typename Addr_t, typename Endpoint_t>
         void send_dns_reply(
@@ -239,16 +240,17 @@ namespace llarp::handlers
 
         /// maps ip address to timestamp last active
         std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
-        /// our ip address (host byte order)
-        oxen::quic::Address _local_ip;
-        ip local_ip_v;
-        /// our network interface's ipv6 address
-        IPRange _local_ipv6;
+        /// our local address and ip
+        oxen::quic::Address _local_addr;
+        ip _local_ip;
 
-        /// next ip address to allocate (host byte order)
-        IPRange _next_ip;
-        /// highest ip address to allocate (host byte order)
-        IPRange _max_ip;
+        /// our network interface's ipv6 address
+        oxen::quic::Address _local_ipv6;
+
+        /// next ip address to allocate
+        ip _next_ip;
+        /// highest ip address to allocate
+        ip _max_ip;
         /// our ip range we are using
         IPRange _local_range;
         /// list of strict connect addresses for hooks
