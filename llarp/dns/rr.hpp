@@ -42,4 +42,4 @@ namespace llarp::dns
 }  // namespace llarp::dns
 
 template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::dns::ResourceRecord> = true;
+inline constexpr bool llarp::IsToStringFormattable<llarp::dns::ResourceRecord> = true;

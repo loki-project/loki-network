@@ -91,7 +91,7 @@ namespace llarp
     }
 
     template <>
-    constexpr inline bool IsToStringFormattable<service::Address> = true;
+    inline constexpr bool IsToStringFormattable<service::Address> = true;
 }  // namespace llarp
 
 namespace std

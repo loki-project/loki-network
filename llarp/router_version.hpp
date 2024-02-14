@@ -59,7 +59,7 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<RouterVersion> = true;
+    inline constexpr bool IsToStringFormattable<RouterVersion> = true;
 
     static constexpr int64_t INVALID_VERSION = -1;
     static const RouterVersion emptyRouterVersion({0, 0, 0}, INVALID_VERSION);

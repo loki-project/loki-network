@@ -1,29 +1,19 @@
 BasedOnStyle: Google
+
+# alignment
 AlignAfterOpenBracket: AlwaysBreak
 AlignConsecutiveAssignments: 'false'
 AlignConsecutiveDeclarations: 'false'
 AlignEscapedNewlinesLeft: 'true'
 AlignOperands: 'false'
 AlignTrailingComments: 'true'
-AllowShortBlocksOnASingleLine: 'false'
-AllowShortCaseLabelsOnASingleLine: 'false'
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: 'false'
-AllowShortLoopsOnASingleLine: 'false'
 ColumnLimit: 120
-KeepEmptyLinesAtTheStartOfBlocks: 'false'
-NamespaceIndentation: All
-PenaltyBreakString: '3'
-SortIncludes: CaseInsensitive
-SpaceBeforeParens: ControlStatements
-SpacesInAngles: 'false'
-SpacesInContainerLiterals: 'false'
-SpacesInParentheses: 'false'
-SpacesInSquareBrackets: 'false'
-Standard: Cpp11
-UseTab: Never
+PointerAlignment: Left
+QualifierAlignment: Custom
+QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'type']
 
 # bracing
+BreakBeforeBraces: Custom
 BraceWrapping:
   AfterCaseLabel: true
   AfterClass: true
@@ -46,20 +36,34 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakTemplateDeclarations: 'true'
 BreakBeforeBinaryOperators: NonAssignment
-BreakBeforeBraces: Custom
 BreakBeforeTernaryOperators: 'true'
 BreakConstructorInitializers: BeforeColon
 
-# indent width
-IndentWidth: 4
+# indentation
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
+IndentWidth: 4
+NamespaceIndentation: All
 
-# treat pointers and reference declarations as if part of the type
-DerivePointerAlignment: false
-PointerAlignment: Left
+# shorties
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortCaseLabelsOnASingleLine: 'false'
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: 'false'
+AllowShortLoopsOnASingleLine: 'false'
 
-# when wrapping function calls/declarations, force each parameter to have its own line
+# spacing
+KeepEmptyLinesAtTheStartOfBlocks: 'false'
+PenaltyBreakString: '3'
+SpaceBeforeParens: ControlStatements
+SpacesInAngles: 'false'
+SpacesInContainerLiterals: 'false'
+SpacesInParentheses: 'false'
+SpacesInSquareBrackets: 'false'
+Standard: Cpp11
+UseTab: Never
+
+# wrapping
 PackConstructorInitializers: NextLine
 BinPackParameters: 'false'
 BinPackArguments: 'false'
@@ -70,6 +74,7 @@ BinPackArguments: 'false'
 #   - Absolute path includes in angle brackets
 #   - External dependencies
 #   - System dependencies
+SortIncludes: CaseInsensitive
 IncludeBlocks: Regroup
 IncludeCategories:
   - Regex: '".+\.h'

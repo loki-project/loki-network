@@ -58,24 +58,9 @@ namespace llarp::path
         return started + lifetime;
     }
 
-    TransitHopInfo::TransitHopInfo(const RouterID& down) : downstream(down)
+    TransitHopInfo::TransitHopInfo(RouterID down) : downstream{std::move(down)}
     {}
 
-    /** Note: this is one of two places where AbstractRoutingMessage::bt_encode() is called, the
-        other of which is llarp/path/path.cpp in Path::SendRoutingMessage(). For now,
-        we will default to the override of ::bt_encode() that returns an std::string. The role that
-        llarp_buffer_t plays here is likely superfluous, and can be replaced with either a leaner
-        llarp_buffer, or just handled using strings.
-
-        One important consideration is the frequency at which routing messages are sent, making
-        superfluous copies important to optimize out here. We have to instantiate at least one
-        std::string whether we pass a bt_dict_producer as a reference or create one within the
-        ::bt_encode() call.
-
-        If we decide to stay with std::strings, the function Path::HandleUpstream (along with the
-        functions it calls and so on) will need to be modified to take an std::string that we can
-        std::move around.
-    */
     /* TODO: replace this with layer of onion + send data message
     bool TransitHop::SendRoutingMessage(std::string payload, Router* r)
     {

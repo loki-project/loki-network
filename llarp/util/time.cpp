@@ -14,9 +14,9 @@ namespace llarp
             return std::chrono::duration_cast<Res>(point.time_since_epoch());
         }
 
-        const static auto started_at_system = Clock_t::now();
+        static const auto started_at_system = Clock_t::now();
 
-        const static auto started_at_steady = std::chrono::steady_clock::now();
+        static const auto started_at_steady = std::chrono::steady_clock::now();
     }  // namespace
 
     std::chrono::steady_clock::time_point get_time()

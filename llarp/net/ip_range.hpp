@@ -51,7 +51,7 @@ namespace llarp
             return IP_range_deprecated{net::ExpandV4(ipaddr_ipv4_bits(a, b, c, d)), netmask_ipv6_bits(mask + 96)};
         }
 
-        static inline IP_range_deprecated FromIPv4(net::ipv4addr_t addr, net::ipv4addr_t netmask)
+        inline static IP_range_deprecated FromIPv4(net::ipv4addr_t addr, net::ipv4addr_t netmask)
         {
             return IP_range_deprecated{
                 net::ExpandV4(llarp::net::ToHost(addr)), netmask_ipv6_bits(bits::count_bits(netmask) + 96)};
@@ -150,7 +150,7 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<IP_range_deprecated> = true;
+    inline constexpr bool IsToStringFormattable<IP_range_deprecated> = true;
 
 }  // namespace llarp
 

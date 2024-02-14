@@ -41,13 +41,24 @@ namespace llarp
             llarp_time_t lifetime = DEFAULT_LIFETIME;
 
             StatusObject ExtractStatus() const;
-        };
 
-        inline bool operator<(const PathHopConfig& lhs, const PathHopConfig& rhs)
-        {
-            return std::tie(lhs.txID, lhs.rxID, lhs.rc, lhs.upstream, lhs.lifetime)
-                < std::tie(rhs.txID, rhs.rxID, rhs.rc, rhs.upstream, rhs.lifetime);
-        }
+            bool operator<(const PathHopConfig& other) const
+            {
+                return std::tie(txID, rxID, rc, upstream, lifetime)
+                    < std::tie(other.txID, other.rxID, other.rc, other.upstream, other.lifetime);
+            }
+
+            bool operator==(const PathHopConfig& other) const
+            {
+                return std::tie(txID, rxID, rc, upstream, lifetime)
+                    == std::tie(other.txID, other.rxID, other.rc, other.upstream, other.lifetime);
+            }
+
+            bool operator!=(const PathHopConfig& other) const
+            {
+                return not(*this == other);
+            }
+        };
 
         // milliseconds waiting between builds on a path per router
         static constexpr auto MIN_PATH_BUILD_INTERVAL = 500ms;

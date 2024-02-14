@@ -14,31 +14,31 @@ namespace llarp
         struct TransitHopInfo
         {
             TransitHopInfo() = default;
-            TransitHopInfo(const RouterID& down);
+            TransitHopInfo(RouterID down);
 
             HopID txID, rxID;
             RouterID upstream;
             RouterID downstream;
 
             std::string to_string() const;
+
+            bool operator==(const TransitHopInfo& rhs) const
+            {
+                return std::tie(txID, rxID, upstream, downstream)
+                    == std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
+            }
+
+            bool operator!=(const TransitHopInfo& rhs) const
+            {
+                return not(*this == rhs);
+            }
+
+            bool operator<(const TransitHopInfo& rhs) const
+            {
+                return std::tie(txID, rxID, upstream, downstream)
+                    < std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
+            }
         };
-
-        inline bool operator==(const TransitHopInfo& lhs, const TransitHopInfo& rhs)
-        {
-            return std::tie(lhs.txID, lhs.rxID, lhs.upstream, lhs.downstream)
-                == std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
-        }
-
-        inline bool operator!=(const TransitHopInfo& lhs, const TransitHopInfo& rhs)
-        {
-            return !(lhs == rhs);
-        }
-
-        inline bool operator<(const TransitHopInfo& lhs, const TransitHopInfo& rhs)
-        {
-            return std::tie(lhs.txID, lhs.rxID, lhs.upstream, lhs.downstream)
-                < std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
-        }
 
         struct TransitHop : public AbstractHopHandler, std::enable_shared_from_this<TransitHop>
         {
@@ -125,9 +125,9 @@ namespace llarp
     }  // namespace path
 
     template <>
-    constexpr inline bool IsToStringFormattable<path::TransitHop> = true;
+    inline constexpr bool IsToStringFormattable<path::TransitHop> = true;
     template <>
-    constexpr inline bool IsToStringFormattable<path::TransitHopInfo> = true;
+    inline constexpr bool IsToStringFormattable<path::TransitHopInfo> = true;
 
 }  // namespace llarp
 
@@ -136,7 +136,7 @@ namespace std
     template <>
     struct hash<llarp::path::TransitHopInfo>
     {
-        std::size_t operator()(llarp::path::TransitHopInfo const& a) const
+        std::size_t operator()(const llarp::path::TransitHopInfo& a) const
         {
             hash<llarp::RouterID> RHash{};
             hash<llarp::HopID> PHash{};

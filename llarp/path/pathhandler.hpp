@@ -247,6 +247,6 @@ namespace llarp
     }  // namespace path
 
     template <>
-    constexpr inline bool IsToStringFormattable<path::BuildStats> = true;
+    inline constexpr bool IsToStringFormattable<path::BuildStats> = true;
 
 }  // namespace llarp

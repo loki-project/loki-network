@@ -13,7 +13,7 @@
 
 namespace llarp
 {
-    constexpr static char whitespace[] = " \t\n\r\f\v";
+    static constexpr char whitespace[] = " \t\n\r\f\v";
 
     std::string_view TrimWhitespace(std::string_view str)
     {

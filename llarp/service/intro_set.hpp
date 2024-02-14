@@ -171,6 +171,6 @@ namespace llarp::service
 }  // namespace llarp::service
 
 template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::IntroSet> = true;
+inline constexpr bool llarp::IsToStringFormattable<llarp::service::IntroSet> = true;
 template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::EncryptedIntroSet> = true;
+inline constexpr bool llarp::IsToStringFormattable<llarp::service::EncryptedIntroSet> = true;

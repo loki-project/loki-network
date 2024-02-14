@@ -71,7 +71,7 @@ namespace llarp
         return (path_success * chances) > path_fail;
     }
 
-    static bool constexpr checkIsGood(uint64_t fails, uint64_t success, uint64_t chances)
+    static constexpr bool checkIsGood(uint64_t fails, uint64_t success, uint64_t chances)
     {
         if (fails > 0 && (fails + success) >= chances)
             return (success / fails) > 1;

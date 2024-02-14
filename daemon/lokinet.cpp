@@ -256,8 +256,8 @@ namespace
     /// will make a coredump when there is an unhandled exception
     LONG GenerateDump(EXCEPTION_POINTERS* pExceptionPointers)
     {
-        const auto flags =
-            (MINIDUMP_TYPE)(MiniDumpWithFullMemory | MiniDumpWithFullMemoryInfo | MiniDumpWithHandleData | MiniDumpWithUnloadedModules | MiniDumpWithThreadInfo);
+        const auto flags = (MINIDUMP_TYPE)(MiniDumpWithFullMemory | MiniDumpWithFullMemoryInfo | MiniDumpWithHandleData
+                                           | MiniDumpWithUnloadedModules | MiniDumpWithThreadInfo);
 
         const std::string fname = fmt::format("C:\\ProgramData\\lokinet\\crash-{}.dump", llarp::time_now_ms().count());
 

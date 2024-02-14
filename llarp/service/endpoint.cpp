@@ -549,7 +549,7 @@ namespace llarp::service
 
     auto Endpoint::GetUniqueEndpointsForLookup() const
     {
-        std::unordered_set<std::shared_ptr<path::Path>, path::Endpoint_Hash, path::endpoint_comparator> paths;
+        std::unordered_set<std::shared_ptr<path::Path>> paths;
 
         for_each_path([&paths](auto path) {
             if (path and path->IsReady())
@@ -561,7 +561,8 @@ namespace llarp::service
 
     bool Endpoint::ReadyForNetwork() const
     {
-        return is_ready() and ReadyToDoLookup(GetUniqueEndpointsForLookup().size());
+        // return is_ready() and ReadyToDoLookup(GetUniqueEndpointsForLookup().size());
+        return true;
     }
 
     bool Endpoint::ReadyToDoLookup(size_t num_paths) const

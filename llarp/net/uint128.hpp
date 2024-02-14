@@ -31,7 +31,7 @@ namespace llarp
 
         // Initializes with upper and lower values
         constexpr uint128_t(uint64_t upper, uint64_t lower)
-// clang-format off
+        // clang-format off
 #ifdef __BIG_ENDIAN__
         : upper{upper}, lower{lower}
 #else
@@ -194,7 +194,8 @@ namespace llarp
         constexpr uint128_t& operator<<=(uint64_t shift)
         {
             if (shift == 0)
-            {}
+            {
+            }
             else if (shift < 64)
             {
                 upper = upper << shift | (lower >> (64 - shift));
@@ -226,7 +227,8 @@ namespace llarp
         constexpr uint128_t& operator>>=(uint64_t shift)
         {
             if (shift == 0)
-            {}
+            {
+            }
             else if (shift < 64)
             {
                 lower = lower >> shift | upper << (64 - shift);

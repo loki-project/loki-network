@@ -40,7 +40,7 @@ namespace llarp
         template <size_t... I>
         struct concat_args_fmt_impl<std::integer_sequence<size_t, I...>>
         {
-            constexpr static std::array<char, sizeof...(I)> format{(I % 2 == 0 ? '{' : '}')...};
+            static constexpr std::array<char, sizeof...(I)> format{(I % 2 == 0 ? '{' : '}')...};
         };
         template <size_t N>
         constexpr std::string_view concat_args_fmt()

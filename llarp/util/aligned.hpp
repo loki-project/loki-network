@@ -282,7 +282,7 @@ namespace llarp
     }  // namespace detail
     // True if T is or is derived from AlignedBuffer<N> for any N
     template <typename T>
-    constexpr inline bool is_aligned_buffer = decltype(detail::is_aligned_buffer_impl(static_cast<T*>(nullptr)))::value;
+    inline constexpr bool is_aligned_buffer = decltype(detail::is_aligned_buffer_impl(static_cast<T*>(nullptr)))::value;
 
 }  // namespace llarp
 

@@ -20,7 +20,7 @@
 
 namespace llarp
 {
-    static inline constexpr size_t NETID_SIZE{8};
+    inline static constexpr size_t NETID_SIZE{8};
 
     /// On the wire we encode the data as a dict containing:
     /// ""  -- the RC format version, which must be == RouterContact::Version for us to attempt to
@@ -45,11 +45,11 @@ namespace llarp
         static constexpr uint8_t RC_VERSION = 0;
 
         /// Unit tests disable this to allow private IP ranges in RCs, which normally get rejected.
-        static inline bool BLOCK_BOGONS = true;
+        inline static bool BLOCK_BOGONS = true;
 
-        static inline std::string ACTIVE_NETID{LOKINET_DEFAULT_NETID};
+        inline static std::string ACTIVE_NETID{LOKINET_DEFAULT_NETID};
 
-        static inline constexpr size_t MAX_RC_SIZE = 1024;
+        inline static constexpr size_t MAX_RC_SIZE = 1024;
 
         /// How long (from its signing time) before an RC is considered "stale".  Relays republish
         /// their RCs slightly more frequently than this so that ideally this won't happen.
@@ -112,7 +112,7 @@ namespace llarp
 
        public:
         /// should we serialize the exit info?
-        const static bool serializeExit = true;
+        static const bool serializeExit = true;
 
         StatusObject extract_status() const;
 
@@ -302,11 +302,11 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<RouterContact> = true;
+    inline constexpr bool IsToStringFormattable<RouterContact> = true;
     template <>
-    constexpr inline bool IsToStringFormattable<RemoteRC> = true;
+    inline constexpr bool IsToStringFormattable<RemoteRC> = true;
     template <>
-    constexpr inline bool IsToStringFormattable<LocalRC> = true;
+    inline constexpr bool IsToStringFormattable<LocalRC> = true;
 
     using RouterLookupHandler = std::function<void(const std::vector<RemoteRC>&)>;
 }  // namespace llarp

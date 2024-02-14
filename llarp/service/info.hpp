@@ -97,4 +97,4 @@ namespace llarp::service
 }  // namespace llarp::service
 
 template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::ServiceInfo> = true;
+inline constexpr bool llarp::IsToStringFormattable<llarp::service::ServiceInfo> = true;

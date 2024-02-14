@@ -9,9 +9,8 @@
 
 namespace llarp::path
 {
-
     Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, std::string shortName)
-        : path_set{std::move(pathset)}, _router{rtr}, _short_name{std::move(shortName)}
+        : handler{std::move(pathset)}, _router{rtr}, _short_name{std::move(shortName)}
     {
         hops.resize(h.size());
         size_t hsz = h.size();
@@ -37,6 +36,33 @@ namespace llarp::path
         // initialize parts of the introduction
         intro.router = hops[hsz - 1].rc.router_id();
         intro.path_id = hops[hsz - 1].txID;
+    }
+
+    bool Path::operator<(const Path& other) const
+    {
+        auto& first_hop = hops[0];
+        auto& other_first = other.hops[0];
+        return std::tie(first_hop.txID, first_hop.rxID, first_hop.upstream)
+            < std::tie(other_first.txID, other_first.rxID, other_first.upstream);
+    }
+
+    bool Path::operator==(const Path& other) const
+    {
+        bool ret = true;
+        size_t len = std::min(hops.size(), other.hops.size()), i = 0;
+
+        while (ret and i < len)
+        {
+            ret &= hops[i] == other.hops[i];
+            ++i;
+        };
+
+        return ret;
+    }
+
+    bool Path::operator!=(const Path& other) const
+    {
+        return not(*this == other);
     }
 
     bool Path::obtain_exit(SecretKey sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
@@ -250,7 +276,7 @@ namespace llarp::path
 
     void Path::rebuild()
     {
-        if (auto parent = path_set.lock())
+        if (auto parent = handler.lock())
         {
             std::vector<RemoteRC> new_hops;
 
@@ -368,21 +394,6 @@ namespace llarp::path
         return fmt::format("TX={} RX={}", TXID(), RXID());
     }
 
-    /** Note: this is one of two places where AbstractRoutingMessage::bt_encode() is called, the
-        other of which is llarp/path/transit_hop.cpp in TransitHop::SendRoutingMessage(). For now,
-        we will default to the override of ::bt_encode() that returns an std::string. The role that
-        llarp_buffer_t plays here is likely superfluous, and can be replaced with either a leaner
-        llarp_buffer, or just handled using strings.
-
-        One important consideration is the frequency at which routing messages are sent, making
-        superfluous copies important to optimize out here. We have to instantiate at least one
-        std::string whether we pass a bt_dict_producer as a reference or create one within the
-        ::bt_encode() call.
-
-        If we decide to stay with std::strings, the function Path::HandleUpstream (along with the
-        functions it calls and so on) will need to be modified to take an std::string that we can
-        std::move around.
-    */
     /* TODO: replace this with sending an onion-ed data message
     bool Path::SendRoutingMessage(std::string payload, Router*)
     {

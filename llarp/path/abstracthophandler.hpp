@@ -15,11 +15,6 @@ namespace llarp
 {
     struct Router;
 
-    namespace routing
-    {
-        struct AbstractRoutingMessage;
-    }
-
     namespace path
     {
         std::string make_onion_payload(

@@ -266,7 +266,7 @@ namespace llarp::win32
             std::thread _recv_thread;
             std::thread _send_thread;
 
-            static inline constexpr size_t packet_queue_length = 1024;
+            inline static constexpr size_t packet_queue_length = 1024;
 
            public:
             WintunInterface(vpn::InterfaceInfo info, Router* router)

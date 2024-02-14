@@ -38,7 +38,7 @@ namespace llarp::apple
         // Called when we are ready to start reading packets
         on_readable_callback _on_readable;
 
-        static inline constexpr auto PacketQueueSize = 1024;
+        inline static constexpr auto PacketQueueSize = 1024;
 
         thread::Queue<IPPacket> _read_que{PacketQueueSize};
 

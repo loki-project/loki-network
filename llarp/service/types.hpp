@@ -81,40 +81,41 @@ namespace llarp
           std::set<SessionTag>& tags */);
         }  // namespace util
 
-        template <typename Endpoint_t>
-    static std::
-        unordered_set<std::shared_ptr<path::Path>, path::Endpoint_Hash, path::endpoint_comparator>
-        GetManyPathsWithUniqueEndpoints(
-            /* Endpoint_t* ep,
-            size_t N,
-            std::optional<dht::Key_t> maybeLocation = std::nullopt,
-            size_t tries = 10 */)
-        {
-            // std::unordered_set<RouterID> exclude;
-            std::unordered_set<std::shared_ptr<path::Path>, path::Endpoint_Hash, path::endpoint_comparator> paths;
-            // do
-            // {
-            //   --tries;
-            //   std::shared_ptr<path::Path> path;
-            //   if (maybeLocation)
-            //   {
-            //     path = ep->GetEstablishedPathClosestTo(RouterID{maybeLocation->as_array()},
-            //     exclude);
-            //   }
-            //   else
-            //   {
-            //     path = ep->PickRandomEstablishedPath();
-            //   }
-            //   if (path and path->IsReady())
-            //   {
-            //     paths.emplace(path);
-            //     exclude.insert(path->Endpoint());
-            //   }
-            // } while (tries > 0 and paths.size() < N);
-            return paths;
-        }
+        //     template <typename Endpoint_t>
+        // static std::
+        //     unordered_set<std::shared_ptr<path::Path>, path::Endpoint_Hash, path::endpoint_comparator>
+        //     GetManyPathsWithUniqueEndpoints(
+        //         /* Endpoint_t* ep,
+        //         size_t N,
+        //         std::optional<dht::Key_t> maybeLocation = std::nullopt,
+        //         size_t tries = 10 */)
+        //     {
+        //         // std::unordered_set<RouterID> exclude;
+        //         std::unordered_set<std::shared_ptr<path::Path>, path::Endpoint_Hash, path::endpoint_comparator>
+        //         paths;
+        //         // do
+        //         // {
+        //         //   --tries;
+        //         //   std::shared_ptr<path::Path> path;
+        //         //   if (maybeLocation)
+        //         //   {
+        //         //     path = ep->GetEstablishedPathClosestTo(RouterID{maybeLocation->as_array()},
+        //         //     exclude);
+        //         //   }
+        //         //   else
+        //         //   {
+        //         //     path = ep->PickRandomEstablishedPath();
+        //         //   }
+        //         //   if (path and path->IsReady())
+        //         //   {
+        //         //     paths.emplace(path);
+        //         //     exclude.insert(path->Endpoint());
+        //         //   }
+        //         // } while (tries > 0 and paths.size() < N);
+        //         return paths;
+        //     }
     }  // namespace service
 
     template <>
-    constexpr inline bool IsToStringFormattable<service::ProtocolType> = true;
+    inline constexpr bool IsToStringFormattable<service::ProtocolType> = true;
 }  // namespace llarp

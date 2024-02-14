@@ -48,7 +48,7 @@ namespace llarp
     }
 
     template <>
-    constexpr inline bool IsToStringFormattable<RouterID> = true;
+    inline constexpr bool IsToStringFormattable<RouterID> = true;
 }  // namespace llarp
 
 namespace std

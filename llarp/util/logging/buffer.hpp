@@ -54,5 +54,5 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<buffer_printer> = true;
+    inline constexpr bool IsToStringFormattable<buffer_printer> = true;
 }  // namespace llarp

@@ -122,11 +122,11 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<PubKey> = true;
+    inline constexpr bool IsToStringFormattable<PubKey> = true;
     template <>
-    constexpr inline bool IsToStringFormattable<SecretKey> = true;
+    inline constexpr bool IsToStringFormattable<SecretKey> = true;
     template <>
-    constexpr inline bool IsToStringFormattable<PrivateKey> = true;
+    inline constexpr bool IsToStringFormattable<PrivateKey> = true;
 
     using ShortHash = AlignedBuffer<SHORTHASHSIZE>;
     using LongHash = AlignedBuffer<HASHSIZE>;

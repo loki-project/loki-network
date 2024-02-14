@@ -91,5 +91,5 @@ namespace llarp
     }  // namespace dns
 
     template <>
-    constexpr inline bool IsToStringFormattable<llarp::dns::Message> = true;
+    inline constexpr bool IsToStringFormattable<llarp::dns::Message> = true;
 }  // namespace llarp

@@ -131,7 +131,7 @@ namespace llarp
     };
 
     template <>
-    constexpr inline bool IsToStringFormattable<Ip_address_deprecated> = true;
+    inline constexpr bool IsToStringFormattable<Ip_address_deprecated> = true;
 
 }  // namespace llarp
 

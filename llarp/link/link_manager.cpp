@@ -1203,13 +1203,17 @@ namespace llarp
             log::info(link_cat, "PublishIntroMessage failed with error code: {}", payload);
 
             if (payload == PublishIntroMessage::INVALID_INTROSET)
-            {}
+            {
+            }
             else if (payload == PublishIntroMessage::EXPIRED)
-            {}
+            {
+            }
             else if (payload == PublishIntroMessage::INSUFFICIENT)
-            {}
+            {
+            }
             else if (payload == PublishIntroMessage::INVALID_ORDER)
-            {}
+            {
+            }
         }
     }
 
@@ -1705,7 +1709,8 @@ namespace llarp
                 // see Path::HandleUpdateExitVerifyMessage
             }
             else
-            {}
+            {
+            }
         }
     }
 

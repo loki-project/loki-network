@@ -36,15 +36,12 @@ namespace llarp
         struct TransitHopInfo;
         struct PathHopConfig;
 
-        struct Endpoint_Hash;
-        struct endpoint_comparator;
-
         /// A path we made
         struct Path final : public AbstractHopHandler, public std::enable_shared_from_this<Path>
         {
             std::vector<PathHopConfig> hops;
 
-            std::weak_ptr<PathHandler> path_set;
+            std::weak_ptr<PathHandler> handler;
 
             service::Introduction intro;
 
@@ -67,11 +64,6 @@ namespace llarp
             }
 
             StatusObject ExtractStatus() const;
-
-            bool operator<(const Path& other) const
-            {
-                return hops < other.hops;
-            }
 
             void MarkActive(llarp_time_t now)
             {
@@ -165,6 +157,12 @@ namespace llarp
 
             std::string name() const;
 
+            bool operator<(const Path& other) const;
+
+            bool operator==(const Path& other) const;
+
+            bool operator!=(const Path& other) const;
+
            private:
             std::string make_outer_payload(std::string payload);
 
@@ -181,41 +179,23 @@ namespace llarp
             uint64_t last_latency_test_id = 0;
             const std::string _short_name;
         };
-
-        struct Hash
-        {
-            size_t operator()(const Path& p) const
-            {
-                const auto& tx = p.hops[0].txID;
-                const auto& rx = p.hops[0].rxID;
-                const auto& r = p.hops[0].upstream;
-                const size_t rhash = std::accumulate(r.begin(), r.end(), 0, std::bit_xor{});
-                return std::accumulate(
-                    rx.begin(),
-                    rx.begin(),
-                    std::accumulate(tx.begin(), tx.end(), rhash, std::bit_xor{}),
-                    std::bit_xor{});
-            }
-        };
-
-        /// hash for std::shared_ptr<Path> by path endpoint
-        struct Endpoint_Hash
-        {
-            size_t operator()(const std::shared_ptr<Path>& p) const
-            {
-                if (p == nullptr)
-                    return 0;
-                return std::hash<RouterID>{}(p->pivot_router_id());
-            }
-        };
-
-        /// comparision for equal endpoints
-        struct endpoint_comparator
-        {
-            bool operator()(const std::shared_ptr<Path>& left, const std::shared_ptr<Path>& right) const
-            {
-                return left && right && left->pivot_router_id() == left->pivot_router_id();
-            }
-        };
     }  // namespace path
 }  // namespace llarp
+
+namespace std
+{
+    template <>
+    struct hash<llarp::path::Path>
+    {
+        size_t operator()(const llarp::path::Path& p) const
+        {
+            auto& first_hop = p.hops[0];
+            llarp::AlignedBuffer<PUBKEYSIZE> b;
+            std::memcpy(b.data(), first_hop.txID.data(), PATHIDSIZE);
+            std::memcpy(&b[PATHIDSIZE], first_hop.txID.data(), PATHIDSIZE);
+
+            auto h = hash<llarp::AlignedBuffer<PUBKEYSIZE>>{}(b);
+            return h ^ hash<llarp::RouterID>{}(first_hop.upstream);
+        }
+    };
+}  //  namespace std
