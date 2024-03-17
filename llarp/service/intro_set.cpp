@@ -143,7 +143,8 @@ namespace llarp::service
 
         if (not crypto::sign(sig, k, reinterpret_cast<uint8_t*>(bte.data()), bte.size()))
             return false;
-        LogDebug("signed encrypted introset: ", *this);
+
+        log::debug(logcat, "Singed encrypted introset: {}", *this);
         return true;
     }
 

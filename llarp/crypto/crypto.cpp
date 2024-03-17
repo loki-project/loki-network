@@ -19,6 +19,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("crypto");
+
     static bool dh(
         llarp::SharedSecret& out,
         const PubKey& client_pk,
@@ -68,7 +70,7 @@ namespace llarp
             return crypto_generichash_blake2b(shared.data(), 32, n.data(), 32, dh_result.data(), 32) != -1;
         }
 
-        llarp::LogWarn("crypto::dh_client - dh failed");
+        log::warning(logcat, "crypto::dh_client - dh failed");
         return false;
     }
 
@@ -81,7 +83,7 @@ namespace llarp
             return crypto_generichash_blake2b(shared.data(), 32, n.data(), n.size(), dh_result.data(), 32) != -1;
         }
 
-        llarp::LogWarn("crypto::dh_server - dh failed");
+        log::warning(logcat, "crypto::dh_server - dh failed");
         return false;
     }
 
@@ -94,7 +96,7 @@ namespace llarp
             return crypto_generichash_blake2b(shared, 32, nonce, 24, dh_result.data(), 32) != -1;
         }
 
-        llarp::LogWarn("crypto::dh_server - dh failed");
+        log::warning(logcat, "crypto::dh_server - dh failed");
         return false;
     }
 
@@ -319,7 +321,7 @@ namespace llarp
             h = *hash;
         else if (not make_scalar(h, root_pubkey, key_n))
         {
-            LogError("cannot make scalar");
+            log::error(logcat, "cannot make scalar");
             return false;
         }
 
@@ -366,7 +368,7 @@ namespace llarp
             h = *hash;
         else if (not make_scalar(h, root_pubkey, key_n))
         {
-            LogError("cannot make scalar");
+            log::error(logcat, "cannot make scalar");
             return false;
         }
 
@@ -491,7 +493,7 @@ namespace llarp
     {
         if (sodium_init() == -1)
         {
-            log::critical(log::Cat("initialization"), "sodium_init() failed, unable to continue!");
+            log::critical(logcat, "sodium_init() failed, unable to continue!");
             std::abort();
         }
         char* avx2 = std::getenv("AVX2_FORCE_DISABLE");

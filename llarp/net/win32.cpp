@@ -17,6 +17,8 @@
 
 namespace llarp::net
 {
+    static auto logcat = log::Cat("win32.net");
+
     class Platform_Impl : public Platform
     {
         /// visit all adapters (not addresses). windows serves net info per adapter unlink posix
@@ -50,7 +52,8 @@ namespace llarp::net
             for (auto* addr = a->FirstUnicastAddress; addr; addr = addr->Next)
             {
                 oxen::quic::Address saddr{*addr->Address.lpSockaddr};
-                LogDebug(fmt::format("'{}' has address '{}'", a->AdapterName, saddr));
+
+                log::debug(logcat, "'{}' has address '{}", a->AdapterName, saddr);
                 if (saddr.getIP() == ip)
                     return true;
             }
@@ -83,8 +86,13 @@ namespace llarp::net
                     if (found)
                         return;
 
-                    LogDebug(fmt::format(
-                        "visit adapter looking for '{}': '{}' idx={}", ip, adapter->AdapterName, adapter->IfIndex));
+                    log::debug(
+                        logcat,
+                        "Visit adapter looking for '{}': '{} idx={}",
+                        ip,
+                        adapter->AdapterName,
+                        adapter->IfIndex);
+
                     if (adapter_has_ip(adapter, ip))
                     {
                         found = adapter->IfIndex;
@@ -149,7 +157,7 @@ namespace llarp::net
                 }
             });
 
-            return IPRange::FindPrivateRange(currentRanges);
+            return IPRange::find_private_range(currentRanges);
         }
 
         std::string loopback_interface_name() const override
@@ -160,7 +168,7 @@ namespace llarp::net
 
         bool has_interface_address(ip ip) const override
         {
-            return GetInterfaceIndex(ip) != std::nullopt;
+            return get_interface_index(ip) != std::nullopt;
         }
 
         std::vector<InterfaceInfo> all_network_interfaces() const override

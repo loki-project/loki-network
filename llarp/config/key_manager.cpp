@@ -65,7 +65,7 @@ namespace llarp
 
                 if (not gen_if_absent)
                 {
-                    log::error(logcat, err);
+                    log::error(logcat, "{}", err);
                     return false;
                 }
 
@@ -138,29 +138,29 @@ namespace llarp
 
         if (ec)
         {
-            LogError("Could not determine status of file ", filepath, ": ", ec.message());
+            log::error(logcat, "Could not determine status of file (path:{}): {}", filepath, ec.message());
             return false;
         }
 
         if (not exists)
         {
-            LogInfo("File ", filepath, " doesn't exist; no backup needed");
+            log::info(logcat, "File (path:{}) does not exist; no backup needed", filepath);
             return true;
         }
 
         fs::path newFilepath = findFreeBackupFilename(filepath);
         if (newFilepath.empty())
         {
-            LogWarn("Could not find an appropriate backup filename for", filepath);
+            log::warning(logcat, "Could not find an appropriate backup filename for file (path:{})", filepath);
             return false;
         }
 
-        LogInfo("Backing up (moving) key file ", filepath, " to ", newFilepath, "...");
+        log::info(logcat, "Backing up (moving) key file at {} to {}...", filepath, newFilepath);
 
         fs::rename(filepath, newFilepath, ec);
         if (ec)
         {
-            LogError("Failed to move key file ", ec.message());
+            log::error(logcat, "Failed to move key file {}", ec.message());
             return false;
         }
 
@@ -184,16 +184,17 @@ namespace llarp
     {
         if (not fs::exists(path))
         {
-            LogInfo("Generating new key", path);
+            log::info(logcat, "Generating new key (path:{})", path);
             keygen(key);
 
             if (!key.write_to_file(path))
             {
-                LogError("Failed to save new key");
+                log::error(logcat, "Failed to save new key!");
                 return false;
             }
         }
-        LogDebug("Loading key from file ", path);
+
+        log::debug(logcat, "Loading key from file (path:{})", path);
         return key.load_from_file(path);
     }
 

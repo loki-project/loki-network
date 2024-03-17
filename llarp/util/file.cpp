@@ -18,6 +18,8 @@
 
 namespace llarp::util
 {
+    static auto logcat = log::Cat("util.file");
+
     static std::streampos file_reader_impl(const fs::path& filename, fs::ifstream& in)
     {
         in.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -87,7 +89,7 @@ namespace llarp::util
 
             fs::permissions(pathname, perms, ec);
             if (ec)
-                llarp::LogError("failed to set permissions on ", pathname);
+                log::error(logcat, "failed to set permissions on {}", pathname);
         }
         else  // file is not there
         {
@@ -102,7 +104,7 @@ namespace llarp::util
 
 #ifndef WIN32
         if (ec)
-            llarp::LogError("failed to ensure ", str, ", ", ec.message());
+            log::error(logcat, "failed to ensure {}: {}", str, ec.message());
         return ec;
 #else
         return {};

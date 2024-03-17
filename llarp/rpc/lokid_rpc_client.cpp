@@ -10,6 +10,8 @@
 
 namespace llarp::rpc
 {
+    static auto logcat = log::Cat("rpc.client");
+
     static constexpr oxenmq::LogLevel toLokiMQLogLevel(log::Level level)
     {
         switch (level)
@@ -53,12 +55,15 @@ namespace llarp::rpc
             {
                 throw std::runtime_error("we cannot talk to lokid while not a service node");
             }
-            LogInfo("connecting to lokid via LMQ at ", url.full_address());
+
+            log::info(logcat, "Connecting to oxend at {}", url.full_address());
+
             m_Connection = m_lokiMQ->connect_remote(
                 url,
                 [](oxenmq::ConnectionID) {},
                 [self = shared_from_this(), url](oxenmq::ConnectionID, std::string_view f) {
-                    llarp::LogWarn("Failed to connect to lokid: ", f);
+                    log::info(logcat, "Failed to connect to oxend at {}", f);
+
                     if (auto router = self->_router.lock())
                     {
                         router->loop()->call([self, url]() { self->connect_async(url); });
@@ -69,7 +74,7 @@ namespace llarp::rpc
 
     void LokidRpcClient::command(std::string_view cmd)
     {
-        LogDebug("lokid command: ", cmd);
+        log::debug(logcat, "Oxend command: {}", cmd);
         m_lokiMQ->send(*m_Connection, std::move(cmd));
     }
 
@@ -77,10 +82,11 @@ namespace llarp::rpc
     {
         if (msg.data.size() != 2)
         {
-            LogError(
-                "we got an invalid new block notification with ",
-                msg.data.size(),
-                " parts instead of 2 parts so we will not update the list of service nodes");
+            log::error(
+                logcat,
+                "Received invalid new block notification with {} parts (expected 2); not updating service node list!",
+                msg.data.size());
+
             return;  // bail
         }
         try
@@ -89,7 +95,8 @@ namespace llarp::rpc
         }
         catch (std::exception& ex)
         {
-            LogError("bad block height: ", ex.what());
+            log::error(logcat, "Bad block height: {}", ex.what());
+
             return;  // bail
         }
 
@@ -121,9 +128,9 @@ namespace llarp::rpc
             "rpc.get_service_nodes",
             [self = shared_from_this()](bool success, std::vector<std::string> data) {
                 if (not success)
-                    LogWarn("failed to update service node list");
+                    log::warning(logcat, "Failed to update service node list");
                 else if (data.size() < 2)
-                    LogWarn("oxend gave empty reply for service node list");
+                    log::warning(logcat, "Oxend gave empty reply for service node list");
                 else
                 {
                     try
@@ -144,7 +151,7 @@ namespace llarp::rpc
                     }
                     catch (const std::exception& ex)
                     {
-                        LogError("failed to process service node list: ", ex.what());
+                        log::error(logcat, "Failed to process service node list: {}", ex.what());
                     }
                 }
 
@@ -184,7 +191,7 @@ namespace llarp::rpc
                 "admin.lokinet_ping",
                 [](bool success, std::vector<std::string> data) {
                     (void)data;
-                    LogDebug("Received response for ping. Successful: ", success);
+                    log::debug(logcat, "Received response for ping. Successful: {}", success);
                 },
                 payload.dump());
 
@@ -192,10 +199,10 @@ namespace llarp::rpc
             self->request("sub.block", [](bool success, std::vector<std::string> data) {
                 if (data.empty() or not success)
                 {
-                    LogError("failed to subscribe to new blocks");
+                    log::error(logcat, "Failed to subscribe to new blocks");
                     return;
                 }
-                LogDebug("subscribed to new blocks: ", data[0]);
+                log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
             });
             // Trigger an update on a regular timer as well in case we missed a block notify for
             // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
@@ -264,7 +271,7 @@ namespace llarp::rpc
             });
         }
         else
-            LogWarn("Cannot update whitelist: router object has gone away");
+            log::warning(logcat, "Cannot update whitelist: router object has gone away");
     }
 
     void LokidRpcClient::inform_connection(RouterID router, bool success)
@@ -281,10 +288,10 @@ namespace llarp::rpc
                         [self = shared_from_this()](bool success, std::vector<std::string>) {
                             if (not success)
                             {
-                                LogError("Failed to report connection status to oxend");
+                                log::error(logcat, "Failed to report connection status to oxend");
                                 return;
                             }
-                            LogDebug("reported connection status to core");
+                            log::debug(logcat, "Reported connection status to core");
                         },
                         req.dump());
                 }
@@ -301,33 +308,27 @@ namespace llarp::rpc
                 try
                 {
                     if (not success)
-                    {
-                        throw std::runtime_error(
-                            "failed to get private key request "
-                            "failed");
-                    }
+                        throw std::runtime_error("Failed to get private key request");
+
                     if (data.empty() or data.size() < 2)
-                    {
-                        throw std::runtime_error(
-                            "failed to get private key request "
-                            "data empty");
-                    }
+                        throw std::runtime_error("Failed to get private key request: data empty");
+
                     const auto j = nlohmann::json::parse(data[1]);
                     SecretKey k;
+
                     if (not k.FromHex(j.at("service_node_ed25519_privkey").get<std::string>()))
-                    {
                         throw std::runtime_error("failed to parse private key");
-                    }
+
                     promise.set_value(k);
                 }
                 catch (const std::exception& e)
                 {
-                    LogWarn("Caught exception while trying to request admin keys: ", e.what());
+                    log::warning(logcat, "Caught exception while trying to request admin keys: {}", e.what());
                     promise.set_exception(std::current_exception());
                 }
                 catch (...)
                 {
-                    LogWarn("Caught non-standard exception while trying to request admin keys");
+                    log::warning(logcat, "Caught non-standard exception while trying to request admin keys");
                     promise.set_exception(std::current_exception());
                 }
             });
@@ -338,7 +339,7 @@ namespace llarp::rpc
     void LokidRpcClient::lookup_ons_hash(
         std::string namehash, std::function<void(std::optional<service::EncryptedName>)> resultHandler)
     {
-        LogDebug("Looking Up LNS NameHash ", namehash);
+        log::debug(logcat, "Looking Up ONS NameHash {}", namehash);
         const nlohmann::json req{{"type", 2}, {"name_hash", oxenc::to_hex(namehash)}};
         request(
             "rpc.lns_resolve",
@@ -363,7 +364,7 @@ namespace llarp::rpc
                     }
                     catch (std::exception& ex)
                     {
-                        LogError("failed to parse response from lns lookup: ", ex.what());
+                        log::error(logcat, "Failed to parse response from ONS lookup: {}", ex.what());
                     }
                 }
                 if (auto r = _router.lock())

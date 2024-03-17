@@ -9,6 +9,8 @@ using std::chrono::steady_clock;
 
 namespace llarp::consensus
 {
+    static auto logcat = log::Cat("reachability");
+
     using fseconds = std::chrono::duration<float, std::chrono::seconds::period>;
     using fminutes = std::chrono::duration<float, std::chrono::minutes::period>;
 
@@ -30,26 +32,21 @@ namespace llarp::consensus
             incoming.last_whine = now;
             if (!failing)
             {
-                LogInfo(name, " ping received; port is likely reachable again");
+                log::info(logcat, "{} received ping; port is likely reachable!", name);
             }
             else
             {
                 if (incoming.last_test.time_since_epoch() == 0s)
                 {
-                    LogWarn("Have NEVER received ", name, " pings!");
+                    log::warning(logcat, "{} has NEVER received pings!", name);
                 }
                 else
                 {
-                    LogWarn(
-                        "Have not received ", name, " pings for a long time: ", fminutes{elapsed}.count(), " minutes");
+                    log::warning(
+                        logcat, "Have not received pings from {} in {} minutes", name, fminutes{elapsed}.count());
                 }
-                LogWarn(
-                    "Please check your ",
-                    name,
-                    " port. Not being reachable "
-                    "over ",
-                    name,
-                    " may result in a deregistration!");
+
+                log::warning(logcat, "Check {} port. Non-reachabibility may result in deregistration!", name);
             }
         }
     }

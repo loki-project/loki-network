@@ -10,6 +10,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("config.ini");
+
     bool ConfigParser::load_file(const fs::path& fname)
     {
         try
@@ -111,7 +113,8 @@ namespace llarp
                 {
                     throw std::runtime_error(fmt::format("{} invalid line ({}): '{}'", _filename, lineno, line));
                 }
-                LogDebug(_filename, ": [", sectName, "]:", k, "=", v);
+
+                log::debug(logcat, "{}:[{}]:{}={}", _filename, sectName, k, v);
                 _config[std::string{sectName}].emplace(k, v);
             }
             else  // malformed?
@@ -177,7 +180,8 @@ namespace llarp
                 {
                     throw std::runtime_error(fmt::format("{} invalid line ({}): '{}'", _filename, lineno, line));
                 }
-                LogDebug(_filename, ": [", sectName, "]:", k, "=", v);
+
+                log::debug(logcat, "{}:[{}]:{}={}", _filename, sectName, k, v);
                 _config[std::string{sectName}].emplace(k, v);
             }
             else  // malformed?

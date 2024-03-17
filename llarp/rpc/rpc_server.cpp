@@ -98,7 +98,7 @@ namespace llarp::rpc
         for (const auto& addr : r.config()->api.rpc_bind_addrs)
         {
             m_LMQ->listen_plain(addr.zmq_address());
-            LogInfo("Bound RPC server to ", addr.full_address());
+            log::info(logcat, "Bound RPC server to {}", addr.full_address());
         }
 
         AddCategories();

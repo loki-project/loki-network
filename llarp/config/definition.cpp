@@ -8,6 +8,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("config.def");
+
     template <>
     bool OptionDefinition<bool>::from_string(const std::string& input)
     {
@@ -32,13 +34,13 @@ namespace llarp
                 Hidden,
                 [deprecated = def->deprecated, relay = relay, opt = "[" + def->section + "]:" + def->name](
                     std::string_view) {
-                    LogWarn(
-                        "*** WARNING: The config option ",
+                    log::warning(
+                        logcat,
+                        "*** WARNING: The config option {} {} and has been ignored",
                         opt,
                         (deprecated  ? " is deprecated"
                              : relay ? " is not valid in service node configuration files"
-                                     : " is not valid in client configuration files"),
-                        " and has been ignored.");
+                                     : " is not valid in client configuration files"));
                 });
         }
 

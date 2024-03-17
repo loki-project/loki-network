@@ -594,7 +594,7 @@ namespace llarp
             return;
         }
 
-        LogInfo("stopping links");
+        log::info(logcat, "stopping links");
         is_stopping = true;
 
         quic.reset();

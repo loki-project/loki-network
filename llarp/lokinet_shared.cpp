@@ -22,6 +22,8 @@
 
 namespace
 {
+    static auto logcat = oxen::log::Cat("liblokinet");
+
     struct Context : public llarp::Context
     {
         using llarp::Context::Context;
@@ -426,7 +428,7 @@ extern "C"
         }
         catch (std::invalid_argument& e)
         {
-            llarp::LogError(e.what());
+            oxen::log::error(logcat, "{}", e.what());
         }
         return -1;
     }
@@ -454,7 +456,7 @@ extern "C"
         {
             if (not ctx->config->bootstrap.routers.BDecode(&buf))
             {
-                llarp::LogError("Cannot decode bootstrap list: ", llarp::buffer_printer{buf});
+                oxen::log::error(logcat, "Cannot decode bootstrap list: {}}", llarp::buffer_printer{buf});
                 return -1;
             }
             for (const auto& rc : ctx->config->bootstrap.routers)
@@ -468,7 +470,7 @@ extern "C"
             llarp::RouterContact rc{};
             if (not rc.BDecode(&buf))
             {
-                llarp::LogError("failed to decode signle RC: ", llarp::buffer_printer{buf});
+                oxen::log::error(logcat, "failed to decode signle RC: {}", llarp::buffer_printer{buf});
                 return -1;
             }
             if (not rc.Verify(llarp::time_now_ms()))
@@ -910,7 +912,7 @@ extern "C"
             auto lock = ctx->acquire();
             if (ctx->impl->router->loop()->inEventLoop())
             {
-                llarp::LogError("cannot call udp_establish from internal event loop");
+                oxen::log::error(logcat, "Cannot call udp_establish from internal event loop");
                 return EINVAL;
             }
             if (auto itr = ctx->udp_sockets.find(remote->socket_id); itr != ctx->udp_sockets.end())

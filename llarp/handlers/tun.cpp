@@ -420,14 +420,14 @@ namespace llarp::handlers
 
                         // if (not ip.FromString(key))
                         // {
-                        //     LogWarn(name(), " malformed IP in addr map data: ", key);
+                        //     log::warning(logcat, "{} malformed IP in addr map data: {}", name(), key);
                         //     continue;
                         // }
                         if (_local_ip == ip)
                             continue;
                         if (not _local_range.contains(ip))
                         {
-                            LogWarn(name(), " out of range IP in addr map data: ", ip);
+                            log::warning(logcat, "{} out of range IP in addr map data", name(), ip);
                             continue;
                         }
 
@@ -441,13 +441,13 @@ namespace llarp::handlers
                             }
                             else
                             {
-                                LogWarn(name(), " invalid address in addr map: ", *str);
+                                log::warning(logcat, "{} invalid address in addr map: {}", name(), *str);
                                 continue;
                             }
                         }
                         else
                         {
-                            LogWarn(name(), " invalid first entry in addr map, not a string");
+                            log::warning(logcat, "{} invalid first entry in addr map: not a string!", name());
                             continue;
                         }
                         if (const auto* loki = std::get_if<service::Address>(&addr))
@@ -455,14 +455,16 @@ namespace llarp::handlers
                             _ip_to_addr.emplace(ip, loki->data());
                             _addr_to_ip.emplace(loki->data(), ip);
                             _is_snode_map[*loki] = false;
-                            LogInfo(name(), " remapped ", ip, " to ", *loki);
+
+                            log::info(logcat, "{} remapped {} to {}", name(), ip, *loki);
                         }
                         if (const auto* snode = std::get_if<RouterID>(&addr))
                         {
                             _ip_to_addr.emplace(ip, snode->data());
                             _addr_to_ip.emplace(snode->data(), ip);
                             _is_snode_map[*snode] = true;
-                            LogInfo(name(), " remapped ", ip, " to ", *snode);
+
+                            log::info(logcat, "{} remapped {} to {}", name(), ip, *snode);
                         }
                         if (_next_ip < ip)
                             _next_ip = ip;
@@ -473,7 +475,7 @@ namespace llarp::handlers
             }
             else
             {
-                LogInfo(name(), " skipping loading addr map at ", file, " as it does not currently exist");
+                log::info(logcat, "{} skipping loading addr map at {} as it does not currently exist", name(), file);
             }
         }
 
@@ -622,7 +624,7 @@ namespace llarp::handlers
         // }
         // if (msg.questions.size() != 1)
         // {
-        //   llarp::LogWarn("bad number of dns questions: ", msg.questions.size());
+        //   log::warning(logcat, "bad number of dns questions: {}", msg.questions.size());
         //   return false;
         // }
         // std::string qname = msg.questions[0].Name();
@@ -947,10 +949,11 @@ namespace llarp::handlers
         (void)SNode;
         if (itr != _ip_to_addr.end())
         {
-            llarp::LogWarn(ip, " already mapped to ", service::Address(itr->second.as_array()).to_string());
+            log::warning(logcat, "{} already mapped to {}", ip, itr->second);
             return false;
         }
-        llarp::LogInfo(name() + " map ", addr.to_string(), " to ", ip);
+
+        log::info(logcat, "{} mapping {} to {}", name(), addr.to_string(), ip);
 
         // m_IPToAddr[ip] = addr;
         // _addr_to_ip[addr] = ip;
@@ -984,8 +987,8 @@ namespace llarp::handlers
     {
         _next_ip = _local_ip;
         // _max_ip = _local_range.HighestAddr();
-        llarp::LogInfo(name(), " set ", _if_name, " to have address ", _local_ip);
-        llarp::LogInfo(name(), " allocated up to ", _max_ip, " on range ", _local_range);
+        log::info(logcat, "{} set {} to have address ", name(), _if_name, _local_ip);
+        log::info(logcat, "{} allocated up to {} on range ", name(), _max_ip, _local_range);
 
         const service::Address ourAddr = _identity.pub.address();
 
@@ -1005,7 +1008,7 @@ namespace llarp::handlers
 
         info.ifname = _if_name;
 
-        LogInfo(name(), " setting up network...");
+        log::info(logcat, "{} setting up network...", name());
 
         try
         {
@@ -1013,12 +1016,12 @@ namespace llarp::handlers
         }
         catch (std::exception& ex)
         {
-            LogError(name(), " failed to set up network interface: ", ex.what());
+            log::error(logcat, "{} failed to set up network interface: ", name(), ex.what());
             return false;
         }
 
         _if_name = _net_if->Info().ifname;
-        LogInfo(name(), " got network interface ", _if_name);
+        log::info(logcat, "{} got network interface:{}", name(), _if_name);
 
         auto handle_packet = [netif = _net_if, pktrouter = _packet_router](UDPPacket pkt) {
             // TODO: packets used to have reply hooks
@@ -1067,7 +1070,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::setup_networking()
     {
-        llarp::LogInfo("Set Up networking for ", name());
+        log::info(logcat, "Set Up networking for {}", name());
         return setup_tun();
     }
 
@@ -1083,7 +1086,7 @@ namespace llarp::handlers
         if (_persisting_addr_file and not platform::is_android)
         {
             const auto& file = *_persisting_addr_file;
-            LogInfo(name(), " saving address map to ", file);
+            log::info(logcat, "{} saving address map to {}", name(), file);
             // if (auto maybe = util::OpenFileStream<fs::ofstream>(file, std::ios_base::binary))
             // {
             //   std::map<std::string, std::string> addrmap;
@@ -1213,7 +1216,7 @@ namespace llarp::handlers
         //     //         router().TriggerPump();
         //     //         return;
         //     //       }
-        //     //       LogWarn("cannot ensure path to exit ", addr, " so we drop some packets");
+        //     //       log::warning(logcat, "cannot ensure path to exit {}; so we drop some packets", addr);
         //     //     },
         //     //     PathAlignmentTimeout());
         //     return;
@@ -1264,7 +1267,7 @@ namespace llarp::handlers
         // //       {
         // //         var::visit(
         // //             [this](auto&& addr) {
-        // //               LogWarn(name(), " failed to ensure path to ", addr, " no convo tag found");
+        // //               Log Warn(name(), " failed to ensure path to ", addr, " no convo tag found");
         // //             },
         // //             to);
         // //       }
@@ -1277,7 +1280,7 @@ namespace llarp::handlers
         // //       {
         // //         var::visit(
         // //             [this](auto&& addr) {
-        // //               LogWarn(name(), " failed to send to ", addr, ", SendToOrQueue failed");
+        // //               Log Warn(name(), " failed to send to ", addr, ", SendToOrQueue failed");
         // //             },
         // //             to);
         // //       }
@@ -1303,15 +1306,15 @@ namespace llarp::handlers
         //   auto* quic = GetQUICTunnel();
         //   if (!quic)
         //   {
-        //     LogWarn("incoming quic packet but this endpoint is not quic capable; dropping");
+        //     Log Warn("incoming quic packet but this endpoint is not quic capable; dropping");
         //     return false;
         //   }
         //   if (buf.sz < 4)
         //   {
-        //     LogWarn("invalid incoming quic packet, dropping");
+        //     Log Warn("invalid incoming quic packet, dropping");
         //     return false;
         //   }
-        //   LogInfo("tag active T=", tag);
+        //   log::info(logcat, "tag active T={}", tag);
 
         //   // TODO:
         //   // quic->receive_packet(tag, buf);
@@ -1471,9 +1474,8 @@ namespace llarp::handlers
             //     _addr_to_ip[ident] = nextIP;
             //     _ip_to_addr[nextIP] = ident;
             //     _is_snode_map[ident] = snode;
-            //     var::visit([&](auto&& remote) { llarp::LogInfo(name(), " mapped ", remote, " to ", nextIP); }, addr);
-            //     mark_ip_active(nextIP);
-            //     return nextIP;
+            //     var::visit([&](auto&& remote) { llarp::Log Info(name(), " mapped ", remote, " to ", nextIP); },
+            //     addr); mark_ip_active(nextIP); return nextIP;
             // }
         }
 

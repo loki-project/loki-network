@@ -51,7 +51,7 @@ namespace llarp::service
         if (!self->m_LocalIdentity.KeyExchange(
                 crypto::dh_client, sharedSecret, self->m_remote, frame->nonce))
         {
-          LogError("failed to derive x25519 shared key component");
+          log::error(logcat, "failed to derive x25519 shared key component");
         }
 
         auto buf = secret.bt_encode() + sharedSecret.bt_encode();
@@ -67,7 +67,7 @@ namespace llarp::service
           self->loop->call([self, frame] { AsyncKeyExchange::Result(self, frame); });
         else
         {
-          LogError("failed to encrypt and sign");
+          log::error(logcat, "failed to encrypt and sign");
         }
         */
     }

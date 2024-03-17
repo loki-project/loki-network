@@ -203,23 +203,23 @@ namespace llarp
             return _data.cend();
         }
 
+        // TODO: move to .cpp file to add static logcat def
         bool FromBytestring(llarp_buffer_t* buf)
         {
             if (buf->sz != sz)
             {
-                llarp::LogError("bdecode buffer size mismatch ", buf->sz, "!=", sz);
+                // log::error(logcat, "bdecode buffer size mismatch {}!={}", buf->sz, sz);
                 return false;
             }
             memcpy(data(), buf->base, sz);
             return true;
         }
 
-        // TODO: move to .cpp file to add static logcat def
         bool from_string(std::string_view b)
         {
             if (b.size() != sz)
             {
-                log::error(logcat, "Error: buffer size mismatch in aligned buffer!");
+                // log::error(logcat, "Error: buffer size mismatch in aligned buffer!");
                 return false;
             }
 

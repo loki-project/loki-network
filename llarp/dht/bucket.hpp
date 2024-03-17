@@ -11,6 +11,8 @@
 
 namespace llarp::dht
 {
+    static auto logcat = log::Cat("dht.bucket");
+
     template <typename Val_t>
     struct Bucket
     {
@@ -87,7 +89,7 @@ namespace llarp::dht
         {
             if (nodes.size() < N || nodes.empty())
             {
-                llarp::LogWarn("Not enough dht nodes, have ", nodes.size(), " want ", N);
+                log::warning(logcat, "Not enough DHT nodes (have:{}, want:{})", nodes.size(), N);
                 return false;
             }
             if (nodes.size() == N)

@@ -6,7 +6,6 @@
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/constants/apple.hpp>
-#include <llarp/ev/libuv.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>
@@ -20,6 +19,8 @@
 
 namespace
 {
+    static auto logcat = oxen::log::Cat("apple.ctx_wrapper");
+
     struct instance_data
     {
         llarp::apple::Context context;
@@ -110,7 +111,7 @@ void* llarp_apple_init(llarp_apple_config* appleconf)
     }
     catch (const std::exception& e)
     {
-        llarp::LogError("Failed to initialize lokinet from config: ", e.what());
+        oxen::log::error(logcat, "Failed to initialize lokinet from config: {}", e.what());
     }
     return nullptr;
 }
@@ -153,7 +154,7 @@ int llarp_apple_start(void* lokinet, void* callback_context)
     }
     catch (const std::exception& e)
     {
-        llarp::LogError("Failed to initialize lokinet: ", e.what());
+        oxen::log::error(logcat, "Failed to initialize lokinet: {}", e.what());
         return -1;
     }
 
@@ -183,7 +184,7 @@ int llarp_apple_incoming(void* lokinet, const llarp_incoming_packet* packets, si
         if (iface->OfferReadPacket(buf))
             count++;
         else
-            llarp::LogError("invalid IP packet: ", llarp::buffer_printer(buf));
+            oxen::log::error(logcat, "invalid IP packet: {}", llarp::buffer_printer(buf));
     }
 
     iface->MaybeWakeUpperLayers();

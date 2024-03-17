@@ -9,6 +9,8 @@
 
 namespace llarp::path
 {
+    static auto logcat = log::Cat("path");
+
     Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, std::string shortName)
         : handler{std::move(pathset)}, _router{rtr}, _short_name{std::move(shortName)}
     {
@@ -144,7 +146,7 @@ namespace llarp::path
                 }
                 catch (const std::exception& e)
                 {
-                    log::warning(path_cat, "Error parsing path control message response: {}", e.what());
+                    log::warning(logcat, "Error parsing path control message response: {}", e.what());
                     response_cb(messages::ERROR_RESPONSE);
                     return;
                 }
@@ -283,7 +285,7 @@ namespace llarp::path
             for (const auto& hop : hops)
                 new_hops.emplace_back(hop.rc);
 
-            LogInfo(name(), " rebuilding on ", short_name());
+            log::info(logcat, "{} rebuilding on {}", name(), short_name());
             parent->build(new_hops);
         }
     }
@@ -412,7 +414,7 @@ namespace llarp::path
             reinterpret_cast<unsigned char*>(buf.data()) + payload.size(), PAD_SIZE -
     payload.size());
       }
-      log::debug(path_cat, "Sending {}B routing message to {}", buf.size(), Endpoint());
+      log::debug(logcat, "Sending {}B routing message to {}", buf.size(), Endpoint());
 
       // TODO: path relaying here
 

@@ -38,6 +38,8 @@ static constexpr std::chrono::milliseconds ROUTER_TICK_INTERVAL = 250ms;
 
 namespace llarp
 {
+    static auto logcat = log::Cat("router");
+
     Router::Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform)
         : _route_poker{std::make_shared<RoutePoker>(*this)},
           _next_explore_at{std::chrono::steady_clock::now()},
@@ -216,11 +218,11 @@ namespace llarp
         if (is_service_node())
         {
 #if defined(ANDROID) || defined(IOS)
-            LogError("running a service node on mobile device is not possible.");
+            log::error(logcat, "running a service node on mobile device is not possible.");
             return false;
 #else
 #if defined(_WIN32)
-            LogError("running a service node on windows is not possible.");
+            log::error(logcat, "running a service node on windows is not possible.");
             return false;
 #endif
 #endif
@@ -233,19 +235,15 @@ namespace llarp
                 {
                     _identity = rpc_client()->obtain_identity_key();
                     const RouterID pk{pubkey()};
-                    LogWarn("Obtained lokid identity key: ", pk);
+
+                    log::warning(logcat, "Obtained lokid identity key: {}", pk);
                     rpc_client()->start_pings();
                     break;
                 }
                 catch (const std::exception& e)
                 {
-                    LogWarn(
-                        "Failed attempt ",
-                        numTries,
-                        " of ",
-                        maxTries,
-                        " to get lokid identity keys because: ",
-                        e.what());
+                    log::warning(
+                        logcat, "Failed attempt {} of {} to get oxend id keys: ", numTries, maxTries, e.what());
 
                     if (numTries == maxTries)
                         throw;
@@ -336,14 +334,14 @@ namespace llarp
         if (not if_net)
         {
             auto err = "Could not create net interface"s;
-            log::error(logcat, err);
+            log::error(logcat, "{}", err);
             throw std::runtime_error{err};
         }
         if (not loop()->add_network_interface(
                 if_net, [](UDPPacket pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
         {
             auto err = "Could not create tunnel for net interface"s;
-            log::error(logcat, err);
+            log::error(logcat, "{}", err);
             throw std::runtime_error{err};
         }
 
@@ -412,7 +410,7 @@ namespace llarp
                 netid,
                 _testnet ? "Please ensure your local instance is configured to operate on testnet"
                          : "Local lokinet instance will attempt to run on the specified network");
-            log::critical(logcat, err);
+            log::critical(logcat, "{}", err);
         }
 
         log::debug(logcat, "Configuring router");
@@ -429,7 +427,7 @@ namespace llarp
 
         _node_db = std::move(nodedb);
 
-        log::debug(logcat, _is_service_node ? "Running as a relay (service node)" : "Running as a client");
+        log::debug(logcat, "{}", _is_service_node ? "Running as a relay (service node)" : "Running as a client");
 
         log::debug(logcat, "Initializing key manager");
         if (not _key_manager->initialize(*_config, true, _is_service_node))
@@ -1098,7 +1096,8 @@ namespace llarp
         _is_stopping.store(true);
         if (log::get_level_default() != log::Level::off)
             log::reset_level(log::Level::info);
-        LogWarn("stopping router hard");
+
+        log::warning(logcat, "Hard stopping router");
         llarp::sys::service_manager->stopping();
         stop_sessions();
         close();

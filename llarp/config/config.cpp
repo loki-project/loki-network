@@ -813,14 +813,14 @@ namespace llarp
                             _ip_to_addr.emplace(ip, loki->data());
                             _addr_to_ip.emplace(loki->data(), ip);
                             _is_snode_map[*loki] = false;
-                            LogInfo(name(), " remapped ", ip, " to ", *loki);
+                            log::info(logcat, "Remapping {} to {}", ip, *loki);
                         }
                         if (const auto* snode = std::get_if<RouterID>(&addr))
                         {
                             _ip_to_addr.emplace(ip, snode->data());
                             _addr_to_ip.emplace(snode->data(), ip);
                             _is_snode_map[*snode] = true;
-                            LogInfo(name(), " remapped ", ip, " to ", *snode);
+                            log::info(logcat, "Remapping {} to {}", ip, *snode);
                         }
                         if (_next_ip < ip)
                             _next_ip = ip;
@@ -949,7 +949,7 @@ namespace llarp
             "add-hosts",
             ClientOnly,
             Comment{"Add a hosts file to the dns resolver", "For use with client side dns filtering"},
-            [=](fs::path path) {
+            [=, this](fs::path path) {
                 if (path.empty())
                     return;
                 if (not fs::exists(path))
@@ -1349,7 +1349,7 @@ namespace llarp
             "unique-range-size",
             DefaultUniqueCIDR,
             ClientOnly,
-            [=](int arg) {
+            [=, this](int arg) {
                 if (arg > 32 or arg < 4)
                     throw std::invalid_argument{"[paths]:unique-range-size must be between 4 and 32"};
 
@@ -1428,7 +1428,7 @@ namespace llarp
                     continue;
                 ConfigParser parser;
                 if (not parser.load_file(f.path()))
-                    throw std::runtime_error{"cannot load '" + f.path().u8string() + "'"};
+                    throw std::runtime_error{"cannot load file at path:{}"_format(f.path().string())};
 
                 parser.iter_all_sections([&](std::string_view section, const SectionValues& values) {
                     for (const auto& [k, v] : values)
@@ -1539,7 +1539,7 @@ namespace llarp
         // fail to overwrite if not instructed to do so
         if (fs::exists(confFile) && !overwrite)
         {
-            LogDebug("Not creating config file; it already exists.");
+            log::debug(logcat, "Config file already exists; NOT creating new config");
             return;
         }
 
@@ -1551,7 +1551,11 @@ namespace llarp
             fs::create_directory(parent);
         }
 
-        llarp::LogInfo("Attempting to create config file for ", (asRouter ? "router" : "client"), " at ", confFile);
+        log::info(
+            logcat,
+            "Attempting to create config file for {} at file path:{}",
+            asRouter ? "router" : "client",
+            confFile);
 
         llarp::Config config{dataDir};
         std::string confStr;
@@ -1570,7 +1574,7 @@ namespace llarp
             throw std::runtime_error{fmt::format("Failed to write config data to {}: {}", confFile, e.what())};
         }
 
-        llarp::LogInfo("Generated new config ", confFile);
+        log::info(logcat, "Generated new config (path: {})", confFile);
     }
 
     void generate_common_config_comments(ConfigDefinition& def)

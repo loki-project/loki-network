@@ -14,6 +14,8 @@
 
 namespace llarp::quic
 {
+    static auto logcat = log::Cat("tun");
+
     namespace
     {
         // Takes data from the tcp connection and pushes it down the quic tunnel
@@ -22,22 +24,25 @@ namespace llarp::quic
             auto stream = client.data<Stream>();
             assert(stream);
             std::string_view data{event.data.get(), event.length};
+
             auto peer = client.peer();
-            LogTrace(peer.ip, ":", peer.port, " → lokinet ", buffer_printer{data});
+            log::trace(logcat, "{}:{} -> lokinet {}", peer.ip, peer.port, buffer_printer{data});
+
             // Steal the buffer from the DataEvent's unique_ptr<char[]>:
             stream->append_buffer(reinterpret_cast<const std::byte*>(event.data.release()), event.length);
+
             if (stream->used() >= tunnel::PAUSE_SIZE)
             {
-                LogDebug(
-                    "quic tunnel is congested (have ",
-                    stream->used(),
-                    " bytes in flight); pausing local tcp connection reads");
+                log::debug(
+                    logcat,
+                    "Quic tunnel is congested ({} bytes in flight); pausing local TCP connection reads",
+                    stream->used());
                 client.stop();
                 stream->when_available([](Stream& s) {
                     auto client = s.data<uvw::TCPHandle>();
                     if (s.used() < tunnel::PAUSE_SIZE)
                     {
-                        LogDebug("quic tunnel is no longer congested; resuming tcp connection reading");
+                        log::debug(logcat, "Quic tunnel is no longer congested; resuming TCP connection reading!");
                         client->read();
                         return true;
                     }
@@ -46,7 +51,7 @@ namespace llarp::quic
             }
             else
             {
-                LogDebug("Queued ", event.length, " bytes");
+                log::debug(logcat, "Queued {} bytes", event.length);
             }
         }
 
@@ -60,7 +65,8 @@ namespace llarp::quic
 
             std::string_view data{reinterpret_cast<const char*>(bdata.data()), bdata.size()};
             auto peer = tcp->peer();
-            LogTrace(peer.ip, ":", peer.port, " ← lokinet ", buffer_printer{data});
+
+            log::trace(logcat, "{}:{} -> lokinet {}", peer.ip, peer.port, buffer_printer{data});
 
             if (data.empty())
                 return;
@@ -82,7 +88,7 @@ namespace llarp::quic
         {
             if (auto tcp = st.data<uvw::TCPHandle>())
             {
-                LogTrace("Closing TCP connection");
+                log::trace(logcat, "Closing TCP connection...");
                 tcp->close();
             }
         };
@@ -99,7 +105,8 @@ namespace llarp::quic
                 // This fires sometime after we call `close()` to signal that the close is done.
                 if (auto stream = c.data<Stream>())
                 {
-                    LogInfo("Local TCP connection closed, closing associated quic stream ", stream->id());
+                    log::info(
+                        logcat, "Local TCP connection closed, closing associated quic stream id:{}", stream->id());
                     stream->close();
                     stream->data(nullptr);
                 }
@@ -108,20 +115,17 @@ namespace llarp::quic
             tcp.on<uvw::EndEvent>([](auto&, uvw::TCPHandle& c) {
                 // This fires on eof, most likely because the other side of the TCP connection
                 // closed it.
-                LogInfo("EOF on connection to ", c.peer().ip, ":", c.peer().port);
+                log::info(logcat, "EOF on connection to {}:{}", c.peer().ip, c.peer().port);
                 c.close();
             });
             tcp.on<uvw::ErrorEvent>([](const uvw::ErrorEvent& e, uvw::TCPHandle& tcp) {
-                LogError(
-                    "ErrorEvent[",
+                log::error(
+                    logcat,
+                    "Error: [{}:{}] on connection with {}:{}; shutting down quic stream",
                     e.name(),
-                    ": ",
                     e.what(),
-                    "] on connection with ",
                     tcp.peer().ip,
-                    ":",
-                    tcp.peer().port,
-                    ", shutting down quic stream");
+                    tcp.peer().port);
                 if (auto stream = tcp.data<Stream>())
                 {
                     stream->close(tunnel::ERROR_TCP);
@@ -143,7 +147,7 @@ namespace llarp::quic
         // (and forward the rest of the data to it if we got more than just the single byte).
         void initial_client_data_handler(uvw::TCPHandle& client, Stream& stream, bstring_view bdata)
         {
-            LogTrace("initial client handler; data: ", buffer_printer{bdata});
+            log::trace(logcat, "Initial client handler -- data: {}", buffer_printer{bdata});
             if (bdata.empty())
                 return;
             client.clear();  // Clear these initial event handlers: we either set up the proper
@@ -160,14 +164,15 @@ namespace llarp::quic
                     bdata.remove_prefix(1);
                     stream.data_callback(stream, std::move(bdata));
                 }
-                LogTrace("starting client reading");
+
+                log::trace(logcat, "Starting client read...");
             }
             else
             {
-                LogWarn(
-                    "Remote connection returned invalid initial byte (0x",
-                    oxenc::to_hex(bdata.begin(), bdata.begin() + 1),
-                    "); dropping connection");
+                log::warning(
+                    logcat,
+                    "Remote connection returned invalid initial byte (0x{}); dropping connection",
+                    oxenc::to_hex(bdata.begin(), bdata.begin() + 1));
                 stream.close(tunnel::ERROR_BAD_INIT);
                 client.close();
             }
@@ -182,14 +187,14 @@ namespace llarp::quic
             uvw::TCPHandle& client, Stream& /*stream*/, std::optional<uint64_t> error_code)
         {
             if (error_code && *error_code == tunnel::ERROR_CONNECT)
-                LogDebug("Remote TCP connection failed, closing local connection");
+                log::debug(logcat, "Remote TCP connection failed, closing local connection");
             else
-                LogWarn(
-                    "Stream connection closed ",
-                    error_code ? "with error " + std::to_string(*error_code) : "gracefully",
-                    "; closing local TCP connection.");
+                log::warning(
+                    logcat,
+                    "Stream connection closed {}; closing local TCP connection.",
+                    error_code ? "with error " + std::to_string(*error_code) : "gracefully");
             auto peer = client.peer();
-            LogDebug("Closing connection to ", peer.ip, ":", peer.port);
+            log::debug(logcat, "Closing connection to {}:{}", peer.ip, peer.port);
             client.clear();
             // TOFIX: this logic
             //   if (error_code)
@@ -204,7 +209,7 @@ namespace llarp::quic
     {
         // Cleanup callback to clear out closed tunnel connections
         service_endpoint_.Loop()->call_every(500ms, timer_keepalive_, [this] {
-            LogTrace("Checking quic tunnels for finished connections");
+            log::trace(logcat, "Checking quic tunnels for finished connections...");
             for (auto ctit = client_tunnels_.begin(); ctit != client_tunnels_.end();)
             {
                 // Clear any accepted connections that have been closed:
@@ -217,7 +222,7 @@ namespace llarp::quic
                     // congested.
                     if (not *it or not(*it)->data())
                     {
-                        LogDebug("Cleanup up closed outgoing tunnel on quic:", port);
+                        log::debug(logcat, "Cleanup up closed outgoing tunnel on quic port: {}", port);
                         it = ct.conns.erase(it);
                     }
                     else
@@ -228,13 +233,14 @@ namespace llarp::quic
                 // ones then destroy the whole thing.
                 if (ct.conns.empty() and (not ct.tcp or not ct.tcp->active()))
                 {
-                    LogDebug("All sockets closed on quic:", port, ", destroying tunnel data");
+                    log::debug(logcat, "All sockets closed on quic port:{},destroying tunnel data", port);
                     ctit = client_tunnels_.erase(ctit);
                 }
                 else
                     ++ctit;
             }
-            LogTrace("Done quic tunnel cleanup check");
+
+            log::trace(logcat, "Finished quic tunnel cleanup!");
         });
     }
 
@@ -250,7 +256,7 @@ namespace llarp::quic
             auto remote = service_endpoint_.GetEndpointWithConvoTag(conn.path.remote);
             if (!remote)
             {
-                LogWarn("Received new stream open from invalid/unknown convo tag, dropping stream");
+                log::warning(logcat, "Received new stream open from invalid/unknown convo tag, dropping stream");
                 return false;
             }
 
@@ -258,43 +264,42 @@ namespace llarp::quic
             auto tunnel_to = allow_connection(lokinet_addr, port);
             if (not tunnel_to)
                 return false;
-            LogInfo("quic stream from ", lokinet_addr, " to ", port, " tunnelling to ", *tunnel_to);
+            log::info(logcat, "Quic stream from {} to port:{} tunnelling to {}", lokinet_addr, port, *tunnel_to);
 
             auto tcp = get_loop()->resource<uvw::TCPHandle>();
             [[maybe_unused]] auto error_handler =
                 tcp->once<uvw::ErrorEvent>([&stream, to = *tunnel_to](const uvw::ErrorEvent&, uvw::TCPHandle&) {
-                    LogWarn("Failed to connect to ", to, ", shutting down quic stream");
+                    log::warning(logcat, "Failed to connect to {}; shutting down quic stream", to);
                     stream.close(tunnel::ERROR_CONNECT);
                 });
 
             // As soon as we connect to the local tcp tunnel port we fire a CONNECT_INIT down the
             // stream tunnel to let the other end know the connection was successful, then set up
             // regular stream handling to handle any other to/from data.
-            tcp->once<uvw::ConnectEvent>(
-                [streamw = stream.weak_from_this()](const uvw::ConnectEvent&, uvw::TCPHandle& tcp) {
-                    auto peer = tcp.peer();
-                    auto stream = streamw.lock();
-                    if (!stream)
-                    {
-                        LogWarn(
-                            "Connected to TCP ",
-                            peer.ip,
-                            ":",
-                            peer.port,
-                            " but quic stream has gone away; close/resetting local TCP connection");
-                        tcp.close();
-                        return;
-                    }
-                    LogDebug("Connected to ", peer.ip, ":", peer.port, " for quic ", stream->id());
-                    // Set up the data stream forwarding (which also clears these initial handlers).
-                    install_stream_forwarding(tcp, *stream);
-                    assert(stream->used() == 0);
+            tcp->once<uvw::ConnectEvent>([streamw = stream.weak_from_this()](
+                                             const uvw::ConnectEvent&, uvw::TCPHandle& tcp) {
+                auto peer = tcp.peer();
+                auto stream = streamw.lock();
+                if (!stream)
+                {
+                    log::warning(
+                        logcat,
+                        "Connected to TCP {}:{} but quic stream has gone away; close/resetting local TCP connection",
+                        peer.ip,
+                        peer.port);
+                    tcp.close();
+                    return;
+                }
+                log::debug(logcat, "Connected to {}:{} for quic stream ID:{}", peer.ip, peer.port, stream->id());
+                // Set up the data stream forwarding (which also clears these initial handlers).
+                install_stream_forwarding(tcp, *stream);
+                assert(stream->used() == 0);
 
-                    // Send the magic byte, and start reading from the tcp tunnel in the logic
-                    // thread
-                    stream->append_buffer(new std::byte[1]{tunnel::CONNECT_INIT}, 1);
-                    tcp.read();
-                });
+                // Send the magic byte, and start reading from the tcp tunnel in the logic
+                // thread
+                stream->append_buffer(new std::byte[1]{tunnel::CONNECT_INIT}, 1);
+                tcp.read();
+            });
 
             tcp->connect(*tunnel_to->operator const sockaddr*());
 
@@ -318,7 +323,7 @@ namespace llarp::quic
     int TunnelManager::listen(SockAddr addr)
     {
         return listen([addr](std::string_view, uint16_t p) -> std::optional<SockAddr> {
-            LogInfo("try accepting ", addr.getPort());
+            log::info(logcat, "try accepting {}", addr.getPort());
             if (p == addr.getPort())
                 return addr;
             return std::nullopt;
@@ -341,18 +346,13 @@ namespace llarp::quic
             }
             catch (const std::exception& e)
             {
-                LogWarn(
-                    "Incoming quic connection from ",
-                    lokinet_addr,
-                    " to ",
-                    port,
-                    " denied via exception (",
-                    e.what(),
-                    ")");
+                log::warning(
+                    logcat, "Incoming Quic connection from {} to port:{} denied:{}", lokinet_addr, port, e.what());
                 return std::nullopt;
             }
         }
-        LogWarn("Incoming quic connection from ", lokinet_addr, " to ", port, " declined by all handlers");
+
+        log::warning(logcat, "Incoming Quic connection from {} to port:{} denied by all handlers!", lokinet_addr, port);
         return std::nullopt;
     }
 
@@ -398,12 +398,12 @@ namespace llarp::quic
         auto it = client_tunnels_.find(pseudo_port);
         if (it == client_tunnels_.end())
         {
-            LogDebug("QUIC tunnel to ", addr, " closed before ", step_name, " finished");
+            log::debug(logcat, "Quic tunnel to {} closed before step (name:{}) finished!", addr, step_name);
             return false;
         }
         if (!step_success)
         {
-            LogWarn("QUIC tunnel to ", addr, " failed during ", step_name, "; aborting tunnel");
+            log::warning(logcat, "Quic tunnel to {} failed during step (name:{}); aborting tunnel!", addr, step_name);
             it->second.tcp->close();
             if (it->second.open_cb)
                 it->second.open_cb(false);
@@ -476,7 +476,7 @@ namespace llarp::quic
             throw std::runtime_error{"Unable to open an outgoing quic connection: too many existing connections"};
         (next_pseudo_port_ = pport)++;
 
-        LogInfo("Bound TCP tunnel ", saddr, " for quic client :", pport);
+        log::info(logcat, "Bound TCP tunnel {} for quic client pseudo_port:{}", saddr, pport);
 
         // We are emplacing into client_tunnels_ here: beyond this point we must not throw until we
         // return (or if we do, make sure we remove this row from client_tunnels_ first).
@@ -568,7 +568,7 @@ namespace llarp::quic
         auto conn = tunnel.client->get_connection();
 
         conn->on_stream_available = [this, id = row.first](Connection&) {
-            LogDebug("QUIC connection :", id, " established; streams now available");
+            log::debug(logcat, "Quic connection (id:{}) established; streams now available", id);
             if (auto it = client_tunnels_.find(id); it != client_tunnels_.end())
                 flush_pending_incoming(it->second);
         };
@@ -602,11 +602,11 @@ namespace llarp::quic
             }
             catch (const std::exception& e)
             {
-                LogWarn("Opening quic stream failed: ", e.what());
+                log::warning(logcat, "Opening quic stream failed: {}", e.what());
                 tcp_client->close();
             }
 
-            LogTrace("Set up new stream");
+            log::trace(logcat, "Set up new stream!");
             conn.io_ready();
         }
     }
@@ -615,7 +615,7 @@ namespace llarp::quic
     {
         if (buf.sz <= 4)
         {
-            LogWarn("invalid quic packet: packet size (", buf.sz, ") too small");
+            log::warning(logcat, "Invalid quic packet: packet size ({}) too small", buf.sz);
             return;
         }
         auto type = static_cast<std::byte>(buf.base[0]);
@@ -629,26 +629,26 @@ namespace llarp::quic
         quic::Endpoint* ep = nullptr;
         if (type == CLIENT_TO_SERVER)
         {
-            LogTrace("packet is client-to-server from client pport ", pseudo_port);
+            log::trace(logcat, "Packet is client-to-server from client pseudo-port:{}", pseudo_port);
             // Client-to-server: the header port is the return port
             remote.setPort(pseudo_port);
             if (!server_)
             {
-                LogWarn("Dropping incoming quic packet to server: no listeners");
+                log::warning(logcat, "Dropping incoming quic packet to server: no listeners");
                 return;
             }
             ep = server_.get();
         }
         else if (type == SERVER_TO_CLIENT)
         {
-            LogTrace("packet is server-to-client to client pport ", pseudo_port);
+            log::trace(logcat, "Packet is server-to-client to client pseudo-port:{}", pseudo_port);
             // Server-to-client: the header port tells us which client tunnel this is going to
             if (auto it = client_tunnels_.find(pseudo_port); it != client_tunnels_.end())
                 ep = it->second.client.get();
 
             if (not ep)
             {
-                LogWarn("Incoming quic packet to invalid/closed client; dropping");
+                log::warning(logcat, "Incoming quic packet to invalid/closed client; dropping");
                 return;
             }
 
@@ -657,17 +657,17 @@ namespace llarp::quic
             if (auto conn = static_cast<quic::Client&>(*ep).get_connection())
             {
                 remote.setPort(conn->path.remote.port());
-                LogTrace("remote port is ", remote.getPort());
+                log::trace(logcat, "Remoter port is {}", remote.getPort());
             }
             else
             {
-                LogWarn("Incoming quic to a quic::Client without an active quic::Connection; dropping");
+                log::warning(logcat, "Incoming quic to a quic::Client without an active quic::Connection; dropping");
                 return;
             }
         }
         else
         {
-            LogWarn("Invalid incoming quic packet type ", type, "; dropping packet");
+            log::warning(logcat, "Invalid incoming quic packet type {}; dropping packet", type);
             return;
         }
         ep->receive_packet(remote, ecn, data);

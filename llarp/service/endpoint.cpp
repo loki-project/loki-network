@@ -573,7 +573,7 @@ namespace llarp::service
 
     bool Endpoint::HandleDataDrop(std::shared_ptr<path::Path> p, const HopID& dst, uint64_t seq)
     {
-        LogWarn(name(), " message ", seq, " dropped by endpoint ", p->pivot_router_id(), " via ", dst);
+        log::warning(logcat, "{} message (sqno:{}) dropped by pivot {} via {}", name(), seq, p->pivot_router_id(), dst);
         return true;
     }
 
@@ -707,7 +707,7 @@ namespace llarp::service
         {
             if (not f.sign(_identity))
             {
-                LogError("failed to sign auth reply result");
+                log::error(logcat, "Failed to sign auth reply result");
                 return;
             }
         }

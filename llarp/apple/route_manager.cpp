@@ -7,6 +7,8 @@
 
 namespace llarp::apple
 {
+    static auto logcat = log::Cat("apple.route_manager");
+
     void RouteManager::check_trampoline(bool enable)
     {
         if (trampoline_active == enable)
@@ -14,7 +16,7 @@ namespace llarp::apple
         auto router = context.router;
         if (!router)
         {
-            LogError("Cannot reconfigure to use DNS trampoline: no router");
+            log::error(logcat, "Cannot reconfigure to use DNS trampoline: no router");
             return;
         }
 
@@ -26,7 +28,7 @@ namespace llarp::apple
 
         if (!tun)
         {
-            LogError("Cannot reconfigure to use DNS trampoline: no tun endpoint found (!?)");
+            log::error(logcat, "Cannot reconfigure to use DNS trampoline: no tun endpoint found (!?)");
             return;
         }
 
