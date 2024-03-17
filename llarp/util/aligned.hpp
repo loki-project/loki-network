@@ -214,11 +214,12 @@ namespace llarp
             return true;
         }
 
+        // TODO: move to .cpp file to add static logcat def
         bool from_string(std::string_view b)
         {
             if (b.size() != sz)
             {
-                log::error(util_cat, "Error: buffer size mismatch in aligned buffer!");
+                log::error(logcat, "Error: buffer size mismatch in aligned buffer!");
                 return false;
             }
 
@@ -269,7 +270,7 @@ namespace llarp
             return true;
         }
 
-       private:
+      private:
         std::array<uint8_t, SIZE> _data;
     };
 

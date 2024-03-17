@@ -32,7 +32,7 @@ namespace llarp::net
             freeifaddrs(addrs);
         }
 
-       public:
+      public:
         std::string loopback_interface_name() const override
         {
             std::string ifname;

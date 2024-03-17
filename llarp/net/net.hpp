@@ -52,7 +52,7 @@ namespace llarp
         /// network platform (all methods virtual so it can be mocked by unit tests)
         class Platform
         {
-           public:
+          public:
             Platform() = default;
             virtual ~Platform() = default;
             Platform(const Platform&) = delete;
@@ -77,7 +77,7 @@ namespace llarp
                 {
                     ret.set_addr(&in6addr_any);
                 }
-                throw std::invalid_argument{fmt::format("{} is not a valid address family")};
+                throw std::invalid_argument{"{} is not a valid address family"_format(af)};
             }
 
             inline oxen::quic::Address wildcard_with_port(uint16_t port, int af = AF_INET) const

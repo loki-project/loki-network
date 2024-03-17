@@ -42,7 +42,7 @@ namespace llarp
     {
         std::unordered_set<dns::SRVData> _srv_records;
 
-       public:
+      public:
         bool _publish_introset = true;
 
         std::unordered_map<service::SessionTag, RouterID> _session_lookup;

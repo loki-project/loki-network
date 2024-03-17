@@ -34,7 +34,7 @@ namespace llarp::dns
         std::unique_ptr<UDPHandle> _udp;
         oxen::quic::Address _local_addr;
 
-       public:
+      public:
         explicit UDPReader(Server& dns, const loop_ptr& loop, oxen::quic::Address bind) : _dns{dns}
         {
             _udp = std::make_unique<UDPHandle>(loop, bind, [&](UDPPacket pkt) {
@@ -42,11 +42,12 @@ namespace llarp::dns
 
                 if (src == _local_addr)
                     return;
-
-                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
-                {
-                    log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
-                }
+                (void)_dns;
+                // TOFIX: this
+                // if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
+                // {
+                //     log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
+                // }
             });
 
             if (auto maybe_addr = bound_on())
@@ -94,7 +95,7 @@ namespace llarp::dns
             oxen::quic::Address resolverAddr;
             oxen::quic::Address askerAddr;
 
-           public:
+          public:
             explicit Query(
                 std::weak_ptr<Resolver> parent_,
                 Message query,
@@ -312,7 +313,7 @@ namespace llarp::dns
             // applied upstream DNS settings when turning on/off exit mode).
             llarp::DnsConfig m_conf;
 
-           public:
+          public:
             explicit Resolver(const std::shared_ptr<EventLoop>& loop, llarp::DnsConfig conf)
                 : _loop{loop}, m_conf{std::move(conf)}
             {

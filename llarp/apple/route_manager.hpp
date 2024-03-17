@@ -9,7 +9,7 @@ namespace llarp::apple
 {
     class RouteManager final : public llarp::vpn::AbstractRouteManager
     {
-       public:
+      public:
         RouteManager(llarp::Context& ctx, llarp_route_callbacks rcs, void* callback_context)
             : context{ctx}, callback_context{callback_context}, route_callbacks{std::move(rcs)}
         {}
@@ -37,7 +37,7 @@ namespace llarp::apple
             return std::vector<oxen::quic::Address>{};
         }
 
-       private:
+      private:
         llarp::Context& context;
         bool trampoline_active = false;
         void check_trampoline(bool enable);

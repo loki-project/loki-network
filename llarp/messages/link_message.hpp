@@ -4,7 +4,6 @@
 
 #include <llarp/path/path_types.hpp>
 #include <llarp/router_id.hpp>
-#include <llarp/util/bencode.hpp>
 
 #include <vector>
 
@@ -21,7 +20,7 @@ namespace llarp
     struct AbstractLinkMessage : private AbstractSerializable
     {
         std::shared_ptr<link::Connection> conn;
-        PathID_t pathid;
+        HopID pathid;
 
         uint64_t version = llarp::constants::proto_version;
 
@@ -32,8 +31,6 @@ namespace llarp
         std::string bt_encode() const override = 0;
 
         virtual bool handle_message(Router* router) const = 0;
-
-        virtual bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf) = 0;
 
         virtual void clear() = 0;
 

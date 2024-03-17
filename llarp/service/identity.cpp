@@ -33,18 +33,6 @@ namespace llarp::service
         }
     }
 
-    bool Identity::decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf)
-    {
-        bool read = false;
-        if (!BEncodeMaybeReadDictEntry("s", signkey, read, key, buf))
-            return false;
-        if (!BEncodeMaybeReadDictInt("v", version, read, key, buf))
-            return false;
-        if (not read)
-            return bencode_discard(buf);
-        return true;
-    }
-
     void Identity::Clear()
     {
         signkey.zero();
@@ -59,7 +47,7 @@ namespace llarp::service
         crypto::identity_keygen(signkey);
         crypto::encryption_keygen(enckey);
 
-        pub.Update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey));
+        pub.update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey));
 
         crypto::pqe_keygen(pq);
 
@@ -72,7 +60,7 @@ namespace llarp::service
     bool Identity::KeyExchange(
         path_dh_func dh, SharedSecret& result, const ServiceInfo& other, const KeyExchangeNonce& N) const
     {
-        return dh(result, other.EncryptionPublicKey(), enckey, N);
+        return dh(result, other.encryption_pubkey(), enckey, N);
     }
 
     bool Identity::Sign(Signature& sig, uint8_t* buf, size_t size) const
@@ -146,7 +134,7 @@ namespace llarp::service
         if (!vanity.is_zero())
             van = vanity;
         // update pubkeys
-        pub.Update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey), van);
+        pub.update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey), van);
         if (not crypto::derive_subkey_private(derivedSignKey, signkey, 1))
         {
             throw std::runtime_error("failed to derive subkey");
@@ -174,7 +162,7 @@ namespace llarp::service
 
         auto bte = i.bt_encode();
 
-        const SharedSecret k{i.address_keys.Addr()};
+        const SharedSecret k{i.address_keys.address()};
         crypto::xchacha20(reinterpret_cast<uint8_t*>(bte.data()), bte.size(), k, encrypted.nonce);
 
         std::memcpy(encrypted.introset_payload.data(), bte.data(), bte.size());

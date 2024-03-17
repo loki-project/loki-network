@@ -49,7 +49,7 @@ namespace llarp::handlers
         oxen::quic::Address _our_ip;  // maybe should be an IP type...?
         llarp::DnsConfig _config;
 
-       public:
+      public:
         explicit DnsInterceptor(udp_pkt_hook reply, oxen::quic::Address our_ip, llarp::DnsConfig conf)
             : _hook{std::move(reply)}, _our_ip{std::move(our_ip)}, _config{std::move(conf)}
         {}
@@ -60,8 +60,11 @@ namespace llarp::handlers
         {
             if (data.empty())
                 return;
-
-            _hook(data.make_udp(to, from));
+            // TOFIX: this
+            (void)to;
+            (void)from;
+            (void)data;
+            // _hook(data.make_udp(to, from));
         }
 
         void stop() override{};
@@ -95,11 +98,11 @@ namespace llarp::handlers
 
     class TunDNS : public dns::Server
     {
-        TunEndpoint* const _tun;
+        const TunEndpoint* _tun;
         std::optional<oxen::quic::Address> _query_bind;
         oxen::quic::Address _our_ip;
 
-       public:
+      public:
         std::shared_ptr<dns::PacketSource_Base> pkt_source;
 
         ~TunDNS() override = default;
@@ -149,13 +152,15 @@ namespace llarp::handlers
                 // if (const auto& reply = pkt.reply)
                 //     dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
 
-                auto& pkt_path = pkt.path;
+                // auto& pkt_path = pkt.path;
 
-                if (dns->maybe_handle_packet(
-                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
-                    return;
-
-                handle_user_packet(IPPacket::from_udp(pkt));
+                // if (dns->maybe_handle_packet(
+                //         std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
+                //     return;
+                // TOFIX:
+                (void)this;
+                (void)pkt;
+                // handle_user_packet(IPPacket::from_udp(pkt));
             });
         }
         else
@@ -326,7 +331,7 @@ namespace llarp::handlers
             _if_name = *maybe;
         }
 
-        _local_range = conf._local_if_range;
+        _local_range = conf._local_ip_range;
 
         if (!_local_range.address().is_addressable())
         {
@@ -982,7 +987,7 @@ namespace llarp::handlers
         llarp::LogInfo(name(), " set ", _if_name, " to have address ", _local_ip);
         llarp::LogInfo(name(), " allocated up to ", _max_ip, " on range ", _local_range);
 
-        const service::Address ourAddr = _identity.pub.Addr();
+        const service::Address ourAddr = _identity.pub.address();
 
         if (not map_address(ourAddr, get_if_addr(), false))
         {
@@ -1291,7 +1296,7 @@ namespace llarp::handlers
     bool TunEndpoint::handle_inbound_packet(
         const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t seqno)
     {
-        LogTrace("Inbound ", t, " packet (", buf.sz, "B) on convo ", tag);
+        log::trace(logcat, "Inbound packet on session:{}", tag);
 
         // if (t == service::ProtocolType::QUIC)
         // {

@@ -14,11 +14,6 @@ namespace llarp
     namespace log = oxen::log;
 }
 
-namespace
-{
-    static auto util_cat = llarp::log::Cat("lokinet.util");
-}  // namespace
-
 // Not ready to pollute these deprecation warnings everywhere yet
 #if 0
 #define LOKINET_LOG_DEPRECATED(Meth) [[deprecated("Use formatted log::" #Meth "(cat, fmt, args...) instead")]]

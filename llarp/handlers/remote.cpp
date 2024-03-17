@@ -5,6 +5,8 @@
 
 namespace llarp::handlers
 {
+    static auto logcat = log::Cat("remote_handler");
+
     RemoteHandler::RemoteHandler(std::string name, Router& r)
         : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}, _name{std::move(name)}
     {}
@@ -128,7 +130,7 @@ namespace llarp::handlers
         //   should_init_tun = false;
         // }
 
-        _ip_range = _net_config._local_if_range;
+        _ip_range = _net_config._local_ip_range;
 
         if (!_ip_range.address().is_addressable())
         {

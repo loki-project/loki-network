@@ -31,7 +31,7 @@ namespace llarp::win32
 
         void route_via_interface(NetworkInterface& vpn, std::string addr, std::string mask, std::string cmd);
 
-       public:
+      public:
         VPNPlatform(const VPNPlatform&) = delete;
         VPNPlatform(VPNPlatform&&) = delete;
 

@@ -23,10 +23,10 @@ namespace llarp::handlers
     */
     struct BaseHandler
     {
-       protected:
+      protected:
         Router& _router;
 
-       public:
+      public:
         BaseHandler(Router& r) : _router{r}
         {}
 

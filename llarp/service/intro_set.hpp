@@ -8,7 +8,6 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/traffic_policy.hpp>
-#include <llarp/util/bencode.hpp>
 #include <llarp/util/time.hpp>
 #include <llarp/util/types.hpp>
 
@@ -72,12 +71,9 @@ namespace llarp::service
 
         std::string bt_encode() const;
 
-        bool BDecode(llarp_buffer_t* buf)
-        {
-            return bencode_decode_dict(*this, buf);
-        }
+        bool bt_decode(std::string_view buf);
 
-        bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
         bool verify(llarp_time_t now) const;
 
@@ -126,12 +122,9 @@ namespace llarp::service
 
         std::string bt_encode() const;
 
-        bool BDecode(llarp_buffer_t* buf)
-        {
-            return bencode_decode_dict(*this, buf);
-        }
+        bool bt_decode(std::string_view buf);
 
-        bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
         bool OtherIsNewer(const EncryptedIntroSet& other) const;
 

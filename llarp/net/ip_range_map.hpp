@@ -131,7 +131,7 @@ namespace llarp::net
             return obj;
         }
 
-       private:
+      private:
         Container_t m_Entries;
     };
 }  // namespace llarp::net

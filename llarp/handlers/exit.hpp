@@ -131,7 +131,7 @@ namespace llarp::handlers
         /// async obtain snode session and call callback when it's ready to send
         void ObtainSNodeSession(const RouterID& rid, exit::SessionReadyFunc obtain_cb);
 
-       private:
+      private:
         huint128_t AllocateNewAddress();
 
         /// obtain ip for service node session, creates a new session if one does

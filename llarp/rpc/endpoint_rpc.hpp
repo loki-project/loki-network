@@ -35,7 +35,7 @@ namespace llarp::rpc
 
         bool auth_async_pending(service::ConvoTag tag) const override;
 
-       private:
+      private:
         const std::string m_AuthURL;
         const std::string m_AuthMethod;
         const Whitelist_t m_AuthWhitelist;

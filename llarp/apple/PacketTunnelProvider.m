@@ -10,11 +10,11 @@
 {
     void* lokinet;
     llarp_incoming_packet packet_buf[LLARP_APPLE_PACKET_BUF_SIZE];
-   @public
+  @public
     NEPacketTunnelNetworkSettings* settings;
-   @public
+  @public
     NEIPv4Route* tun_route4;
-   @public
+  @public
     NEIPv6Route* tun_route6;
     LLARPDNSTrampoline* dns_tramp;
 }

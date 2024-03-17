@@ -1,6 +1,5 @@
 #include "tunnel.hpp"
 
-#include <llarp/ev/libuv.hpp>
 #include <llarp/service/endpoint.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/service/tag.hpp>

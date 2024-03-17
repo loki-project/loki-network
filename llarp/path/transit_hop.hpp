@@ -119,7 +119,7 @@ namespace llarp
 
             void QueueDestroySelf(Router* r);
 
-           private:
+          private:
             void SetSelfDestruct();
         };
     }  // namespace path

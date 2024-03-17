@@ -128,7 +128,7 @@ namespace llarp::win32
                 return _uid;
             }
 
-           public:
+          public:
             explicit WintunAdapter(std::string name)
             {
                 _handle = make_adapter(std::move(name), PoolName);
@@ -192,7 +192,7 @@ namespace llarp::win32
             std::atomic<bool> ended{false};
             static_assert(std::atomic<bool>::is_always_lock_free);
 
-           public:
+          public:
             WintunSession() : _impl{nullptr}, _handle{nullptr}
             {}
 
@@ -268,7 +268,7 @@ namespace llarp::win32
 
             inline static constexpr size_t packet_queue_length = 1024;
 
-           public:
+          public:
             WintunInterface(vpn::InterfaceInfo info, Router* router)
                 : vpn::NetworkInterface{std::move(info)},
                   _router{router},

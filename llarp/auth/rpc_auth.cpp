@@ -49,7 +49,7 @@ namespace llarp::auth
     {
         service::SessionTag tag = msg->tag;
         _pending_sessions.insert(tag);
-        const auto from = msg->sender.Addr();
+        const auto from = msg->sender.address();
         auto reply = _ep->loop()->make_caller([this, tag, hook](std::string code, bool success) {
             _pending_sessions.erase(tag);
             hook(code, success);
@@ -91,7 +91,7 @@ namespace llarp::auth
             return;
         }
 
-        const auto authinfo = msg->EncodeAuthInfo();
+        const auto authinfo = msg->encode_auth_info();
         std::string_view metainfo{authinfo.data(), authinfo.size()};
         // call method with 2 parameters: metainfo and userdata
         _omq->request(

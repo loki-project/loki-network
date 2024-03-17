@@ -1,6 +1,6 @@
 #include "traffic_policy.hpp"
 
-#include <llarp/util/bencode.hpp>
+#include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
 
 namespace llarp::net
@@ -92,7 +92,7 @@ namespace llarp::net
 
         auto& dest = pkt.path.remote;
         ipv4 addrv4{oxenc::big_to_host<uint32_t>(dest.in4().sin_addr.s_addr)};
-        ipv6 addrv6{dest.in6().sin6_addr.s6_addr};
+        ipv6 addrv6{&dest.in6().sin6_addr};
 
         auto is_ipv4 = dest.is_ipv4();
 
@@ -112,40 +112,42 @@ namespace llarp::net
         return false;
     }
 
-    bool ProtocolInfo::BDecode(llarp_buffer_t* buf)
+    void ProtocolInfo::bt_decode(oxenc::bt_list_consumer& btlc)
+    {
+        try
+        {
+            protocol = IPProtocol{btlc.consume_integer<uint8_t>()};
+
+            if (not btlc.is_finished())
+                port = btlc.consume_integer<uint16_t>();
+        }
+        catch (...)
+        {
+            log::critical(logcat, "ProtocolInfo parsing exception");
+            throw;
+        }
+    }
+
+    bool ProtocolInfo::bt_decode(std::string_view buf)
     {
         port = std::nullopt;
 
         std::vector<uint64_t> vals;
 
-        if (not bencode_read_list(
-                [&vals](llarp_buffer_t* buf, bool more) {
-                    if (more)
-                    {
-                        uint64_t intval;
-                        if (not bencode_read_integer(buf, &intval))
-                            return false;
-                        vals.push_back(intval);
-                    }
-                    return true;
-                },
-                buf))
-            return false;
-        if (vals.empty())
-            return false;
-        if (vals.size() >= 1)
+        try
         {
-            if (vals[0] > 255)
-                return false;
-            protocol = static_cast<IPProtocol>(vals[0]);
-        }
-        if (vals.size() >= 2)
-        {
-            if (vals[1] > 65536)
-                return false;
+            oxenc::bt_list_consumer btlc{buf};
 
-            port = vals[1];
+            bt_decode(btlc);
         }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "ProtocolInfo parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
         return true;
     }
 
@@ -154,7 +156,7 @@ namespace llarp::net
         try
         {
             btlp.append(static_cast<uint8_t>(protocol));
-            btlp.append(port);
+            btlp.append(port.value_or(0));
         }
         catch (...)
         {
@@ -181,16 +183,33 @@ namespace llarp::net
         try
         {
             {
-                auto sublist = btdc.consume_list_consumer();
+                auto [key, sublist] = btdc.next_list_consumer();
+
+                if (key != "p")
+                    throw std::invalid_argument{"Unexpected key (expected:'p', actual:'{}')"_format(key)};
+
                 while (not sublist.is_finished())
                 {
                     protocols.emplace(sublist.consume_string());
+                }
+            }
+
+            {
+                auto [key, sublist] = btdc.next_list_consumer();
+
+                if (key != "r")
+                    throw std::invalid_argument{"Unexpected key (expected:'r', actual:'{}')"_format(key)};
+
+                while (not sublist.is_finished())
+                {
+                    ranges.emplace(sublist.consume_string());
                 }
             }
         }
         catch (...)
         {
             log::critical(logcat, "Error: TrafficPolicy failed to populate with bt encoded contents");
+            throw;
         }
     }
 
@@ -216,25 +235,23 @@ namespace llarp::net
         }
     }
 
-    bool TrafficPolicy::BDecode(llarp_buffer_t* buf)
+    bool TrafficPolicy::bt_decode(std::string_view buf)
     {
-        return bencode_read_dict(
-            [&](llarp_buffer_t* buffer, llarp_buffer_t* key) -> bool {
-                if (key == nullptr)
-                    return true;
-                if (key->startswith("p"))
-                {
-                    // TOFIX: GFY here as well
-                    // return BEncodeReadSet(protocols, buffer);
-                }
-                if (key->startswith("r"))
-                {
-                    // TOFIX: GFY here as well
-                    // return BEncodeReadSet(ranges, buffer);
-                }
-                return bencode_discard(buffer);
-            },
-            buf);
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "TrafficPolicy parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
     StatusObject ProtocolInfo::ExtractStatus() const

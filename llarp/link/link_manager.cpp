@@ -20,6 +20,8 @@
 
 namespace llarp
 {
+    static auto logcat = llarp::log::Cat("quic");
+
     static ustring_view static_shared_key = "Lokinet static shared secret key"_usv;
 
     static static_secret make_static_secret(const SecretKey& sk)
@@ -434,20 +436,20 @@ namespace llarp
     void LinkManager::on_conn_closed(oxen::quic::connection_interface& ci, uint64_t ec)
     {
         _router.loop()->call([this, ref_id = ci.reference_id(), rid = RouterID{ci.remote_key()}, error_code = ec]() {
-            log::critical(quic_cat, "Purging quic connection {} (ec:{})", ref_id, error_code);
+            log::critical(logcat, "Purging quic connection {} (ec:{})", ref_id, error_code);
 
             if (auto s_itr = ep.service_conns.find(rid); s_itr != ep.service_conns.end())
             {
-                log::critical(quic_cat, "Quic connection to relay RID:{} purged successfully", rid);
+                log::critical(logcat, "Quic connection to relay RID:{} purged successfully", rid);
                 ep.service_conns.erase(s_itr);
             }
             else if (auto c_itr = ep.client_conns.find(rid); c_itr != ep.client_conns.end())
             {
-                log::critical(quic_cat, "Quic connection to client RID:{} purged successfully", rid);
+                log::critical(logcat, "Quic connection to client RID:{} purged successfully", rid);
                 ep.client_conns.erase(c_itr);
             }
             else
-                log::critical(quic_cat, "Nothing to purge for quic connection {}", ref_id);
+                log::critical(logcat, "Nothing to purge for quic connection {}", ref_id);
         });
     }
 
@@ -513,7 +515,7 @@ namespace llarp
             connect_to(*rc, std::move(on_open), std::move(on_close));
         }
         else
-            log::warning(quic_cat, "Could not find RouterContact for connection to rid:{}", rid);
+            log::warning(logcat, "Could not find RouterContact for connection to rid:{}", rid);
     }
 
     void LinkManager::connect_and_send(
@@ -536,14 +538,14 @@ namespace llarp
                     std::move(func));
                 rv)
             {
-                log::info(quic_cat, "Begun establishing connection to {}", remote_addr);
+                log::info(logcat, "Begun establishing connection to {}", remote_addr);
                 return;
             }
 
-            log::warning(quic_cat, "Failed to begin establishing connection to {}", remote_addr);
+            log::warning(logcat, "Failed to begin establishing connection to {}", remote_addr);
         }
         else
-            log::error(quic_cat, "Error: Could not find RC for connection to rid:{}, message not sent!", router);
+            log::error(logcat, "Error: Could not find RC for connection to rid:{}, message not sent!", router);
     }
 
     void LinkManager::connect_to(const RemoteRC& rc, conn_open_hook on_open, conn_closed_hook on_close)
@@ -564,10 +566,10 @@ namespace llarp
                 oxen::quic::RemoteAddress{rid.ToView(), remote_addr}, rc, std::move(on_open), std::move(on_close));
             rv)
         {
-            log::info(quic_cat, "Begun establishing connection to {}", remote_addr);
+            log::info(logcat, "Begun establishing connection to {}", remote_addr);
             return;
         }
-        log::warning(quic_cat, "Failed to begin establishing connection to {}", remote_addr);
+        log::warning(logcat, "Failed to begin establishing connection to {}", remote_addr);
     }
 
     bool LinkManager::have_connection_to(const RouterID& remote) const
@@ -705,17 +707,17 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(link_cat, "Exception handling GossipRC request: {}", e.what());
+            log::critical(logcat, "Exception handling GossipRC request: {}", e.what());
             return;
         }
 
         if (node_db->verify_store_gossip_rc(rc))
         {
-            log::critical(link_cat, "Received updated RC, forwarding to relay peers.");
+            log::critical(logcat, "Received updated RC, forwarding to relay peers.");
             gossip_rc(_router.local_rid(), rc);
         }
         else
-            log::debug(link_cat, "Received known or old RC, not storing or forwarding.");
+            log::debug(logcat, "Received known or old RC, not storing or forwarding.");
     }
 
     // TODO: can probably use ::send_control_message instead. Need to discuss the potential
@@ -760,7 +762,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(link_cat, "Exception handling RC Fetch request (body:{}): {}", m.body(), e.what());
+            log::critical(logcat, "Exception handling RC Fetch request (body:{}): {}", m.body(), e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -855,7 +857,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(link_cat, "Exception handling RC Fetch request: {}", e.what());
+            log::critical(logcat, "Exception handling RC Fetch request: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -924,7 +926,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(link_cat, "Error fulfilling FetchRIDs request: {}", e.what());
+            log::critical(logcat, "Error fulfilling FetchRIDs request: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -982,7 +984,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             respond(messages::ERROR_RESPONSE);
             return;
         }
@@ -1001,7 +1003,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "FindNameMessage request timed out!");
+            log::info(logcat, "FindNameMessage request timed out!");
             return;
         }
 
@@ -1014,7 +1016,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1026,17 +1028,17 @@ namespace llarp
         {
             if (payload == "ERROR")
             {
-                log::info(link_cat, "FindNameMessage failed with unkown error!");
+                log::info(logcat, "FindNameMessage failed with unkown error!");
 
                 // resend?
             }
             else if (payload == FindNameMessage::NOT_FOUND)
             {
-                log::info(link_cat, "FindNameMessage failed with unkown error!");
+                log::info(logcat, "FindNameMessage failed with unkown error!");
                 // what to do here?
             }
             else
-                log::info(link_cat, "FindNameMessage failed with unkown error!");
+                log::info(logcat, "FindNameMessage failed with unkown error!");
         }
     }
 
@@ -1064,7 +1066,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             respond(messages::ERROR_RESPONSE);
             return;
         }
@@ -1075,14 +1077,14 @@ namespace llarp
 
         if (not service::EncryptedIntroSet::verify(introset, derived_signing_key, sig))
         {
-            log::error(link_cat, "Received PublishIntroMessage with invalid introset: {}", introset);
+            log::error(logcat, "Received PublishIntroMessage with invalid introset: {}", introset);
             respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_INTROSET}}));
             return;
         }
 
         if (now + service::MAX_INTROSET_TIME_DELTA > signed_at + path::DEFAULT_LIFETIME)
         {
-            log::error(link_cat, "Received PublishIntroMessage with expired introset: {}", introset);
+            log::error(logcat, "Received PublishIntroMessage with expired introset: {}", introset);
             respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::EXPIRED}}));
             return;
         }
@@ -1091,7 +1093,7 @@ namespace llarp
 
         if (closest_rcs.size() != INTROSET_STORAGE_REDUNDANCY)
         {
-            log::error(link_cat, "Received PublishIntroMessage but only know {} nodes", closest_rcs.size());
+            log::error(logcat, "Received PublishIntroMessage but only know {} nodes", closest_rcs.size());
             respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INSUFFICIENT}}));
             return;
         }
@@ -1102,12 +1104,12 @@ namespace llarp
         {
             if (relay_order >= INTROSET_STORAGE_REDUNDANCY)
             {
-                log::error(link_cat, "Received PublishIntroMessage with invalide relay order: {}", relay_order);
+                log::error(logcat, "Received PublishIntroMessage with invalide relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_ORDER}}));
                 return;
             }
 
-            log::info(link_cat, "Relaying PublishIntroMessage for {}", addr);
+            log::info(logcat, "Relaying PublishIntroMessage for {}", addr);
 
             const auto& peer_rc = closest_rcs[relay_order];
             const auto& peer_key = peer_rc.router_id();
@@ -1115,7 +1117,7 @@ namespace llarp
             if (peer_key == local_key)
             {
                 log::info(
-                    link_cat,
+                    logcat,
                     "Received PublishIntroMessage in which we are peer index {}.. storing introset",
                     relay_order);
 
@@ -1124,7 +1126,7 @@ namespace llarp
             }
             else
             {
-                log::info(link_cat, "Received PublishIntroMessage; propagating to peer index {}", relay_order);
+                log::info(logcat, "Received PublishIntroMessage; propagating to peer index {}", relay_order);
 
                 send_control_message(
                     peer_key,
@@ -1154,13 +1156,13 @@ namespace llarp
 
         if (rc_index >= 0)
         {
-            log::info(link_cat, "Received PublishIntroMessage for {} (TXID: {}); we are candidate {}");
+            log::info(logcat, "Received PublishIntroMessage for {} (TXID: {}); we are candidate {}");
 
             _router.contacts().put_intro(std::move(enc));
             respond(serialize_response({{messages::STATUS_KEY, ""}}));
         }
         else
-            log::warning(link_cat, "Received non-relayed PublishIntroMessage from {}; we are not the candidate", addr);
+            log::warning(logcat, "Received non-relayed PublishIntroMessage from {}; we are not the candidate", addr);
     }
 
     // DISCUSS: I feel like ::handle_publish_intro_response should be the callback that handles the
@@ -1170,7 +1172,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "PublishIntroMessage timed out!");
+            log::info(logcat, "PublishIntroMessage timed out!");
             return;
         }
 
@@ -1183,7 +1185,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1195,12 +1197,12 @@ namespace llarp
         {
             if (payload == "ERROR")
             {
-                log::info(link_cat, "PublishIntroMessage failed with remote exception!");
+                log::info(logcat, "PublishIntroMessage failed with remote exception!");
                 // Do something smart here probably
                 return;
             }
 
-            log::info(link_cat, "PublishIntroMessage failed with error code: {}", payload);
+            log::info(logcat, "PublishIntroMessage failed with error code: {}", payload);
 
             if (payload == PublishIntroMessage::INVALID_INTROSET)
             {
@@ -1232,7 +1234,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             respond(messages::ERROR_RESPONSE);
             return;
         }
@@ -1243,7 +1245,7 @@ namespace llarp
         {
             if (relay_order >= INTROSET_STORAGE_REDUNDANCY)
             {
-                log::warning(link_cat, "Received FindIntroMessage with invalid relay order: {}", relay_order);
+                log::warning(logcat, "Received FindIntroMessage with invalid relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INVALID_ORDER}}));
                 return;
             }
@@ -1252,12 +1254,12 @@ namespace llarp
 
             if (closest_rcs.size() != INTROSET_STORAGE_REDUNDANCY)
             {
-                log::error(link_cat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
+                log::error(logcat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INSUFFICIENT_NODES}}));
                 return;
             }
 
-            log::info(link_cat, "Relaying FindIntroMessage for {}", addr);
+            log::info(logcat, "Relaying FindIntroMessage for {}", addr);
 
             const auto& peer_rc = closest_rcs[relay_order];
             const auto& peer_key = peer_rc.router_id();
@@ -1269,14 +1271,14 @@ namespace llarp
                 [respond = std::move(respond)](oxen::quic::message relay_response) mutable {
                     if (relay_response)
                         log::info(
-                            link_cat,
+                            logcat,
                             "Relayed FindIntroMessage returned successful response; transmitting "
                             "to initial "
                             "requester");
                     else if (relay_response.timed_out)
-                        log::critical(link_cat, "Relayed FindIntroMessage timed out! Notifying initial requester");
+                        log::critical(logcat, "Relayed FindIntroMessage timed out! Notifying initial requester");
                     else
-                        log::critical(link_cat, "Relayed FindIntroMessage failed! Notifying initial requester");
+                        log::critical(logcat, "Relayed FindIntroMessage failed! Notifying initial requester");
 
                     respond(relay_response.body_str());
                 });
@@ -1287,7 +1289,7 @@ namespace llarp
                 respond(serialize_response({{"INTROSET", maybe_intro->bt_encode()}}));
             else
             {
-                log::warning(link_cat, "Received FindIntroMessage with relayed == false and no local introset entry");
+                log::warning(logcat, "Received FindIntroMessage with relayed == false and no local introset entry");
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::NOT_FOUND}}));
             }
         }
@@ -1297,7 +1299,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "FindIntroMessage timed out!");
+            log::info(logcat, "FindIntroMessage timed out!");
             return;
         }
 
@@ -1310,7 +1312,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1322,7 +1324,7 @@ namespace llarp
         }
         else
         {
-            log::info(link_cat, "FindIntroMessage failed with error: {}", payload);
+            log::info(logcat, "FindIntroMessage failed with error: {}", payload);
             // Do something smart here probably
         }
     }
@@ -1331,7 +1333,7 @@ namespace llarp
     {
         if (!_router.path_context().is_transit_allowed())
         {
-            log::warning(link_cat, "got path build request when not permitting transit");
+            log::warning(logcat, "got path build request when not permitting transit");
             m.respond(PathBuildMessage::NO_TRANSIT, true);
             return;
         }
@@ -1341,7 +1343,7 @@ namespace llarp
             auto payload_list = oxenc::bt_deserialize<std::deque<ustring>>(m.body());
             if (payload_list.size() != path::MAX_LEN)
             {
-                log::info(link_cat, "Path build message with wrong number of frames");
+                log::info(logcat, "Path build message with wrong number of frames");
                 m.respond(PathBuildMessage::BAD_FRAMES, true);
                 return;
             }
@@ -1359,7 +1361,7 @@ namespace llarp
             // derive shared secret using ephemeral pubkey and our secret key (and nonce)
             if (!crypto::dh_server(shared.data(), other_pubkey.data(), _router.pubkey(), outer_nonce.data()))
             {
-                log::info(link_cat, "DH server initialization failed during path build");
+                log::info(logcat, "DH server initialization failed during path build");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
@@ -1368,13 +1370,13 @@ namespace llarp
             ShortHash digest;
             if (!crypto::hmac(digest.data(), frame.data(), frame.size(), shared))
             {
-                log::error(link_cat, "HMAC failed on path build request");
+                log::error(logcat, "HMAC failed on path build request");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
             if (!std::equal(digest.begin(), digest.end(), hash.data()))
             {
-                log::info(link_cat, "HMAC mismatch on path build request");
+                log::info(logcat, "HMAC mismatch on path build request");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
@@ -1382,7 +1384,7 @@ namespace llarp
             // decrypt frame with our hop info
             if (!crypto::xchacha20(hop_payload.data(), hop_payload.size(), shared.data(), outer_nonce.data()))
             {
-                log::info(link_cat, "Decrypt failed on path build request");
+                log::info(logcat, "Decrypt failed on path build request");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
@@ -1406,7 +1408,7 @@ namespace llarp
 
             if (hop->info.txID.is_zero() || hop->info.rxID.is_zero())
             {
-                log::warning(link_cat, "Invalid PathID; PathIDs must be non-zero");
+                log::warning(logcat, "Invalid PathID; PathIDs must be non-zero");
                 m.respond(PathBuildMessage::BAD_PATHID, true);
                 return;
             }
@@ -1415,14 +1417,14 @@ namespace llarp
 
             if (_router.path_context().has_transit_hop(hop->info))
             {
-                log::warning(link_cat, "Invalid PathID; PathIDs must be unique");
+                log::warning(logcat, "Invalid PathID; PathIDs must be unique");
                 m.respond(PathBuildMessage::BAD_PATHID, true);
                 return;
             }
 
             if (!crypto::dh_server(hop->pathKey.data(), other_pubkey.data(), _router.pubkey(), inner_nonce.data()))
             {
-                log::warning(link_cat, "DH failed during path build.");
+                log::warning(logcat, "DH failed during path build.");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
@@ -1436,7 +1438,7 @@ namespace llarp
 
             if (hop->lifetime >= path::DEFAULT_LIFETIME)
             {
-                log::warning(link_cat, "Path build attempt with too long of a lifetime.");
+                log::warning(logcat, "Path build attempt with too long of a lifetime.");
                 m.respond(PathBuildMessage::BAD_LIFETIME, true);
                 return;
             }
@@ -1478,23 +1480,23 @@ namespace llarp
                     if (m)
                     {
                         log::info(
-                            link_cat,
+                            logcat,
                             "Upstream returned successful path build response; giving hop info to "
                             "Router, "
                             "then relaying response");
                         _router.path_context().put_transit_hop(hop);
                     }
                     if (m.timed_out)
-                        log::info(link_cat, "Upstream timed out on path build; relaying timeout");
+                        log::info(logcat, "Upstream timed out on path build; relaying timeout");
                     else
-                        log::info(link_cat, "Upstream returned path build failure; relaying response");
+                        log::info(logcat, "Upstream returned path build failure; relaying response");
 
                     prev_message.respond(m.body_str(), m.is_error());
                 });
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1508,7 +1510,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1522,7 +1524,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             // m.respond(serialize_response({{messages::STATUS_KEY, "EXCEPTION"}}), true);
             return;
         }
@@ -1536,7 +1538,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1550,7 +1552,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1575,7 +1577,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             throw;
         }
@@ -1596,7 +1598,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "ObtainExitMessage timed out!");
+            log::info(logcat, "ObtainExitMessage timed out!");
             return;
         }
         if (m.is_error())
@@ -1618,7 +1620,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             throw;
         }
 
@@ -1645,7 +1647,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1672,7 +1674,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "UpdateExitMessage timed out!");
+            log::info(logcat, "UpdateExitMessage timed out!");
             return;
         }
         if (m.is_error())
@@ -1695,7 +1697,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1730,7 +1732,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1756,7 +1758,7 @@ namespace llarp
     {
         if (m.timed_out)
         {
-            log::info(link_cat, "CloseExitMessage timed out!");
+            log::info(logcat, "CloseExitMessage timed out!");
             return;
         }
         if (m.is_error())
@@ -1779,7 +1781,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1804,7 +1806,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1853,7 +1855,7 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    log::warning(link_cat, "Exception: {}", e.what());
+                    log::warning(logcat, "Exception: {}", e.what());
                     return;
                 }
 
@@ -1876,7 +1878,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
 
@@ -1885,7 +1887,7 @@ namespace llarp
 
         if (itr == path_requests.end())
         {
-            log::info(link_cat, "Received path control request \"{}\", which has no handler.", method);
+            log::info(logcat, "Received path control request \"{}\", which has no handler.", method);
             return;
         }
 
@@ -1904,7 +1906,7 @@ namespace llarp
     {
         if (not m)
         {
-            log::info(link_cat, "Path control message timed out!");
+            log::info(logcat, "Path control message timed out!");
             return;
         }
 
@@ -1914,7 +1916,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(link_cat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
     }

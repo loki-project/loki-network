@@ -12,7 +12,7 @@ namespace llarp::apple
 
     class VPNInterface final : public vpn::NetworkInterface, public std::enable_shared_from_this<VPNInterface>
     {
-       public:
+      public:
         using packet_write_callback = std::function<bool(int af_family, void* data, int size)>;
         using on_readable_callback = std::function<void(VPNInterface&)>;
 
@@ -30,7 +30,7 @@ namespace llarp::apple
 
         void MaybeWakeUpperLayers() const override;
 
-       private:
+      private:
         // Function for us to call when we have a packet to emit.  Should return true if the packet
         // was handed off to the OS successfully.
         packet_write_callback _pkt_writer;

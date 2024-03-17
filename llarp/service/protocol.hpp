@@ -9,7 +9,6 @@
 #include <llarp/ev/loop.hpp>
 #include <llarp/path/pathhandler.hpp>
 #include <llarp/service/tag.hpp>
-#include <llarp/util/bencode.hpp>
 #include <llarp/util/time.hpp>
 
 #include <vector>
@@ -35,7 +34,7 @@ namespace llarp
     {
         struct Endpoint;
 
-        constexpr std::size_t MAX_PROTOCOL_MESSAGE_SIZE = 2048 * 2;
+        inline constexpr std::size_t MAX_PROTOCOL_MESSAGE_SIZE{4096};
 
         /// inner message
         struct ProtocolMessage
@@ -46,22 +45,24 @@ namespace llarp
             ProtocolType proto = ProtocolType::TrafficV4;
             llarp_time_t queued = 0s;
             std::vector<uint8_t> payload;  // encrypted AbstractLinkMessage
-            Introduction introReply;
+            Introduction intro_reply;
             ServiceInfo sender;
             Endpoint* handler = nullptr;
             SessionTag tag;
             std::chrono::milliseconds creation_time{time_now_ms()};
 
             /// encode metainfo for lmq endpoint auth
-            std::vector<char> EncodeAuthInfo() const;
-
-            bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* val);
+            std::vector<char> encode_auth_info() const;
 
             std::string bt_encode() const;
 
+            bool bt_decode(std::string_view buf);
+
+            void bt_decode(oxenc::bt_dict_consumer& btdc);
+
             void put_buffer(std::string buf);
 
-            static void ProcessAsync(std::shared_ptr<path::Path> p, HopID from, std::shared_ptr<ProtocolMessage> self);
+            static void process_async(std::shared_ptr<path::Path> p, HopID from, std::shared_ptr<ProtocolMessage> self);
 
             bool operator>(const ProtocolMessage& other) const
             {
@@ -98,19 +99,18 @@ namespace llarp
 
             ProtocolFrameMessage& operator=(const ProtocolFrameMessage& other) = default;
 
-            bool EncryptAndSign(const ProtocolMessage& msg, const SharedSecret& sharedkey, const Identity& localIdent);
+            bool encrypt_and_sign(
+                const ProtocolMessage& msg, const SharedSecret& sharedkey, const Identity& localIdent);
 
-            bool Sign(const Identity& localIdent);
+            bool sign(const Identity& localIdent);
 
-            bool AsyncDecryptAndVerify(
+            bool async_decrypt_verify(
                 std::shared_ptr<path::Path> fromPath,
                 const Identity& localIdent,
                 Endpoint* handler,
                 std::function<void(std::shared_ptr<ProtocolMessage>)> hook = nullptr) const;
 
-            bool DecryptPayloadInto(const SharedSecret& sharedkey, ProtocolMessage& into) const;
-
-            bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* val);
+            bool decrypt_payload_to_message(const SharedSecret& sharedkey, ProtocolMessage& into) const;
 
             /** Note: this method needs to be re-examined where it is called in the other class
                methods, like ::Sign(), ::EncryptAndSign(), and ::Verify(). In all 3 of these cases,
@@ -130,7 +130,7 @@ namespace llarp
                 flag = 0;
             }
 
-            bool Verify(const ServiceInfo& from) const;
+            bool verify(const ServiceInfo& from) const;
 
             bool handle_message(Router* r) const;
         };

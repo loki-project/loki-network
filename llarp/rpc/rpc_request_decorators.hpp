@@ -25,10 +25,10 @@ namespace llarp::rpc
     //  Base class that all RPC requests will expand for each endpoint type
     struct RPCRequest
     {
-       private:
+      private:
         bool bt = false;
 
-       public:
+      public:
         //  Returns true if response is bt-encoded, and false for json
         //  Note: do not set value
         bool is_bt() const

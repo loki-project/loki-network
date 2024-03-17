@@ -14,7 +14,7 @@ namespace llarp::vpn
 {
     class permission_error : public std::runtime_error
     {
-       public:
+      public:
         using std::runtime_error::runtime_error;
     };
 

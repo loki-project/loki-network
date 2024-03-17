@@ -264,10 +264,10 @@ namespace llarp::service
         /// endpoint. Returns nullptr if quic is not supported.
         link::TunnelManager* GetQUICTunnel() override;
 
-       protected:
+      protected:
         void regen_and_publish_introset();
 
-       private:
+      private:
         bool DoNetworkIsolation(bool failed);
 
         virtual bool SetupNetworking()
@@ -285,7 +285,7 @@ namespace llarp::service
         /// return true if we are ready to do outbound and inbound traffic
         bool ReadyForNetwork() const;
 
-       protected:
+      protected:
         bool ReadyToDoLookup(size_t num_paths) const;
 
         auto GetUniqueEndpointsForLookup() const;
@@ -328,11 +328,11 @@ namespace llarp::service
         Identity _identity;
         std::unique_ptr<link::TunnelManager> _tunnel_manager;
 
-       private:
+      private:
         llarp_time_t _last_introset_regen_attempt = 0s;
         std::set<RouterID> snode_blacklist;
 
-       protected:
+      protected:
         friend struct EndpointUtil;
     };
 }  // namespace llarp::service

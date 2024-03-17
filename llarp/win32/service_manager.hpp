@@ -15,7 +15,7 @@ namespace llarp::sys
     {
         SERVICE_STATUS _status;
 
-       public:
+      public:
         SERVICE_STATUS_HANDLE handle;
 
         // How long we tell Windows to give us to startup before assuming we have stalled/hung.  The

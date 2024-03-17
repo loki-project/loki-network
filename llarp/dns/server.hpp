@@ -20,14 +20,14 @@ namespace llarp::dns
     /// a job handling 1 dns query
     class QueryJob_Base
     {
-       protected:
+      protected:
         /// the original dns query
         Message _query;
 
         /// True if we've sent a reply (including via a call to cancel)
         std::atomic_flag _done = ATOMIC_FLAG_INIT;
 
-       public:
+      public:
         explicit QueryJob_Base(Message query) : _query{std::move(query)}
         {}
 
@@ -52,7 +52,7 @@ namespace llarp::dns
 
     class PacketSource_Base
     {
-       public:
+      public:
         virtual ~PacketSource_Base() = default;
 
         /// return true if traffic with source and dest addresses would cause a
@@ -82,7 +82,7 @@ namespace llarp::dns
         std::weak_ptr<PacketSource_Base> _wrapped;
         udp_pkt_hook _write_pkt;
 
-       public:
+      public:
         explicit PacketSource_Wrapper(std::weak_ptr<PacketSource_Base> wrapped, udp_pkt_hook write_packet)
             : _wrapped{std::move(wrapped)}, _write_pkt{std::move(write_packet)}
         {}
@@ -97,7 +97,11 @@ namespace llarp::dns
 
         void send_to(const oxen::quic::Address& to, const oxen::quic::Address& from, IPPacket data) const override
         {
-            _write_pkt(data.make_udp(from, to));
+            // TOFIX: this
+            (void)to;
+            (void)from;
+            (void)data;
+            // _write_pkt(data.make_udp(from, to));
         }
 
         void send_to(
@@ -131,7 +135,7 @@ namespace llarp::dns
         const oxen::quic::Address resolver;
         const oxen::quic::Address asker;
 
-       public:
+      public:
         explicit QueryJob(
             std::shared_ptr<PacketSource_Base> source,
             const Message& query,
@@ -150,12 +154,12 @@ namespace llarp::dns
     /// intercepts dns for internal processing
     class Resolver_Base
     {
-       protected:
+      protected:
         /// return the sorting order for this resolver
         /// lower means it will be tried first
         virtual int rank() const = 0;
 
-       public:
+      public:
         virtual ~Resolver_Base() = default;
 
         /// less than via rank
@@ -200,7 +204,7 @@ namespace llarp::dns
     // Base class for DNS proxy
     class Server : public std::enable_shared_from_this<Server>
     {
-       protected:
+      protected:
         /// add a packet source to this server, does share ownership
         void add_packet_source(std::shared_ptr<PacketSource_Base> resolver);
         /// add a resolver to this packet handler, does share ownership
@@ -209,7 +213,7 @@ namespace llarp::dns
         /// create the platform dependant dns stuff
         virtual std::shared_ptr<I_Platform> create_platform() const;
 
-       public:
+      public:
         virtual ~Server() = default;
 
         explicit Server(std::shared_ptr<EventLoop> loop, llarp::DnsConfig conf, unsigned int netif_index);
@@ -256,12 +260,12 @@ namespace llarp::dns
         /// true for intercepting all queries. false for just .loki and .snode
         void set_dns_mode(bool all_queries);
 
-       protected:
+      protected:
         std::shared_ptr<EventLoop> _loop;
         llarp::DnsConfig _conf;
         std::shared_ptr<I_Platform> _platform;
 
-       private:
+      private:
         const unsigned int m_NetIfIndex;
         std::set<std::shared_ptr<Resolver_Base>, ComparePtr<std::shared_ptr<Resolver_Base>>> _owned_resolvers;
         std::set<std::weak_ptr<Resolver_Base>, CompareWeakPtr<Resolver_Base>> _resolvers;

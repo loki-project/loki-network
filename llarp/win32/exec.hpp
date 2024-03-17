@@ -18,7 +18,7 @@ namespace llarp::win32
 
         OneShotExec(std::string cmd, std::chrono::milliseconds timeout);
 
-       public:
+      public:
         /// construct a call to an exe in system32 with args, will resolve the full path of the exe
         /// to prevent path injection
         explicit OneShotExec(std::string exe, std::string args, std::chrono::milliseconds timeout = 5s);
@@ -33,7 +33,7 @@ namespace llarp::win32
         std::string _args;
         std::chrono::milliseconds _timeout;
 
-       public:
+      public:
         explicit DeferExec(std::string exe, std::string args, std::chrono::milliseconds timeout = 5s)
             : _exe{std::move(exe)}, _args{std::move(args)}, _timeout{std::move(timeout)}
         {}

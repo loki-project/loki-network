@@ -84,10 +84,10 @@ namespace llarp
 
         int androidFD = -1;
 
-       protected:
+      protected:
         std::shared_ptr<Config> config = nullptr;
 
-       private:
+      private:
         void sigINT();
 
         void close();

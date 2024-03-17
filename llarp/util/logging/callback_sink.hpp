@@ -10,17 +10,17 @@ namespace llarp::logging
     template <typename Mutex>
     class CallbackSink : public spdlog::sinks::base_sink<Mutex>
     {
-       private:
+      private:
         lokinet_logger_func log_;
         lokinet_logger_sync sync_;
         void* ctx_;
 
-       public:
+      public:
         explicit CallbackSink(lokinet_logger_func log, lokinet_logger_sync sync = nullptr, void* context = nullptr)
             : log_{log}, sync_{sync}, ctx_{context}
         {}
 
-       protected:
+      protected:
         void sink_it_(const spdlog::details::log_msg& msg) override
         {
             if (!log_)

@@ -15,7 +15,7 @@ namespace llarp::vpn
     {
         const int m_fd;
 
-       public:
+      public:
         AndroidInterface(InterfaceInfo info, int fd) : NetworkInterface{std::move(info)}, m_fd{fd}
         {
             if (m_fd == -1)
@@ -76,7 +76,7 @@ namespace llarp::vpn
         const int fd;
         AndroidRouteManager _route_manager{};
 
-       public:
+      public:
         AndroidPlatform(llarp::Context* ctx) : fd{ctx->androidFD}
         {}
 

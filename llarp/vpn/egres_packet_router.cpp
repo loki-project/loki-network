@@ -22,17 +22,20 @@ namespace llarp::vpn
 
         void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
         {
-            auto ip_pkt = IPPacket::from_udp(std::move(pkt));
+            (void)from;
+            (void)pkt;
+            // TOFIX:
+            // auto ip_pkt = IPPacket::from_udp(std::move(pkt));
 
-            if (auto dstPort = pkt.path.remote.port())
-            {
-                if (auto itr = _ports.find(dstPort); itr != _ports.end())
-                {
-                    itr->second(std::move(from), std::move(ip_pkt));
-                    return;
-                }
-            }
-            _handler(std::move(from), std::move(ip_pkt));
+            // if (auto dstPort = pkt.path.remote.port())
+            // {
+            //     if (auto itr = _ports.find(dstPort); itr != _ports.end())
+            //     {
+            //         itr->second(std::move(from), std::move(ip_pkt));
+            //         return;
+            //     }
+            // }
+            // _handler(std::move(from), std::move(ip_pkt));
         }
     };
 
@@ -45,7 +48,10 @@ namespace llarp::vpn
 
         void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
         {
-            _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
+            // TOFIX: this
+            (void)from;
+            (void)pkt;
+            // _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
         }
     };
 
@@ -54,13 +60,16 @@ namespace llarp::vpn
 
     void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt)
     {
+        (void)from;
+        (void)pkt;
         // const auto proto = pkt.Header()->protocol;
         // if (const auto itr = _proto_handlers.find(proto); itr != _proto_handlers.end())
         // {
         //     itr->second->HandleIPPacketFrom(std::move(from), std::move(pkt));
         // }
         // else
-        _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
+        // TOFIX:
+        // _handler(std::move(from), IPPacket::from_udp(std::move(pkt)));
     }
 
     namespace

@@ -12,38 +12,67 @@ namespace llarp
 {
     static auto logcat = log::Cat("profiling");
 
-    RouterProfile::RouterProfile(bt_dict_consumer dict)
+    RouterProfile::RouterProfile(bt_dict_consumer& btdc)
     {
-        BDecode(std::move(dict));
+        try
+        {
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "RouterProfile parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
     }
 
-    void RouterProfile::BEncode(bt_dict_producer& dict) const
+    void RouterProfile::bt_encode(bt_dict_producer& btdp) const
     {
-        dict.append("g", conn_success);
-        dict.append("p", path_success);
-        dict.append("q", path_timeout);
-        dict.append("s", path_fail);
-        dict.append("t", conn_timeout);
-        dict.append("u", last_update.count());
-        dict.append("v", version);
+        btdp.append("g", conn_success);
+        btdp.append("p", path_success);
+        btdp.append("q", path_timeout);
+        btdp.append("s", path_fail);
+        btdp.append("t", conn_timeout);
+        btdp.append("u", last_update.count());
+        btdp.append("v", version);
     }
 
-    void RouterProfile::BDecode(bt_dict_consumer dict)
+    void RouterProfile::bt_decode(bt_dict_consumer& btdc)
     {
-        if (dict.skip_until("g"))
-            conn_success = dict.consume_integer<uint64_t>();
-        if (dict.skip_until("p"))
-            path_success = dict.consume_integer<uint64_t>();
-        if (dict.skip_until("q"))
-            path_timeout = dict.consume_integer<uint64_t>();
-        if (dict.skip_until("s"))
-            path_fail = dict.consume_integer<uint64_t>();
-        if (dict.skip_until("t"))
-            conn_timeout = dict.consume_integer<uint64_t>();
-        if (dict.skip_until("u"))
-            last_update = llarp_time_t{dict.consume_integer<uint64_t>()};
-        if (dict.skip_until("v"))
-            version = dict.consume_integer<uint64_t>();
+        try
+        {
+            conn_success = btdc.require<uint64_t>("g");
+            path_success = btdc.require<uint64_t>("p");
+            path_timeout = btdc.require<uint64_t>("q");
+            path_fail = btdc.require<uint64_t>("s");
+            conn_timeout = btdc.require<uint64_t>("t");
+            last_update = std::chrono::milliseconds{btdc.require<uint64_t>("u")};
+            version = btdc.require<uint64_t>("v");
+        }
+        catch (...)
+        {
+            log::critical(logcat, "RouterProfile failed to decode contents");
+            throw;
+        }
+    }
+
+    bool RouterProfile::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "RouterProfile parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
     void RouterProfile::decay()

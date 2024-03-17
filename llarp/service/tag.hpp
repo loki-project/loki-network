@@ -11,9 +11,9 @@ namespace llarp::service
 
         void Randomize() override;
 
-        sockaddr_in6 ToV6() const;
+        sockaddr_in6 to_v6() const;
 
-        void FromV6(sockaddr_in6 saddr);
+        void from_v6(sockaddr_in6 saddr);
     };
 }  // namespace llarp::service
 

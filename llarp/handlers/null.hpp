@@ -14,17 +14,7 @@ namespace llarp::handlers
                                 public BaseHandler,
                                 public std::enable_shared_from_this<NullEndpoint>
     {
-        NullEndpoint(Router& r)
-            : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, IPPacket pkt) {
-                  var::visit(
-                      [&pkt](AddressVariant_t&& from) {
-                          log::error(logcat, "Unhandled traffic from {} (pkt size:{}B)", from, pkt.size());
-                      },
-                      from);
-              }}}
-        {
-            // r->loop()->add_ticker([this] { Pump(Now()); });
-        }
+        NullEndpoint(Router& r);
 
         vpn::NetworkInterface* get_vpn_interface() override
         {
@@ -69,48 +59,7 @@ namespace llarp::handlers
         }
 
         bool handle_inbound_packet(
-            const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t) override
-        {
-            LogTrace("Inbound ", t, " packet (", buf.sz, "B) on convo ", tag);
-            if (t == service::ProtocolType::Control)
-            {
-                return true;
-            }
-            if (t == service::ProtocolType::TrafficV4 or t == service::ProtocolType::TrafficV6)
-            {
-                // if (auto from = GetEndpointWithConvoTag(tag))
-                // {
-                //   net::IPPacket pkt{};
-                //   if (not pkt.Load(buf))
-                //   {
-                //     LogWarn("invalid ip packet from remote T=", tag);
-                //     return false;
-                //   }
-                //   _packet_router->HandleIPPacketFrom(std::move(*from), std::move(pkt));
-                //   return true;
-                // }
-
-                LogWarn("did not handle packet, no endpoint with convotag T=", tag);
-                return false;
-            }
-            if (t != service::ProtocolType::QUIC)
-                return false;
-
-            // auto* quic = GetQUICTunnel();
-            // if (!quic)
-            // {
-            //   LogWarn("incoming quic packet but this endpoint is not quic capable; dropping");
-            //   return false;
-            // }
-            // if (buf.sz < 4)
-            // {
-            //   LogWarn("invalid incoming quic packet, dropping");
-            //   return false;
-            // }
-            // TODO:
-            // quic->receive_packet(tag, buf);
-            return true;
-        }
+            const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t) override;
 
         std::string get_if_name() const override
         {
@@ -137,7 +86,7 @@ namespace llarp::handlers
             return _packet_router.get();
         }
 
-       private:
+      private:
         std::unique_ptr<vpn::EgresPacketRouter> _packet_router;
     };
 }  // namespace llarp::handlers

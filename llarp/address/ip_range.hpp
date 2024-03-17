@@ -10,7 +10,7 @@ namespace llarp
 {
     struct IPRange
     {
-       private:
+      private:
         oxen::quic::Address _addr;
         uint8_t _mask;
 
@@ -20,7 +20,7 @@ namespace llarp
 
         ip_net init_ip();
 
-       public:
+      public:
         IPRange() = default;
         explicit IPRange(std::string a) : IPRange{a, 0}
         {}

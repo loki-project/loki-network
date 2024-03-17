@@ -23,7 +23,7 @@ namespace llarp
 
     struct RemoteAddr
     {
-       public:
+      public:
         RemoteAddr() = default;
 
         explicit RemoteAddr(PublicKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
@@ -48,7 +48,7 @@ namespace llarp
             return remote_name();
         }
 
-       protected:
+      protected:
         PublicKey _pubkey;
         std::optional<std::string> _name = std::nullopt;
         std::string _tld;

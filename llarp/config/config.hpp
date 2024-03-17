@@ -139,11 +139,15 @@ namespace llarp
         std::optional<llarp_time_t> path_alignment_timeout;
 
         // TODO: if this is provided, we should parse it in the config
+        // parse in the god damn config
         std::optional<fs::path> addr_map_persist_file;
 
         /* TESTNET: Under modification */
+
+        // only member that refers to an actual interface
         std::string _if_name;
-        IPRange _local_if_range;
+
+        IPRange _local_ip_range;  // rename to _local_ip_range
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
         std::unordered_map<ClientAddress, oxen::quic::Address> _addr_map;
 
@@ -288,7 +292,7 @@ namespace llarp
         /// create a config with the default parameters for an embedded lokinet
         static std::shared_ptr<Config> make_embedded_config();
 
-       private:
+      private:
         /// Load (initialize) a default config.
         ///
         /// This delegates to the ConfigDefinition to generate a default config,

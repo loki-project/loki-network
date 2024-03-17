@@ -36,7 +36,7 @@ namespace llarp
         /// pass in if we are using exit node mode right now  as a bool void set_dns_mode(bool
         /// using_exit_mode) const;
 
-       private:
+      private:
         void update();
 
         bool is_enabled() const;

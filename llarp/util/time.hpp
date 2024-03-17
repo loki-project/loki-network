@@ -39,7 +39,7 @@ namespace llarp
     // to hours. E.g. "-4h04m12.123s" or "1234h00m09.876s.
     std::string to_string(Duration_t t);
 
-    timeval loop_time_to_timeval(loop_time t)
+    inline timeval loop_time_to_timeval(loop_time t)
     {
         return timeval{.tv_sec = t / 1s, .tv_usec = (t % 1s) / 1us};
     }

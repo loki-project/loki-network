@@ -51,12 +51,12 @@ namespace llarp
 
     struct llarp_buffer
     {
-       private:
+      private:
         std::string _buf;
         std::string_view _bview;
         size_t _size;
 
-       public:
+      public:
         llarp_buffer() = default;
         llarp_buffer(size_t s) : _size{s}
         {
@@ -261,7 +261,7 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
         return view_remaining().substr(0, prefix.size()) == prefix;
     }
 
-   private:
+  private:
     friend struct ManagedBuffer;
     llarp_buffer_t(const llarp_buffer_t&) = default;
     llarp_buffer_t(llarp_buffer_t&&) = default;

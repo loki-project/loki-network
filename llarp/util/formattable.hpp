@@ -1,6 +1,8 @@
 #pragma once
 
-#include <fmt/format.h>
+#include <oxen/log/format.hpp>
+
+// #include <fmt/format.h>
 
 #include <type_traits>
 

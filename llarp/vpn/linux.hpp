@@ -35,7 +35,7 @@ namespace llarp::vpn
     {
         const int _fd;
 
-       public:
+      public:
         LinuxInterface(InterfaceInfo info) : NetworkInterface{std::move(info)}, _fd{::open("/dev/net/tun", O_RDWR)}
         {
             if (_fd == -1)
@@ -385,7 +385,7 @@ namespace llarp::vpn
             make_route(cmd, flags, _inet_addr{ip}, _inet_addr{gateway}, GatewayMode::eFirstHop, 0);
         }
 
-       public:
+      public:
         LinuxRouteManager() : fd{socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE)}
         {
             if (fd == -1)
@@ -468,7 +468,7 @@ namespace llarp::vpn
     {
         LinuxRouteManager _routeManager{};
 
-       public:
+      public:
         std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router*) override
         {
             return std::make_shared<LinuxInterface>(std::move(info));

@@ -9,12 +9,12 @@ namespace llarp
 {
     struct UDPHandle
     {
-       public:
+      public:
         UDPHandle() = delete;
         explicit UDPHandle(loop_ptr ev, const oxen::quic::Address& bind, udp_pkt_hook cb);
         ~UDPHandle();
 
-       private:
+      private:
         std::unique_ptr<UDPSocket> socket;
         oxen::quic::Address _local;
 
@@ -27,7 +27,7 @@ namespace llarp
             uint8_t ecn,
             std::function<void(io_result)> callback = nullptr);
 
-       public:
+      public:
         io_result send(const oxen::quic::Address& dest, bstring data);
 
         io_result send(const oxen::quic::Address& dest, std::vector<uint8_t> data);

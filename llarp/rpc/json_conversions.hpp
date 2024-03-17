@@ -9,8 +9,6 @@
 
 namespace llarp
 {
-    static auto logcat = log::Cat("RPC");
-
     void to_json(nlohmann::json& j, const IPRange& ipr);
     void from_json(const nlohmann::json& j, IPRange& ipr);
 }  // namespace llarp

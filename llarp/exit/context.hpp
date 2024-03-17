@@ -36,7 +36,7 @@ namespace llarp::exit
 
         std::shared_ptr<handlers::ExitEndpoint> get_exit_endpoint(std::string name) const;
 
-       private:
+      private:
         Router* router;
         std::unordered_map<std::string, std::shared_ptr<handlers::ExitEndpoint>> _exits;
         std::list<std::shared_ptr<handlers::ExitEndpoint>> _closed;

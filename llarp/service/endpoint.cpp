@@ -262,7 +262,7 @@ namespace llarp::service
 
     std::string Endpoint::name() const
     {
-        return /* _state->name + ":" +  */ _identity.pub.Name();
+        return /* _state->name + ":" +  */ _identity.pub.name();
     }
 
     // bool Endpoint::HasInboundConvo(const Address& addr) const
@@ -617,7 +617,7 @@ namespace llarp::service
 
     AddressVariant_t Endpoint::local_address() const
     {
-        return _identity.pub.Addr();
+        return _identity.pub.address();
     }
 
     // bool Endpoint::ProcessDataMessage(std::shared_ptr<ProtocolMessage> msg)
@@ -705,7 +705,7 @@ namespace llarp::service
         }
         else
         {
-            if (not f.Sign(_identity))
+            if (not f.sign(_identity))
             {
                 LogError("failed to sign auth reply result");
                 return;

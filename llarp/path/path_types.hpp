@@ -6,11 +6,6 @@
 #include <llarp/router_contact.hpp>
 #include <llarp/util/aligned.hpp>
 
-namespace
-{
-    static auto path_cat = llarp::log::Cat("lokinet.path");
-}  // namespace
-
 namespace llarp
 {
     struct HopID final : public AlignedBuffer<PATHIDSIZE>

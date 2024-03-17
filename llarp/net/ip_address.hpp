@@ -124,7 +124,7 @@ namespace llarp
 
         bool operator==(const Ip_address_deprecated& other) const;
 
-       private:
+      private:
         bool m_empty = true;
         std::string m_ipAddress;
         std::optional<uint16_t> m_port = std::nullopt;

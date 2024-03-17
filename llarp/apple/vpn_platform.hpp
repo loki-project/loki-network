@@ -9,7 +9,7 @@ namespace llarp::apple
 {
     class VPNPlatform final : public vpn::Platform
     {
-       public:
+      public:
         explicit VPNPlatform(
             Context& ctx,
             VPNInterface::packet_write_callback packet_writer,
@@ -24,7 +24,7 @@ namespace llarp::apple
             return _route_manager;
         }
 
-       private:
+      private:
         Context& _context;
         apple::RouteManager _route_manager;
         VPNInterface::packet_write_callback _packet_writer;

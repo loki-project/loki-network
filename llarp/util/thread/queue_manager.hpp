@@ -61,12 +61,12 @@ namespace llarp
             //     1. Sets the element index back to 0
             //     2. Increments the generation
 
-           public:
+          public:
             static constexpr size_t Alignment = 64;
 
             using AtomicIndex = std::atomic<std::uint32_t>;
 
-           private:
+          private:
             AtomicIndex m_pushIndex;  // Index in the buffer that the next
                                       // element will be added to.
 
@@ -100,7 +100,7 @@ namespace llarp
             // Return the next generation
             uint32_t nextGeneration(uint32_t generation) const;
 
-           public:
+          public:
             // Return the difference between the startingValue and the subtractValue
             // around a particular modulo.
             static int32_t circularDifference(uint32_t startingValue, uint32_t subtractValue, uint32_t modulo);

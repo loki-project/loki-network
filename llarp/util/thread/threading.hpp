@@ -80,12 +80,12 @@ namespace llarp::util
 
     class Semaphore
     {
-       private:
+      private:
         std::mutex m_mutex;  // protects m_count
         size_t m_count;
         std::condition_variable m_cv;
 
-       public:
+      public:
         Semaphore(size_t count) : m_count(count)
         {}
 
@@ -139,7 +139,7 @@ namespace llarp::util
             visit();
         }
 #if defined(LOKINET_DEBUG)
-       private:
+      private:
         mutable NullMutex _access;
 #endif
     };

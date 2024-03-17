@@ -2,17 +2,11 @@
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path_types.hpp>
-#include <llarp/util/bencode.hpp>
 #include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
 
 #include <iostream>
-
-namespace
-{
-    static auto intro_cat = llarp::log::Cat("lokinet.intro");
-}  // namespace
 
 namespace llarp::service
 {
@@ -29,29 +23,27 @@ namespace llarp::service
 
         StatusObject ExtractStatus() const;
 
-        bool IsExpired(llarp_time_t now) const
+        bool is_expired(llarp_time_t now) const
         {
             return now >= expiry;
         }
 
-        bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt = 30s) const
+        bool expires_soon(llarp_time_t now, llarp_time_t dlt = 30s) const
         {
-            return IsExpired(now + dlt);
+            return is_expired(now + dlt);
         }
 
         std::string to_string() const;
 
         void bt_encode(oxenc::bt_list_producer& btlp) const;
+
         void bt_encode(oxenc::bt_dict_producer& subdict) const;
 
-        bool BDecode(llarp_buffer_t* buf)
-        {
-            return bencode_decode_dict(*this, buf);
-        }
+        bool bt_decode(std::string_view buf);
 
-        bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
-        void Clear();
+        void clear();
 
         bool operator<(const Introduction& other) const
         {

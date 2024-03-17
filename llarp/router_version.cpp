@@ -1,15 +1,22 @@
 #include "router_version.hpp"
 
+#include "util/buffer.hpp"
+#include "util/logging.hpp"
+
+#include <oxenc/bt.h>
+
 #include <cassert>
 
 namespace llarp
 {
-    RouterVersion::RouterVersion(const Version_t& router, uint64_t proto) : m_Version(router), m_ProtoVersion(proto)
+    static auto logcat = llarp::log::Cat("router_version");
+
+    RouterVersion::RouterVersion(const Version_t& router, uint64_t proto) : _version(router), _proto(proto)
     {}
 
-    bool RouterVersion::IsCompatableWith(const RouterVersion& other) const
+    bool RouterVersion::is_compatible_with(const RouterVersion& other) const
     {
-        return m_ProtoVersion == other.m_ProtoVersion;
+        return _proto == other._proto;
     }
 
     std::string RouterVersion::bt_encode() const
@@ -18,71 +25,65 @@ namespace llarp
 
         try
         {
-            btlp.append(m_ProtoVersion);
+            btlp.append(_proto);
 
-            for (auto& v : m_Version)
+            for (auto& v : _version)
                 btlp.append(v);
         }
         catch (...)
         {
-            log::critical(llarp_cat, "Error: RouterVersion failed to bt encode contents!");
+            log::critical(logcat, "Error: RouterVersion failed to bt encode contents!");
         }
 
         return std::move(btlp).str();
     }
 
-    void RouterVersion::Clear()
+    void RouterVersion::clear()
     {
-        m_Version.fill(0);
-        m_ProtoVersion = INVALID_VERSION;
-        assert(IsEmpty());
+        _version.fill(0);
+        _proto = INVALID_VERSION;
+        assert(is_empty());
     }
 
-    bool RouterVersion::IsEmpty() const
+    bool RouterVersion::is_empty() const
     {
         return *this == emptyRouterVersion;
     }
 
-    bool RouterVersion::BDecode(llarp_buffer_t* buf)
+    bool RouterVersion::bt_decode(std::string_view buf)
     {
         // clear before hand
-        Clear();
-        size_t idx = 0;
-        if (not bencode_read_list(
-                [this, &idx](llarp_buffer_t* buffer, bool has) {
-                    if (has)
-                    {
-                        uint64_t i;
-                        if (idx == 0)
-                        {
-                            uint64_t val = -1;
-                            if (not bencode_read_integer(buffer, &val))
-                                return false;
-                            m_ProtoVersion = val;
-                        }
-                        else if (bencode_read_integer(buffer, &i))
-                        {
-                            // prevent overflow (note that idx includes version too)
-                            if (idx > m_Version.max_size())
-                                return false;
-                            m_Version[idx - 1] = i;
-                        }
-                        else
-                            return false;
-                        ++idx;
-                    }
-                    return true;
-                },
-                buf))
-            return false;
-        // either full list or empty list is valid
-        return idx == 4 || idx == 0;
+        clear();
+
+        try
+        {
+            oxenc::bt_list_consumer btlc{buf};
+
+            _proto = btlc.consume_integer<int64_t>();
+
+            // The previous bt_decode implementation accepted either a full or empty version array,
+            // so accounting for this with the following check...
+            if (not btlc.is_finished())
+            {
+                for (auto& v : _version)
+                    v = btlc.consume_integer<uint16_t>();
+            }
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "RouterVersion parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
     std::string RouterVersion::to_string() const
     {
-        return std::to_string(m_Version.at(0)) + "." + std::to_string(m_Version.at(1)) + "."
-            + std::to_string(m_Version.at(2)) + " protocol version " + std::to_string(m_ProtoVersion);
+        return std::to_string(_version.at(0)) + "." + std::to_string(_version.at(1)) + "."
+            + std::to_string(_version.at(2)) + " protocol version " + std::to_string(_proto);
     }
 
 }  // namespace llarp

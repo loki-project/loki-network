@@ -30,10 +30,10 @@ namespace llarp::auth
 {
     struct AuthPolicy
     {
-       protected:
+      protected:
         Router& _router;
 
-       public:
+      public:
         AuthPolicy(Router& r) : _router{r}
         {}
         virtual ~AuthPolicy() = default;
@@ -63,11 +63,11 @@ namespace llarp::auth
 
     struct SessionAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<SessionAuthPolicy>
     {
-       protected:
+      protected:
         SecretKey _session_key;
         bool _is_snode_service{false};
 
-       public:
+      public:
         SessionAuthPolicy(Router& r, const SecretKey& sk, bool _snode_service);
 
         bool load_identity_from_file(const char* fname);
@@ -119,7 +119,7 @@ namespace llarp::auth
 
         bool auth_async_pending(service::SessionTag tag) const override;
 
-       private:
+      private:
         const std::set<fs::path> _files;
         const AuthFileType _type;
         mutable util::Mutex _m;
@@ -161,7 +161,7 @@ namespace llarp::auth
 
         bool auth_async_pending(service::SessionTag tag) const override;
 
-       private:
+      private:
         const std::string _url;
         const std::string _method;
         const std::unordered_set<llarp::service::Address> _whitelist;

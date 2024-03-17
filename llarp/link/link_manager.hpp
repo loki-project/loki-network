@@ -20,9 +20,7 @@
 #include <unordered_map>
 
 namespace
-{
-    static auto quic_cat = llarp::log::Cat("lokinet.quic");
-}  // namespace
+{}  // namespace
 
 namespace llarp
 {
@@ -112,7 +110,7 @@ namespace llarp
 
             void close_connection(RouterID rid);
 
-           private:
+          private:
             const bool _is_service_node;
         };
     }  // namespace link
@@ -121,7 +119,7 @@ namespace llarp
 
     struct LinkManager
     {
-       public:
+      public:
         static std::unique_ptr<LinkManager> make(Router& r);
 
         bool send_control_message(
@@ -137,7 +135,7 @@ namespace llarp
             return _router;
         }
 
-       private:
+      private:
         explicit LinkManager(Router& r);
 
         friend struct link::Endpoint;
@@ -182,7 +180,7 @@ namespace llarp
         void register_commands(
             const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& rid, bool client_only = false);
 
-       public:
+      public:
         const link::Endpoint& endpoint() const
         {
             return ep;
@@ -259,7 +257,7 @@ namespace llarp
         /// always maintain this many client connections to other routers
         int client_router_connections = 4;
 
-       private:
+      private:
         // DHT messages
         void handle_find_name(std::string_view body, std::function<void(std::string)> respond);      // relay
         void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay

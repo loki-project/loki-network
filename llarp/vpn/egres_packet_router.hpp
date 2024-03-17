@@ -26,7 +26,7 @@ namespace llarp::vpn
         EgresPacketHandlerFunc _handler;
         std::unordered_map<uint8_t, std::unique_ptr<EgresLayer4Handler>> _proto_handlers;
 
-       public:
+      public:
         /// baseHandler will be called if no other handlers matches a packet
         explicit EgresPacketRouter(EgresPacketHandlerFunc baseHandler);
 

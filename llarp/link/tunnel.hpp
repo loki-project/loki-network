@@ -49,7 +49,7 @@ namespace llarp::link
     /// Manager class for incoming and outgoing QUIC tunnels.
     class TunnelManager
     {
-       public:
+      public:
         using ListenHandler = std::function<std::optional<oxen::quic::Address>(
             std::string_view lokinet_addr,  // The remote's full lokinet address
             uint16_t port                   // The requested port the tunnel wants to reach
@@ -142,7 +142,7 @@ namespace llarp::link
             return not incoming_handlers_.empty();
         }
 
-       private:
+      private:
         EndpointBase& service_endpoint_;
 
         struct ClientTunnel

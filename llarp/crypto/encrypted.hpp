@@ -112,6 +112,16 @@ namespace llarp
             return true;
         }
 
+        std::string to_string()
+        {
+            return {reinterpret_cast<const char*>(data()), size()};
+        }
+
+        ustring to_ustring()
+        {
+            return {data(), size()};
+        }
+
         llarp_buffer_t* Buffer()
         {
             return &m_Buffer;
@@ -137,7 +147,7 @@ namespace llarp
             return _buf.data();
         }
 
-       protected:
+      protected:
         void UpdateBuffer()
         {
             m_Buffer.base = _buf.data();

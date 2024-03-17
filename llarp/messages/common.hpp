@@ -5,16 +5,10 @@
 #include <llarp/path/path_types.hpp>
 #include <llarp/router_id.hpp>
 #include <llarp/service/tag.hpp>
-#include <llarp/util/bencode.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 
 #include <oxenc/bt.h>
-
-namespace
-{
-    static auto link_cat = llarp::log::Cat("lokinet.link");
-}  // namespace
 
 namespace llarp
 {

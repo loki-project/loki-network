@@ -12,8 +12,8 @@ namespace llarp::net
     /// info about a network interface lokinet does not own
     struct InterfaceInfo
     {
-       private:
-       public:
+      private:
+      public:
         // TODO: is this needed?
         /// a gateway we can use if it exists
         std::optional<ip_net> _gateway;

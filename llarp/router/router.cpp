@@ -329,7 +329,7 @@ namespace llarp
 
         info.ifname = network_config._if_name;
 
-        info.addrs.emplace_back(network_config._local_if_range);
+        info.addrs.emplace_back(network_config._local_ip_range);
 
         auto if_net = vpn_platform()->CreateInterface(std::move(info), this);
 

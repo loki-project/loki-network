@@ -103,13 +103,13 @@ namespace llarp
                 return prefix() + _remote_router.to_string();
             }
 
-           protected:
+          protected:
             RouterID _remote_router;  // remote {service,exit} pubkey
             std::shared_ptr<auth::SessionAuthPolicy> _auth;
 
             virtual std::string prefix() const = 0;
 
-           private:
+          private:
             HopID _current_hop_id;
 
             // uint64_t _counter;
@@ -172,7 +172,7 @@ namespace llarp
 
             void set_new_path(const std::shared_ptr<path::Path>& _new_path);
 
-           protected:
+          protected:
             Router& _router;
             EndpointBase& _parent;
 

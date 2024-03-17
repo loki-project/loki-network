@@ -4,6 +4,8 @@
 
 namespace llarp::service
 {
+    static auto logcat = log::Cat("introduction");
+
     StatusObject Introduction::ExtractStatus() const
     {
         StatusObject obj{
@@ -13,22 +15,6 @@ namespace llarp::service
             {"latency", to_json(latency)},
             {"version", uint64_t(version)}};
         return obj;
-    }
-
-    bool Introduction::decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf)
-    {
-        bool read = false;
-        if (!BEncodeMaybeReadDictEntry("k", router, read, key, buf))
-            return false;
-        if (!BEncodeMaybeReadDictInt("l", latency, read, key, buf))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("p", path_id, read, key, buf))
-            return false;
-        if (!BEncodeMaybeReadDictInt("v", version, read, key, buf))
-            return false;
-        if (!BEncodeMaybeReadDictInt("x", expiry, read, key, buf))
-            return false;
-        return read;
     }
 
     Introduction::Introduction(std::string buf)
@@ -44,7 +30,7 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(intro_cat, "Error: Introduction failed to populate with bt encoded contents");
+            log::critical(logcat, "Error: Introduction failed to populate with bt encoded contents");
         }
     }
 
@@ -53,15 +39,11 @@ namespace llarp::service
         try
         {
             auto subdict = btlp.append_dict();
-
-            subdict.append("k", router.ToView());
-            subdict.append("l", latency.count());
-            subdict.append("p", path_id.ToView());
-            subdict.append("x", expiry.count());
+            bt_encode(subdict);
         }
         catch (...)
         {
-            log::critical(intro_cat, "Error: Introduction failed to bt encode contents!");
+            log::critical(logcat, "Error: Introduction failed to bt encode contents!");
         }
     }
 
@@ -76,11 +58,43 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(intro_cat, "Error: Introduction failed to bt encode contents!");
+            log::critical(logcat, "Error: Introduction failed to bt encode contents!");
         }
     }
 
-    void Introduction::Clear()
+    bool Introduction::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "Introduction parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+    }
+
+    void Introduction::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            router.from_string(btdc.require<std::string>("k"));
+            latency = std::chrono::milliseconds{btdc.require<int64_t>("l")};
+            path_id.from_string(btdc.require<std::string>("p"));
+            expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Introcuction failed to populate with bt encoded contents");
+            throw;
+        }
+    }
+
+    void Introduction::clear()
     {
         router.zero();
         path_id.zero();

@@ -7,7 +7,6 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/util/aligned.hpp>
-#include <llarp/util/bencode.hpp>
 #include <llarp/util/time.hpp>
 #include <llarp/util/types.hpp>
 
@@ -89,7 +88,7 @@ namespace llarp
             return _timestamp;
         }
 
-       protected:
+      protected:
         // advertised addresses
         oxen::quic::Address _addr;                  // refactor all 15 uses to use addr() method
         std::optional<oxen::quic::Address> _addr6;  // optional ipv6
@@ -110,7 +109,7 @@ namespace llarp
         // the re-signing of the payload.
         ustring _payload;
 
-       public:
+      public:
         /// should we serialize the exit info?
         static const bool serializeExit = true;
 
@@ -193,7 +192,7 @@ namespace llarp
     {
         static LocalRC make(const SecretKey secret, oxen::quic::Address local);
 
-       private:
+      private:
         ustring _signature;
         SecretKey _secret_key;
 
@@ -203,7 +202,7 @@ namespace llarp
 
         LocalRC(const SecretKey secret, oxen::quic::Address local);
 
-       public:
+      public:
         LocalRC() = default;
         ~LocalRC() = default;
 
@@ -269,7 +268,7 @@ namespace llarp
     /// the data in the constructor, eliminating the need for a ::verify method/
     struct RemoteRC final : public RouterContact
     {
-       public:
+      public:
         RemoteRC() = default;
         explicit RemoteRC(std::string_view data) : RemoteRC{oxenc::bt_dict_consumer{data}}
         {

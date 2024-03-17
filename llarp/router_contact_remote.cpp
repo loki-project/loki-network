@@ -2,7 +2,6 @@
 #include "crypto/crypto.hpp"
 #include "net/net.hpp"
 #include "router_contact.hpp"
-#include "util/bencode.hpp"
 #include "util/buffer.hpp"
 #include "util/file.hpp"
 #include "util/time.hpp"
@@ -23,7 +22,7 @@ namespace llarp
         catch (const std::exception& e)
         {
             auto err = "Exception caught parsing RemoteRC: {}"_format(e.what());
-            log::warning(logcat, err);
+            log::warning(logcat, "{}", err);
             throw std::runtime_error{err};
         }
     }

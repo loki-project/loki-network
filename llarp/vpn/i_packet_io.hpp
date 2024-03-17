@@ -9,7 +9,7 @@ namespace llarp::vpn
 {
     class I_Packet_IO
     {
-       public:
+      public:
         virtual ~I_Packet_IO() = default;
 
         /// start any platform specific operations before running

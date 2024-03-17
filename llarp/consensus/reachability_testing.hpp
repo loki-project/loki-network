@@ -48,7 +48,7 @@ namespace llarp::consensus
 
     class reachability_testing
     {
-       public:
+      public:
         // Distribution for the seconds between node tests: we throw in some randomness to avoid //
         // potential clustering of tests.  (Note that there is some granularity here as the test
         // timer only runs every REACHABILITY_TESTING_TIMER_INTERVAL).
@@ -83,7 +83,7 @@ namespace llarp::consensus
         // How often we whine in the logs about being unreachable
         inline static constexpr auto WHINING_INTERVAL = 2min;
 
-       private:
+      private:
         // Queue of pubkeys of service nodes to test; we pop off the back of this until the queue
         // empties then we refill it with a shuffled list of all pubkeys then pull off of it until
         // it is empty again, etc.
@@ -107,7 +107,7 @@ namespace llarp::consensus
         // warn about possible network issues.
         detail::incoming_test_state last;
 
-       public:
+      public:
         // If it is time to perform another random test, this returns the next node to test from the
         // testing queue and returns it, also updating the timer for the next test.  If it is not
         // yet time, or if the queue is empty and cannot current be replenished, returns

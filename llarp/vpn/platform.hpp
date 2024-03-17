@@ -48,10 +48,10 @@ namespace llarp::vpn
     /// a vpn network interface
     class NetworkInterface : public I_Packet_IO
     {
-       protected:
+      protected:
         InterfaceInfo _info;
 
-       public:
+      public:
         NetworkInterface(InterfaceInfo info) : _info{std::move(info)}
         {}
         NetworkInterface(const NetworkInterface&) = delete;
@@ -68,7 +68,7 @@ namespace llarp::vpn
 
     class AbstractRouteManager
     {
-       public:
+      public:
         AbstractRouteManager() = default;
         AbstractRouteManager(const AbstractRouteManager&) = delete;
         AbstractRouteManager(AbstractRouteManager&&) = delete;
@@ -104,12 +104,12 @@ namespace llarp::vpn
     /// responsible for obtaining vpn interfaces
     class Platform
     {
-       protected:
+      protected:
         /// get a new network interface fully configured given the interface info
         /// blocks until ready, throws on error
         virtual std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router* router) = 0;
 
-       public:
+      public:
         Platform() = default;
         Platform(const Platform&) = delete;
         Platform(Platform&&) = delete;

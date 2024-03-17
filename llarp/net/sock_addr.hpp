@@ -154,7 +154,7 @@ namespace llarp
             return &addr6;
         }
 
-       private:
+      private:
         bool m_empty = true;
         sockaddr_in6 addr6;
         sockaddr_in addr4;

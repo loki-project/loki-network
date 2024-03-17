@@ -4,6 +4,8 @@
 
 namespace llarp::handlers
 {
+    static auto logcat = llarp::log::Cat("base_handler");
+
     void BaseHandler::load_key_file(std::optional<fs::path> p, Router& r)
     {
         try
@@ -16,7 +18,7 @@ namespace llarp::handlers
         catch (const std::exception& e)
         {
             auto err = "API endpoint keyfile failed to load: {}"_format(e.what());
-            log::error(logcat, err);
+            log::error(logcat, "{}", err);
             throw std::runtime_error{err};
         }
     }

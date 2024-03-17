@@ -14,7 +14,7 @@ namespace llarp
             std::condition_variable cv;
             unsigned pending;
 
-           public:
+          public:
             Barrier(unsigned threads) : pending{threads}
             {}
 

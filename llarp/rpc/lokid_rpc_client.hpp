@@ -40,7 +40,7 @@ namespace llarp
 
             void start_pings();
 
-           private:
+          private:
             /// do a lmq command on the current connection
             void command(std::string_view cmd);
 

@@ -54,7 +54,7 @@ namespace llarp
             _filename = f;
         }
 
-       private:
+      private:
         bool parse_all();
 
         bool parse();

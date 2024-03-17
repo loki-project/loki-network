@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types.hpp"
+
 #include <llarp/util/logging.hpp>
 
 #include <charconv>
@@ -9,13 +11,21 @@
 
 namespace llarp
 {
-    static auto logcat = log::Cat("Address");
+    static uint16_t checksum_ipv4(const void *header, uint8_t header_len);
+
+    static uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum);
+
+    static uint32_t tcp_checksum_ipv6(
+        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
+
+    static uint32_t udp_checksum_ipv6(
+        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
 
     template <typename T>
-    bool parse_int(const std::string_view str, T& value, int base = 10)
+    static bool parse_int(const std::string_view str, T &value, int base = 10)
     {
         T tmp;
-        auto* strend = str.data() + str.size();
+        auto *strend = str.data() + str.size();
 
         auto [p, ec] = std::from_chars(str.data(), strend, tmp, base);
 
@@ -26,7 +36,8 @@ namespace llarp
         return true;
     }
 
-    inline std::pair<std::string, uint16_t> parse_addr(std::string_view addr, std::optional<uint16_t> default_port)
+    inline static std::pair<std::string, uint16_t> parse_addr(
+        std::string_view addr, std::optional<uint16_t> default_port)
     {
         std::pair<std::string, uint16_t> result;
 
@@ -47,6 +58,7 @@ namespace llarp
         }
 
         bool had_sq_brackets = false;
+
         if (!addr.empty() && addr.front() == '[' && addr.back() == ']')
         {
             addr.remove_prefix(1);

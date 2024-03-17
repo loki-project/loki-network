@@ -4,47 +4,41 @@
 #include "vanity.hpp"
 
 #include <llarp/crypto/types.hpp>
-#include <llarp/util/bencode.hpp>
 
 #include <oxenc/bt.h>
 
 #include <optional>
 
-namespace
-{
-    static auto info_cat = llarp::log::Cat("lokinet.info");
-}  // namespace
-
 namespace llarp::service
 {
     struct ServiceInfo
     {
-       private:
+      private:
         PubKey enckey;
         PubKey signkey;
         mutable Address _cached_addr;
 
-       public:
+      public:
         VanityNonce vanity;
         uint64_t version = llarp::constants::proto_version;
 
-        void RandomizeVanity()
+        void randomize_vanity()
         {
             vanity.Randomize();
         }
 
         bool verify(uint8_t* buf, size_t size, const Signature& sig) const;
 
-        const PubKey& EncryptionPublicKey() const
+        const PubKey& encryption_pubkey() const
         {
             if (_cached_addr.is_zero())
             {
-                CalculateAddress(_cached_addr.as_array());
+                calculate_address(_cached_addr.as_array());
             }
             return enckey;
         }
 
-        bool Update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce = {});
+        bool update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce = {});
 
         bool operator==(const ServiceInfo& other) const
         {
@@ -59,40 +53,33 @@ namespace llarp::service
 
         bool operator<(const ServiceInfo& other) const
         {
-            return Addr() < other.Addr();
+            return address() < other.address();
         }
 
         std::string to_string() const;
 
         /// .loki address
-        std::string Name() const;
+        std::string name() const;
 
-        bool UpdateAddr();
+        bool update_address();
 
-        const Address& Addr() const
+        const Address& address() const
         {
             if (_cached_addr.is_zero())
             {
-                CalculateAddress(_cached_addr.as_array());
+                calculate_address(_cached_addr.as_array());
             }
             return _cached_addr;
         }
 
         /// calculate our address
-        bool CalculateAddress(std::array<uint8_t, 32>& data) const;
+        bool calculate_address(std::array<uint8_t, 32>& data) const;
 
-        bool BDecode(llarp_buffer_t* buf)
-        {
-            if (not bencode_decode_dict(*this, buf))
-                return false;
-            return UpdateAddr();
-        }
+        bool bt_decode(std::string_view buf);
 
-        void bt_decode(oxenc::bt_dict_consumer&);
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
         void bt_encode(oxenc::bt_dict_producer& btdp) const;
-
-        bool decode_key(const llarp_buffer_t& key, llarp_buffer_t* buf);
     };
 }  // namespace llarp::service
 

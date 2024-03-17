@@ -5,11 +5,14 @@
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/buffer.hpp>
+#include <llarp/util/logging.hpp>
 
 #include <utility>
 
 namespace llarp::service
 {
+    static auto logcat = log::Cat("Protocol");
+
     ProtocolMessage::ProtocolMessage()
     {
         tag.zero();
@@ -26,7 +29,7 @@ namespace llarp::service
         memcpy(payload.data(), buf.data(), buf.size());
     }
 
-    void ProtocolMessage::ProcessAsync(
+    void ProtocolMessage::process_async(
         std::shared_ptr<path::Path> path, HopID from, std::shared_ptr<ProtocolMessage> self)
     {
         (void)path;
@@ -36,25 +39,60 @@ namespace llarp::service
         //   LogWarn("failed to handle data message from ", path->name());
     }
 
-    bool ProtocolMessage::decode_key(const llarp_buffer_t& k, llarp_buffer_t* buf)
+    bool ProtocolMessage::bt_decode(std::string_view buf)
     {
-        bool read = false;
-
-        if (k.startswith("d"))
+        try
         {
-            llarp_buffer_t strbuf;
-            if (!bencode_read_string(buf, &strbuf))
-                return false;
-            put_buffer(strbuf.to_string());
-            return true;
+            oxenc::bt_dict_consumer btdc{buf};
+            bt_decode(btdc);
         }
-        if (!BEncodeMaybeReadDictEntry("i", introReply, read, k, buf))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("s", sender, read, k, buf))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("t", tag, read, k, buf))
-            return false;
-        return read;
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "ProtocolMessage parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
+    }
+
+    void ProtocolMessage::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            proto = ProtocolType{btdc.require<uint64_t>("p")};
+
+            if (auto maybe_payload = btdc.maybe<ustring>("d"))
+            {
+                payload = std::vector<uint8_t>(*maybe_payload->data(), maybe_payload->size());
+            }
+
+            {
+                auto [key, subdict] = btdc.next_dict_consumer();
+
+                if (key != "i")
+                    throw std::invalid_argument{"Unexpected key (expected:'i', actual:'{}')"_format(key)};
+
+                intro_reply.bt_decode(subdict);
+            }
+
+            {
+                auto [key, subdict] = btdc.next_dict_consumer();
+
+                if (key != "s")
+                    throw std::invalid_argument{"Unexpected key (expected:'s', actual:'{}')"_format(key)};
+
+                sender.bt_decode(subdict);
+            }
+
+            tag.from_string(btdc.require<std::string>("t"));
+        }
+        catch (...)
+        {
+            log::critical(logcat, "ProtocolMessage failed to populate with bt encoded contents");
+            throw;
+        }
     }
 
     std::string ProtocolMessage::bt_encode() const
@@ -63,14 +101,14 @@ namespace llarp::service
 
         try
         {
-            // btdp.append("a", static_cast<uint64_t>(proto));
+            btdp.append("a", static_cast<uint64_t>(proto));
 
             if (not payload.empty())
                 btdp.append("d", std::string_view{reinterpret_cast<const char*>(payload.data()), payload.size()});
 
             {
                 auto subdict = btdp.append_dict("i");
-                introReply.bt_encode(subdict);
+                intro_reply.bt_encode(subdict);
             }
 
             {
@@ -88,7 +126,7 @@ namespace llarp::service
         return std::move(btdp).str();
     }
 
-    std::vector<char> ProtocolMessage::EncodeAuthInfo() const
+    std::vector<char> ProtocolMessage::encode_auth_info() const
     {
         oxenc::bt_dict_producer btdp;
 
@@ -139,44 +177,17 @@ namespace llarp::service
         return std::move(btdp).str();
     }
 
-    bool ProtocolFrameMessage::decode_key(const llarp_buffer_t& key, llarp_buffer_t* val)
-    {
-        bool read = false;
-        if (key.startswith("A"))
-        {
-            llarp_buffer_t strbuf;
-            if (!bencode_read_string(val, &strbuf))
-                return false;
-            if (strbuf.sz != 1)
-                return false;
-            return *strbuf.cur == 'H';
-        }
-        if (!BEncodeMaybeReadDictEntry("D", enc, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("F", path_id, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("C", cipher, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("N", nonce, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictInt("R", flag, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("T", convo_tag, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("Z", sig, read, key, val))
-            return false;
-        return read;
-    }
-
-    bool ProtocolFrameMessage::DecryptPayloadInto(const SharedSecret& sharedkey, ProtocolMessage& msg) const
+    bool ProtocolFrameMessage::decrypt_payload_to_message(const SharedSecret& sharedkey, ProtocolMessage& msg) const
     {
         Encrypted<2048> tmp = enc;
         crypto::xchacha20(tmp.data(), tmp.size(), sharedkey, nonce);
 
-        return bencode_decode_dict(msg, tmp.Buffer());
+        auto buf = tmp.to_string();
+
+        return msg.bt_decode(buf);
     }
 
-    bool ProtocolFrameMessage::Sign(const Identity& localIdent)
+    bool ProtocolFrameMessage::sign(const Identity& localIdent)
     {
         sig.zero();
         std::array<uint8_t, MAX_PROTOCOL_MESSAGE_SIZE> tmp;
@@ -192,7 +203,7 @@ namespace llarp::service
         return localIdent.Sign(sig, reinterpret_cast<uint8_t*>(bte.data()), bte.size());
     }
 
-    bool ProtocolFrameMessage::EncryptAndSign(
+    bool ProtocolFrameMessage::encrypt_and_sign(
         const ProtocolMessage& msg, const SharedSecret& sessionKey, const Identity& localIdent)
     {
         // encode message
@@ -208,7 +219,7 @@ namespace llarp::service
         // sign
         if (!localIdent.Sign(sig, reinterpret_cast<uint8_t*>(bte2.data()), bte2.size()))
         {
-            LogError("failed to sign? wtf?!");
+            log::error(logcat, "ProtocolFrameMessage failed to sign with local identity key!");
             return false;
         }
         return true;
@@ -218,10 +229,10 @@ namespace llarp::service
     {
         std::shared_ptr<path::Path> path;
         std::shared_ptr<ProtocolMessage> msg;
-        const Identity& m_LocalIdentity;
+        const Identity& _local_identity;
         Endpoint* handler;
         const ProtocolFrameMessage frame;
-        const Introduction fromIntro;
+        const Introduction src_intro;
 
         AsyncFrameDecrypt(
             const Identity& localIdent,
@@ -229,18 +240,18 @@ namespace llarp::service
             std::shared_ptr<ProtocolMessage> m,
             const ProtocolFrameMessage& f,
             const Introduction& recvIntro)
-            : msg(std::move(m)), m_LocalIdentity(localIdent), handler(h), frame(f), fromIntro(recvIntro)
+            : msg(std::move(m)), _local_identity(localIdent), handler(h), frame(f), src_intro(recvIntro)
         {}
 
-        static void Work(std::shared_ptr<AsyncFrameDecrypt> self)
+        static void work(std::shared_ptr<AsyncFrameDecrypt> self)
         {
             SharedSecret K;
             SharedSecret shared_key;
             // copy
             ProtocolFrameMessage frame(self->frame);
-            if (!crypto::pqe_decrypt(self->frame.cipher, K, pq_keypair_to_seckey(self->m_LocalIdentity.pq)))
+            if (!crypto::pqe_decrypt(self->frame.cipher, K, pq_keypair_to_seckey(self->_local_identity.pq)))
             {
-                LogError("pqke failed C=", self->frame.cipher);
+                log::error(logcat, "pqe_decrypt failed (cipher:{})", self->frame.cipher);
                 self->msg.reset();
                 return;
             }
@@ -261,11 +272,13 @@ namespace llarp::service
             }
 
             // verify signature of outer message after we parsed the inner message
-            if (!self->frame.Verify(self->msg->sender))
+            if (!self->frame.verify(self->msg->sender))
             {
-                LogError("intro frame has invalid signature Z=", self->frame.sig, " from ", self->msg->sender.Addr());
-                Dump<MAX_PROTOCOL_MESSAGE_SIZE>(self->frame);
-                Dump<MAX_PROTOCOL_MESSAGE_SIZE>(*self->msg);
+                log::error(
+                    logcat,
+                    "Intro frame has invalid signature (sig:{}, from:{})",
+                    self->frame.sig,
+                    self->msg->sender.address());
                 self->msg.reset();
                 return;
             }
@@ -280,14 +293,14 @@ namespace llarp::service
 
             // PKE (A, B, N)
             SharedSecret shared_secret;
+
             if (!crypto::dh_server(
                     shared_secret,
-                    self->msg->sender.EncryptionPublicKey(),
-                    self->m_LocalIdentity.enckey,
+                    self->msg->sender.encryption_pubkey(),
+                    self->_local_identity.enckey,
                     self->frame.nonce))
             {
-                LogError("x25519 key exchange failed");
-                Dump<MAX_PROTOCOL_MESSAGE_SIZE>(self->frame);
+                log::error(logcat, "X25519 key exchange failed!");
                 self->msg.reset();
                 return;
             }
@@ -344,7 +357,7 @@ namespace llarp::service
         ProtocolFrameMessage frame;
     };
 
-    bool ProtocolFrameMessage::AsyncDecryptAndVerify(
+    bool ProtocolFrameMessage::async_decrypt_verify(
         std::shared_ptr<path::Path> recvPath,
         const Identity& localIdent,
         Endpoint* handler,
@@ -357,7 +370,7 @@ namespace llarp::service
             // we need to dh
             auto dh = std::make_shared<AsyncFrameDecrypt>(localIdent, handler, msg, *this, recvPath->intro);
             dh->path = recvPath;
-            handler->router().queue_work([dh = std::move(dh)] { return AsyncFrameDecrypt::Work(dh); });
+            handler->router().queue_work([dh = std::move(dh)] { return AsyncFrameDecrypt::work(dh); });
             return true;
         }
 
@@ -429,7 +442,7 @@ namespace llarp::service
             && convo_tag == other.convo_tag;
     }
 
-    bool ProtocolFrameMessage::Verify(const ServiceInfo& svc) const
+    bool ProtocolFrameMessage::verify(const ServiceInfo& svc) const
     {
         ProtocolFrameMessage copy(*this);
         copy.sig.zero();

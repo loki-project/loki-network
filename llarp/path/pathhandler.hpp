@@ -42,7 +42,7 @@ namespace llarp
         {
             util::DecayingHashSet<RouterID> _edge_limiter;
 
-           public:
+          public:
             /// attempt a build
             /// return true if we are allowed to continue
             bool Attempt(const RouterID& router);
@@ -87,7 +87,7 @@ namespace llarp
 
         struct PathHandler
         {
-           private:
+          private:
             llarp_time_t last_warn_time = 0s;
 
             std::unordered_map<RouterID, std::weak_ptr<Path>> path_cache;
@@ -100,7 +100,7 @@ namespace llarp
 
             std::string create_hop_info_frame(const path::PathHopConfig& hop);
 
-           protected:
+          protected:
             void dissociate_hop_ids(std::shared_ptr<Path> p);
 
             /// flag for ::Stop()
@@ -130,7 +130,7 @@ namespace llarp
 
             virtual void path_build_succeeded(const RouterID& remote, std::shared_ptr<Path> p);
 
-           public:
+          public:
             Router& _router;
             size_t num_hops;
             llarp_time_t _last_build = 0s;

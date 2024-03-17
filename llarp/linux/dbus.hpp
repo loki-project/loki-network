@@ -13,14 +13,14 @@ namespace llarp::linux
     /// exception for connecting to system bus
     class system_bus_exception : public std::runtime_error
     {
-       public:
+      public:
         explicit system_bus_exception(int err);
     };
 
     /// exception for a failed calling of a dbus method
     class dbus_call_exception : public std::runtime_error
     {
-       public:
+      public:
         explicit dbus_call_exception(std::string meth, int err);
     };
 
@@ -38,7 +38,7 @@ namespace llarp::linux
         const std::string m_instance;
         const std::string m_call;
 
-       public:
+      public:
         DBUS(std::string _interface, std::string _instance, std::string _call);
 
         template <typename... T>

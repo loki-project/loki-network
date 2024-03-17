@@ -21,14 +21,15 @@ namespace llarp::vpn
 
             if (not dstport)
             {
-                _base_handler(IPPacket::from_udp(std::move(pkt)));
+                // TOFIX:
+                // _base_handler(IPPacket::from_udp(std::move(pkt)));
                 return;
             }
 
             if (auto itr = _port_mapped_handlers.find(dstport); itr != _port_mapped_handlers.end())
                 itr->second(std::move(pkt));
-            else
-                _base_handler(IPPacket::from_udp(std::move(pkt)));
+            // else
+            //     _base_handler(IPPacket::from_udp(std::move(pkt)));
         }
     };
 
@@ -39,9 +40,10 @@ namespace llarp::vpn
         explicit GenericLayer4Handler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)}
         {}
 
-        void handle_ip_packet(UDPPacket pkt) override
+        void handle_ip_packet(UDPPacket) override
         {
-            _base_handler(IPPacket::from_udp(std::move(pkt)));
+            // TOFIX:
+            // _base_handler(IPPacket::from_udp(std::move(pkt)));
         }
     };
 

@@ -9,7 +9,7 @@ namespace llarp::service
         llarp::AlignedBuffer<16>::operator[](0) = 0xfc;
     }
 
-    sockaddr_in6 SessionTag::ToV6() const
+    sockaddr_in6 SessionTag::to_v6() const
     {
         sockaddr_in6 saddr{};
         saddr.sin6_family = AF_INET6;
@@ -17,7 +17,7 @@ namespace llarp::service
         return saddr;
     }
 
-    void SessionTag::FromV6(sockaddr_in6 saddr)
+    void SessionTag::from_v6(sockaddr_in6 saddr)
     {
         std::copy_n(saddr.sin6_addr.s6_addr, size(), data());
     }

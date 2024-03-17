@@ -28,6 +28,7 @@ lokinet_add_library(lokinet-core-utils
   exit/endpoint.cpp
   
   handlers/common.cpp
+  handlers/null.cpp
   handlers/remote.cpp
   handlers/tun.cpp
 
@@ -88,7 +89,6 @@ lokinet_add_library(lokinet-wire
 # config, crypto, timeplace, nodedb, bootstrap.cpp, net, router
 lokinet_add_library(lokinet-utils
   ${CMAKE_CURRENT_BINARY_DIR}/constants/version.cpp
-  util/bencode.cpp
   util/buffer.cpp
   util/file.cpp
   util/logging/buffer.cpp
@@ -108,6 +108,7 @@ lokinet_add_library(lokinet-time-place
   address/ip_packet.cpp
   address/ip_range.cpp
   address/keys.cpp
+  address/utils.cpp
 
   ev/udp.cpp
   ev/loop.cpp

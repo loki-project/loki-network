@@ -10,7 +10,7 @@ namespace llarp::win32
 
     class error : public std::runtime_error
     {
-       public:
+      public:
         explicit error(std::string msg);
         virtual ~error() = default;
         explicit error(DWORD err, std::string msg);

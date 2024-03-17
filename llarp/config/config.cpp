@@ -585,7 +585,7 @@ namespace llarp
                 "lokinet will attempt to find an unused private range.",
             },
             [this](std::string arg) {
-                if (not _local_if_range.from_string(arg))
+                if (not _local_ip_range.from_string(arg))
                 {
                     throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
                 }
@@ -722,9 +722,113 @@ namespace llarp
                 "is not specified then the local IP of remote lokinet targets will not persist across",
                 "restarts of lokinet.",
             },
-            [this](fs::path arg) {
-                if (arg.empty())
+            [this](fs::path file) {
+                if (file.empty())
                     throw std::invalid_argument("persist-addrmap-file cannot be empty");
+
+                if (not fs::exists(file))
+                    throw std::invalid_argument("persist-addrmap-file path invalid: {}"_format(file));
+
+                bool load_file = true;
+                {
+                    constexpr auto ADDR_PERSIST_MODIFY_WINDOW = 1min;
+                    const auto last_write_time = fs::last_write_time(file);
+                    const auto now = decltype(last_write_time)::clock::now();
+
+                    if (now < last_write_time or now - last_write_time > ADDR_PERSIST_MODIFY_WINDOW)
+                    {
+                        load_file = false;
+                    }
+                }
+
+                std::vector<char> data;
+
+                if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary); maybe and load_file)
+                {
+                    log::debug(logcat, "Config loading persisting address map file from path:{}", file);
+
+                    maybe->seekg(0, std::ios_base::end);
+                    const size_t len = maybe->tellg();
+
+                    maybe->seekg(0, std::ios_base::beg);
+                    data.resize(len);
+
+                    log::trace(logcat, "Config reading {}B", len);
+
+                    maybe->read(data.data(), data.size());
+                }
+                else
+                {
+                    auto err = "Config could not load persisting address map file from path:{} --"_format(file);
+
+                    log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
+
+                    if (load_file)
+                    {
+                        log::info(logcat, "{} NOT FOUND", err);
+                    }
+                    else
+                        log::info(logcat, "{} STALE", err);
+                }
+                if (not data.empty())
+                {
+                    std::string_view bdata{data.data(), data.size()};
+
+                    log::trace(logcat, "Config parsing address map data: {}", bdata);
+
+                    const auto parsed = oxenc::bt_deserialize<oxenc::bt_dict>(bdata);
+
+                    for (const auto& [key, value] : parsed)
+                    {
+                        ip ip{};
+
+                        // TODO: this
+                        // if (not ip.FromString(key))
+                        // {
+                        //     LogWarn(name(), " malformed IP in addr map data: ", key);
+                        //     continue;
+                        // }
+
+                        AddressVariant_t addr;
+
+                        if (const auto* str = std::get_if<std::string>(&value))
+                        {
+                            if (auto maybe = parse_address(*str))
+                            {
+                                addr = *maybe;
+                            }
+                            else
+                            {
+                                log::warning(logcat, "Invalid address in addr map: {}", *str);
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            log::warning(logcat, "Invalid first entry in addr map: not a string");
+                            continue;
+                        }
+                        if (const auto* loki = std::get_if<service::Address>(&addr))
+                        {
+                            _ip_to_addr.emplace(ip, loki->data());
+                            _addr_to_ip.emplace(loki->data(), ip);
+                            _is_snode_map[*loki] = false;
+                            LogInfo(name(), " remapped ", ip, " to ", *loki);
+                        }
+                        if (const auto* snode = std::get_if<RouterID>(&addr))
+                        {
+                            _ip_to_addr.emplace(ip, snode->data());
+                            _addr_to_ip.emplace(snode->data(), ip);
+                            _is_snode_map[*snode] = true;
+                            LogInfo(name(), " remapped ", ip, " to ", *snode);
+                        }
+                        if (_next_ip < ip)
+                            _next_ip = ip;
+                        // make sure we dont unmap this guy
+                        mark_ip_active(ip);
+                    }
+                }
+
                 addr_map_persist_file = arg;
             });
 

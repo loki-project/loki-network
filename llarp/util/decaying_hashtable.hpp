@@ -48,7 +48,7 @@ namespace llarp::util
             m_Values.erase(key);
         }
 
-       private:
+      private:
         template <typename Predicate_t>
         void EraseIf(Predicate_t pred)
         {

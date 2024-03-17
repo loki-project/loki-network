@@ -70,7 +70,7 @@ namespace llarp
                 m_Values.erase(val);
             }
 
-           private:
+          private:
             template <typename Predicate_t>
             void EraseIf(Predicate_t pred)
             {

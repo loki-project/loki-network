@@ -11,7 +11,7 @@ namespace llarp::vpn
 
     class I_PacketInterceptor
     {
-       public:
+      public:
         virtual ~I_PacketInterceptor() = default;
 
         /// start intercepting packets and call a callback for each one we get

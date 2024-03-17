@@ -16,11 +16,6 @@
 #include <stdexcept>
 #include <string>
 
-namespace
-{
-    static auto net_cat = llarp::log::Cat("lokinet.net");
-}  // namespace
-
 namespace llarp
 {
     struct IP_range_deprecated

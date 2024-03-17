@@ -38,7 +38,6 @@ namespace llarp
             Exit = 3UL,
             Auth = 4UL,
             QUIC = 5UL,
-
         };
 
         inline constexpr std::string_view to_string(ProtocolType t)

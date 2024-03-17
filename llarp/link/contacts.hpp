@@ -12,7 +12,7 @@ namespace llarp
     /// router, like RouterContacts and introsets for example
     struct Contacts
     {
-       private:
+      private:
         // TODO: why was this a shared ptr in the original implementation? revisit this
         std::shared_ptr<int> timer_keepalive;
         Router& _router;
@@ -21,7 +21,7 @@ namespace llarp
         // holds introsets for remote services
         std::unique_ptr<dht::Bucket<dht::ISNode>> _introset_nodes;
 
-       public:
+      public:
         Contacts(Router& r);
 
         std::optional<service::EncryptedIntroSet> get_introset_by_location(const dht::Key_t& key) const;

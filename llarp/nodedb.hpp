@@ -184,7 +184,7 @@ namespace llarp
         /// get filename of an RC file given its public ident key
         fs::path get_path_by_pubkey(const RouterID& pk) const;
 
-       public:
+      public:
         explicit NodeDB(fs::path rootdir, std::function<void(std::function<void()>)> diskCaller, Router* r);
 
         /// in memory nodedb

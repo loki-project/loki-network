@@ -30,6 +30,7 @@ namespace llarp::net
     {
         /// ip protocol byte of this protocol
         IPProtocol protocol;
+
         /// the layer 3 port IN HOST ORDER FFS
         std::optional<uint16_t> port;
 
@@ -37,7 +38,9 @@ namespace llarp::net
 
         void bt_encode(oxenc::bt_list_producer& btlp) const;
 
-        bool BDecode(llarp_buffer_t* buf);
+        void bt_decode(oxenc::bt_list_consumer& btlc);
+
+        bool bt_decode(std::string_view buf);
 
         StatusObject ExtractStatus() const;
 
@@ -65,9 +68,10 @@ namespace llarp::net
         std::set<ProtocolInfo> protocols;
 
         void bt_encode(oxenc::bt_dict_producer& btdp) const;
+
         void bt_decode(oxenc::bt_dict_consumer& btdc);
 
-        bool BDecode(llarp_buffer_t* buf);
+        bool bt_decode(std::string_view buf);
         StatusObject ExtractStatus() const;
 
         /// returns true if we allow the traffic in this ip packet

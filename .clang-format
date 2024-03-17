@@ -11,6 +11,7 @@ ColumnLimit: 120
 PointerAlignment: Left
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'type']
+ReferenceAlignment: Left
 
 # bracing
 BreakBeforeBraces: Custom
@@ -40,6 +41,7 @@ BreakBeforeTernaryOperators: 'true'
 BreakConstructorInitializers: BeforeColon
 
 # indentation
+AccessModifierOffset: -2
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 IndentWidth: 4

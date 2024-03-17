@@ -101,7 +101,7 @@ namespace llarp::path
             return _router;
         }
 
-       private:
+      private:
         Router* _router;
 
         std::unordered_map<TransitHopID, std::shared_ptr<TransitHop>> transit_hops;

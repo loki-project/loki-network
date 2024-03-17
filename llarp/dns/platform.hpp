@@ -18,7 +18,7 @@ namespace llarp::dns
     /// sets dns settings in a platform dependant way
     class I_Platform
     {
-       public:
+      public:
         virtual ~I_Platform() = default;
 
         /// Attempts to set lokinet as the DNS server.
@@ -36,7 +36,7 @@ namespace llarp::dns
     /// a dns platform does silently does nothing, successfully
     class Null_Platform : public I_Platform
     {
-       public:
+      public:
         ~Null_Platform() override = default;
         void set_resolver(unsigned int, oxen::quic::Address, bool) override
         {}
@@ -47,7 +47,7 @@ namespace llarp::dns
     {
         std::vector<std::unique_ptr<I_Platform>> m_Impls;
 
-       public:
+      public:
         ~Multi_Platform() override = default;
         /// add a platform to be owned
         void add_impl(std::unique_ptr<I_Platform> impl);

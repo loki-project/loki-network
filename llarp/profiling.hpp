@@ -2,7 +2,6 @@
 
 #include "path/path.hpp"
 #include "router_id.hpp"
-#include "util/bencode.hpp"
 #include "util/thread/threading.hpp"
 
 #include <map>
@@ -28,15 +27,13 @@ namespace llarp
         uint64_t version = llarp::constants::proto_version;
 
         RouterProfile() = default;
-        RouterProfile(oxenc::bt_dict_consumer dict);
+        RouterProfile(oxenc::bt_dict_consumer& btdc);
 
-        void BEncode(oxenc::bt_dict_producer& dict) const;
-        void BEncode(oxenc::bt_dict_producer&& dict) const
-        {
-            BEncode(dict);
-        }
+        void bt_encode(oxenc::bt_dict_producer& btdp) const;
 
-        void BDecode(oxenc::bt_dict_consumer dict);
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
+
+        bool bt_decode(std::string_view buf);
 
         bool is_good(uint64_t chances) const;
 
@@ -92,7 +89,7 @@ namespace llarp
 
         void enable();
 
-       private:
+      private:
         void BEncode(oxenc::bt_dict_producer& dict) const;
 
         void BDecode(oxenc::bt_dict_consumer dict);

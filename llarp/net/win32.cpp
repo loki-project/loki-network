@@ -69,7 +69,7 @@ namespace llarp::net
             return false;
         }
 
-       public:
+      public:
         std::optional<int> get_interface_index(ip ip) const override
         {
             std::optional<int> found;

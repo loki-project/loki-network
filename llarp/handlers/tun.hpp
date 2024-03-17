@@ -162,7 +162,7 @@ namespace llarp::handlers
         /// get ip address for key unconditionally
         ip get_ip_for_addr(std::variant<service::Address, RouterID> addr) override;
 
-       protected:
+      protected:
         struct WritePacket
         {
             uint64_t seqno;
@@ -186,7 +186,7 @@ namespace llarp::handlers
         /// flush writing ip packets to interface
         void flush_write();
 
-        // TONUKE: errythang buddy
+        // TONUKE: errythang buddy (move to handlers)
         /// maps ip to key (host byte order)
         std::unordered_map<ip, AlignedBuffer<32>> _ip_to_addr;
 
@@ -201,7 +201,7 @@ namespace llarp::handlers
         /// maps ip address to an exit endpoint, useful when we have multiple exits on a range
         std::unordered_map<huint128_t, service::Address> _exit_to_ip;
 
-       private:
+      private:
         /// given an ip address that is not mapped locally find the address it shall be forwarded to
         /// optionally provide a custom selection strategy, if none is provided it will choose a
         /// random entry from the available choices
@@ -242,15 +242,17 @@ namespace llarp::handlers
         std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
         /// our local address and ip
         oxen::quic::Address _local_addr;
-        ip _local_ip;
+        ip _local_ip;  // fuck this, use _local_addr::get_ip()
 
         /// our network interface's ipv6 address
         oxen::quic::Address _local_ipv6;
 
         /// next ip address to allocate
         ip _next_ip;
+
         /// highest ip address to allocate
-        ip _max_ip;
+        ip _max_ip;  // last IP address in the range (add to IPRange class)
+
         /// our ip range we are using
         IPRange _local_range;
         /// list of strict connect addresses for hooks
@@ -266,8 +268,10 @@ namespace llarp::handlers
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
         std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
+
         /// ranges we advetise as reachable
         std::set<IPRange> _owned_ranges;
+
         /// how long to wait for path alignment
         llarp_time_t _path_alignment_timeout;
 

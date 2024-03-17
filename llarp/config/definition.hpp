@@ -536,7 +536,7 @@ namespace llarp
         /// @return a string containing the config in INI format
         std::string generate_ini_config(bool useValues = false);
 
-       private:
+      private:
         // If true skip client-only options; if false skip relay-only options.
         bool relay;
 

@@ -6,12 +6,14 @@
 
 namespace llarp::service
 {
+    static auto logcat = log::Cat("service_info");
+
     bool ServiceInfo::verify(uint8_t* buf, size_t size, const Signature& sig) const
     {
         return crypto::verify(signkey, buf, size, sig);
     }
 
-    bool ServiceInfo::Update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce)
+    bool ServiceInfo::update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce)
     {
         signkey = sign;
         enckey = enc;
@@ -19,21 +21,7 @@ namespace llarp::service
         {
             vanity = *nonce;
         }
-        return UpdateAddr();
-    }
-
-    bool ServiceInfo::decode_key(const llarp_buffer_t& key, llarp_buffer_t* val)
-    {
-        bool read = false;
-        if (!BEncodeMaybeReadDictEntry("e", enckey, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("s", signkey, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictInt("v", version, read, key, val))
-            return false;
-        if (!BEncodeMaybeReadDictEntry("x", vanity, read, key, val))
-            return false;
-        return read;
+        return update_address();
     }
 
     void ServiceInfo::bt_decode(oxenc::bt_dict_consumer& btdc)
@@ -46,8 +34,28 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(info_cat, "ServiceInfo failed to populate with bt encoded contents");
+            log::critical(logcat, "ServiceInfo failed to populate with bt encoded contents");
+            throw;
         }
+    }
+
+    bool ServiceInfo::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "ServiceInfo parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
     void ServiceInfo::bt_encode(oxenc::bt_dict_producer& btdp) const
@@ -59,28 +67,28 @@ namespace llarp::service
             btdp.append("x", vanity.ToView());
     }
 
-    std::string ServiceInfo::Name() const
+    std::string ServiceInfo::name() const
     {
         if (_cached_addr.is_zero())
         {
             Address addr;
-            CalculateAddress(addr.as_array());
+            calculate_address(addr.as_array());
             return addr.to_string();
         }
         return _cached_addr.to_string();
     }
 
-    bool ServiceInfo::CalculateAddress(std::array<uint8_t, 32>& data) const
+    bool ServiceInfo::calculate_address(std::array<uint8_t, 32>& data) const
     {
         data = signkey.as_array();
         return true;
     }
 
-    bool ServiceInfo::UpdateAddr()
+    bool ServiceInfo::update_address()
     {
         if (_cached_addr.is_zero())
         {
-            return CalculateAddress(_cached_addr.as_array());
+            return calculate_address(_cached_addr.as_array());
         }
         return true;
     }

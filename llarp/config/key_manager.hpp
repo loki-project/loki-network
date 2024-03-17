@@ -64,7 +64,7 @@ namespace llarp
         fs::path enckey_path;
         fs::path transkey_path;
 
-       private:
+      private:
         std::atomic_bool is_initialized;
         std::atomic_bool backup_keys;
 

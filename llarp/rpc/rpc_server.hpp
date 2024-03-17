@@ -20,9 +20,7 @@ namespace llarp
 }  // namespace llarp
 
 namespace
-{
-    static auto logcat = llarp::log::Cat("lokinet.rpc");
-}  // namespace
+{}  // namespace
 
 namespace llarp::rpc
 {
@@ -80,7 +78,7 @@ namespace llarp::rpc
 
     class RPCServer
     {
-       public:
+      public:
         explicit RPCServer(LMQ_ptr, Router&);
         ~RPCServer() = default;
 
@@ -110,7 +108,7 @@ namespace llarp::rpc
     template <typename RPC>
     class EndpointHandler
     {
-       public:
+      public:
         RPCServer& server;
         RPC rpc{};
 
@@ -127,14 +125,11 @@ namespace llarp::rpc
             }
             catch (const rpc_error& e)
             {
-                log::info(logcat, "RPC request 'rpc.{}' failed with: {}", rpc.name, e.what());
-                SetJSONError(fmt::format("RPC request 'rpc.{}' failed with: {}", rpc.name, e.what()), rpc.response);
+                SetJSONError("RPC request 'rpc.{}' failed with: {}"_format(rpc.name, e.what()), rpc.response);
             }
             catch (const std::exception& e)
             {
-                log::info(logcat, "RPC request 'rpc.{}' raised an exception: {}", rpc.name, e.what());
-                SetJSONError(
-                    fmt::format("RPC request 'rpc.{}' raised an exception: {}", rpc.name, e.what()), rpc.response);
+                SetJSONError("RPC request 'rpc.{}' raised an exception: {}"_format(rpc.name, e.what()), rpc.response);
             }
 
             if (rpc.replier.has_value())

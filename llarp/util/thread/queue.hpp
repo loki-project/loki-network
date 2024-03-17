@@ -18,10 +18,10 @@ namespace llarp::thread
     class Queue
     {
         // This class provides a thread-safe, lock-free, fixed-size queue.
-       public:
+      public:
         static constexpr size_t Alignment = 64;
 
-       private:
+      private:
         Type* m_data;
         const char m_dataPadding[Alignment - sizeof(Type*)];
 
@@ -38,7 +38,7 @@ namespace llarp::thread
         friend QueuePopGuard<Type>;
         friend QueuePushGuard<Type>;
 
-       public:
+      public:
         explicit Queue(size_t capacity);
 
         ~Queue();
@@ -100,12 +100,12 @@ namespace llarp::thread
     template <typename Type>
     class QueuePushGuard
     {
-       private:
+      private:
         Queue<Type>* m_queue;
         uint32_t m_generation;
         uint32_t m_index;
 
-       public:
+      public:
         QueuePushGuard(Queue<Type>& queue, uint32_t generation, uint32_t index)
             : m_queue(&queue), m_generation(generation), m_index(index)
         {}
@@ -121,12 +121,12 @@ namespace llarp::thread
     template <typename Type>
     class QueuePopGuard
     {
-       private:
+      private:
         Queue<Type>& m_queue;
         uint32_t m_generation;
         uint32_t m_index;
 
-       public:
+      public:
         QueuePopGuard(Queue<Type>& queue, uint32_t generation, uint32_t index)
             : m_queue(queue), m_generation(generation), m_index(index)
         {}

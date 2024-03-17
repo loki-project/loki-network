@@ -18,12 +18,14 @@
 
 namespace llarp::rpc
 {
+    static auto logcat = llarp::log::Cat("lokinet.rpc");
+
     // Fake packet source that serializes repsonses back into dns
     class DummyPacketSource final : public dns::PacketSource_Base
     {
         std::function<void(std::optional<dns::Message>)> func;
 
-       public:
+      public:
         oxen::quic::Address dumb;
 
         template <typename Callable>

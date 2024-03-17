@@ -13,7 +13,7 @@ namespace llarp::sys
     {
         llarp::sys::ServiceState m_State{ServiceState::Initial};
 
-       public:
+      public:
         /// change our state and report it to the system layer
         void we_changed_our_state(ServiceState st) override
         {

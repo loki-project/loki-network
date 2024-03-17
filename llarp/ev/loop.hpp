@@ -17,8 +17,6 @@ namespace llarp
         class NetworkInterface;
     }  // namespace vpn
 
-    class EventLoop;
-
     struct EventHandler
     {
         event_ptr ev;
@@ -35,23 +33,22 @@ namespace llarp
 
     class EventLoop
     {
-       public:
+      public:
         static std::shared_ptr<EventLoop> make();
         static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         EventLoop();
         EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
-        ~EventLoop();
+        ~EventLoop();  // TODO:
 
         std::shared_ptr<oxen::quic::Loop> _loop;
-        event_ptr _ticker;
 
         void add_oneshot_event(loop_time delay, std::function<void()> hook);
 
         std::shared_ptr<EventHandler> make_handler();
 
-       public:
+      public:
         const loop_ptr& loop() const
         {
             return _loop->loop();
@@ -61,8 +58,6 @@ namespace llarp
         {
             return _loop->in_event_loop();
         }
-
-        bool add_ticker(std::function<void()> ticker);
 
         bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler);
 

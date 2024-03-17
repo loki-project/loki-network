@@ -87,7 +87,7 @@ namespace llarp
 
         ~Router() = default;
 
-       private:
+      private:
         std::shared_ptr<RoutePoker> _route_poker;
         std::chrono::steady_clock::time_point _next_explore_at;
         llarp_time_t last_pump{0s};
@@ -183,7 +183,7 @@ namespace llarp
 
         void init_api();
 
-       protected:
+      protected:
         std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};
         std::chrono::system_clock::time_point next_rc_gossip{last_rc_gossip};
         std::chrono::system_clock::time_point next_initial_fetch_attempt{last_rc_gossip};
@@ -191,7 +191,7 @@ namespace llarp
         std::chrono::system_clock::time_point last_rid_fetch{last_rc_gossip};
         std::chrono::system_clock::time_point next_bootstrap_attempt{last_rc_gossip};
 
-       public:
+      public:
         bool fully_meshed() const;
 
         bool testnet() const

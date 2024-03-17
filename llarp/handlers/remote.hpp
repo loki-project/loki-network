@@ -25,7 +25,7 @@ namespace llarp
         */
         struct RemoteHandler : public EndpointBase, public path::PathHandler
         {
-           protected:
+          protected:
             std::string _name;
             std::unordered_map<RemoteAddr, oxen::quic::Address> _ip_map;
 
@@ -40,7 +40,7 @@ namespace llarp
 
             bool _use_v6;
 
-           public:
+          public:
             RemoteHandler(std::string name, Router& r);
             ~RemoteHandler() override;
 

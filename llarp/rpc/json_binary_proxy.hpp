@@ -46,7 +46,7 @@ namespace llarp::rpc
     // bt-encoding); or as hex or base64 (for json-encoding).
     class json_binary_proxy
     {
-       public:
+      public:
         nlohmann::json& e;
         enum class fmt
         {

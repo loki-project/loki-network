@@ -16,7 +16,7 @@ namespace llarp::vpn
         ip_pkt_hook _handler;
         std::unordered_map<uint8_t, std::unique_ptr<Layer4Handler>> _ip_proto_handler;
 
-       public:
+      public:
         /// baseHandler will be called if no other handlers matches a packet
         explicit PacketRouter(ip_pkt_hook baseHandler);
 

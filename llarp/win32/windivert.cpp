@@ -158,7 +158,7 @@ namespace llarp::win32
             // dns packet queue size
             static constexpr size_t recv_queue_size = 64;
 
-           public:
+          public:
             IO(const std::string& filter_spec, std::function<void(void)> wake)
                 : m_Wake{wake}, m_RecvQueue{recv_queue_size}
             {
