@@ -12,6 +12,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("ip_packet");
+
     IPPacket::IPPacket(size_t sz)
     {
         if (sz and sz < MIN_PACKET_SIZE)
@@ -100,46 +102,29 @@ namespace llarp
         log::debug(logcat, "Setting new source ({}) and destination ({}) IPs", src, dst);
 
         std::basic_string_view<uint16_t> head_u16s{reinterpret_cast<const uint16_t*>(_header), sizeof(ip_header)};
+        // set new IP addresses
+        _header->src = src.addr;
+        _header->dest = dst.addr;
 
-        auto old_src = ipv4{_header->src};
-        auto old_dest = ipv4{_header->dest};
-
-        auto* buf = data();
-        auto sz = size();
-
-        // Header length is divided by 4 to indicate the number of 32 bit words; multiplying
-        // by 4 returns the size
-        auto header_size = static_cast<size_t>(_header->header_len * 4);
-
-        if (header_size <= sz)
+        switch (_header->protocol)
         {
-            auto pld = buf + header_size;
-            auto psz = sz - header_size;
-
-            auto fragoff = static_cast<size_t>((ntohs(_header->frag_off) & 0x1Fff) * 8);
-
-            switch (_header->protocol)
-            {
-                case 6:  // TCP
-                    deltaChecksumIPv4TCP(pld, psz, fragoff, 16, old_src, old_dest, old_src, old_dest);
-                    break;
-                case 17:   // UDP
-                case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
-                    deltaChecksumIPv4UDP(pld, psz, fragoff, old_src, old_dest, old_src, old_dest);
-                    break;
-                case 33:  // DCCP
-                    deltaChecksumIPv4TCP(pld, psz, fragoff, 6, old_src, old_dest, old_src, old_dest);
-                    break;
-            }
+            case 6:    // TCP
+            case 17:   // UDP
+            case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
+            case 33:   // DCCP
+                _header->checksum = tcpudp_checksum_ipv4(
+                    _header->src, _header->dest, _header->header_len, _header->protocol, _header->checksum);
+                break;
+            default:
+                // do nothing
+                break;
         }
 
         // IPv4 checksum
         auto v4chk = (uint16_t*)&(_header->checksum);
-        *v4chk = deltaIPv4Checksum(*v4chk, old_src, old_dest, old_src, old_dest);
+        *v4chk = checksum_ipv4(_header, _header->header_len);
 
-        // write new IP addresses
-        _header->src = nSrcIP.n;
-        _header->dest = nDstIP.n;
+        _init_internals();
     }
 
     void IPPacket::update_ipv6_address(ipv6 src, ipv6 dst, std::optional<uint32_t> flowlabel)
@@ -150,23 +135,16 @@ namespace llarp
         if (sz <= ihs)
             return;
 
-        auto hdr = HeaderV6();
+        auto hdr = v6_header();
         if (flowlabel.has_value())
         {
             // set flow label if desired
-            hdr->FlowLabel(*flowlabel);
+            hdr->set_flowlabel(*flowlabel);
         }
 
-        const auto oldSrcIP = hdr->srcaddr;
-        const auto oldDstIP = hdr->dstaddr;
-        const uint32_t* oSrcIP = in6_uint32_ptr(oldSrcIP);
-        const uint32_t* oDstIP = in6_uint32_ptr(oldDstIP);
-
         // IPv6 address
-        hdr->srcaddr = HUIntToIn6(src);
-        hdr->dstaddr = HUIntToIn6(dst);
-        const uint32_t* nSrcIP = in6_uint32_ptr(hdr->srcaddr);
-        const uint32_t* nDstIP = in6_uint32_ptr(hdr->dstaddr);
+        hdr->srcaddr = src.to_in6();
+        hdr->dstaddr = dst.to_in6();
 
         // TODO IPv6 header options
         auto* pld = data() + ihs;
@@ -217,19 +195,38 @@ namespace llarp
         }
     endprotohdrs:
 
+        uint16_t chksumoff{0};
+        uint16_t chksum{0};
+
         switch (nextproto)
         {
             case 6:  // TCP
-                deltaChecksumIPv6TCP(pld, psz, fragoff, 16, oSrcIP, oDstIP, nSrcIP, nDstIP);
+                chksumoff = 16;
+            case 33:  // DCCP
+                chksum = tcp_checksum_ipv6(&hdr->srcaddr, &hdr->dstaddr, hdr->payload_len, 0);
+
+                // ones-complement addition fo 0xFFff is 0; this is verboten
+                if (chksum == 0xFFff)
+                    chksum = 0x0000;
+
+                chksumoff = chksumoff == 16 ? 16 : 6;
+                _is_udp = false;
                 break;
             case 17:   // UDP
             case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
-                deltaChecksumIPv6UDP(pld, psz, fragoff, oSrcIP, oDstIP, nSrcIP, nDstIP);
+                chksum = udp_checksum_ipv6(&hdr->srcaddr, &hdr->dstaddr, hdr->payload_len, 0);
+                _is_udp = true;
                 break;
-            case 33:  // DCCP
-                deltaChecksumIPv6TCP(pld, psz, fragoff, 6, oSrcIP, oDstIP, nSrcIP, nDstIP);
+            default:
+                // do nothing
                 break;
         }
+
+        auto check = _is_udp ? (uint16_t*)(pld + 6) : (uint16_t*)(pld + chksumoff - fragoff);
+
+        *check = chksum;
+
+        _init_internals();
     }
 
     std::optional<IPPacket> IPPacket::make_icmp_unreachable() const
@@ -256,23 +253,29 @@ namespace llarp
             uint8_t* itr = pkt.data() + ip_hdr_sz;
             uint8_t* icmp_begin = itr;  // type 'destination unreachable'
             *itr++ = 3;
+
             // code 'Destination host unknown error'
             *itr++ = 7;
+
             // checksum + unused
             oxenc::write_host_as_big<uint32_t>(0, itr);
             checksum = (uint16_t*)itr;
             itr += 4;
+
             // next hop mtu is ignored but let's put something here anyways just in case tm
             oxenc::write_host_as_big<uint16_t>(1500, itr);
             itr += 2;
+
             // copy ip header and first 8 bytes of datagram for icmp rject
             std::copy_n(data(), ip_hdr_sz + ICMP_HEADER_SIZE, itr);
             itr += ip_hdr_sz + ICMP_HEADER_SIZE;
+
             // calculate checksum of ip header
-            _header->checksum = ipchksum(pkt.data(), ip_hdr_sz);
+            _header->checksum = checksum_ipv4(_header, _header->header_len);
             const auto icmp_size = std::distance(icmp_begin, itr);
+
             // calculate icmp checksum
-            *checksum = ipchksum(icmp_begin, icmp_size);
+            *checksum = checksum_ipv4(icmp_begin, icmp_size);
             return pkt;
         }
         return std::nullopt;

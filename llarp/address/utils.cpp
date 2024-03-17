@@ -87,12 +87,12 @@ namespace llarp
         return result;
     }
 
-    static uint16_t checksum_ipv4(const void *header, uint8_t header_len)
+    uint16_t checksum_ipv4(const void *header, uint8_t header_len)
     {
         return ~ipv4_checksum_magic(static_cast<const uint8_t *>(header), header_len * 4);
     }
 
-    static uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum)
+    uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum)
     {
         auto _sum = static_cast<uint64_t>(sum);
 
@@ -135,14 +135,12 @@ namespace llarp
         return fold_csum(sum);
     }
 
-    static uint32_t tcp_checksum_ipv6(
-        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
+    uint32_t tcp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
     {
         return ~ipv6_checksum_magic(saddr, daddr, len, IPPROTO_TCP, csum);
     }
 
-    static uint32_t udp_checksum_ipv6(
-        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
+    uint32_t udp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
     {
         return ~ipv6_checksum_magic(saddr, daddr, len, IPPROTO_UDP, csum);
     }

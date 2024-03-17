@@ -63,7 +63,7 @@ namespace llarp
             Comment{
                 "Minimum number of routers lokinet client will attempt to maintain connections to.",
             },
-            [=](int arg) {
+            [=, this](int arg) {
                 if (arg < CLIENT_ROUTER_CONNECTIONS)
                     throw std::invalid_argument{
                         fmt::format("Client relay connections must be >= {}", CLIENT_ROUTER_CONNECTIONS)};

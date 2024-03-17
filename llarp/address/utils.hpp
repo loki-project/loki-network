@@ -11,15 +11,13 @@
 
 namespace llarp
 {
-    static uint16_t checksum_ipv4(const void *header, uint8_t header_len);
+    uint16_t checksum_ipv4(const void *header, uint8_t header_len);
 
-    static uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum);
+    uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum);
 
-    static uint32_t tcp_checksum_ipv6(
-        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
+    uint32_t tcp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
 
-    static uint32_t udp_checksum_ipv6(
-        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
+    uint32_t udp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
 
     template <typename T>
     static bool parse_int(const std::string_view str, T &value, int base = 10)

@@ -90,13 +90,13 @@ namespace llarp
         in6_addr dstaddr;
 
         /// Returns the flowlabel (stored in network order) in HOST ORDER
-        uint32_t FlowLabel() const
+        uint32_t set_flowlabel() const
         {
             return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask));
         }
 
         /// Sets a flowlabel in network order. Takes in a label in HOST ORDER
-        void FlowLabel(uint32_t label)
+        void set_flowlabel(uint32_t label)
         {
             // the ipv6 flow label is the last 20 bits in the first 32 bits of the header
             preamble.flowlabel =
