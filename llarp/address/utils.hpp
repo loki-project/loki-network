@@ -4,6 +4,7 @@
 
 #include <llarp/crypto/constants.hpp>
 #include <llarp/util/logging.hpp>
+#include <llarp/util/str.hpp>
 #include <llarp/util/types.hpp>
 
 #include <charconv>
@@ -50,21 +51,6 @@ namespace llarp
 
         return ret;
     };
-
-    template <typename T>
-    static bool parse_int(const std::string_view str, T &value, int base = 10)
-    {
-        T tmp;
-        auto *strend = str.data() + str.size();
-
-        auto [p, ec] = std::from_chars(str.data(), strend, tmp, base);
-
-        if (ec != std::errc() || p != strend)
-            return false;
-
-        value = tmp;
-        return true;
-    }
 
     inline static std::pair<std::string, uint16_t> parse_addr(
         std::string_view addr, std::optional<uint16_t> default_port)

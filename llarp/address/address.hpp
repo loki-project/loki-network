@@ -3,6 +3,7 @@
 #include "keys.hpp"
 #include "utils.hpp"
 
+#include <llarp/service/name.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/fs.hpp>
 
@@ -18,12 +19,14 @@ namespace llarp
         pubkey_t _pubkey;
         std::optional<std::string> _name = std::nullopt;
         std::string _tld;
+        bool is_ons{false};
 
         RemoteAddress() = default;
 
-        explicit RemoteAddress(std::string addr) : _name{std::move(addr)}
+        explicit RemoteAddress(std::string addr, bool _is_ons = false) : _name{std::move(addr)}, is_ons{_is_ons}
         {
-            _pubkey.from_string(*_name);
+            if (not is_ons)
+                _pubkey.from_string(*_name);
 
             if constexpr (std::is_same_v<pubkey_t, ClientPubKey>)
                 _tld = std::string{TLD::CLIENT};
@@ -88,11 +91,13 @@ namespace llarp
         }
     };
 
-    /// This function currently assumes the remote address string is a pubkey, rather than
-    /// an ONS name (TODO:)
-    template <typename pubkey_t>
+    template <typename pubkey_t = PubKey, std::enable_if_t<std::is_base_of_v<PubKey, pubkey_t>, int> = 0>
     std::optional<RemoteAddress<pubkey_t>> from_pubkey_addr(const std::string& arg)
     {
+        if (service::is_valid_ons(arg))
+        {
+            return RemoteAddress<ClientPubKey>(arg, true);
+        }
         if (auto maybe_addr = parse_addr_string(arg, TLD::CLIENT))
         {
             return RemoteAddress<ClientPubKey>(*maybe_addr);

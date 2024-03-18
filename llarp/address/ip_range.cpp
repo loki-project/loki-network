@@ -4,11 +4,13 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("iprange");
+
     ip_net IPRange::init_ip()
     {
         if (_is_ipv4)
             return ipv4_net{ipv4{oxenc::big_to_host<uint32_t>(_addr.in4().sin_addr.s_addr)}, _mask};
-        return ipv6_net{ipv6{_addr.in6().sin6_addr.s6_addr}, _mask};
+        return ipv6_net{ipv6{&_addr.in6().sin6_addr}, _mask};
     }
 
     std::optional<IPRange> IPRange::from_string(std::string arg)

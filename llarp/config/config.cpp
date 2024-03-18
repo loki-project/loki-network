@@ -458,7 +458,7 @@ namespace llarp
             ClientOnly,
             MultiValue,
             Comment{
-                "Specify a `.loki` address and an optional ip range to use as an exit broker.",
+                "Specify a `.loki` address and an ip range to use as an exit broker.",
                 "Examples:",
                 "    exit-node=whatever.loki",
                 "would map all exit traffic through whatever.loki; and",
@@ -471,7 +471,7 @@ namespace llarp
                     return;
 
                 std::optional<IPRange> range;
-                ClientAddress remote;
+                RemoteAddress remote;
 
                 const auto pos = arg.find(":");
 
@@ -483,22 +483,12 @@ namespace llarp
                     throw std::invalid_argument("[network]:exit-node invalid ip range for exit provided");
 
                 if (pos != std::string::npos)
-                {
                     arg = arg.substr(0, pos);
-                }
 
-                if (service::is_valid_name(arg))
-                {
-                    _ons_range_map.emplace(std::move(arg), std::move(*range));
-                    return;
-                }
-
-                if (arg != "null" and not remote.from_pubkey_addr(arg))
-                {
+                if (auto maybe_raddr = from_pubkey_addr<ClientPubKey>(arg); maybe_raddr)
+                    _range_map.emplace(std::move(*maybe_raddr), std::move(*range));
+                else
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
-                }
-
-                _range_map.emplace(std::move(remote), std::move(*range));
             });
 
         conf.define_option<std::string>(
@@ -529,7 +519,7 @@ namespace llarp
                 const auto exit_str = arg.substr(0, pos);
                 auth.token = arg.substr(pos + 1);
 
-                if (llarp::service::is_valid_name(exit_str))
+                if (llarp::service::is_valid_ons(exit_str))
                 {
                     ons_exit_auths.emplace(exit_str, auth);
                     return;
@@ -638,20 +628,18 @@ namespace llarp
                 const auto pos = arg.find(":");
 
                 if (pos == std::string::npos)
-                {
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
-                }
 
-                RemoteAddress remote;
+                auto addr_arg = arg.substr(0, pos);
+                auto ip_arg = arg.substr(pos + 1);
 
-                if (not remote.from_pubkey_addr(arg.substr(0, pos)))
+                if (auto maybe_raddr = from_pubkey_addr<ClientPubKey>(std::move(addr_arg)); maybe_raddr)
                 {
-                    throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
+                    oxen::quic::Address addr{std::move(ip_arg), 0};
+                    _addr_map.emplace(std::move(*maybe_raddr), std::move(addr));
                 }
-
-                oxen::quic::Address addr{arg.substr(pos + 1), 0};
-
-                _addr_map.emplace(std::move(remote), std::move(addr));
+                else
+                    throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
             });
 
         conf.define_option<std::string>(
@@ -780,56 +768,37 @@ namespace llarp
 
                     for (const auto& [key, value] : parsed)
                     {
-                        ip ip{};
+                        oxen::quic::Address addr;
 
-                        // TODO: this
-                        // if (not ip.FromString(key))
-                        // {
-                        //     LogWarn(name(), " malformed IP in addr map data: ", key);
-                        //     continue;
-                        // }
-
-                        AddressVariant_t addr;
-
-                        if (const auto* str = std::get_if<std::string>(&value))
+                        try
                         {
-                            if (auto maybe = parse_address(*str))
+                            addr = oxen::quic::Address{key, 0};
+
+                            if (const auto* str = std::get_if<std::string>(&value))
                             {
-                                addr = *maybe;
-                            }
-                            else
-                            {
+                                if (auto maybe_raddr = from_pubkey_addr(*str); maybe_raddr)
+                                {
+                                    _persisting_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
+                                    continue;
+                                }
+
                                 log::warning(logcat, "Invalid address in addr map: {}", *str);
                                 continue;
                             }
-                        }
-                        else
-                        {
+
                             log::warning(logcat, "Invalid first entry in addr map: not a string");
                             continue;
                         }
-                        if (const auto* loki = std::get_if<service::Address>(&addr))
+                        catch (...)
                         {
-                            _ip_to_addr.emplace(ip, loki->data());
-                            _addr_to_ip.emplace(loki->data(), ip);
-                            _is_snode_map[*loki] = false;
-                            log::info(logcat, "Remapping {} to {}", ip, *loki);
+                            log::warning(
+                                logcat, "Exception caught parsing key:value pair in addr persist file (key:{})", key);
+                            continue;
                         }
-                        if (const auto* snode = std::get_if<RouterID>(&addr))
-                        {
-                            _ip_to_addr.emplace(ip, snode->data());
-                            _addr_to_ip.emplace(snode->data(), ip);
-                            _is_snode_map[*snode] = true;
-                            log::info(logcat, "Remapping {} to {}", ip, *snode);
-                        }
-                        if (_next_ip < ip)
-                            _next_ip = ip;
-                        // make sure we dont unmap this guy
-                        mark_ip_active(ip);
                     }
                 }
 
-                addr_map_persist_file = arg;
+                addr_map_persist_file = file;
             });
 
         // Deprecated options:

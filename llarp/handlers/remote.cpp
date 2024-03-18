@@ -28,7 +28,7 @@ namespace llarp::handlers
 
     void RemoteHandler::lookup_name(std::string target, std::function<void(std::string res, bool success)> func)
     {
-        if (not service::is_valid_name(target))
+        if (not service::is_valid_ons(target))
         {
             log::debug(logcat, "Invalid ONS name ({}) queried for lookup", target);
             return func(target, false);

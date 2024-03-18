@@ -14,12 +14,13 @@ namespace llarp::service
         std::optional<Address> Decrypt(std::string_view name) const;
     };
 
-    /// check if an lns name complies with the registration rules
-    inline bool is_valid_name(std::string_view ons_name)
+    /// check if an ons name complies with the registration rules
+    inline bool is_valid_ons(std::string_view ons_name)
     {
         // make sure it ends with .loki because no fucking shit right?
         if (not ends_with(ons_name, ".loki"))
             return false;
+
         // strip off .loki suffix
         ons_name = ons_name.substr(0, ons_name.find_last_of('.'));
 
@@ -36,12 +37,15 @@ namespace llarp::service
                 continue;
             return false;
         }
+
         // split into domain parts
         const auto parts = split(ons_name, ".");
+
         // get root domain
         const auto primaryName = parts[parts.size() - 1];
         constexpr size_t MaxNameLen = 32;
         constexpr size_t MaxPunycodeNameLen = 63;
+
         // check against lns name blacklist
         if (primaryName == "localhost")
             return false;

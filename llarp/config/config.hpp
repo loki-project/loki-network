@@ -138,29 +138,34 @@ namespace llarp
 
         std::optional<llarp_time_t> path_alignment_timeout;
 
-        // TODO: if this is provided, we should parse it in the config
-        // parse in the god damn config
-        std::optional<fs::path> addr_map_persist_file;
-
         /* TESTNET: Under modification */
+
+        std::optional<fs::path> addr_map_persist_file;
+        std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _persisting_addrs;
 
         // only member that refers to an actual interface
         std::string _if_name;
 
-        IPRange _local_ip_range;  // rename to _local_ip_range
+        IPRange _local_ip_range;
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
-        std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _addr_map;
+        // Remote client exit addresses mapped to fixed local IP addresses
+        std::unordered_map<RemoteAddress<ClientPubKey>, oxen::quic::Address> _addr_map;
 
-        std::unordered_map<RemoteAddress<PubKey>, IPRange> _range_map;
-        std::unordered_map<std::string, IPRange> _ons_range_map;
+        // Remote client exit addresses mapped to local IP ranges. Addresses can be populated via client
+        // PubKey or their ONS name
+        std::unordered_map<RemoteAddress<ClientPubKey>, IPRange> _range_map;
 
         std::set<IPRange> _owned_ranges;
 
-        // DEPRECATED
+        /* DEPRECATED */
+
+        // IP ranges mapped to remote client exits with an ONS name. Deprecating this because RemoteAddress
+        // can store and account for ONS names
+        // std::unordered_map<std::string, IPRange> _ons_range_map;
         // IP_range_deprecated if_addr;
         // std::optional<huint128_t> base_ipv6_range = std::nullopt;
-        std::unordered_map<huint128_t, service::Address> addr_map;
+        // std::unordered_map<huint128_t, service::Address> addr_map;
         // net::IPRangeMap<service::Address> range_map;
         // net::IPRangeMap<std::string> ons_range_map;
         // std::set<IP_range_deprecated> owned_ranges;
