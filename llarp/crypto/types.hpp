@@ -2,6 +2,7 @@
 
 #include "constants.hpp"
 
+#include <llarp/address/keys.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/types.hpp>
@@ -14,29 +15,29 @@ namespace llarp
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
     using KeyExchangeNonce = AlignedBuffer<32>;
 
-    struct PubKey : public AlignedBuffer<PUBKEYSIZE>
-    {
-        PubKey() = default;
+    // struct PubKey : public AlignedBuffer<PUBKEYSIZE>
+    // {
+    //     PubKey() = default;
 
-        explicit PubKey(const uint8_t* ptr) : AlignedBuffer<SIZE>(ptr)
-        {}
+    //     explicit PubKey(const uint8_t* ptr) : AlignedBuffer<SIZE>(ptr)
+    //     {}
 
-        explicit PubKey(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
-        {}
+    //     explicit PubKey(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
+    //     {}
 
-        explicit PubKey(const AlignedBuffer<SIZE>& other) : AlignedBuffer<SIZE>(other)
-        {}
+    //     explicit PubKey(const AlignedBuffer<SIZE>& other) : AlignedBuffer<SIZE>(other)
+    //     {}
 
-        std::string to_string() const;
+    //     std::string to_string() const;
 
-        bool from_hex(const std::string& str);
+    //     bool from_hex(const std::string& str);
 
-        static PubKey make_from_hex(const std::string& s);
+    //     static PubKey make_from_hex(const std::string& s);
 
-        PubKey& operator=(const uint8_t* ptr);
-    };
+    //     PubKey& operator=(const uint8_t* ptr);
+    // };
 
-    bool operator==(const PubKey& lhs, const PubKey& rhs);
+    // bool operator==(const PubKey& lhs, const PubKey& rhs);
 
     struct PrivateKey;
 
@@ -122,8 +123,6 @@ namespace llarp
     };
 
     template <>
-    inline constexpr bool IsToStringFormattable<PubKey> = true;
-    template <>
     inline constexpr bool IsToStringFormattable<SecretKey> = true;
     template <>
     inline constexpr bool IsToStringFormattable<PrivateKey> = true;
@@ -150,10 +149,3 @@ namespace llarp
     /// SH(result, body)
     using shorthash_func = bool (*)(ShortHash&, const llarp_buffer_t&);
 }  // namespace llarp
-
-namespace std
-{
-    template <>
-    struct hash<llarp::PubKey> : hash<llarp::AlignedBuffer<llarp::PubKey::SIZE>>
-    {};
-};  // namespace std

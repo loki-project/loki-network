@@ -149,9 +149,10 @@ namespace llarp
 
         IPRange _local_ip_range;  // rename to _local_ip_range
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
-        std::unordered_map<ClientAddress, oxen::quic::Address> _addr_map;
 
-        std::unordered_map<ClientAddress, IPRange> _range_map;
+        std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _addr_map;
+
+        std::unordered_map<RemoteAddress<PubKey>, IPRange> _range_map;
         std::unordered_map<std::string, IPRange> _ons_range_map;
 
         std::set<IPRange> _owned_ranges;

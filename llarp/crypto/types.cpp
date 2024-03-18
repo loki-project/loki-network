@@ -10,36 +10,36 @@
 
 namespace llarp
 {
-    bool PubKey::from_hex(const std::string& str)
-    {
-        if (str.size() != 2 * size())
-            return false;
-        oxenc::from_hex(str.begin(), str.end(), begin());
-        return true;
-    }
+    // bool PubKey::from_hex(const std::string& str)
+    // {
+    //     if (str.size() != 2 * size())
+    //         return false;
+    //     oxenc::from_hex(str.begin(), str.end(), begin());
+    //     return true;
+    // }
 
-    PubKey PubKey::make_from_hex(const std::string& s)
-    {
-        PubKey p;
-        oxenc::from_hex(s.begin(), s.end(), p.begin());
-        return p;
-    }
+    // PubKey PubKey::make_from_hex(const std::string& s)
+    // {
+    //     PubKey p;
+    //     oxenc::from_hex(s.begin(), s.end(), p.begin());
+    //     return p;
+    // }
 
-    std::string PubKey::to_string() const
-    {
-        return oxenc::to_hex(begin(), end());
-    }
+    // std::string PubKey::to_string() const
+    // {
+    //     return oxenc::to_hex(begin(), end());
+    // }
 
-    PubKey& PubKey::operator=(const uint8_t* ptr)
-    {
-        std::copy(ptr, ptr + SIZE, begin());
-        return *this;
-    }
+    // PubKey& PubKey::operator=(const uint8_t* ptr)
+    // {
+    //     std::copy(ptr, ptr + SIZE, begin());
+    //     return *this;
+    // }
 
-    bool operator==(const PubKey& lhs, const PubKey& rhs)
-    {
-        return lhs.as_array() == rhs.as_array();
-    }
+    // bool operator==(const PubKey& lhs, const PubKey& rhs)
+    // {
+    //     return lhs.as_array() == rhs.as_array();
+    // }
 
     bool SecretKey::load_from_file(const fs::path& fname)
     {

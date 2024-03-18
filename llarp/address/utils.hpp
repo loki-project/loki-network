@@ -2,15 +2,26 @@
 
 #include "types.hpp"
 
+#include <llarp/crypto/constants.hpp>
 #include <llarp/util/logging.hpp>
+#include <llarp/util/types.hpp>
 
 #include <charconv>
 #include <optional>
+#include <set>
 #include <string_view>
 #include <system_error>
 
 namespace llarp
 {
+    namespace TLD
+    {
+        inline constexpr auto RELAY = ".snode"sv;
+        inline constexpr auto CLIENT = ".loki"sv;
+
+        std::set<std::string_view> allowed = {RELAY, CLIENT};
+    }  //  namespace TLD
+
     uint16_t checksum_ipv4(const void *header, uint8_t header_len);
 
     uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum);
@@ -18,6 +29,27 @@ namespace llarp
     uint32_t tcp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
 
     uint32_t udp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
+
+    inline static std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
+    {
+        std::optional<std::string> ret = std::nullopt;
+
+        if (auto pos = arg.find_first_of('.'); pos != std::string_view::npos)
+        {
+            auto _prefix = arg.substr(0, pos);
+            // check the pubkey prefix is the right length
+            if (_prefix.length() != PUBKEYSIZE)
+                return ret;
+
+            // verify the tld is allowed
+            auto _tld = arg.substr(pos);
+
+            if (_tld == tld and TLD::allowed.count(_tld))
+                ret = _prefix;
+        }
+
+        return ret;
+    };
 
     template <typename T>
     static bool parse_int(const std::string_view str, T &value, int base = 10)

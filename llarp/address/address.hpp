@@ -1,57 +1,76 @@
 #pragma once
 
 #include "keys.hpp"
+#include "utils.hpp"
 
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/fs.hpp>
-#include <llarp/util/types.hpp>
 
 #include <oxen/quic.hpp>
 
-#include <set>
 #include <utility>
 
 namespace llarp
 {
-    namespace TLD
+    template <typename pubkey_t = PubKey, std::enable_if_t<std::is_base_of_v<PubKey, pubkey_t>, int> = 0>
+    struct RemoteAddress
     {
-        inline constexpr auto RELAY = ".snode"sv;
-        inline constexpr auto CLIENT = ".loki"sv;
+        pubkey_t _pubkey;
+        std::optional<std::string> _name = std::nullopt;
+        std::string _tld;
 
-        std::set<std::string_view> allowed = {RELAY, CLIENT};
-    }  //  namespace TLD
+        RemoteAddress() = default;
 
-    struct RemoteAddr
-    {
-      public:
-        RemoteAddr() = default;
+        explicit RemoteAddress(std::string addr) : _name{std::move(addr)}
+        {
+            _pubkey.from_string(*_name);
 
-        explicit RemoteAddr(PublicKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
+            if constexpr (std::is_same_v<pubkey_t, ClientPubKey>)
+                _tld = std::string{TLD::CLIENT};
+            else if constexpr (std::is_same_v<pubkey_t, RelayPubKey>)
+                _tld = std::string{TLD::RELAY};
+            else
+                throw std::invalid_argument{"Something seriously weird just happened."};
+        }
+
+        explicit RemoteAddress(PubKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
             : _pubkey{std::move(pk)}, _name{std::move(n)}, _tld{tld}
         {}
-        RemoteAddr(const RemoteAddr& other) : RemoteAddr{other._pubkey, other._tld, other._name}
+        RemoteAddress(const RemoteAddress& other) : RemoteAddress{other._pubkey, other._tld, other._name}
         {}
-        RemoteAddr(RemoteAddr&& other)
-            : RemoteAddr{std::move(other._pubkey), std::move(other._tld), std::move(other._name)}
+        RemoteAddress(RemoteAddress&& other)
+            : RemoteAddress{std::move(other._pubkey), std::move(other._tld), std::move(other._name)}
         {}
-        RemoteAddr& operator=(const RemoteAddr& other) = default;
-        RemoteAddr& operator=(RemoteAddr&& other);
 
-        bool operator<(const RemoteAddr& other) const;
-        bool operator==(const RemoteAddr& other) const;
-        bool operator!=(const RemoteAddr& other) const;
+        RemoteAddress& operator=(const RemoteAddress& other) = default;
 
-        virtual ~RemoteAddr() = default;
+        RemoteAddress& operator=(RemoteAddress&& other)
+        {
+            _pubkey = std::move(other._pubkey);
+            _name = std::move(other._name);
+            _tld = std::move(other._tld);
+            return *this;
+        }
+
+        bool operator<(const RemoteAddress& other) const
+        {
+            return std::tie(_pubkey, _name, _tld) < std::tie(other._pubkey, other._name, other._tld);
+        }
+        bool operator==(const RemoteAddress& other) const
+        {
+            return _pubkey == other._pubkey and _name == other._name && _tld == other._tld;
+        }
+        bool operator!=(const RemoteAddress& other) const
+        {
+            return not(*this == other);
+        }
+
+        ~RemoteAddress() = default;
 
         std::string to_string() const
         {
             return remote_name();
         }
-
-      protected:
-        PublicKey _pubkey;
-        std::optional<std::string> _name = std::nullopt;
-        std::string _tld;
 
         std::string name() const
         {
@@ -67,85 +86,36 @@ namespace llarp
         {
             return name() + tld();
         }
+    };
 
-        /// This function currently assumes the remote address string is a pubkey, rather than
-        /// an ONS name (TODO:)
-        virtual bool from_pubkey_addr(std::string)
+    /// This function currently assumes the remote address string is a pubkey, rather than
+    /// an ONS name (TODO:)
+    template <typename pubkey_t>
+    std::optional<RemoteAddress<pubkey_t>> from_pubkey_addr(const std::string& arg)
+    {
+        if (auto maybe_addr = parse_addr_string(arg, TLD::CLIENT))
         {
-            return true;
+            return RemoteAddress<ClientPubKey>(*maybe_addr);
         }
-    };
+        if (auto maybe_addr = parse_addr_string(arg, TLD::RELAY))
+        {
+            return RemoteAddress<RelayPubKey>(*maybe_addr);
+        }
 
-    struct RelayAddress final : public RemoteAddr
-    {
-        RelayAddress() = default;
-
-        explicit RelayAddress(RelayPubKey rpk, std::optional<std::string> n = std::nullopt)
-            : RemoteAddr{std::move(rpk), TLD::RELAY, std::move(n)}
-        {}
-        RelayAddress(const RelayAddress& other) : RemoteAddr{other._pubkey, TLD::RELAY, other._name}
-        {}
-        RelayAddress(RelayAddress&& other) : RemoteAddr{std::move(other._pubkey), TLD::RELAY, std::move(other._name)}
-        {}
-        RelayAddress& operator=(const RelayAddress& other) = default;
-        RelayAddress& operator=(RelayAddress&& other);
-
-        bool operator<(const RelayAddress& other) const;
-        bool operator==(const RelayAddress& other) const;
-        bool operator!=(const RelayAddress& other) const;
-
-        ~RelayAddress() override = default;
-
-        bool from_pubkey_addr(std::string arg) override;
-    };
-
-    struct ClientAddress final : public RemoteAddr
-    {
-        ClientAddress() = default;
-
-        explicit ClientAddress(ClientPubKey cpk, std::optional<std::string> n = std::nullopt)
-            : RemoteAddr{std::move(cpk), TLD::CLIENT, std::move(n)}
-        {}
-        ClientAddress(const ClientAddress& other) : RemoteAddr{other._pubkey, TLD::RELAY, other._name}
-        {}
-        ClientAddress(ClientAddress&& other) : RemoteAddr{std::move(other._pubkey), TLD::RELAY, std::move(other._name)}
-        {}
-        ClientAddress& operator=(const ClientAddress& other) = default;
-        ClientAddress& operator=(ClientAddress&& other);
-
-        bool operator<(const ClientAddress& other) const;
-        bool operator==(const ClientAddress& other) const;
-        bool operator!=(const ClientAddress& other) const;
-
-        ~ClientAddress() override = default;
-
-        bool from_pubkey_addr(std::string arg) override;
-    };
-
-    template <>
-    inline constexpr bool IsToStringFormattable<RemoteAddr> = true;
-
-    template <typename T>
-    inline constexpr bool IsToStringFormattable<T, std::enable_if_t<std::is_base_of_v<RemoteAddr, T>>> = true;
-
+        return std::nullopt;
+    }
+    template <typename pk_t>
+    inline constexpr bool IsToStringFormattable<RemoteAddress<pk_t>> = true;
 }  // namespace llarp
 
 namespace std
 {
-    template <>
-    struct hash<llarp::RemoteAddr>
+    template <typename pk_t>
+    struct hash<llarp::RemoteAddress<pk_t>>
     {
-        virtual size_t operator()(const llarp::RemoteAddr& r) const
+        virtual size_t operator()(const llarp::RemoteAddress<pk_t>& r) const
         {
             return std::hash<std::string>{}(r.to_string());
         }
     };
-
-    template <>
-    struct hash<llarp::RelayAddress> : public hash<llarp::RemoteAddr>
-    {};
-
-    template <>
-    struct hash<llarp::ClientAddress> : public hash<llarp::RemoteAddr>
-    {};
 }  //  namespace std

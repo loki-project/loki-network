@@ -27,7 +27,7 @@ namespace llarp
         {
           protected:
             std::string _name;
-            std::unordered_map<RemoteAddr, oxen::quic::Address> _ip_map;
+            std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _ip_map;
 
             DnsConfig _dns_config;
             NetworkConfig _net_config;

@@ -531,7 +531,7 @@ namespace llarp
             const auto& remote_addr = rc->addr();
 
             if (auto rv = ep.establish_and_send(
-                    oxen::quic::RemoteAddress{router.ToView(), remote_addr},
+                    KeyedAddress{router.ToView(), remote_addr},
                     *rc,
                     std::move(endpoint),
                     std::move(body),
@@ -563,7 +563,7 @@ namespace llarp
         const auto& remote_addr = rc.addr();
 
         if (auto rv = ep.establish_connection(
-                oxen::quic::RemoteAddress{rid.ToView(), remote_addr}, rc, std::move(on_open), std::move(on_close));
+                KeyedAddress{rid.ToView(), remote_addr}, rc, std::move(on_open), std::move(on_close));
             rv)
         {
             log::info(logcat, "Begun establishing connection to {}", remote_addr);
@@ -1156,7 +1156,7 @@ namespace llarp
 
         if (rc_index >= 0)
         {
-            log::info(logcat, "Received PublishIntroMessage for {} (TXID: {}); we are candidate {}");
+            log::info(logcat, "Received PublishIntroMessage for {}; we are candidate {}", addr, relay_order);
 
             _router.contacts().put_intro(std::move(enc));
             respond(serialize_response({{messages::STATUS_KEY, ""}}));

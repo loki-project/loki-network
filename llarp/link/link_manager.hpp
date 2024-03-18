@@ -38,6 +38,8 @@ namespace llarp
 
     using static_secret = oxen::quic::opt::static_secret;
 
+    using KeyedAddress = oxen::quic::RemoteAddress;
+
     inline const keep_alive ROUTER_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 
@@ -95,11 +97,11 @@ namespace llarp
             size_t num_router_conns() const;
 
             template <typename... Opt>
-            bool establish_connection(const oxen::quic::RemoteAddress& remote, const RemoteRC& rc, Opt&&... opts);
+            bool establish_connection(const KeyedAddress& remote, const RemoteRC& rc, Opt&&... opts);
 
             template <typename... Opt>
             bool establish_and_send(
-                const oxen::quic::RemoteAddress& remote,
+                const KeyedAddress& remote,
                 const RemoteRC& rc,
                 std::optional<std::string> endpoint,
                 std::string body,
@@ -318,9 +320,11 @@ namespace llarp
 
     namespace link
     {
+        static auto logcat = log::Cat("link_manager");
+
         template <typename... Opt>
         bool Endpoint::establish_and_send(
-            const oxen::quic::RemoteAddress& remote,
+            const KeyedAddress& remote,
             const RemoteRC& rc,
             std::optional<std::string> ep,
             std::string body,
@@ -383,14 +387,14 @@ namespace llarp
                 }
                 catch (...)
                 {
-                    log::error(quic_cat, "Error: failed to establish connection to {}", remote);
+                    log::error(logcat, "Error: failed to establish connection to {}", remote);
                     return false;
                 }
             });
         }
 
         template <typename... Opt>
-        bool Endpoint::establish_connection(const oxen::quic::RemoteAddress& remote, const RemoteRC& rc, Opt&&... opts)
+        bool Endpoint::establish_connection(const KeyedAddress& remote, const RemoteRC& rc, Opt&&... opts)
         {
             return link_manager.router().loop()->call_get([&]() {
                 try
@@ -430,7 +434,7 @@ namespace llarp
                 }
                 catch (...)
                 {
-                    log::error(quic_cat, "Error: failed to establish connection to {}", remote);
+                    log::error(logcat, "Error: failed to establish connection to {}", remote);
                     return false;
                 }
             });

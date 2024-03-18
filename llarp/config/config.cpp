@@ -642,7 +642,7 @@ namespace llarp
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
                 }
 
-                ClientAddress remote;
+                RemoteAddress remote;
 
                 if (not remote.from_pubkey_addr(arg.substr(0, pos)))
                 {
