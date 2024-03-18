@@ -19,7 +19,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: GossipRCMessage failed to bt encode contents");
+                log::error(messages::logcat, "Error: GossipRCMessage failed to bt encode contents");
             }
 
             return std::move(btdp).str();
@@ -49,7 +49,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: RCFetchMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: RCFetchMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();
@@ -65,7 +65,7 @@ namespace llarp
 
             if (local_rc)
             {
-                log::critical(link_cat, "Serializing localRC: {}", oxenc::to_hex(local_rc->view()));
+                log::critical(messages::logcat, "Serializing localRC: {}", oxenc::to_hex(local_rc->view()));
                 btdp.append_encoded("local", oxen::quic::to_sv(local_rc->view()));
             }
 
@@ -87,7 +87,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: BootstrapFetchMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: BootstrapFetchMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();
@@ -108,7 +108,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: FetchRIDMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: FetchRIDMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();

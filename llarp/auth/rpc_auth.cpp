@@ -5,6 +5,8 @@
 
 namespace llarp::auth
 {
+    static auto logcat = log::Cat("rpc.auth");
+
     RPCAuthPolicy::RPCAuthPolicy(
         Router& r,
         std::string url,

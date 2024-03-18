@@ -24,7 +24,7 @@ namespace llarp
             if (not addr().is_public() and BLOCK_BOGONS)
             {
                 auto err = "Unable to verify expired RemoteRC address!";
-                log::info(logcat, err);
+                log::info(logcat, "{}", err);
                 throw std::runtime_error{err};
             }
 

@@ -24,6 +24,8 @@
 
 namespace llarp::vpn
 {
+    static auto logcat = log::Cat("vpn.linux");
+
     struct in6_ifreq
     {
         in6_addr addr;

@@ -22,7 +22,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: FindIntroMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: FindIntroMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();
@@ -43,7 +43,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: FindNameMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();
@@ -59,7 +59,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: FindNameMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();
@@ -85,7 +85,7 @@ namespace llarp
             }
             catch (...)
             {
-                log::error(link_cat, "Error: FindNameMessage failed to bt encode contents!");
+                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
             }
 
             return std::move(btdp).str();

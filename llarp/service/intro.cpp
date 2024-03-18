@@ -76,6 +76,8 @@ namespace llarp::service
             log::warning(logcat, "{}", err);
             throw std::runtime_error{err};
         }
+
+        return true;
     }
 
     void Introduction::bt_decode(oxenc::bt_dict_consumer& btdc)

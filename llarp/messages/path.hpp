@@ -51,7 +51,7 @@ namespace llarp
             if (!crypto::dh_client(hop.shared, hop.rc.router_id(), hop.commkey, hop.nonce))
             {
                 auto err = fmt::format("Failed to generate shared key for path build!");
-                log::warning(path_cat, err);
+                log::warning(messages::logcat, "{}", err);
                 throw std::runtime_error{std::move(err)};
             }
             // generate nonceXOR value self->hop->pathKey
@@ -89,7 +89,7 @@ namespace llarp
             // derive (outer) shared key
             if (!crypto::dh_client(shared, hop.rc.router_id(), framekey, outer_nonce))
             {
-                log::warning(path_cat, "DH client failed during hop info encryption!");
+                log::warning(messages::logcat, "DH client failed during hop info encryption!");
                 throw std::runtime_error{"DH failed during hop info encryption"};
             }
 
@@ -97,7 +97,7 @@ namespace llarp
             if (!crypto::xchacha20(
                     reinterpret_cast<unsigned char*>(hop_info.data()), hop_info.size(), shared, outer_nonce))
             {
-                log::warning(path_cat, "Hop info encryption failed!");
+                log::warning(messages::logcat, "Hop info encryption failed!");
                 throw std::runtime_error{"Hop info encryption failed"};
             }
 
@@ -122,7 +122,7 @@ namespace llarp
                     hashed_data.size(),
                     shared))
             {
-                log::warning(path_cat, "Failed to generate HMAC for hop info");
+                log::warning(messages::logcat, "Failed to generate HMAC for hop info");
                 throw std::runtime_error{"Failed to generate HMAC for hop info"};
             }
 

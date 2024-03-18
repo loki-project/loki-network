@@ -285,7 +285,10 @@ namespace llarp
     void Profiling::BEncode(bt_dict_producer& dict) const
     {
         for (const auto& [r_id, profile] : _profiles)
-            profile.BEncode(dict.append_dict(r_id.ToView()));
+        {
+            auto subdict = dict.append_dict(r_id.ToView());
+            profile.bt_encode(subdict);
+        }
     }
 
     void Profiling::BDecode(bt_dict_consumer dict)

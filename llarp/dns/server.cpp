@@ -356,7 +356,7 @@ namespace llarp::dns
                 // add host files
                 for (const auto& file : conf.hostfiles)
                 {
-                    const auto str = file.u8string();
+                    const auto str = file.string();
                     if (auto ret = ub_ctx_hosts(m_ctx, str.c_str()))
                     {
                         throw std::runtime_error{fmt::format("Failed to add host file {}: {}", file, ub_strerror(ret))};

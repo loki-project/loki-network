@@ -1,5 +1,6 @@
 #include "bootstrap.hpp"
 
+#include "util/file.hpp"
 #include "util/logging.hpp"
 #include "util/logging/buffer.hpp"
 

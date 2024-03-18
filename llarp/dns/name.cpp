@@ -114,13 +114,15 @@ namespace llarp::dns
 
             // our string right now is the little endian representation, so load it as such on
             // little endian, or in reverse on big endian.
+
+            std::string arg;
+
             if constexpr (oxenc::little_endian)
-            {
-                auto hex = oxenc::from_hex(in.begin(), in.end());
-                return ipv6{reinterpret_cast<const unsigned char*>(hex.data())};
-            }
+                arg = oxenc::from_hex(in.begin(), in.end());
             else
-                return ipv6{reinterpret_cast<const unsigned char*>(in.data())};
+                arg = std::string{in.data(), in.size()};
+
+            return ipv6{arg};
         }
         return std::nullopt;
     }

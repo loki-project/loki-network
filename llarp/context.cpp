@@ -21,6 +21,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("context");
+
     bool Context::call_safe(std::function<void(void)> f)
     {
         if (!_loop)

@@ -176,7 +176,7 @@ namespace llarp
         {
             nuint_t<UInt_t> x{};
             if (not x.FromString(str))
-                throw std::invalid_argument{fmt::format("{} is not a valid value")};
+                throw std::invalid_argument{fmt::format("{} is not a valid value", str)};
             return x;
         }
 

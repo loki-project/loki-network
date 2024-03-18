@@ -251,7 +251,7 @@ namespace llarp::rpc
 
         if (activeNodeList.empty())
         {
-            LogWarn("got empty service node list, ignoring.");
+            log::warning(logcat, "Received empty service node list, ignoring.");
             return;
         }
 

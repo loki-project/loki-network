@@ -55,6 +55,8 @@ namespace llarp
         {}
         explicit RelayPubKey(const RelayPubKey& other) : RelayPubKey{other.data()}
         {}
+        RelayPubKey(RelayPubKey&& other) : RelayPubKey{other.data()}
+        {}
 
         std::string to_string() const;
 
@@ -78,6 +80,8 @@ namespace llarp
         explicit ClientPubKey(std::string_view data) : ClientPubKey{to_usv(data)}
         {}
         explicit ClientPubKey(const ClientPubKey& other) : ClientPubKey{other.data()}
+        {}
+        ClientPubKey(ClientPubKey&& other) : ClientPubKey{other.data()}
         {}
 
         std::string to_string() const;

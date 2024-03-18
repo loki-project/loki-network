@@ -21,7 +21,7 @@ namespace llarp::dns::sd
         const bool isStandardDNSPort = dns.port() == 53;
         if (dns.is_ipv6())
         {
-            ipv6 ipv6{dns.in6().sin6_addr.s6_addr};
+            ipv6 ipv6{&dns.in6().sin6_addr};
             static_assert(sizeof(ipv6) == 16);
 
             auto* a = reinterpret_cast<const uint8_t*>(&ipv6);

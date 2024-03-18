@@ -279,7 +279,7 @@ namespace llarp
             if (default_values.empty())
                 return {};
             if constexpr (std::is_same_v<fs::path, T>)
-                return {{default_values.front().u8string()}};
+                return {{default_values.front().string()}};
             else
             {
                 std::vector<std::string> def_strs;

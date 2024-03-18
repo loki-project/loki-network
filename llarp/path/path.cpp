@@ -91,6 +91,18 @@ namespace llarp::path
         return send_path_control_message("find_name", FindNameMessage::serialize(std::move(name)), std::move(func));
     }
 
+    void Path::enable_exit_traffic()
+    {
+        log::info(logcat, "{} {} granted exit", name(), pivot_router_id());
+        // _role |= ePathRoleExit;
+    }
+
+    void Path::mark_exit_closed()
+    {
+        log::info(logcat, "{} hd its exit closed", name());
+        // _role &= ePathRoleExit;
+    }
+
     std::string Path::make_outer_payload(std::string payload)
     {
         SymmNonce nonce;

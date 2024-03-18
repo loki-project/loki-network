@@ -37,7 +37,7 @@ namespace llarp
         }
 
         explicit RemoteAddress(PubKey pk, std::string_view tld, std::optional<std::string> n = std::nullopt)
-            : _pubkey{std::move(pk)}, _name{std::move(n)}, _tld{tld}
+            : _pubkey{pk.data()}, _name{std::move(n)}, _tld{tld}
         {}
         RemoteAddress(const RemoteAddress& other) : RemoteAddress{other._pubkey, other._tld, other._name}
         {}
@@ -94,17 +94,20 @@ namespace llarp
     template <typename pubkey_t = PubKey, std::enable_if_t<std::is_base_of_v<PubKey, pubkey_t>, int> = 0>
     std::optional<RemoteAddress<pubkey_t>> from_pubkey_addr(const std::string& arg)
     {
-        if (service::is_valid_ons(arg))
+        if constexpr (std::is_same_v<pubkey_t, ClientPubKey> || std::is_same_v<pubkey_t, PubKey>)
         {
-            return RemoteAddress<ClientPubKey>(arg, true);
-        }
-        if (auto maybe_addr = parse_addr_string(arg, TLD::CLIENT))
-        {
-            return RemoteAddress<ClientPubKey>(*maybe_addr);
+            if (service::is_valid_ons(arg))
+            {
+                return std::make_optional(RemoteAddress<ClientPubKey>(arg, true));
+            }
+            if (auto maybe_addr = parse_addr_string(arg, TLD::CLIENT))
+            {
+                return std::make_optional(RemoteAddress<ClientPubKey>(*maybe_addr));
+            }
         }
         if (auto maybe_addr = parse_addr_string(arg, TLD::RELAY))
         {
-            return RemoteAddress<RelayPubKey>(*maybe_addr);
+            return std::make_optional(RemoteAddress<RelayPubKey>(*maybe_addr));
         }
 
         return std::nullopt;

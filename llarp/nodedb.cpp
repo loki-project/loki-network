@@ -15,6 +15,8 @@ static const std::string RC_FILE_EXT = ".signed";
 
 namespace llarp
 {
+    static auto logcat = llarp::log::Cat("nodedb");
+
     static void EnsureSkiplist(fs::path nodedbDir)
     {
         if (not fs::exists(nodedbDir))
@@ -450,7 +452,7 @@ namespace llarp
                     {
                         auto err =
                             "RID fetch from {} via {} {}"_format(target, source, m.timed_out ? "timed out" : "failed");
-                        log::critical(link_cat, err);
+                        log::critical(logcat, "{}", err);
                         ingest_rid_fetch_responses(target);
                         fetch_rids_result(initial);
                         return;
@@ -476,8 +478,7 @@ namespace llarp
                         {
                             if (s.size() != RouterID::SIZE)
                             {
-                                log::critical(
-                                    link_cat, "RID fetch from {} via {} returned bad RouterID", target, source);
+                                log::critical(logcat, "RID fetch from {} via {} returned bad RouterID", target, source);
                                 ingest_rid_fetch_responses(target);
                                 fetch_rids_result(initial);
                                 return;
@@ -492,7 +493,7 @@ namespace llarp
                     }
                     catch (const std::exception& e)
                     {
-                        log::critical(link_cat, "Error handling fetch RouterIDs response: {}", e.what());
+                        log::critical(logcat, "Error handling fetch RouterIDs response: {}", e.what());
                         ingest_rid_fetch_responses(target);
                         fetch_rids_result(initial);
                     }
@@ -634,7 +635,7 @@ namespace llarp
             if (_using_bootstrap_fallback)
             {
                 auto err = fmt::format("ERROR: ALL BOOTSTRAPS ARE BAD... REATTEMPTING IN {}...", BOOTSTRAP_COOLDOWN);
-                log::error(logcat, err);
+                log::error(logcat, "{}", err);
 
                 bootstrap_cooldown();
                 return;

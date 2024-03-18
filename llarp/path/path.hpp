@@ -95,17 +95,9 @@ namespace llarp
                 return now >= (ExpireTime() - dlt);
             }
 
-            void enable_exit_traffic()
-            {
-                log::info(path_cat, "{} {} granted exit", name(), pivot_router_id());
-                // _role |= ePathRoleExit;
-            }
+            void enable_exit_traffic();
 
-            void mark_exit_closed()
-            {
-                log::info(path_cat, "{} hd its exit closed", name());
-                // _role &= ePathRoleExit;
-            }
+            void mark_exit_closed();
 
             bool update_exit(uint64_t tx_id);
 

@@ -62,20 +62,20 @@ namespace llarp
         bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler);
 
         template <typename Callable>
-        void call(Callable&& f, source_location src = source_location::current())
+        void call(Callable&& f)
         {
-            _loop->call(std::forward<Callable>(f), src);
+            _loop->call(std::forward<Callable>(f));
         }
 
         template <typename Callable, typename Ret = decltype(std::declval<Callable>()())>
-        Ret call_get(Callable&& f, source_location src = source_location::current())
+        Ret call_get(Callable&& f)
         {
-            return _loop->call_get(std::forward<Callable>(f), src);
+            return _loop->call_get(std::forward<Callable>(f));
         }
 
-        void call_soon(std::function<void(void)> f, source_location src = source_location::current())
+        void call_soon(std::function<void(void)> f)
         {
-            _loop->call_soon(std::move(f), src);
+            _loop->call_soon(std::move(f));
         }
 
         void call_later(loop_time delay, std::function<void()> hook);

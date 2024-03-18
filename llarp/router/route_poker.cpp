@@ -6,6 +6,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("route_poker");
+
     void RoutePoker::add_route(oxen::quic::Address ip)
     {
         if (not is_up)

@@ -14,6 +14,8 @@ namespace llarp
 {
     namespace messages
     {
+        static auto logcat = log::Cat("messages");
+
         inline std::string serialize_response(oxenc::bt_dict supplement = {})
         {
             return oxenc::bt_serialize(supplement);

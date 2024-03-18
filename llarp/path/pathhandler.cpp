@@ -13,13 +13,10 @@
 
 #include <functional>
 
-namespace llarp
-{
-    auto path_cat = log::Cat("path");
-}
-
 namespace llarp::path
 {
+    static auto logcat = log::Cat("pathhandler");
+
     bool BuildLimiter::Attempt(const RouterID& router)
     {
         return _edge_limiter.Insert(router);
@@ -104,7 +101,7 @@ namespace llarp::path
         if (!crypto::dh_client(hop.shared, hop.rc.router_id(), hop.commkey, hop.nonce))
         {
             auto err = fmt::format("{} failed to generate shared key for path build!", name());
-            log::error(path_cat, err);
+            log::error(logcat, "{}", err);
             throw std::runtime_error{std::move(err)};
         }
         // generate nonceXOR value self->hop->pathKey
@@ -263,14 +260,14 @@ namespace llarp::path
         // derive (outer) shared key
         if (!crypto::dh_client(shared, hop.rc.router_id(), framekey, outer_nonce))
         {
-            log::error(path_cat, "DH client failed during hop info encryption!");
+            log::error(logcat, "DH client failed during hop info encryption!");
             throw std::runtime_error{"DH failed during hop info encryption"};
         }
 
         // encrypt hop_info (mutates in-place)
         if (!crypto::xchacha20(reinterpret_cast<uint8_t*>(hop_info.data()), hop_info.size(), shared, outer_nonce))
         {
-            log::error(path_cat, "Hop info encryption failed!");
+            log::error(logcat, "Hop info encryption failed!");
             throw std::runtime_error{"Hop info encryption failed"};
         }
 
@@ -295,7 +292,7 @@ namespace llarp::path
                 hashed_data.size(),
                 shared))
         {
-            log::error(path_cat, "Failed to generate HMAC for hop info");
+            log::error(logcat, "Failed to generate HMAC for hop info");
             throw std::runtime_error{"Failed to generate HMAC for hop info"};
         }
 
@@ -551,7 +548,7 @@ namespace llarp::path
             hops.push_back(*maybe);
         else
         {
-            log::warning(path_cat, "{} has no first hop candidate", name());
+            log::warning(logcat, "{} has no first hop candidate", name());
             return std::nullopt;
         }
 
@@ -623,7 +620,7 @@ namespace llarp::path
     {
         if (is_stopped())
         {
-            log::info(path_cat, "Path builder is stopped, aborting path build...");
+            log::info(logcat, "Path builder is stopped, aborting path build...");
             return;
         }
 
@@ -633,7 +630,7 @@ namespace llarp::path
 
         if (not _router.pathbuild_limiter().Attempt(edge))
         {
-            log::warning(path_cat, "{} building too quickly to edge router {}", name(), edge);
+            log::warning(logcat, "{} building too quickly to edge router {}", name(), edge);
             return;
         }
 
@@ -652,7 +649,7 @@ namespace llarp::path
 
         auto path = std::make_shared<path::Path>(_router, hops, get_weak(), std::move(path_shortName));
 
-        log::info(path_cat, "{} building path -> {} : {}", name(), path->short_name(), path->HopsString());
+        log::info(logcat, "{} building path -> {} : {}", name(), path->short_name(), path->HopsString());
 
         oxenc::bt_list_producer frames;
         std::vector<std::string> frame_str(path::MAX_LEN);
@@ -743,27 +740,27 @@ namespace llarp::path
                 // TODO: inform failure (what this means needs revisiting, badly)
                 if (m.timed_out)
                 {
-                    log::warning(path_cat, "Path build request timed out!");
+                    log::warning(logcat, "Path build request timed out!");
                     path_build_failed(terminus, path, true);
                 }
                 else
                 {
                     oxenc::bt_dict_consumer d{m.body()};
                     auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                    log::warning(path_cat, "Path build returned failure status: {}", status);
+                    log::warning(logcat, "Path build returned failure status: {}", status);
                     path_build_failed(terminus, path);
                 }
             }
             catch (const std::exception& e)
             {
-                log::warning(path_cat, "Exception caught parsing path build response: {}", e.what());
+                log::warning(logcat, "Exception caught parsing path build response: {}", e.what());
             }
         };
 
         if (not _router.send_control_message(
                 path->upstream(), "path_build", std::move(frames).str(), std::move(response_cb)))
         {
-            log::warning(path_cat, "Error sending path_build control message");
+            log::warning(logcat, "Error sending path_build control message");
             path_build_failed(terminus, path);
         }
     }

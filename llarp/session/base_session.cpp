@@ -10,6 +10,8 @@
 
 namespace llarp::session
 {
+    static auto logcat = log::Cat("session.base");
+
     BaseSession::BaseSession(
         RouterID _router, Router& r, size_t hoplen, EndpointBase& parent, std::shared_ptr<auth::SessionAuthPolicy> a)
         : PathHandler{r, NUM_SESSION_PATHS, hoplen},
