@@ -141,20 +141,25 @@ namespace llarp
         /* TESTNET: Under modification */
 
         std::optional<fs::path> addr_map_persist_file;
-        std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _persisting_addrs;
+
+        std::unordered_map<ClientAddress, oxen::quic::Address> _persisting_clients;
+        std::unordered_map<RelayAddress, oxen::quic::Address> _persisting_relays;
 
         // only member that refers to an actual interface
         std::string _if_name;
 
-        IPRange _local_ip_range;
+        std::optional<IPRange> _local_ip_range;
+        std::optional<oxen::quic::Address> _local_addr;
+        std::optional<ip> _local_ip;
+
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
         // Remote client exit addresses mapped to fixed local IP addresses
-        std::unordered_map<RemoteAddress<ClientPubKey>, oxen::quic::Address> _addr_map;
+        std::unordered_map<ClientAddress, oxen::quic::Address> _client_addrs;
 
         // Remote client exit addresses mapped to local IP ranges. Addresses can be populated via client
         // PubKey or their ONS name
-        std::unordered_map<RemoteAddress<ClientPubKey>, IPRange> _range_map;
+        std::unordered_map<ClientAddress, IPRange> _client_ranges;
 
         std::set<IPRange> _owned_ranges;
 

@@ -22,9 +22,8 @@ namespace llarp
 
       public:
         IPRange() = default;
-        explicit IPRange(std::string a) : IPRange{a, 0}
-        {}
-        explicit IPRange(std::string a, uint8_t m)
+
+        explicit IPRange(std::string a, uint8_t m = 0)
             : _addr{std::move(a), 0}, _mask{m}, _is_ipv4{_addr.is_ipv4()}, _ip{init_ip()}
         {}
         explicit IPRange(oxen::quic::Address a, uint8_t m)

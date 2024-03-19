@@ -18,11 +18,11 @@ namespace llarp::service
     inline bool is_valid_ons(std::string_view ons_name)
     {
         // make sure it ends with .loki because no fucking shit right?
-        if (not ends_with(ons_name, ".loki"))
+        if (not ons_name.ends_with(".loki"))
             return false;
 
         // strip off .loki suffix
-        ons_name = ons_name.substr(0, ons_name.find_last_of('.'));
+        ons_name.remove_suffix(5);
 
         // ensure chars are sane
         for (const auto ch : ons_name)

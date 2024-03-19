@@ -471,7 +471,6 @@ namespace llarp
                     return;
 
                 std::optional<IPRange> range;
-                RemoteAddress remote;
 
                 const auto pos = arg.find(":");
 
@@ -485,8 +484,8 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (auto maybe_raddr = from_pubkey_addr<ClientPubKey>(arg); maybe_raddr)
-                    _range_map.emplace(std::move(*maybe_raddr), std::move(*range));
+                if (auto maybe_raddr = ClientAddress::from_client_addr(arg); maybe_raddr)
+                    _client_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
                 else
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
             });
@@ -575,10 +574,14 @@ namespace llarp
                 "lokinet will attempt to find an unused private range.",
             },
             [this](std::string arg) {
-                if (not _local_ip_range.from_string(arg))
+                if (auto maybe_range = IPRange::from_string(arg); maybe_range)
                 {
-                    throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
+                    _local_ip_range = *maybe_range;
+                    _local_addr = _local_ip_range->address();
+                    _local_ip = _local_ip_range->get_ip();
                 }
+                else
+                    throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
             });
 
         conf.define_option<std::string>(
@@ -633,10 +636,10 @@ namespace llarp
                 auto addr_arg = arg.substr(0, pos);
                 auto ip_arg = arg.substr(pos + 1);
 
-                if (auto maybe_raddr = from_pubkey_addr<ClientPubKey>(std::move(addr_arg)); maybe_raddr)
+                if (auto maybe_raddr = ClientAddress::from_client_addr(std::move(addr_arg)); maybe_raddr)
                 {
                     oxen::quic::Address addr{std::move(ip_arg), 0};
-                    _addr_map.emplace(std::move(*maybe_raddr), std::move(addr));
+                    _client_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
                 }
                 else
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
@@ -747,7 +750,7 @@ namespace llarp
                 }
                 else
                 {
-                    auto err = "Config could not load persisting address map file from path:{} --"_format(file);
+                    auto err = "Config could not load persisting address map file from path:{}"_format(file);
 
                     log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
 
@@ -768,17 +771,47 @@ namespace llarp
 
                     for (const auto& [key, value] : parsed)
                     {
-                        oxen::quic::Address addr;
-
                         try
                         {
-                            addr = oxen::quic::Address{key, 0};
+                            oxen::quic::Address addr{key, 0};
+                            bool in_range{false}, is_local{false};
+
+                            if (addr.is_ipv4())
+                            {
+                                auto addr_v4 = addr.to_ipv4();
+                                in_range = _local_ip_range->contains(addr_v4);
+                                is_local = addr_v4 == std::get<ipv4>(*_local_ip);
+                            }
+                            else
+                            {
+                                auto addr_v6 = addr.to_ipv6();
+                                in_range = _local_ip_range->contains(addr.to_ipv6());
+                                is_local = addr_v6 == std::get<ipv6>(*_local_ip);
+                            }
+
+                            if (is_local)
+                                continue;
+
+                            if (not in_range)
+                            {
+                                log::warning(
+                                    logcat,
+                                    "Out of range IP in addr map data: IP:{}, local range{}",
+                                    addr.host(),
+                                    _local_ip_range);
+                                continue;
+                            }
 
                             if (const auto* str = std::get_if<std::string>(&value))
                             {
-                                if (auto maybe_raddr = from_pubkey_addr(*str); maybe_raddr)
+                                if (auto maybe_raddr = ClientAddress::from_client_addr(*str); maybe_raddr)
                                 {
-                                    _persisting_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
+                                    _persisting_clients.emplace(std::move(*maybe_raddr), std::move(addr));
+                                    continue;
+                                }
+                                if (auto maybe_raddr = RelayAddress::from_relay_addr(*str); maybe_raddr)
+                                {
+                                    _persisting_relays.emplace(std::move(*maybe_raddr), std::move(addr));
                                     continue;
                                 }
 

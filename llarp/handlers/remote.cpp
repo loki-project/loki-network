@@ -158,7 +158,7 @@ namespace llarp::handlers
 
         log::info(logcat, "{} set ifname to {}", name(), _if_name);
 
-        for (const auto& addr : _net_config._addr_map)
+        for (const auto& addr : _net_config._client_addrs)
         {
             (void)addr;
             // TODO: here is where we should map remote services and exits, but first we need

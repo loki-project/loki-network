@@ -312,7 +312,7 @@ namespace llarp::handlers
         else
             _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
 
-        for (const auto& item : conf._addr_map)
+        for (const auto& item : conf._client_addrs)
         {
             (void)item;
             // if (not map_address(item.second, item.first, false))
@@ -354,10 +354,11 @@ namespace llarp::handlers
         else
             _local_ip = _local_addr.to_ipv4();
 
-        // TODO: move all this parsing to the config
-        // DISCUSS: what format do we expect these to be bt-encoded in? If strings, then must make
-        // string ctors for ipv4/ipv6 types to load directly into and pass to IPRange::contains(...)
         _persisting_addr_file = conf.addr_map_persist_file;
+
+        if (conf.addr_map_persist_file and not conf._persisting_clients.empty())
+        {
+        }
 
         if (_persisting_addr_file)
         {
@@ -427,7 +428,7 @@ namespace llarp::handlers
                             continue;
                         if (not _local_range.contains(ip))
                         {
-                            log::warning(logcat, "{} out of range IP in addr map data", name(), ip);
+                            // log::warning(logcat, "{} out of range IP in addr map data", name(), ip);
                             continue;
                         }
 
