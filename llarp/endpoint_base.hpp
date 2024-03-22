@@ -89,7 +89,7 @@ namespace llarp
         std::set<dns::SRVData> srv_records() const;
 
         /// Gets the local address for the given endpoint, service or exit node
-        virtual AddressVariant_t local_address() const = 0;
+        virtual oxen::quic::Address local_address() const = 0;
 
         virtual link::TunnelManager* GetQUICTunnel() = 0;
 

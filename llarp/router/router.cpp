@@ -319,15 +319,80 @@ namespace llarp
         }
     }
 
+    void Router::process_netconfig()
+    {
+        std::string _if_name;
+        IPRange _local_range;
+        oxen::quic::Address _local_addr;
+        ip _local_ip;
+
+        auto& conf = _config->network;
+
+        if (conf._if_name)
+        {
+            _if_name = *conf._if_name;
+        }
+        else
+        {
+            const auto maybe = net().FindFreeTun();
+
+            if (not maybe.has_value())
+                throw std::runtime_error("cannot find free interface name");
+
+            _if_name = *maybe;
+        }
+
+        log::info(logcat, "if-name set to {}", _if_name);
+
+        // If an ip range is set in the config, then the address and ip optionls are as well
+        if (not(conf._local_ip_range and conf._local_addr->is_addressable()))
+        {
+            const auto maybe = net().find_free_range();
+
+            if (not maybe.has_value())
+            {
+                throw std::runtime_error("cannot find free address range");
+            }
+
+            _local_range = *maybe;
+            _local_addr = _local_range.address();
+            _local_ip = *_local_range.get_ip();
+        }
+        else
+        {
+            _local_range = *conf._local_ip_range;
+            _local_addr = *conf._local_addr;
+            _local_ip = *conf._local_ip;
+        }
+
+        // set values back in config
+        conf._local_ip_range = _local_range;
+        conf._local_addr = _local_addr;
+        conf._local_ip = _local_ip;
+
+        // process remote client map; addresses muyst be within _local_ip_range
+        auto& client_addrs = conf._client_addrs;
+
+        for (auto itr = client_addrs.begin(); itr != client_addrs.end();)
+        {
+            auto is_v4 = itr->second.is_ipv4();
+
+            if ((is_v4 and conf._local_ip_range->contains(itr->second.to_ipv4()))
+                || (conf._local_ip_range->contains(itr->second.to_ipv6())))
+                itr = client_addrs.erase(itr);
+            else
+                ++itr;
+        }
+    }
+
     void Router::init_net_if()
     {
         auto& network_config = _config->network;
 
         vpn::InterfaceInfo info;
 
-        info.ifname = network_config._if_name;
-
-        info.addrs.emplace_back(network_config._local_ip_range);
+        info.ifname = *network_config._if_name;
+        info.addrs.emplace_back(*network_config._local_ip_range);
 
         auto if_net = vpn_platform()->CreateInterface(std::move(info), this);
 
@@ -352,7 +417,6 @@ namespace llarp
         //     std::make_shared<dns::Server>(_router->loop(), dns_conf,
         //     if_nametoindex(if_name.c_str()));
         // resolver->Start();
-
 #endif
     }
 
@@ -483,6 +547,11 @@ namespace llarp
                                                     : oxen::quic::Address{*paddr, pport ? *pport : DEFAULT_LISTEN_PORT};
 
         RouterContact::BLOCK_BOGONS = conf.router.block_bogons;
+
+        // We process the relevant netconfig values (ip_range, address, and ip) here; in case the range or interface is
+        // bad, we search for a free one and set it BACK into the config. Every subsequent object configuring using the
+        // NetworkConfig (ex: tun/null, exit::Handler, etc) will have processed values
+        process_netconfig();
 
         auto& net_config = conf.network;
 

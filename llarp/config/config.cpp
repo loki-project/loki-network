@@ -785,7 +785,7 @@ namespace llarp
                             else
                             {
                                 auto addr_v6 = addr.to_ipv6();
-                                in_range = _local_ip_range->contains(addr.to_ipv6());
+                                in_range = _local_ip_range->contains(addr_v6);
                                 is_local = addr_v6 == std::get<ipv6>(*_local_ip);
                             }
 
@@ -796,7 +796,7 @@ namespace llarp
                             {
                                 log::warning(
                                     logcat,
-                                    "Out of range IP in addr map data: IP:{}, local range{}",
+                                    "Out of range IP in addr map data: IP:{}, local range:{}",
                                     addr.host(),
                                     _local_ip_range);
                                 continue;

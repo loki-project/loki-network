@@ -9,4 +9,7 @@ namespace llarp::exit
 {
     Handler::Handler(std::string name, Router& r) : handlers::RemoteHandler{std::move(name), r}
     {}
+
+    void Handler::_configure()
+    {}
 }  // namespace llarp::exit

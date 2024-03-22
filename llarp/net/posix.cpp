@@ -1,4 +1,3 @@
-#include "ip_range.hpp"
 #include "net.hpp"
 #include "net_if.hpp"
 
@@ -24,7 +23,7 @@ namespace llarp::net
             ifaddrs* addrs{nullptr};
 
             if (getifaddrs(&addrs))
-                throw std::runtime_error{fmt::format("getifaddrs(): {}", strerror(errno))};
+                throw std::runtime_error{"getifaddrs(): {}"_format(strerror(errno))};
 
             for (auto next = addrs; next; next = next->ifa_next)
                 visit(next);

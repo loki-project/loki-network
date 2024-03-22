@@ -6,9 +6,9 @@ namespace llarp
 {
     namespace FindIntroMessage
     {
-        inline auto NOT_FOUND = "NOT FOUND"sv;
-        inline auto INVALID_ORDER = "INVALID ORDER"sv;
-        inline auto INSUFFICIENT_NODES = "INSUFFICIENT NODES"sv;
+        inline constexpr auto NOT_FOUND = "NOT FOUND"sv;
+        inline constexpr auto INVALID_ORDER = "INVALID ORDER"sv;
+        inline constexpr auto INSUFFICIENT_NODES = "INSUFFICIENT NODES"sv;
 
         inline static std::string serialize(const dht::Key_t& location, bool is_relayed, uint64_t order)
         {
@@ -31,7 +31,7 @@ namespace llarp
 
     namespace FindNameMessage
     {
-        inline auto NOT_FOUND = "NOT FOUND"sv;
+        inline constexpr auto NOT_FOUND = "NOT FOUND"sv;
 
         inline static std::string serialize(std::string name_hash)
         {
@@ -68,10 +68,10 @@ namespace llarp
 
     namespace PublishIntroMessage
     {
-        inline auto INVALID_INTROSET = "INVALID INTROSET"sv;
-        inline auto EXPIRED = "EXPIRED INTROSET"sv;
-        inline auto INSUFFICIENT = "INSUFFICIENT NODES"sv;
-        inline auto INVALID_ORDER = "INVALID ORDER"sv;
+        inline constexpr auto INVALID_INTROSET = "INVALID INTROSET"sv;
+        inline constexpr auto EXPIRED = "EXPIRED INTROSET"sv;
+        inline constexpr auto INSUFFICIENT = "INSUFFICIENT NODES"sv;
+        inline constexpr auto INVALID_ORDER = "INVALID ORDER"sv;
 
         inline static std::string serialize(std::string introset, uint64_t relay_order, uint64_t is_relayed)
         {

@@ -8,7 +8,7 @@ namespace llarp
 
     using UDPPacket = oxen::quic::Packet;
 
-    using udp_pkt_hook = oxen::quic::UDPSocket::receive_callback_t;
+    using udp_pkt_hook = std::function<void(UDPPacket&& pkt)>;
     using ip_pkt_hook = std::function<void(IPPacket)>;
 
     using UDPSocket = oxen::quic::UDPSocket;

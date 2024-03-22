@@ -677,11 +677,9 @@ namespace llarp
                     continue;
 
                 send_control_message(
-                    rid,
-                    "gossip_rc"s,
-                    GossipRCMessage::serialize(last_sender, rc) /* , [](oxen::quic::message) {
-      log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
-  } */);
+                    rid, "gossip_rc"s, GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
+                        log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
+                    });
                 ++count;
             }
 
@@ -991,9 +989,10 @@ namespace llarp
 
         _router.rpc_client()->lookup_ons_hash(
             name_hash,
-            [respond = std::move(respond)]([[maybe_unused]] std::optional<service::EncryptedName> maybe) mutable {
-                if (maybe)
-                    respond(serialize_response({{"E", maybe->ciphertext}}));
+            [respond =
+                 std::move(respond)]([[maybe_unused]] std::optional<service::EncryptedONSRecord> maybe_enc) mutable {
+                if (maybe_enc)
+                    respond(maybe_enc->bt_encode());
                 else
                     respond(serialize_response({{messages::STATUS_KEY, FindNameMessage::NOT_FOUND}}));
             });

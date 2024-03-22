@@ -332,25 +332,27 @@ namespace llarp::rpc
                     promise.set_exception(std::current_exception());
                 }
             });
+
         auto ftr = promise.get_future();
         return ftr.get();
     }
 
     void LokidRpcClient::lookup_ons_hash(
-        std::string namehash, std::function<void(std::optional<service::EncryptedName>)> resultHandler)
+        std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler)
     {
         log::debug(logcat, "Looking Up ONS NameHash {}", namehash);
         const nlohmann::json req{{"type", 2}, {"name_hash", oxenc::to_hex(namehash)}};
         request(
             "rpc.lns_resolve",
             [this, resultHandler](bool success, std::vector<std::string> data) {
-                std::optional<service::EncryptedName> maybe = std::nullopt;
+                std::optional<service::EncryptedONSRecord> maybe = std::nullopt;
                 if (success)
                 {
                     try
                     {
-                        service::EncryptedName result;
+                        service::EncryptedONSRecord result;
                         const auto j = nlohmann::json::parse(data[1]);
+                        j.dump();
                         result.ciphertext = oxenc::from_hex(j["encrypted_value"].get<std::string>());
                         const auto nonce = oxenc::from_hex(j["nonce"].get<std::string>());
                         if (nonce.size() != result.nonce.size())

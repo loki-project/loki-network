@@ -29,5 +29,6 @@ namespace llarp::exit
         }
 
         std::unordered_map<IPRange, service::Address> _exit_map;
+        std::set<IPRange> _owned_ranges;
     };
 }  // namespace llarp::exit

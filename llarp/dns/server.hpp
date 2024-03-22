@@ -101,7 +101,7 @@ namespace llarp::dns
             (void)to;
             (void)from;
             (void)data;
-            // _write_pkt(data.make_udp(from, to));
+            _write_pkt(data.make_udp());
         }
 
         void send_to(

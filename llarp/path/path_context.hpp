@@ -6,7 +6,6 @@
 #include "transit_hop.hpp"
 
 #include <llarp/ev/loop.hpp>
-#include <llarp/net/ip_address.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/types.hpp>
@@ -61,8 +60,6 @@ namespace llarp::path
         void allow_transit();
 
         void reject_transit();
-
-        // bool check_path_limit_hit_by_ip(const Ip_address_deprecated& ip);
 
         bool is_transit_allowed() const;
 

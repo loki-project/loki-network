@@ -101,8 +101,6 @@ namespace llarp
         bool check_rcs(const std::set<RemoteRC>& hops) const;
     };
 
-    /** TODO: unfuck the config in regards to tun mapping vs exit/service mapping
-     */
     struct NetworkConfig
     {
         std::optional<bool> enable_profiling;
@@ -142,12 +140,14 @@ namespace llarp
 
         std::optional<fs::path> addr_map_persist_file;
 
+        // Pass to TunEndpoint
         std::unordered_map<ClientAddress, oxen::quic::Address> _persisting_clients;
         std::unordered_map<RelayAddress, oxen::quic::Address> _persisting_relays;
 
         // only member that refers to an actual interface
-        std::string _if_name;
+        std::optional<std::string> _if_name;
 
+        // If _local_ip_range is set, the following two optionals are also set
         std::optional<IPRange> _local_ip_range;
         std::optional<oxen::quic::Address> _local_addr;
         std::optional<ip> _local_ip;
@@ -158,9 +158,10 @@ namespace llarp
         std::unordered_map<ClientAddress, oxen::quic::Address> _client_addrs;
 
         // Remote client exit addresses mapped to local IP ranges. Addresses can be populated via client
-        // PubKey or their ONS name
+        // PubKey or their ONS name // TODO: rename
         std::unordered_map<ClientAddress, IPRange> _client_ranges;
 
+        // Used when in exit mode; pass down to exit::Endpoint // TODO: rename
         std::set<IPRange> _owned_ranges;
 
         /* DEPRECATED */

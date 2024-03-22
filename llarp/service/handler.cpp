@@ -53,6 +53,9 @@ namespace llarp::service
     //   return true;
     // }
 
+    void Handler::_configure()
+    {}
+
     StatusObject Handler::ExtractStatus() const
     {
         // StatusObject obj{{"permitExit", permit_exit}, {"ip", if_addr.to_string()}};

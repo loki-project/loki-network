@@ -47,6 +47,7 @@ namespace llarp::service
         // huint128_t GetIPForIdent(const PubKey pk);
 
       private:
+        void _configure() override;
         // huint128_t AllocateNewAddress();
         /// obtain ip for service node session, creates a new session if one does
         /// not existing already

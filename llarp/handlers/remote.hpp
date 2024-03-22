@@ -4,9 +4,9 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/address/ip_range.hpp>
+#include <llarp/address/map.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/endpoint_base.hpp>
-#include <llarp/handlers/remote.hpp>
 #include <llarp/session/session.hpp>
 
 #include <unordered_map>
@@ -27,18 +27,25 @@ namespace llarp
         {
           protected:
             std::string _name;
-            std::unordered_map<RemoteAddress<PubKey>, oxen::quic::Address> _ip_map;
+
+            address_map<oxen::quic::Address, ClientAddress> _client_address_map;
+            address_map<IPRange, ClientAddress> _client_range_map;
 
             DnsConfig _dns_config;
             NetworkConfig _net_config;
 
-            IPRange _ip_range;
-            IPRange _if_addr;
-            IPRange _next_addr;
+            IPRange _local_range;
+            oxen::quic::Address _local_addr;
+            ip _local_ip;
+
+            ip _next_ip;
 
             std::string _if_name;
 
             bool _use_v6;
+
+            // Private method that {exit,service}::Handler can override
+            virtual void _configure() = 0;
 
           public:
             RemoteHandler(std::string name, Router& r);
@@ -56,14 +63,14 @@ namespace llarp
                 return _use_v6;
             }
 
-            IPRange if_addr() const
+            oxen::quic::Address if_addr() const
             {
-                return _if_addr;
+                return _local_addr;
             }
 
-            // lookup ONS address for a ".loki" hidden service or exit node operated on a remote
-            // client
-            virtual void lookup_name(std::string name, std::function<void(std::string, bool)> func = nullptr);
+            // lookup ONS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
+            virtual void lookup_name(
+                std::string name, std::function<void(std::optional<ClientAddress>)> func = nullptr);
 
             virtual void lookup_remote_srv(
                 std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler);
@@ -77,7 +84,10 @@ namespace llarp
                 return nullptr;
             }
 
-            AddressVariant_t local_address() const override;
+            oxen::quic::Address local_address() const override
+            {
+                return if_addr();
+            }
 
             const std::shared_ptr<EventLoop>& loop() override;
 
@@ -85,17 +95,19 @@ namespace llarp
 
             void Tick(llarp_time_t now) override;
 
-            void map_remote(
-                std::string name,
-                std::string token,
-                std::vector<IPRange> ranges,
-                std::function<void(bool, std::string)> result);
+            /*  Address Mapping - Public Mutators  */
+            void map_remote_to_local_addr(ClientAddress remote, oxen::quic::Address local);
 
-            void map_range(IPRange range, service::Address exit);
+            void unmap_local_addr_by_remote(ClientAddress remote);
 
-            void unmap_range(IPRange range);
+            void unmap_remote_by_name(std::string name);
 
-            void unmap_range_by_remote(IPRange range, std::string exit);
+            /*  IPRange Mapping - Public Mutators  */
+            void map_remote_to_local_range(ClientAddress remote, IPRange range);
+
+            void unmap_local_range_by_remote(ClientAddress remote);
+
+            void unmap_range_by_name(std::string name);
         };
     }  // namespace handlers
 }  // namespace llarp

@@ -90,7 +90,7 @@ namespace llarp
       private:
         std::shared_ptr<RoutePoker> _route_poker;
         std::chrono::steady_clock::time_point _next_explore_at;
-        llarp_time_t last_pump{0s};
+
         // transient iwp encryption key
         fs::path transport_keyfile;
         // long term identity key
@@ -123,8 +123,9 @@ namespace llarp
 
         std::unique_ptr<service::Endpoint> _service_endpoint;  // local service
         std::unique_ptr<exit::Endpoint> _exit_endpoint;        // local exit node
-        std::unique_ptr<service::Handler> _service_handler;    // remote services
-        std::unique_ptr<exit::Handler> _exit_handler;          // remote exit nodes
+
+        std::unique_ptr<service::Handler> _service_handler;  // remote services
+        std::unique_ptr<exit::Handler> _exit_handler;        // remote exit nodes
 
         // TunEndpoint or NullEndpoint, depending on lokinet configuration
         std::unique_ptr<handlers::BaseHandler> _api;
@@ -136,13 +137,16 @@ namespace llarp
         SecretKey _encryption;
         std::shared_ptr<Contacts> _contacts;
         std::shared_ptr<NodeDB> _node_db;
-        llarp_time_t _started_at;
         const oxenmq::TaggedThreadID _disk_thread;
 
+        llarp_time_t _started_at;
         llarp_time_t _last_stats_report{0s};
         llarp_time_t _next_decomm_warning{time_now_ms() + 15s};
+
         std::shared_ptr<llarp::KeyManager> _key_manager;
+
         std::shared_ptr<Config> _config;
+
         uint32_t _path_build_count{0};
 
         std::unique_ptr<rpc::RPCServer> _rpc_server;
@@ -182,6 +186,8 @@ namespace llarp
         void init_net_if();
 
         void init_api();
+
+        void process_netconfig();
 
       protected:
         std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};

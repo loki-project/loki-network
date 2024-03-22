@@ -1,8 +1,6 @@
 #pragma once
 
 #include "interface_info.hpp"
-#include "ip_address.hpp"
-#include "ip_range.hpp"
 #include "net.h"
 #include "net_int.hpp"
 #include "uint128.hpp"
@@ -32,8 +30,6 @@
 #ifndef _WIN32
 #include <arpa/inet.h>
 #endif
-
-#include "bogon_ranges.hpp"
 
 namespace llarp
 {

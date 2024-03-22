@@ -100,7 +100,7 @@ namespace llarp::path
     {
         if (auto itr = own_paths.find(id); itr != own_paths.end())
         {
-            if (auto parent = itr->second->path_set.lock())
+            if (auto parent = itr->second->handler.lock())
                 return parent;
         }
         return nullptr;

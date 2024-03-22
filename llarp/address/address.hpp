@@ -21,6 +21,8 @@ namespace llarp
         explicit RemoteAddress(std::string_view tld) : _tld{std::move(tld)}
         {}
 
+        virtual std::string pub_key() const = 0;
+
       public:
         RemoteAddress() = default;
         virtual ~RemoteAddress() = default;
@@ -41,7 +43,15 @@ namespace llarp
         {
             return name() + tld();
         }
+
+        std::string remote_address() const
+        {
+            return pub_key() + tld();
+        }
     };
+
+    template <typename addr_t>
+    concept RemoteAddrType = std::is_base_of_v<RemoteAddress, addr_t>;
 
     struct ClientAddress final : public RemoteAddress
     {
@@ -51,6 +61,12 @@ namespace llarp
         bool _is_ons{false};
 
         explicit ClientAddress(std::string_view addr, bool is_ons);
+
+      protected:
+        std::string pub_key() const override
+        {
+            return _pubkey ? _pubkey->to_string() : name();
+        }
 
       public:
         ClientAddress() = default;
@@ -77,6 +93,16 @@ namespace llarp
 
         static std::optional<ClientAddress> from_client_addr(std::string arg);
 
+        bool set_pubkey(std::string pk)
+        {
+            return _pubkey->from_string(std::move(pk));
+        }
+
+        bool set_pubkey(std::string_view pk)
+        {
+            return _pubkey->from_string(pk);
+        }
+
         std::optional<ClientPubKey> pubkey()
         {
             return _pubkey;
@@ -99,6 +125,12 @@ namespace llarp
         RelayPubKey _pubkey;
 
         explicit RelayAddress(std::string_view addr);
+
+      protected:
+        std::string pub_key() const override
+        {
+            return _pubkey.to_string();
+        }
 
       public:
         RelayAddress() = default;
@@ -132,44 +164,6 @@ namespace llarp
             return _pubkey.to_string();
         }
     };
-
-    // template <typename pubkey_t = PubKey, std::enable_if_t<std::is_base_of_v<PubKey, pubkey_t>, int> = 0>
-    // std::optional<RemoteAddress<pubkey_t>> from_pubkey_addr(const std::string& arg)
-    // {
-    //     if constexpr (std::is_same_v<pubkey_t, ClientPubKey> || std::is_same_v<pubkey_t, PubKey>)
-    //     {
-    //         if (service::is_valid_ons(arg))
-    //         {
-    //             return std::make_optional(RemoteAddress<ClientPubKey>(arg, true));
-    //         }
-    //         if (auto maybe_addr = parse_addr_string(arg, TLD::CLIENT))
-    //         {
-    //             return std::make_optional(RemoteAddress<ClientPubKey>(*maybe_addr));
-    //         }
-    //     }
-    //     if (auto maybe_addr = parse_addr_string(arg, TLD::RELAY))
-    //     {
-    //         return std::make_optional(RemoteAddress<RelayPubKey>(*maybe_addr));
-    //     }
-
-    //     return std::nullopt;
-    // }
-
-    // template <typename pubkey_t, std::enable_if_t<std::is_base_of_v<PubKey, pubkey_t>, int> = 0>
-    // std::optional<RemoteAddress<pubkey_t>> from_pubkey_addr(const std::string& arg)
-    // // auto from_pubkey_addr(const std::string& arg)
-    // {
-    //     if (arg.ends_with(".loki"))
-    //     {
-    //         return RemoteAddress<ClientPubKey>(arg, service::is_valid_ons(arg));
-    //     }
-    //     if (arg.ends_with(".snode"))
-    //     {
-    //         return RemoteAddress<RelayPubKey>(arg);
-    //     }
-
-    //     return std::nullopt;
-    // }
 
     template <>
     inline constexpr bool IsToStringFormattable<RemoteAddress> = true;

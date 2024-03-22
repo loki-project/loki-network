@@ -7,7 +7,6 @@
 #include <llarp/constants/version.hpp>
 #include <llarp/dns/dns.hpp>
 #include <llarp/endpoint_base.hpp>
-#include <llarp/net/ip_range.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>
 

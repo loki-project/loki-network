@@ -6,7 +6,6 @@
 
 #include <llarp/dns/server.hpp>
 #include <llarp/endpoint_base.hpp>
-#include <llarp/net/ip_range_map.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/path/pathhandler.hpp>
 // #include <llarp/service/address.hpp>
@@ -117,7 +116,7 @@ namespace llarp::service
 
         std::string name() const override;
 
-        AddressVariant_t local_address() const override;
+        oxen::quic::Address local_address() const override;
 
         // bool should_publish_intro(llarp_time_t now) const;
 
@@ -170,19 +169,6 @@ namespace llarp::service
             return _identity;
         }
 
-        // TODO: Move all these to remote exit node session management
-        // void map_exit(
-        //     std::string name,
-        //     std::string token,
-        //     std::vector<IPRange> ranges,
-        //     std::function<void(bool, std::string)> result);
-
-        // void MapExitRange(IPRange range, service::Address exit);
-
-        // void UnmapExitRange(IPRange range);
-
-        // void UnmapRangeByExit(IPRange range, std::string exit);
-
         bool HandleDataDrop(std::shared_ptr<path::Path> p, const HopID& dst, uint64_t s);
 
         bool CheckPathIsDead(std::shared_ptr<path::Path> p, llarp_time_t latency);
@@ -193,63 +179,12 @@ namespace llarp::service
 
         void blacklist_snode(const RouterID& snode) override;
 
-        /// maybe get an endpoint variant given its convo tag
-        // std::optional<std::variant<Address, RouterID>> GetEndpointWithConvoTag(
-        //       SessionTag t) const override;
-
-        // bool HasConvoTag(const SessionTag& t) const;
-
-        // bool ShouldBuildMore(llarp_time_t now) const override;
-
         virtual llarp_time_t PathAlignmentTimeout() const
         {
             return service::DEFAULT_PATH_ALIGN_TIMEOUT;
         }
 
         static constexpr auto DefaultPathEnsureTimeout = 2s;
-
-        // void // InformPathToService(const Address remote, OutboundContext* ctx);
-
-        /// return true if this endpoint is trying to lookup this router right now
-        // bool HasPendingRouterLookup(const RouterID remote) const;
-
-        // bool HasPathToSNode(const RouterID remote) const;
-
-        // bool HasFlowToService(const Address remote) const;
-
-        // void PutSenderFor(const SessionTag& tag, const ServiceInfo& info, bool inbound);
-
-        // bool HasInboundConvo(const Address& addr) const;
-
-        // bool HasOutboundConvo(const Address& addr) const;
-
-        // bool GetCachedSessionKeyFor(const SessionTag& remote, SharedSecret& secret) const;
-
-        // void PutCachedSessionKeyFor(const SessionTag& remote, const SharedSecret& secret);
-
-        // bool GetSenderFor(const SessionTag& remote, ServiceInfo& si) const;
-
-        // void PutIntroFor(const SessionTag& remote, const Introduction& intro);
-
-        // bool GetIntroFor(const SessionTag& remote, Introduction& intro) const;
-
-        // void RemoveConvoTag(const SessionTag& remote);
-
-        // void ConvoTagTX(const SessionTag& remote);
-
-        // void ConvoTagRX(const SessionTag& remote);
-
-        // void PutReplyIntroFor(const SessionTag& remote, const Introduction& intro);
-
-        // bool GetReplyIntroFor(const SessionTag& remote, Introduction& intro) const;
-
-        // bool GetConvoTagsForService(const Address& si, std::set<SessionTag>& tag) const;
-
-        // std::optional<uint64_t> GetSeqNoForConvo(const SessionTag& tag);
-
-        // bool HasExit() const;
-
-        // std::optional<std::vector<RemoteRC>> GetHopsForBuild() override;
 
         void AsyncProcessAuthMessage(std::shared_ptr<ProtocolMessage> msg, std::function<void(std::string, bool)> hook);
 

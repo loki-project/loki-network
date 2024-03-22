@@ -46,7 +46,7 @@ namespace llarp::net
 
         /// returns true if an ip packet looks like it matches this protocol info
         /// returns false otherwise
-        bool matches_packet_proto(const UDPPacket& pkt) const;
+        bool matches_packet_proto(const IPPacket& pkt) const;
 
         bool operator<(const ProtocolInfo& other) const
         {
@@ -76,6 +76,6 @@ namespace llarp::net
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise
-        bool allow_ip_traffic(const UDPPacket& pkt) const;
+        bool allow_ip_traffic(IPPacket& pkt) const;
     };
 }  // namespace llarp::net

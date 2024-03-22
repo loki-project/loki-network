@@ -15,6 +15,10 @@ namespace llarp::exit
     */
     struct Handler final : public handlers::RemoteHandler, public std::enable_shared_from_this<Handler>
     {
+      private:
+        void _configure() override;
+
+      public:
         Handler(std::string name, Router& r);
         ~Handler() override = default;
 

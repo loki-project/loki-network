@@ -63,7 +63,7 @@ namespace llarp::net
     }
 
     // DISCUSS: wtf is this
-    bool ProtocolInfo::matches_packet_proto(const UDPPacket&) const
+    bool ProtocolInfo::matches_packet_proto(const IPPacket&) const
     {
         // if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
         //     return false;
@@ -79,7 +79,7 @@ namespace llarp::net
         return true;
     }
 
-    bool TrafficPolicy::allow_ip_traffic(const UDPPacket& pkt) const
+    bool TrafficPolicy::allow_ip_traffic(IPPacket& pkt) const
     {
         if (protocols.empty() and ranges.empty())
             return true;
@@ -90,25 +90,24 @@ namespace llarp::net
                 return true;
         }
 
-        auto& dest = pkt.path.remote;
-        ipv4 addrv4{oxenc::big_to_host<uint32_t>(dest.in4().sin_addr.s_addr)};
-        ipv6 addrv6{&dest.in6().sin6_addr};
-
-        auto is_ipv4 = dest.is_ipv4();
+        ipv4 v4 = pkt.dest_ipv4();
+        ipv6 v6 = pkt.dest_ipv6();
+        auto is_ipv4 = pkt.is_ipv4();
 
         for (const auto& range : ranges)
         {
             if (is_ipv4)
             {
-                if (range.contains(addrv4))
+                if (range.contains(v4))
                     return true;
             }
             else
             {
-                if (range.contains(addrv6))
+                if (range.contains(v6))
                     return true;
             }
         }
+
         return false;
     }
 

@@ -43,11 +43,11 @@ namespace llarp::dns
                 if (src == _local_addr)
                     return;
                 (void)_dns;
-                // TOFIX: this
-                // if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
-                // {
-                //     log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
-                // }
+
+                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
+                {
+                    log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
+                }
             });
 
             if (auto maybe_addr = bound_on())

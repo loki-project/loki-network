@@ -1,6 +1,5 @@
 #pragma once
 
-#include <llarp/net/sock_addr.hpp>
 #include <llarp/service/tag.hpp>
 
 #include <charconv>

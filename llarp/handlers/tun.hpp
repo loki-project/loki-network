@@ -87,8 +87,6 @@ namespace llarp::handlers
 
         void tick_tun(llarp_time_t now);
 
-        bool map_address(const service::Address& remote, ip ip, bool SNode);
-
         bool start();
 
         bool stop();
@@ -149,7 +147,7 @@ namespace llarp::handlers
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
         /// returns true otherwise
-        bool is_allowing_traffic(const UDPPacket& pkt) const;
+        bool is_allowing_traffic(const IPPacket& pkt) const;
 
         /// get a key for ip address
         std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip ip) const override;
@@ -242,7 +240,7 @@ namespace llarp::handlers
         std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
         /// our local address and ip
         oxen::quic::Address _local_addr;
-        ip _local_ip;  // fuck this, use _local_addr::get_ip()
+        ip _local_ip;
 
         /// our network interface's ipv6 address
         oxen::quic::Address _local_ipv6;

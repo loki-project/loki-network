@@ -8,6 +8,11 @@
 
 namespace llarp
 {
+    /** TODO:
+            - add {lowest,highest}_addr method
+
+    */
+
     struct IPRange
     {
       private:
@@ -21,7 +26,8 @@ namespace llarp
         ip_net init_ip();
 
       public:
-        IPRange() = default;
+        IPRange() : IPRange{"", 0}
+        {}
 
         explicit IPRange(std::string a, uint8_t m = 0)
             : _addr{std::move(a), 0}, _mask{m}, _is_ipv4{_addr.is_ipv4()}, _ip{init_ip()}
@@ -98,6 +104,9 @@ namespace llarp
             return std::tie(_addr, _mask) == std::tie(other._addr, other._mask);
         }
     };
+
+    template <typename local_t>
+    concept LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>;
 
     template <>
     inline constexpr bool IsToStringFormattable<IPRange> = true;

@@ -9,7 +9,6 @@
 #include <llarp/link/tunnel.hpp>
 #include <llarp/messages/common.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/ip_range.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/profiling.hpp>
@@ -615,9 +614,10 @@ namespace llarp::service
     //   return false;
     // }
 
-    AddressVariant_t Endpoint::local_address() const
+    oxen::quic::Address Endpoint::local_address() const
     {
-        return _identity.pub.address();
+        // TESTNET: TODO: this
+        return oxen::quic::Address{};
     }
 
     // bool Endpoint::ProcessDataMessage(std::shared_ptr<ProtocolMessage> msg)

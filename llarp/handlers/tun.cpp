@@ -319,44 +319,16 @@ namespace llarp::handlers
             //     return false;
         }
 
-        _if_name = conf._if_name;
-
-        if (_if_name.empty())
-        {
-            const auto maybe = router().net().FindFreeTun();
-
-            if (not maybe.has_value())
-                throw std::runtime_error("cannot find free interface name");
-
-            _if_name = *maybe;
-        }
-
-        _local_range = conf._local_ip_range;
-
-        if (!_local_range.address().is_addressable())
-        {
-            const auto maybe = router().net().find_free_range();
-
-            if (not maybe.has_value())
-            {
-                throw std::runtime_error("cannot find free address range");
-            }
-
-            _local_range = *maybe;
-        }
+        _if_name = *conf._if_name;
+        _local_range = *conf._local_ip_range;
+        _local_addr = *conf._local_addr;
+        _local_ip = *conf._local_ip;
 
         _use_v6 = not _local_range.is_ipv4();
 
-        _local_addr = _local_range.address();
-
-        if (_use_v6)
-            _local_ip = _local_addr.to_ipv6();
-        else
-            _local_ip = _local_addr.to_ipv4();
-
         _persisting_addr_file = conf.addr_map_persist_file;
 
-        if (conf.addr_map_persist_file and not conf._persisting_clients.empty())
+        if (conf.addr_map_persist_file and not(conf._persisting_clients.empty() and conf._persisting_relays.empty()))
         {
         }
 
@@ -944,26 +916,6 @@ namespace llarp::handlers
         return false;
     }
 
-    bool TunEndpoint::map_address(const service::Address& addr, ip ip, bool SNode)
-    {
-        auto itr = _ip_to_addr.find(ip);
-        (void)SNode;
-        if (itr != _ip_to_addr.end())
-        {
-            log::warning(logcat, "{} already mapped to {}", ip, itr->second);
-            return false;
-        }
-
-        log::info(logcat, "{} mapping {} to {}", name(), addr.to_string(), ip);
-
-        // m_IPToAddr[ip] = addr;
-        // _addr_to_ip[addr] = ip;
-        // _is_snode_map[addr] = SNode;
-        // mark_ip_active_forever(ip);
-        // MarkAddressOutbound(addr);
-        return true;
-    }
-
     std::string TunEndpoint::get_if_name() const
     {
 #ifdef _WIN32
@@ -988,8 +940,8 @@ namespace llarp::handlers
     {
         _next_ip = _local_ip;
         // _max_ip = _local_range.HighestAddr();
-        log::info(logcat, "{} set {} to have address ", name(), _if_name, _local_ip);
-        log::info(logcat, "{} allocated up to {} on range ", name(), _max_ip, _local_range);
+        log::info(logcat, "{} set {} to have address {}", name(), _if_name, _local_addr);
+        // log::info(logcat, "{} allocated up to {} on range {}", name(), _max_ip, _local_range);
 
         const service::Address ourAddr = _identity.pub.address();
 
@@ -1289,7 +1241,7 @@ namespace llarp::handlers
         // //     PathAlignmentTimeout());
     }
 
-    bool TunEndpoint::is_allowing_traffic(const UDPPacket& pkt) const
+    bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
         if (auto exitPolicy = get_traffic_policy())
             return exitPolicy->allow_ip_traffic(pkt);

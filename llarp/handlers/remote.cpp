@@ -26,37 +26,39 @@ namespace llarp::handlers
         return true;
     }
 
-    void RemoteHandler::lookup_name(std::string target, std::function<void(std::string res, bool success)> func)
+    void RemoteHandler::lookup_name(std::string ons, std::function<void(std::optional<ClientAddress>)> func)
     {
-        if (not service::is_valid_ons(target))
+        if (not service::is_valid_ons(ons))
         {
-            log::debug(logcat, "Invalid ONS name ({}) queried for lookup", target);
-            return func(target, false);
+            log::debug(logcat, "Invalid ONS name ({}) queried for lookup", ons);
+            return func(std::nullopt);
         }
 
-        log::debug(logcat, "{} looking up ONS name {}", name(), target);
+        log::debug(logcat, "{} looking up ONS name {}", name(), ons);
 
-        auto response_handler = [hook = std::move(func)](std::string response) {
-            std::string name;
+        auto response_handler = [ons_name = ons, hook = std::move(func)](std::string response) {
+            if (auto record = service::EncryptedONSRecord::construct(response);
+                auto client_addr = record->decrypt(ons_name))
+            {
+                return hook(client_addr);
+            }
+
+            std::optional<std::string> status = std::nullopt;
 
             try
             {
                 oxenc::bt_dict_consumer btdc{response};
 
-                if (auto status = btdc.maybe<std::string>(messages::STATUS_KEY))
-                {
-                    return hook(*status, false);
-                }
-
-                name = btdc.require<std::string>("E");
+                if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                    status = s;
             }
             catch (...)
             {
                 log::warning(logcat, "Exception caught parsing find_name response!");
-                hook(messages::ERROR_RESPONSE, false);
             }
 
-            hook(std::move(name), true);
+            log::warning(logcat, "Call to endpoint 'lookup_name' failed -- status:{}", status.value_or("<none given>"));
+            hook(std::nullopt);
         };
 
         {
@@ -64,10 +66,9 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(
-                    logcat, "{} querying {} for name lookup (target: {})", name(), path->pivot_router_id(), target);
+                log::info(logcat, "{} querying {} for name lookup (target: {})", name(), path->pivot_router_id(), ons);
 
-                path->find_name(target, response_handler);
+                path->find_name(ons, response_handler);
             }
         }
     }
@@ -78,11 +79,6 @@ namespace llarp::handlers
         (void)name;
         (void)service;
         (void)handler;
-    }
-
-    AddressVariant_t RemoteHandler::local_address() const
-    {
-        return _router.local_rid();
     }
 
     const std::shared_ptr<EventLoop>& RemoteHandler::loop()
@@ -103,142 +99,145 @@ namespace llarp::handlers
 
     void RemoteHandler::configure(const NetworkConfig& networkConfig, const DnsConfig& dnsConfig)
     {
-        /*
-          * TODO: pre-config refactor, this was checking a couple things that were extremely vague
-          *       these could have appeared on either [dns] or [network], but they weren't
-        documented
-          *       anywhere
-          *
-        if (k == "type" && v == "null")
-        {
-          m_ShouldInitTun = false;
-          return true;
-        }
-        if (k == "exit")
-        {
-          m_PermitExit = IsTrueValue(v.c_str());
-          return true;
-        }
-          */
-
         _dns_config = dnsConfig;
         _net_config = networkConfig;
 
-        // TODO: this should be in router
-        // if (networkConfig.endpoint_type == "null")
-        // {
-        //   should_init_tun = false;
-        // }
+        _local_range = *_net_config._local_ip_range;
 
-        _ip_range = _net_config._local_ip_range;
+        if (!_local_range.address().is_addressable())
+            throw std::runtime_error("IPRange has been pre-processed and is not free!");
 
-        if (!_ip_range.address().is_addressable())
-        {
-            const auto maybe = _router.net().find_free_range();
-            if (not maybe.has_value())
-                throw std::runtime_error("cannot find free interface range");
-            _ip_range = *maybe;
-        }
-
-        _next_addr = _if_addr = _ip_range;
-
-        _use_v6 = not _ip_range.is_ipv4();
-
-        _if_name = _net_config._if_name;
+        _use_v6 = not _local_range.is_ipv4();
+        _local_addr = *_net_config._local_addr;
+        _local_ip = *_net_config._local_ip;
+        _if_name = *_net_config._if_name;
 
         if (_if_name.empty())
+            throw std::runtime_error("Interface name has been pre-processed and is not found!");
+
+        // Remote exit mapping (TODO: move to exit::handler...? Or combine classes...?)
+        for (const auto& [remote, addr] : _net_config._client_addrs)
         {
-            const auto maybe = _router.net().FindFreeTun();
-
-            if (not maybe.has_value())
-                throw std::runtime_error("cannot find free interface name");
-
-            _if_name = *maybe;
+            if (remote.is_ons())
+            {
+                // we have the ONS name, so look up the `.loki`
+                lookup_name(remote.remote_name(), [this, addr](std::optional<ClientAddress> maybe_addr) {
+                    if (maybe_addr)
+                    {
+                        _client_address_map.map_remote_to_local(*maybe_addr, addr);
+                        log::debug(
+                            logcat, "`find_name` returned successfully -- ONS:{}, local address:{}", *maybe_addr, addr);
+                    }
+                    // we already print a log::warning if failing in ::lookup_name
+                });
+            }
+            else
+            {
+                // we have the '.loki`, so map it buddy boy
+                _client_address_map.map_remote_to_local(remote, addr);
+            }
         }
 
-        log::info(logcat, "{} set ifname to {}", name(), _if_name);
-
-        for (const auto& addr : _net_config._client_addrs)
-        {
-            (void)addr;
-            // TODO: here is where we should map remote services and exits, but first we need
-            // to unfuck the config
-        }
-
-        // if (auto* quic = GetQUICTunnel())
-        // {
-        // quic->listen([ifaddr = net::TruncateV6(if_addr)](std::string_view, uint16_t port) {
-        //   return llarp::SockAddr{ifaddr, huint16_t{port}};
-        // });
-        // }
+        _configure();
     }
 
-    void RemoteHandler::map_remote(
-        std::string /* name */,
-        std::string /* token */,
-        std::vector<IPRange> /* ranges */,
-        std::function<void(bool, std::string)> /* result_handler */)
+    // void RemoteHandler::map_remote(
+    //     std::string name,
+    //     std::string token,
+    //     std::vector<IPRange> ranges,
+    //     std::function<void(bool, std::string)> result_handler)
+    // {
+    // if (ranges.empty())
+    // {
+    //   result_handler(false, "no ranges provided");
+    //   return;
+    // }
+
+    // lookup_name(
+    //     name,
+    //     [ptr = std::static_pointer_cast<Handler>(get_self()),
+    //      name,
+    //      auth = auth::AuthInfo{token},
+    //      ranges,
+    //      result_handler,
+    //      poker = router().route_poker()](std::string response, bool success) mutable {
+    //       if (not success)
+    //       {
+    //         result_handler(false, "Exit {} not found!"_format(response));
+    //         return;
+    //       }
+
+    //       if (auto saddr = service::Address(); saddr.FromString(result))
+    //       {
+    //       ptr->SetAuthInfoForEndpoint(saddr, auth);
+    //       ptr->MarkAddressOutbound(saddr);
+
+    //       auto result = ptr->EnsurePathToService(
+    //           saddr,
+    //           [ptr, name, name_result, ranges, result_handler, poker](
+    //               auto addr, OutboundContext* ctx) {
+    //             if (ctx == nullptr)
+    //             {
+    //               result_handler(
+    //                   false, "could not establish flow to {} ({})"_format(name_result,
+    //                   name));
+    //               return;
+    //             }
+
+    //             // make a lambda that sends the reply after doing auth
+    //             auto apply_result = [ptr, poker, addr, result_handler, ranges](
+    //                                     std::string result, bool success) {
+    //               if (success)
+    //               {
+    //                 for (const auto& range : ranges)
+    //                   ptr->MapExitRange(range, addr);
+
+    //                 if (poker)
+    //                   poker->put_up();
+    //               }
+
+    //               result_handler(success, result);
+    //             };
+
+    //             ctx->send_auth_async(apply_result);
+    //           },
+    //           ptr->PathAlignmentTimeout());
+
+    //       if (not result)
+    //         result_handler(false, "Could not build path to {} ({})"_format(name_result,
+    //         name));
+    //       }
+    //     });
+    // }
+
+    void RemoteHandler::map_remote_to_local_addr(ClientAddress remote, oxen::quic::Address local)
     {
-        // if (ranges.empty())
-        // {
-        //   result_handler(false, "no ranges provided");
-        //   return;
-        // }
-
-        // lookup_name(
-        //     name,
-        //     [ptr = std::static_pointer_cast<Handler>(get_self()),
-        //      name,
-        //      auth = auth::AuthInfo{token},
-        //      ranges,
-        //      result_handler,
-        //      poker = router().route_poker()](std::string response, bool success) mutable {
-        //       if (not success)
-        //       {
-        //         result_handler(false, "Exit {} not found!"_format(response));
-        //         return;
-        //       }
-
-        //       if (auto saddr = service::Address(); saddr.FromString(result))
-        //       {
-        //       ptr->SetAuthInfoForEndpoint(saddr, auth);
-        //       ptr->MarkAddressOutbound(saddr);
-
-        //       auto result = ptr->EnsurePathToService(
-        //           saddr,
-        //           [ptr, name, name_result, ranges, result_handler, poker](
-        //               auto addr, OutboundContext* ctx) {
-        //             if (ctx == nullptr)
-        //             {
-        //               result_handler(
-        //                   false, "could not establish flow to {} ({})"_format(name_result,
-        //                   name));
-        //               return;
-        //             }
-
-        //             // make a lambda that sends the reply after doing auth
-        //             auto apply_result = [ptr, poker, addr, result_handler, ranges](
-        //                                     std::string result, bool success) {
-        //               if (success)
-        //               {
-        //                 for (const auto& range : ranges)
-        //                   ptr->MapExitRange(range, addr);
-
-        //                 if (poker)
-        //                   poker->put_up();
-        //               }
-
-        //               result_handler(success, result);
-        //             };
-
-        //             ctx->send_auth_async(apply_result);
-        //           },
-        //           ptr->PathAlignmentTimeout());
-
-        //       if (not result)
-        //         result_handler(false, "Could not build path to {} ({})"_format(name_result,
-        //         name));
-        //       }
-        //     });
+        _client_address_map.map_remote_to_local(remote, local);
     }
+
+    void RemoteHandler::unmap_local_addr_by_remote(ClientAddress remote)
+    {
+        _client_address_map.unmap_by_remote(remote);
+    }
+
+    void RemoteHandler::unmap_remote_by_name(std::string name)
+    {
+        _client_address_map.unmap_by_name(name);
+    }
+
+    void RemoteHandler::map_remote_to_local_range(ClientAddress remote, IPRange range)
+    {
+        _client_range_map.map_remote_to_local(remote, range);
+    }
+
+    void RemoteHandler::unmap_local_range_by_remote(ClientAddress remote)
+    {
+        _client_range_map.unmap_by_remote(remote);
+    }
+
+    void RemoteHandler::unmap_range_by_name(std::string name)
+    {
+        _client_range_map.unmap_by_name(name);
+    }
+
 }  //  namespace llarp::handlers
