@@ -24,7 +24,7 @@ namespace llarp
             .def("__str__", &RouterContact::ToString)
             .def("__repr__", &RouterContact::ToString)
             .def("Verify", [](const RouterContact* const rc) -> bool {
-                const llarp_time_t now = llarp::time_now_ms();
+                const std::chrono::milliseconds now = llarp::time_now_ms();
                 return rc->Verify(now);
             });
     }

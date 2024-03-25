@@ -150,24 +150,24 @@ namespace llarp
         return _addr.is_addressable();
     }
 
-    bool RouterContact::is_expired(llarp_time_t now) const
+    bool RouterContact::is_expired(std::chrono::milliseconds now) const
     {
         return age(now) >= _timestamp.time_since_epoch() + LIFETIME;
     }
 
-    llarp_time_t RouterContact::time_to_expiry(llarp_time_t now) const
+    std::chrono::milliseconds RouterContact::time_to_expiry(std::chrono::milliseconds now) const
     {
         const auto expiry = _timestamp.time_since_epoch() + LIFETIME;
         return now < expiry ? expiry - now : 0s;
     }
 
-    llarp_time_t RouterContact::age(llarp_time_t now) const
+    std::chrono::milliseconds RouterContact::age(std::chrono::milliseconds now) const
     {
         auto delta = now - _timestamp.time_since_epoch();
         return delta > 0s ? delta : 0s;
     }
 
-    bool RouterContact::expires_within_delta(llarp_time_t now, llarp_time_t dlt) const
+    bool RouterContact::expires_within_delta(std::chrono::milliseconds now, std::chrono::milliseconds dlt) const
     {
         return time_to_expiry(now) <= dlt;
     }

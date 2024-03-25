@@ -18,14 +18,17 @@ namespace llarp
         return ret;
     }
 
-    ClientAddress::ClientAddress(std::string_view arg, bool is_ons) : RemoteAddress{TLD::CLIENT}, _is_ons{is_ons}
+    ClientAddress::ClientAddress(std::string_view arg, bool is_ons) : NetworkAddress{TLD::CLIENT}, _is_ons{is_ons}
     {
         // This private constructor is only called after checking for a '.loki' suffix; only Santa checks twice
         arg.remove_suffix(5);
 
         // If this was constructed using an ONS name, we don't fill in the pubkey
         if (not _is_ons)
-            _pubkey->from_string(arg);
+        {
+            if (not _pubkey->from_string(arg))
+                throw std::invalid_argument{"Invalid address passed to ClientAddress constructor: {}"_format(arg)};
+        }
         else
             _name = arg;
     }
@@ -57,11 +60,12 @@ namespace llarp
         return ret;
     }
 
-    RelayAddress::RelayAddress(std::string_view arg) : RemoteAddress{TLD::RELAY}
+    RelayAddress::RelayAddress(std::string_view arg) : NetworkAddress{TLD::RELAY}
     {
         // This private constructor is only called after checking for a '.loki' suffix; only Santa checks twice
         arg.remove_suffix(6);
-        _pubkey.from_string(arg);
+        if (not _pubkey.from_string(arg))
+            throw std::invalid_argument{"Invalid address passed to RelayAddress constructor: {}"_format(arg)};
     }
 
     bool RelayAddress::operator<(const RelayAddress& other) const

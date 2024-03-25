@@ -48,12 +48,12 @@ namespace llarp::path
         return true;
     }
 
-    bool TransitHop::is_expired(llarp_time_t now) const
+    bool TransitHop::is_expired(std::chrono::milliseconds now) const
     {
         return destroy || (now >= ExpireTime());
     }
 
-    llarp_time_t TransitHop::ExpireTime() const
+    std::chrono::milliseconds TransitHop::ExpireTime() const
     {
         return started + lifetime;
     }

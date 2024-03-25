@@ -2,7 +2,6 @@
 
 #include "constants.hpp"
 
-#include <llarp/address/keys.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/types.hpp>
@@ -15,30 +14,7 @@ namespace llarp
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
     using KeyExchangeNonce = AlignedBuffer<32>;
 
-    // struct PubKey : public AlignedBuffer<PUBKEYSIZE>
-    // {
-    //     PubKey() = default;
-
-    //     explicit PubKey(const uint8_t* ptr) : AlignedBuffer<SIZE>(ptr)
-    //     {}
-
-    //     explicit PubKey(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
-    //     {}
-
-    //     explicit PubKey(const AlignedBuffer<SIZE>& other) : AlignedBuffer<SIZE>(other)
-    //     {}
-
-    //     std::string to_string() const;
-
-    //     bool from_hex(const std::string& str);
-
-    //     static PubKey make_from_hex(const std::string& s);
-
-    //     PubKey& operator=(const uint8_t* ptr);
-    // };
-
-    // bool operator==(const PubKey& lhs, const PubKey& rhs);
-
+    struct PubKey;
     struct PrivateKey;
 
     /// Stores a sodium "secret key" value, which is actually the seed
@@ -70,10 +46,7 @@ namespace llarp
             return "[secretkey]";
         }
 
-        PubKey to_pubkey() const
-        {
-            return PubKey(data() + 32);
-        }
+        PubKey to_pubkey() const;
 
         /// Computes the private key from the secret key (which is actually the
         /// seed)
@@ -121,11 +94,6 @@ namespace llarp
         /// Computes the public key
         bool to_pubkey(PubKey& pubkey) const;
     };
-
-    template <>
-    inline constexpr bool IsToStringFormattable<SecretKey> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<PrivateKey> = true;
 
     using ShortHash = AlignedBuffer<SHORTHASHSIZE>;
     using LongHash = AlignedBuffer<HASHSIZE>;

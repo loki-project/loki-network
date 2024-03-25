@@ -22,8 +22,8 @@ namespace llarp
         uint64_t path_success = 0;
         uint64_t path_fail = 0;
         uint64_t path_timeout = 0;
-        llarp_time_t last_update = 0s;
-        llarp_time_t last_decay = 0s;
+        std::chrono::milliseconds last_update = 0s;
+        std::chrono::milliseconds last_decay = 0s;
         uint64_t version = llarp::constants::proto_version;
 
         RouterProfile() = default;
@@ -83,7 +83,7 @@ namespace llarp
 
         bool save(const fs::path fname);
 
-        bool should_save(llarp_time_t now) const;
+        bool should_save(std::chrono::milliseconds now) const;
 
         void disable();
 
@@ -96,7 +96,7 @@ namespace llarp
 
         mutable util::Mutex _m;
         std::map<RouterID, RouterProfile> _profiles;
-        llarp_time_t _last_save = 0s;
+        std::chrono::milliseconds _last_save = 0s;
         std::atomic<bool> _profiling_disabled;
     };
 

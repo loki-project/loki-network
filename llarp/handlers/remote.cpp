@@ -15,18 +15,21 @@ namespace llarp::handlers
 
     void RemoteHandler::build_more(size_t n)
     {
-        (void)n;
+        size_t count{0};
+        log::debug(logcat, "RemoteHandler building {} paths to random remotes (needed: {})", n, NUM_ONS_LOOKUP_PATHS);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            count += build_path_to_random();
+        }
+
+        if (count == n)
+            log::debug(logcat, "RemoteHandler successfully initiated {} path-builds", n);
+        else
+            log::warning(logcat, "RemoteHandler only initiated {} path-builds (needed: {})", count, n);
     }
 
-    bool RemoteHandler::initiate_session_to_remote(const RouterID& remote)
-    {
-        if (have_session(remote))
-            return false;
-
-        return true;
-    }
-
-    void RemoteHandler::lookup_name(std::string ons, std::function<void(std::optional<ClientAddress>)> func)
+    void RemoteHandler::resolve_ons(std::string ons, std::function<void(std::optional<ClientAddress>)> func)
     {
         if (not service::is_valid_ons(ons))
         {
@@ -40,7 +43,7 @@ namespace llarp::handlers
             if (auto record = service::EncryptedONSRecord::construct(response);
                 auto client_addr = record->decrypt(ons_name))
             {
-                return hook(client_addr);
+                return hook(std::move(client_addr));
             }
 
             std::optional<std::string> status = std::nullopt;
@@ -66,9 +69,10 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(logcat, "{} querying {} for name lookup (target: {})", name(), path->pivot_router_id(), ons);
+                log::info(
+                    logcat, "{} querying pivot:{} for name lookup (target: {})", name(), path->pivot_router_id(), ons);
 
-                path->find_name(ons, response_handler);
+                path->resolve_ons(ons, response_handler);
             }
         }
     }
@@ -86,7 +90,7 @@ namespace llarp::handlers
         return _router.loop();
     }
 
-    void RemoteHandler::Tick(llarp_time_t now)
+    void RemoteHandler::Tick(std::chrono::milliseconds now)
     {
         (void)now;
     }
@@ -121,12 +125,15 @@ namespace llarp::handlers
             if (remote.is_ons())
             {
                 // we have the ONS name, so look up the `.loki`
-                lookup_name(remote.remote_name(), [this, addr](std::optional<ClientAddress> maybe_addr) {
+                resolve_ons(remote.remote_name(), [this, addr](std::optional<ClientAddress> maybe_addr) {
                     if (maybe_addr)
                     {
-                        _client_address_map.map_remote_to_local(*maybe_addr, addr);
+                        _client_address_map.insert_or_assign(addr, *maybe_addr);
                         log::debug(
-                            logcat, "`find_name` returned successfully -- ONS:{}, local address:{}", *maybe_addr, addr);
+                            logcat,
+                            "`ons_resolve` returned successfully -- ONS:{}, local address:{}",
+                            maybe_addr,
+                            addr);
                     }
                     // we already print a log::warning if failing in ::lookup_name
                 });
@@ -134,110 +141,47 @@ namespace llarp::handlers
             else
             {
                 // we have the '.loki`, so map it buddy boy
-                _client_address_map.map_remote_to_local(remote, addr);
+                _client_address_map.insert_or_assign(addr, remote);
             }
         }
-
-        _configure();
     }
 
-    // void RemoteHandler::map_remote(
-    //     std::string name,
-    //     std::string token,
-    //     std::vector<IPRange> ranges,
-    //     std::function<void(bool, std::string)> result_handler)
-    // {
-    // if (ranges.empty())
-    // {
-    //   result_handler(false, "no ranges provided");
-    //   return;
-    // }
-
-    // lookup_name(
-    //     name,
-    //     [ptr = std::static_pointer_cast<Handler>(get_self()),
-    //      name,
-    //      auth = auth::AuthInfo{token},
-    //      ranges,
-    //      result_handler,
-    //      poker = router().route_poker()](std::string response, bool success) mutable {
-    //       if (not success)
-    //       {
-    //         result_handler(false, "Exit {} not found!"_format(response));
-    //         return;
-    //       }
-
-    //       if (auto saddr = service::Address(); saddr.FromString(result))
-    //       {
-    //       ptr->SetAuthInfoForEndpoint(saddr, auth);
-    //       ptr->MarkAddressOutbound(saddr);
-
-    //       auto result = ptr->EnsurePathToService(
-    //           saddr,
-    //           [ptr, name, name_result, ranges, result_handler, poker](
-    //               auto addr, OutboundContext* ctx) {
-    //             if (ctx == nullptr)
-    //             {
-    //               result_handler(
-    //                   false, "could not establish flow to {} ({})"_format(name_result,
-    //                   name));
-    //               return;
-    //             }
-
-    //             // make a lambda that sends the reply after doing auth
-    //             auto apply_result = [ptr, poker, addr, result_handler, ranges](
-    //                                     std::string result, bool success) {
-    //               if (success)
-    //               {
-    //                 for (const auto& range : ranges)
-    //                   ptr->MapExitRange(range, addr);
-
-    //                 if (poker)
-    //                   poker->put_up();
-    //               }
-
-    //               result_handler(success, result);
-    //             };
-
-    //             ctx->send_auth_async(apply_result);
-    //           },
-    //           ptr->PathAlignmentTimeout());
-
-    //       if (not result)
-    //         result_handler(false, "Could not build path to {} ({})"_format(name_result,
-    //         name));
-    //       }
-    //     });
-    // }
+    bool initiate_session(RouterID remote, bool is_exit, bool is_snode)
+    {
+        (void)remote;
+        (void)is_exit;
+        (void)is_snode;
+        return false;
+    }
 
     void RemoteHandler::map_remote_to_local_addr(ClientAddress remote, oxen::quic::Address local)
     {
-        _client_address_map.map_remote_to_local(remote, local);
+        _client_address_map.insert_or_assign(std::move(local), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_addr_by_remote(ClientAddress remote)
+    void RemoteHandler::unmap_local_addr_by_remote(const ClientAddress& remote)
     {
-        _client_address_map.unmap_by_remote(remote);
+        _client_address_map.unmap(remote);
     }
 
-    void RemoteHandler::unmap_remote_by_name(std::string name)
+    void RemoteHandler::unmap_remote_by_name(const std::string& name)
     {
-        _client_address_map.unmap_by_name(name);
+        _client_address_map.unmap(name);
     }
 
     void RemoteHandler::map_remote_to_local_range(ClientAddress remote, IPRange range)
     {
-        _client_range_map.map_remote_to_local(remote, range);
+        _client_range_map.insert_or_assign(std::move(range), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_range_by_remote(ClientAddress remote)
+    void RemoteHandler::unmap_local_range_by_remote(const ClientAddress& remote)
     {
-        _client_range_map.unmap_by_remote(remote);
+        _client_range_map.unmap(remote);
     }
 
-    void RemoteHandler::unmap_range_by_name(std::string name)
+    void RemoteHandler::unmap_range_by_name(const std::string& name)
     {
-        _client_range_map.unmap_by_name(name);
+        _client_range_map.unmap(name);
     }
 
 }  //  namespace llarp::handlers

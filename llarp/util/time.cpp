@@ -9,7 +9,7 @@ namespace llarp
         using Clock_t = std::chrono::system_clock;
 
         template <typename Res, typename Clock>
-        static Duration_t time_since_epoch(std::chrono::time_point<Clock> point)
+        static std::chrono::milliseconds time_since_epoch(std::chrono::time_point<Clock> point)
         {
             return std::chrono::duration_cast<Res>(point.time_since_epoch());
         }
@@ -29,15 +29,16 @@ namespace llarp
         return std::chrono::steady_clock::now().time_since_epoch();
     }
 
-    uint64_t to_milliseconds(Duration_t ms)
+    uint64_t to_milliseconds(std::chrono::milliseconds ms)
     {
         return ms.count();
     }
 
     /// get our uptime in ms
-    Duration_t uptime()
+    std::chrono::milliseconds uptime()
     {
-        return std::chrono::duration_cast<Duration_t>(std::chrono::steady_clock::now() - started_at_steady);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started_at_steady);
     }
 
     rc_time time_point_now()
@@ -45,21 +46,21 @@ namespace llarp
         return std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
     }
 
-    Duration_t time_now_ms()
+    std::chrono::milliseconds time_now_ms()
     {
         auto t = uptime();
 #ifdef TESTNET_SPEED
         t /= uint64_t{TESTNET_SPEED};
 #endif
-        return t + time_since_epoch<Duration_t, Clock_t>(started_at_system);
+        return t + time_since_epoch<std::chrono::milliseconds, Clock_t>(started_at_system);
     }
 
-    nlohmann::json to_json(const Duration_t& t)
+    nlohmann::json to_json(const std::chrono::milliseconds& t)
     {
         return to_milliseconds(t);
     }
 
-    static auto extract_h_m_s_ms(const Duration_t& dur)
+    static auto extract_h_m_s_ms(const std::chrono::milliseconds& dur)
     {
         return std::make_tuple(
             std::chrono::duration_cast<std::chrono::hours>(dur).count(),
@@ -68,9 +69,9 @@ namespace llarp
             (std::chrono::duration_cast<std::chrono::milliseconds>(dur) % 1s).count());
     }
 
-    std::string short_time_from_now(const TimePoint_t& t, const Duration_t& now_threshold)
+    std::string short_time_from_now(const TimePoint_t& t, const std::chrono::milliseconds& now_threshold)
     {
-        auto delta = std::chrono::duration_cast<Duration_t>(llarp::TimePoint_t::clock::now() - t);
+        auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(llarp::TimePoint_t::clock::now() - t);
         bool future = delta < 0s;
         if (future)
             delta = -delta;
@@ -91,7 +92,7 @@ namespace llarp
             "ms"_a = ms);
     }
 
-    std::string to_string(Duration_t delta)
+    std::string to_string(std::chrono::milliseconds delta)
     {
         bool neg = delta < 0s;
         if (neg)

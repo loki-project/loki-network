@@ -128,7 +128,7 @@ namespace llarp::service
         return IntroSet{payload};
     }
 
-    bool EncryptedIntroSet::IsExpired(llarp_time_t now) const
+    bool EncryptedIntroSet::IsExpired(std::chrono::milliseconds now) const
     {
         return now >= signed_at + path::DEFAULT_LIFETIME;
     }
@@ -148,7 +148,7 @@ namespace llarp::service
         return true;
     }
 
-    bool EncryptedIntroSet::verify(llarp_time_t now) const
+    bool EncryptedIntroSet::verify(std::chrono::milliseconds now) const
     {
         if (IsExpired(now))
             return false;
@@ -232,7 +232,7 @@ namespace llarp::service
                 auto sublist = btdc.consume_list_consumer();
                 while (not sublist.is_finished())
                 {
-                    intros.emplace_back(sublist.consume_string());
+                    intros.insert(sublist.consume_string());
                 }
             }
 
@@ -324,7 +324,7 @@ namespace llarp::service
 
                 while (not sublist.is_finished())
                 {
-                    intros.emplace_back(sublist.consume_string());
+                    intros.insert(sublist.consume_string());
                 }
             }
 
@@ -427,7 +427,7 @@ namespace llarp::service
         return std::move(btdp).str();
     }
 
-    bool IntroSet::HasExpiredIntros(llarp_time_t now) const
+    bool IntroSet::HasExpiredIntros(std::chrono::milliseconds now) const
     {
         for (const auto& intro : intros)
             if (now >= intro.expiry)
@@ -435,7 +435,7 @@ namespace llarp::service
         return false;
     }
 
-    bool IntroSet::HasStaleIntros(llarp_time_t now, llarp_time_t delta) const
+    bool IntroSet::HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const
     {
         for (const auto& intro : intros)
             if (intro.expires_soon(now, delta))
@@ -443,7 +443,7 @@ namespace llarp::service
         return false;
     }
 
-    bool IntroSet::IsExpired(llarp_time_t now) const
+    bool IntroSet::IsExpired(std::chrono::milliseconds now) const
     {
         return GetNewestIntroExpiration() < now;
     }
@@ -463,7 +463,7 @@ namespace llarp::service
         return records;
     }
 
-    bool IntroSet::verify(llarp_time_t now) const
+    bool IntroSet::verify(std::chrono::milliseconds now) const
     {
         IntroSet copy;
         copy = *this;
@@ -488,9 +488,9 @@ namespace llarp::service
         return not IsExpired(now);
     }
 
-    llarp_time_t IntroSet::GetNewestIntroExpiration() const
+    std::chrono::milliseconds IntroSet::GetNewestIntroExpiration() const
     {
-        llarp_time_t maxTime = 0s;
+        std::chrono::milliseconds maxTime = 0s;
         for (const auto& intro : intros)
             maxTime = std::max(intro.expiry, maxTime);
         return maxTime;

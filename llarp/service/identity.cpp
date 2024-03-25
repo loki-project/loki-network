@@ -142,7 +142,7 @@ namespace llarp::service
     }
 
     std::optional<EncryptedIntroSet> Identity::encrypt_and_sign_introset(
-        const IntroSet& other_i, llarp_time_t now) const
+        const IntroSet& other_i, std::chrono::milliseconds now) const
     {
         EncryptedIntroSet encrypted;
 

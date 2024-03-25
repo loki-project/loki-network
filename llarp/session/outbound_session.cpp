@@ -12,18 +12,34 @@ namespace llarp::session
 {
     static auto logcat = log::Cat("session.base");
 
-    BaseSession::BaseSession(
-        RouterID _router, Router& r, size_t hoplen, EndpointBase& parent, std::shared_ptr<auth::SessionAuthPolicy> a)
+    OutboundSession::OutboundSession(
+        RouterID _remote,
+        Router& r,
+        size_t hoplen,
+        handlers::RemoteHandler& parent,
+        service::SessionTag _t,
+        std::shared_ptr<auth::SessionAuthPolicy> a)
         : PathHandler{r, NUM_SESSION_PATHS, hoplen},
-          _remote_router{std::move(_router)},
-          _auth{a},
+          _remote_router{std::move(_remote)},
+          _auth{std::move(a)},
+          _tag{std::move(_t)},
           _last_use{r.now()},
-          _parent{parent}
-    {}
+          _parent{parent},
+          _is_exit_service{_auth->is_exit_service()},
+          _is_snode_service{_auth->is_snode_service()},
+          _prefix{
+              _is_exit_service        ? PREFIX::EXIT
+                  : _is_snode_service ? PREFIX::SNODE
+                                      : PREFIX::LOKI}
+    {
+        // These can both be false but CANNOT both be true
+        if (_is_exit_service & _is_snode_service)
+            throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
+    }
 
-    BaseSession::~BaseSession() = default;
+    OutboundSession::~OutboundSession() = default;
 
-    bool BaseSession::send_path_control_message(
+    bool OutboundSession::send_path_control_message(
         std::string method, std::string body, std::function<void(std::string)> func)
     {
         if (auto p = current_path())
@@ -32,7 +48,7 @@ namespace llarp::session
         return false;
     }
 
-    bool BaseSession::send_path_data_message(std::string body)
+    bool OutboundSession::send_path_data_message(std::string body)
     {
         if (auto p = current_path())
             return p->send_path_data_message(std::move(body));
@@ -40,12 +56,12 @@ namespace llarp::session
         return false;
     }
 
-    void BaseSession::path_died(std::shared_ptr<path::Path> p)
+    void OutboundSession::path_died(std::shared_ptr<path::Path> p)
     {
         p->rebuild();
     }
 
-    StatusObject BaseSession::ExtractStatus() const
+    StatusObject OutboundSession::ExtractStatus() const
     {
         auto obj = path::PathHandler::ExtractStatus();
         obj["lastExitUse"] = to_json(_last_use);
@@ -55,29 +71,28 @@ namespace llarp::session
         return obj;
     }
 
-    void BaseSession::blacklist_snode(const RouterID& snode)
+    void OutboundSession::blacklist_snode(const RouterID& snode)
     {
         (void)snode;
     }
 
-    bool BaseSession::is_path_dead(std::shared_ptr<path::Path>, llarp_time_t dlt)
+    bool OutboundSession::is_path_dead(std::shared_ptr<path::Path>, std::chrono::milliseconds dlt)
     {
         return dlt >= path::ALIVE_TIMEOUT;
     }
 
-    void BaseSession::path_build_succeeded(const RouterID& remote, std::shared_ptr<path::Path> p)
+    void OutboundSession::path_build_succeeded(const RouterID& remote, std::shared_ptr<path::Path> p)
     {
         path::PathHandler::path_build_succeeded(remote, p);
 
         // TODO: add callback here
-        if (p->obtain_exit(
-                _auth->session_key(), std::is_same_v<decltype(p), ExitSession> ? 1 : 0, p->TXID().bt_encode()))
+        if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->TXID().bt_encode()))
             log::info(logcat, "Asking {} for exit", _remote_router);
         else
             log::warning(logcat, "Failed to send exit request");
     }
 
-    void BaseSession::reset_path_state()
+    void OutboundSession::reset_path_state()
     {
         // TODO: should we be closing exits on internal state reset?
         auto sendExitClose = [&](const std::shared_ptr<path::Path> p) {
@@ -98,7 +113,7 @@ namespace llarp::session
         path::PathHandler::reset_path_state();
     }
 
-    bool BaseSession::stop(bool send_close)
+    bool OutboundSession::stop(bool send_close)
     {
         _running = false;
 
@@ -122,7 +137,23 @@ namespace llarp::session
         return true;
     }
 
-    void BaseSession::send_path_close(std::shared_ptr<path::Path> p)
+    void OutboundSession::build_more(size_t n)
+    {
+        size_t count{0};
+        log::debug(logcat, "OutboundSession building {} paths to random remotes (needed: {})", n, NUM_ONS_LOOKUP_PATHS);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            count += build_path_to_random();
+        }
+
+        if (count == n)
+            log::debug(logcat, "OutboundSession successfully initiated {} path-builds", n);
+        else
+            log::warning(logcat, "OutboundSession only initiated {} path-builds (needed: {})", count, n);
+    }
+
+    void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
         if (p->close_exit(_auth->session_key(), p->TXID().bt_encode()))
             log::info(logcat, "Sent path close on path {}", p->short_name());
@@ -130,7 +161,7 @@ namespace llarp::session
             log::warning(logcat, "Failed to send path close on path {}", p->short_name());
     }
 
-    bool BaseSession::is_ready() const
+    bool OutboundSession::is_ready() const
     {
         if (_current_hop_id.is_zero())
             return false;
@@ -140,7 +171,7 @@ namespace llarp::session
         return num_paths() >= expect;
     }
 
-    bool BaseSession::is_expired(llarp_time_t now) const
+    bool OutboundSession::is_expired(std::chrono::milliseconds now) const
     {
         return now > _last_use && now - _last_use > path::DEFAULT_LIFETIME;
     }

@@ -27,9 +27,9 @@ namespace llarp
 
             virtual HopID RXID() const = 0;
 
-            virtual bool is_expired(llarp_time_t now) const = 0;
+            virtual bool is_expired(std::chrono::milliseconds now) const = 0;
 
-            virtual bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt) const = 0;
+            virtual bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt) const = 0;
 
             /// sends a control request along a path
             ///
@@ -45,7 +45,7 @@ namespace llarp
             virtual bool send_path_data_message(std::string body) = 0;
 
             /// return timestamp last remote activity happened at
-            virtual llarp_time_t LastRemoteActivityAt() const = 0;
+            virtual std::chrono::milliseconds LastRemoteActivityAt() const = 0;
         };
 
         // using HopHandler_ptr = std::shared_ptr<AbstractHopHandler>;

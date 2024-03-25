@@ -9,7 +9,7 @@ namespace llarp::service
     StatusObject Introduction::ExtractStatus() const
     {
         StatusObject obj{
-            {"router", router.ToHex()},
+            {"router", pivot_router.ToHex()},
             {"path", path_id.ToHex()},
             {"expiresAt", to_json(expiry)},
             {"latency", to_json(latency)},
@@ -23,7 +23,7 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{std::move(buf)};
 
-            router.from_snode_address(btdc.require<std::string>("k"));
+            pivot_router.from_snode_address(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
             path_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};
@@ -51,7 +51,7 @@ namespace llarp::service
     {
         try
         {
-            subdict.append("k", router.ToView());
+            subdict.append("k", pivot_router.ToView());
             subdict.append("l", latency.count());
             subdict.append("p", path_id.ToView());
             subdict.append("x", expiry.count());
@@ -84,7 +84,7 @@ namespace llarp::service
     {
         try
         {
-            router.from_string(btdc.require<std::string>("k"));
+            pivot_router.from_string(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<int64_t>("l")};
             path_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
@@ -98,7 +98,7 @@ namespace llarp::service
 
     void Introduction::clear()
     {
-        router.zero();
+        pivot_router.zero();
         path_id.zero();
         latency = 0s;
         expiry = 0s;
@@ -107,7 +107,12 @@ namespace llarp::service
     std::string Introduction::to_string() const
     {
         return fmt::format(
-            "[Intro k={} l={} p={} v={} x={}]", RouterID{router}, latency.count(), path_id, version, expiry.count());
+            "[Intro k={} l={} p={} v={} x={}]",
+            RouterID{pivot_router},
+            latency.count(),
+            path_id,
+            version,
+            expiry.count());
     }
 
 }  // namespace llarp::service

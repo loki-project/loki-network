@@ -8,6 +8,7 @@
 #include <llarp/service/address.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/service/types.hpp>
+#include <llarp/session/map.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxenc/variant.h>
@@ -29,35 +30,25 @@ namespace llarp
 
     namespace session
     {
-        struct BaseSession;
+        struct OutboundSession;
     }
-
-    // TODO: add forward declaration of TunnelManager
-    //  namespace link
-    //  {
-    //    class TunneLManager;
-    //  }
 
     class EndpointBase
     {
         std::unordered_set<dns::SRVData> _srv_records;
 
       public:
-        bool _publish_introset = true;
+        bool _publish_introset{true};
 
-        std::unordered_map<service::SessionTag, RouterID> _session_lookup;
-        std::unordered_map<RouterID, std::shared_ptr<session::BaseSession>> _sessions;
+        // TODO: replace with session_map type
+        // std::unordered_map<service::SessionTag, RouterID> _session_lookup;
+        // std::unordered_map<RouterID, std::shared_ptr<session::BaseSession>> _sessions;
 
         virtual ~EndpointBase() = default;
 
-        bool have_session(const RouterID& rid) const
-        {
-            return _sessions.count(rid);
-        }
+        std::shared_ptr<session::OutboundSession> get_session(const service::SessionTag& tag) const;
 
-        std::shared_ptr<session::BaseSession> get_session(service::SessionTag tag) const;
-
-        std::shared_ptr<session::BaseSession> get_session(const RouterID& rid) const;
+        std::shared_ptr<session::OutboundSession> get_session(const RouterID& rid) const;
 
         /// add an srv record to this endpoint's descriptor
         virtual void put_srv_record(dns::SRVData srv);
@@ -90,8 +81,6 @@ namespace llarp
 
         /// Gets the local address for the given endpoint, service or exit node
         virtual oxen::quic::Address local_address() const = 0;
-
-        virtual link::TunnelManager* GetQUICTunnel() = 0;
 
         virtual const std::shared_ptr<EventLoop>& loop() = 0;
 

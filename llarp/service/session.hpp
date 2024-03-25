@@ -31,8 +31,8 @@ namespace llarp::service
         bool inbound = false;
         bool forever = false;
 
-        Duration_t lastSend{};
-        Duration_t lastRecv{};
+        std::chrono::milliseconds lastSend{};
+        std::chrono::milliseconds lastRecv{};
 
         StatusObject ExtractStatus() const;
 
@@ -42,7 +42,7 @@ namespace llarp::service
         /// called to indicate we transimitted on this session
         void TX();
 
-        bool IsExpired(llarp_time_t now, llarp_time_t lifetime = SessionLifetime) const;
+        bool IsExpired(std::chrono::milliseconds now, std::chrono::milliseconds lifetime = SessionLifetime) const;
 
         Address Addr() const;
     };

@@ -51,7 +51,8 @@ namespace llarp::service
     /** Holds all local hidden service related functionality. One hidden service can be hosted per
         client or relay instance, and is managed by this object.
      */
-    struct Endpoint final : public path::PathHandler, public EndpointBase, public std::enable_shared_from_this<Endpoint>
+    struct Endpoint final : public path::PathHandler,
+                            /* public EndpointBase, */ public std::enable_shared_from_this<Endpoint>
     {
         Endpoint(Router& r);
         ~Endpoint() override = default;
@@ -82,7 +83,7 @@ namespace llarp::service
 
         virtual bool Configure(const NetworkConfig& conf, const DnsConfig& dnsConf);
 
-        void Tick(llarp_time_t now) override;
+        void Tick(std::chrono::milliseconds now) override;
 
         /// return true if we have a resolvable ip address
         virtual bool HasIfAddr() const
@@ -110,20 +111,20 @@ namespace llarp::service
 
         /// loop (via router)
         /// use when sending any data on a path
-        const std::shared_ptr<EventLoop>& loop() override;
+        const std::shared_ptr<EventLoop>& loop();
 
         virtual bool Start();
 
         std::string name() const override;
 
-        oxen::quic::Address local_address() const override;
+        oxen::quic::Address local_address() const;
 
-        // bool should_publish_intro(llarp_time_t now) const;
+        // bool should_publish_intro(std::chrono::milliseconds now) const;
 
         // TODO:
         void build_more(size_t n = 0) override;
 
-        void srv_records_changed() override;
+        void srv_records_changed();
 
         void path_died(std::shared_ptr<path::Path> p) override;
 
@@ -171,7 +172,7 @@ namespace llarp::service
 
         bool HandleDataDrop(std::shared_ptr<path::Path> p, const HopID& dst, uint64_t s);
 
-        bool CheckPathIsDead(std::shared_ptr<path::Path> p, llarp_time_t latency);
+        bool CheckPathIsDead(std::shared_ptr<path::Path> p, std::chrono::milliseconds latency);
 
         size_t RemoveAllConvoTagsFor(service::Address remote);
 
@@ -179,7 +180,7 @@ namespace llarp::service
 
         void blacklist_snode(const RouterID& snode) override;
 
-        virtual llarp_time_t PathAlignmentTimeout() const
+        virtual std::chrono::milliseconds PathAlignmentTimeout() const
         {
             return service::DEFAULT_PATH_ALIGN_TIMEOUT;
         }
@@ -194,10 +195,6 @@ namespace llarp::service
         uint64_t GenTXID();
 
         const std::set<RouterID>& SnodeBlacklist() const;
-
-        /// Returns a pointer to the quic::Tunnel object handling quic connections for this
-        /// endpoint. Returns nullptr if quic is not supported.
-        link::TunnelManager* GetQUICTunnel() override;
 
       protected:
         void regen_and_publish_introset();
@@ -244,14 +241,14 @@ namespace llarp::service
         // bool // EnsurePathTo(
         //     std::variant<Address, RouterID> addr,
         //     std::function<void(std::optional<ConvoTag>)> hook,
-        //     llarp_time_t timeout) override;
+        //     std::chrono::milliseconds timeout) override;
 
         // /// return false if we have already called this function before for this
         // /// address
         // bool // EnsurePathToService(
         //     const Address remote,
         //     std::function<void(Address, OutboundContext*)> h,
-        //     llarp_time_t timeoutMS = DefaultPathEnsureTimeout);
+        //     std::chrono::milliseconds timeoutMS = DefaultPathEnsureTimeout);
         // /// ensure a path to a service node by public key
         // bool // EnsurePathToSNode(
         //     const RouterID remote,
@@ -264,7 +261,7 @@ namespace llarp::service
         std::unique_ptr<link::TunnelManager> _tunnel_manager;
 
       private:
-        llarp_time_t _last_introset_regen_attempt = 0s;
+        std::chrono::milliseconds _last_introset_regen_attempt = 0s;
         std::set<RouterID> snode_blacklist;
 
       protected:

@@ -4,7 +4,7 @@
 
 namespace llarp::service::util
 {
-    // void ExpireSNodeSessions(llarp_time_t now, SNodeConnectionMap& sessions)
+    // void ExpireSNodeSessions(std::chrono::milliseconds now, SNodeConnectionMap& sessions)
     // {
     //   auto itr = sessions.begin();
     //   while (itr != sessions.end())
@@ -28,7 +28,7 @@ namespace llarp::service::util
     //   }
     // }
 
-    // void DeregisterDeadSessions(llarp_time_t now, ConnectionMap& sessions)
+    // void DeregisterDeadSessions(std::chrono::milliseconds now, ConnectionMap& sessions)
     // {
     //   auto itr = sessions.begin();
     //   while (itr != sessions.end())
@@ -45,7 +45,7 @@ namespace llarp::service::util
     // }
 
     // void TickRemoteSessions(
-    //     llarp_time_t now,
+    //     std::chrono::milliseconds now,
     //     ConnectionMap& remoteSessions,
     //     ConnectionMap& deadSessions,
     //     std::unordered_map<SessionTag, Session>& sessions)
@@ -78,7 +78,7 @@ namespace llarp::service::util
     // }
 
     // void ExpireConvoSessions(
-    //     llarp_time_t now, std::unordered_map<SessionTag, Session>& sessions)
+    //     std::chrono::milliseconds now, std::unordered_map<SessionTag, Session>& sessions)
     // {
     //   auto itr = sessions.begin();
     //   while (itr != sessions.end())

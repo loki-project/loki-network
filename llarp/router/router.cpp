@@ -177,7 +177,7 @@ namespace llarp
         return _node_db->needs_rebootstrap();
     }
 
-    void Router::persist_connection_until(const RouterID& remote, llarp_time_t until)
+    void Router::persist_connection_until(const RouterID& remote, std::chrono::milliseconds until)
     {
         _link_manager->set_conn_persist(remote, until);
     }
@@ -307,7 +307,7 @@ namespace llarp
         {
             log::debug(logcat, "Starting RPC client");
             rpc_addr = oxenmq::address(_config->lokid.rpc_addr);
-            _rpc_client = std::make_shared<rpc::LokidRpcClient>(_lmq, weak_from_this());
+            _rpc_client = std::make_shared<rpc::RPCClient>(_lmq, weak_from_this());
             log::debug(logcat, "RPC client connecting to RPC bind address");
             _rpc_client->connect_async(rpc_addr);
         }
@@ -317,6 +317,59 @@ namespace llarp
             log::debug(logcat, "Starting RPC server");
             _rpc_server = std::make_unique<rpc::RPCServer>(_lmq, *this);
         }
+    }
+
+    void Router::init_bootstrap()
+    {
+        auto& conf = *_config;
+
+        _bootstrap_seed = conf.bootstrap.seednode;
+
+        std::vector<fs::path> bootstrap_paths{std::move(conf.bootstrap.files)};
+
+        fs::path default_bootstrap = conf.router.data_dir / "bootstrap.signed";
+
+        auto& bootstrap = _node_db->bootstrap_list();
+
+        bootstrap.populate_bootstraps(bootstrap_paths, default_bootstrap, not _bootstrap_seed);
+    }
+
+    void Router::process_routerconfig()
+    {
+        auto& conf = *_config;
+
+        // Router config
+        client_router_connections = conf.router.client_router_connections;
+
+        std::optional<std::string> paddr = (conf.router.public_ip) ? conf.router.public_ip
+            : (conf.links.public_addr)                             ? conf.links.public_addr
+                                                                   : std::nullopt;
+        std::optional<uint16_t> pport = (conf.router.public_port) ? conf.router.public_port
+            : (conf.links.public_port)                            ? conf.links.public_port
+                                                                  : std::nullopt;
+
+        if (pport.has_value() and not paddr.has_value())
+            throw std::runtime_error{"If public-port is specified, public-addr must be as well!"};
+
+        if (conf.links.listen_addr)
+        {
+            _listen_address = *conf.links.listen_addr;
+        }
+        else
+        {
+            if (paddr or pport)
+                throw std::runtime_error{"Must specify [bind]:listen in config with public ip/addr!"};
+
+            if (auto maybe_addr = net().get_best_public_address(true, DEFAULT_LISTEN_PORT))
+                _listen_address = std::move(*maybe_addr);
+            else
+                throw std::runtime_error{"Could not find net interface on current platform!"};
+        }
+
+        _public_address = (not paddr and not pport) ? _listen_address
+                                                    : oxen::quic::Address{*paddr, pport ? *pport : DEFAULT_LISTEN_PORT};
+
+        RouterContact::BLOCK_BOGONS = conf.router.block_bogons;
     }
 
     void Router::process_netconfig()
@@ -334,6 +387,7 @@ namespace llarp
         }
         else
         {
+            // DISCUSS: is this only relevant when _should_init_tun is true?
             const auto maybe = net().FindFreeTun();
 
             if (not maybe.has_value())
@@ -369,6 +423,7 @@ namespace llarp
         conf._local_ip_range = _local_range;
         conf._local_addr = _local_addr;
         conf._local_ip = _local_ip;
+        conf._if_name = _if_name;
 
         // process remote client map; addresses muyst be within _local_ip_range
         auto& client_addrs = conf._client_addrs;
@@ -382,6 +437,44 @@ namespace llarp
                 itr = client_addrs.erase(itr);
             else
                 ++itr;
+        }
+
+        /// build a set of strictConnectPubkeys
+        if (not conf.strict_connect.empty())
+        {
+            const auto& val = conf.strict_connect;
+
+            if (is_service_node())
+                throw std::runtime_error("cannot use strict-connect option as service node");
+
+            if (val.size() < 2)
+                throw std::runtime_error("Must specify more than one strict-connect router if using strict-connect");
+
+            _node_db->pinned_edges().insert(val.begin(), val.end());
+            log::debug(logcat, "{} strict-connect routers configured", val.size());
+        }
+
+        // profiling
+        _profile_file = _config->router.data_dir / "profiles.dat";
+
+        // Network config
+        if (_config->network.enable_profiling.value_or(false))
+        {
+            log::debug(logcat, "Router profiling enabled");
+            if (not fs::exists(_profile_file))
+            {
+                log::debug(logcat, "No profiles file found at {}; skipping...", _profile_file);
+            }
+            else
+            {
+                log::debug(logcat, "Loading router profiles from {}", _profile_file);
+                router_profiling().load(_profile_file);
+            }
+        }
+        else
+        {
+            router_profiling().disable();
+            log::debug(logcat, "Router profiling disabled");
         }
     }
 
@@ -460,6 +553,9 @@ namespace llarp
 
         const auto& netid = conf.router.net_id;
 
+        // Set netid before anything else
+        log::debug(logcat, "Network ID set to {}", netid);
+
         if (not netid.empty() and netid != llarp::LOKINET_DEFAULT_NETID)
         {
             _testnet = netid == llarp::LOKINET_TESTNET_NETID;
@@ -470,7 +566,7 @@ namespace llarp
             if (_testing_disabled and not _testnet)
                 throw std::runtime_error{"Error: reachability testing can only be disabled on testnet!"};
 
-            auto err = "Lokinet network ID set to {}, NOT mainnet! {}"_format(
+            auto err = "Lokinet network ID is {}, NOT mainnet! {}"_format(
                 netid,
                 _testnet ? "Please ensure your local instance is configured to operate on testnet"
                          : "Local lokinet instance will attempt to run on the specified network");
@@ -480,6 +576,17 @@ namespace llarp
         log::debug(logcat, "Configuring router");
 
         _is_service_node = conf.router.is_relay;
+        _is_exit_node = conf.network.allow_exit;
+
+        if (_is_exit_node and _is_service_node)
+            throw std::runtime_error{
+                "Lokinet cannot simultaneously operate as a service node and client-operated exit node service!"};
+
+        log::critical(
+            logcat,
+            "Local instance operating in {}",
+            _is_service_node ? "relay mode!"
+                             : "client mode{}"_format(_is_exit_node ? " operating an exit node service!" : "!"));
 
         init_rpc();
 
@@ -491,121 +598,25 @@ namespace llarp
 
         _node_db = std::move(nodedb);
 
-        log::debug(logcat, "{}", _is_service_node ? "Running as a relay (service node)" : "Running as a client");
-
         log::debug(logcat, "Initializing key manager");
         if (not _key_manager->initialize(*_config, true, _is_service_node))
             throw std::runtime_error{"KeyManager failed to initialize"};
 
-        if (!from_config())
-            throw std::runtime_error{"FromConfig() failed"};
-
-        if (not ensure_identity())
-            throw std::runtime_error{"EnsureIdentity() failed"};
-
-        return true;
-    }
-
-    bool Router::from_config()
-    {
         log::debug(logcat, "Initializing from configuration");
 
-        auto& conf = *_config;
-
-        // Set netid before anything else
-        log::debug(logcat, "Network ID set to {}", conf.router.net_id);
-
-        // Router config
-        client_router_connections = conf.router.client_router_connections;
-
-        std::optional<std::string> paddr = (conf.router.public_ip) ? conf.router.public_ip
-            : (conf.links.public_addr)                             ? conf.links.public_addr
-                                                                   : std::nullopt;
-        std::optional<uint16_t> pport = (conf.router.public_port) ? conf.router.public_port
-            : (conf.links.public_port)                            ? conf.links.public_port
-                                                                  : std::nullopt;
-
-        if (pport.has_value() and not paddr.has_value())
-            throw std::runtime_error{"If public-port is specified, public-addr must be as well!"};
-
-        if (conf.links.listen_addr)
-        {
-            _listen_address = *conf.links.listen_addr;
-        }
-        else
-        {
-            if (paddr or pport)
-                throw std::runtime_error{"Must specify [bind]:listen in config with public ip/addr!"};
-
-            if (auto maybe_addr = net().get_best_public_address(true, DEFAULT_LISTEN_PORT))
-                _listen_address = std::move(*maybe_addr);
-            else
-                throw std::runtime_error{"Could not find net interface on current platform!"};
-        }
-
-        _public_address = (not paddr and not pport) ? _listen_address
-                                                    : oxen::quic::Address{*paddr, pport ? *pport : DEFAULT_LISTEN_PORT};
-
-        RouterContact::BLOCK_BOGONS = conf.router.block_bogons;
+        process_routerconfig();
 
         // We process the relevant netconfig values (ip_range, address, and ip) here; in case the range or interface is
         // bad, we search for a free one and set it BACK into the config. Every subsequent object configuring using the
         // NetworkConfig (ex: tun/null, exit::Handler, etc) will have processed values
         process_netconfig();
 
-        auto& net_config = conf.network;
+        init_bootstrap();
 
-        if (net_config.endpoint_type == "null")
-            _should_init_tun = false;
-        else
+        if (conf.network.endpoint_type != "null")
+        {
+            _should_init_tun = true;
             init_net_if();
-
-        /// build a set of  strictConnectPubkeys
-        if (not net_config.strict_connect.empty())
-        {
-            const auto& val = net_config.strict_connect;
-
-            if (is_service_node())
-                throw std::runtime_error("cannot use strict-connect option as service node");
-
-            if (val.size() < 2)
-                throw std::runtime_error("Must specify more than one strict-connect router if using strict-connect");
-
-            _node_db->pinned_edges().insert(val.begin(), val.end());
-            log::debug(logcat, "{} strict-connect routers configured", val.size());
-        }
-
-        _bootstrap_seed = conf.bootstrap.seednode;
-
-        std::vector<fs::path> bootstrap_paths{std::move(conf.bootstrap.files)};
-
-        fs::path default_bootstrap = conf.router.data_dir / "bootstrap.signed";
-
-        auto& bootstrap = _node_db->bootstrap_list();
-
-        bootstrap.populate_bootstraps(bootstrap_paths, default_bootstrap, not _bootstrap_seed);
-
-        // profiling
-        _profile_file = conf.router.data_dir / "profiles.dat";
-
-        // Network config
-        if (conf.network.enable_profiling.value_or(false))
-        {
-            log::debug(logcat, "Router profiling enabled");
-            if (not fs::exists(_profile_file))
-            {
-                log::debug(logcat, "No profiles file found at {}; skipping...", _profile_file);
-            }
-            else
-            {
-                log::debug(logcat, "Loading router profiles from {}", _profile_file);
-                router_profiling().load(_profile_file);
-            }
-        }
-        else
-        {
-            router_profiling().disable();
-            log::debug(logcat, "Router profiling disabled");
         }
 
         // API config
@@ -614,12 +625,20 @@ namespace llarp
             init_api();
         }
 
+        if (not ensure_identity())
+            throw std::runtime_error{"EnsureIdentity() failed"};
+
         return true;
     }
 
     bool Router::is_service_node() const
     {
         return _is_service_node;
+    }
+
+    bool Router::is_exit_node() const
+    {
+        return _is_exit_node;
     }
 
     bool Router::insufficient_peers() const
@@ -712,7 +731,7 @@ namespace llarp
         return _node_db->has_bootstraps() ? _node_db->bootstrap_list().contains(r) : false;
     }
 
-    bool Router::should_report_stats(llarp_time_t now) const
+    bool Router::should_report_stats(std::chrono::milliseconds now) const
     {
         return now - _last_stats_report > REPORT_STATS_INTERVAL;
     }
@@ -1124,9 +1143,9 @@ namespace llarp
         return _is_running;
     }
 
-    llarp_time_t Router::Uptime() const
+    std::chrono::milliseconds Router::Uptime() const
     {
-        const llarp_time_t _now = now();
+        const std::chrono::milliseconds _now = now();
         if (_started_at > 0s && _now > _started_at)
             return _now - _started_at;
         return 0s;

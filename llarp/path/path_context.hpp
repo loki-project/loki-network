@@ -55,7 +55,7 @@ namespace llarp::path
         explicit PathContext(Router* router);
 
         /// called from router tick function
-        void ExpirePaths(llarp_time_t now);
+        void ExpirePaths(std::chrono::milliseconds now);
 
         void allow_transit();
 

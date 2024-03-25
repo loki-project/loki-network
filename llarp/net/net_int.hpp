@@ -215,19 +215,6 @@ namespace llarp
 
     }  // namespace net
 
-    template <>
-    inline constexpr bool IsToStringFormattable<huint128_t> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<huint32_t> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<huint16_t> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<net::ipv6addr_t> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<net::ipv4addr_t> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<net::port_t> = true;
-
     using nuint16_t /* [[deprecated("use llarp::net::port_t instead")]] */ = llarp::net::port_t;
     using nuint32_t /* [[deprecated("use llarp::net::ipv4addr_t instead")]] */ = llarp::net::ipv4addr_t;
     using nuint128_t /* [[deprecated("use llarp::net::ipv6addr_t instead")]] */ = llarp::net::ipv6addr_t;

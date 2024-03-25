@@ -106,7 +106,7 @@ namespace llarp
         const fs::path _root;
         const std::function<void(std::function<void()>)> _disk;
 
-        llarp_time_t _next_flush_time;
+        std::chrono::milliseconds _next_flush_time;
 
         /******** RouterID/RouterContacts ********/
 
@@ -365,7 +365,7 @@ namespace llarp
         size_t num_rids() const;
 
         /// do periodic tasks like flush to disk and expiration
-        void Tick(llarp_time_t now);
+        void Tick(std::chrono::milliseconds now);
 
         /// find the absolute closets router to a dht location
         RemoteRC find_closest_to(dht::Key_t location) const;

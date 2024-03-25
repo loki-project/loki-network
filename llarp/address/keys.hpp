@@ -93,16 +93,17 @@ namespace llarp
         bool operator!=(const ClientPubKey& other) const;
     };
 
-    template <>
-    inline constexpr bool IsToStringFormattable<PubKey> = true;
+    template <typename addr_t>
+    concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+        bool
+#endif
+            RemotePubKeyType = std::is_base_of_v<PubKey, addr_t>;
 
-    template <typename pk_t>
-    inline constexpr bool IsToStringFormattable<pk_t, std::enable_if_t<std::is_base_of_v<PubKey, pk_t>>> = true;
-
-    template <typename PK_t, std::enable_if_t<std::is_base_of_v<PubKey, PK_t>, int> = 0>
-    PK_t make_from_hex(const std::string& str)
+    template <RemotePubKeyType addr_t>
+    addr_t make_from_hex(const std::string& str)
     {
-        PK_t p;
+        addr_t p;
         oxenc::from_hex(str.begin(), str.end(), p.begin());
         return p;
     }

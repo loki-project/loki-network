@@ -66,19 +66,6 @@ namespace llarp::rpc
         return true;
     }
 
-    std::shared_ptr<EndpointBase> GetEndpointByName(Router&, std::string)
-    {
-        // TOFIX: this stupid shit or delete
-
-        // if (r.is_service_node())
-        // {
-        //   return r.exit_context().get_exit_endpoint(name);
-        // }
-
-        // return r.hidden_service_context().GetEndpointByName(name);
-        return nullptr;
-    }
-
     template <typename RPC>
     void register_rpc_command(std::unordered_map<std::string, rpc_callback>& regs)
     {

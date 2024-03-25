@@ -10,13 +10,6 @@
 #include <string_view>
 #include <unordered_set>
 
-// #include <uvw/tcp.h>
-
-namespace llarp
-{
-    class EndpointBase;
-}
-
 namespace llarp::link
 {
     // struct Endpoint;
@@ -58,7 +51,7 @@ namespace llarp::link
         // this includes the resolution time.
         std::chrono::milliseconds open_timeout = 4s;
 
-        TunnelManager(EndpointBase& endpoint);
+        TunnelManager();
 
         /// Adds an incoming listener callback.  When a new incoming quic connection is initiated to
         /// us by some remote we invoke these callback(s) in order of registration.  Each one has
@@ -142,7 +135,7 @@ namespace llarp::link
         }
 
       private:
-        EndpointBase& service_endpoint_;
+        // EndpointBase& service_endpoint_;
 
         struct ClientTunnel
         {

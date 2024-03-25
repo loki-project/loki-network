@@ -8,20 +8,41 @@
 
 namespace llarp
 {
-    /** This class will accept any types satisfying the concepts LocalAddrType and RemoteAddrType
-            LocalAddrType: must be inherited from Remote Address
-            RemoteAddrType: oxen::quic::Address or IPRange
+    /** TODO:
+        - add overloaded [] operators
     */
-    template <LocalAddrType local_addr_t, RemoteAddrType remote_addr_t>
+
+    /** This class will accept any types satisfying the concepts LocalAddrType and RemoteAddrType
+            LocalAddrType: oxen::quic::Address or IPRange
+            NetworkAddrType: must be inherited from NetworkAddress
+    */
+    template <LocalAddrType local_addr_t, NetworkAddrType net_addr_t>
     struct address_map
     {
       protected:
-        std::unordered_map<local_addr_t, remote_addr_t> _local_to_remote;
-        std::unordered_map<remote_addr_t, local_addr_t> _remote_to_local;
-        std::unordered_map<std::string, remote_addr_t> _name_to_remote;
+        std::unordered_map<local_addr_t, net_addr_t> _local_to_remote;
+        std::unordered_map<net_addr_t, local_addr_t> _remote_to_local;
+        std::unordered_map<std::string, net_addr_t> _name_to_remote;
 
       public:
-        std::optional<local_addr_t> get_local_from_remote(const remote_addr_t& remote)
+        /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent
+            to `local` or `remote` already exists, then they will be assigned to the corresponding value.
+            Otherwise, the values will be inserted.
+
+            The returned `bool` is true if the insertion took place and `false` if assignment occurred.
+        */
+        bool insert_or_assign(local_addr_t local, net_addr_t remote)
+        {
+            auto name = remote.name();
+
+            auto [_1, b1] = _local_to_remote.insert_or_assign(local, remote);
+            auto [_2, b2] = _remote_to_local.insert_or_assign(remote, local);
+            auto [_3, b3] = _name_to_remote.insert_or_assign(name, remote);
+
+            return b1 & b2 & b3;
+        }
+
+        std::optional<local_addr_t> get_local_from_remote(const net_addr_t& remote)
         {
             std::optional<local_addr_t> ret = std::nullopt;
 
@@ -31,9 +52,9 @@ namespace llarp
             return ret;
         }
 
-        std::optional<remote_addr_t> get_remote_from_local(const local_addr_t& local)
+        std::optional<net_addr_t> get_remote_from_local(const local_addr_t& local)
         {
-            std::optional<remote_addr_t> ret = std::nullopt;
+            std::optional<net_addr_t> ret = std::nullopt;
 
             if (auto itr = _local_to_remote.find(local); itr != _local_to_remote.end())
                 ret = itr->second;
@@ -41,9 +62,9 @@ namespace llarp
             return ret;
         }
 
-        std::optional<remote_addr_t> get_remote_from_name(const std::string& name)
+        std::optional<net_addr_t> get_remote_from_name(const std::string& name)
         {
-            std::optional<remote_addr_t> ret = std::nullopt;
+            std::optional<net_addr_t> ret = std::nullopt;
 
             if (auto itr = _name_to_remote.find(name); itr != _local_to_remote.end())
                 ret = itr->second;
@@ -55,25 +76,13 @@ namespace llarp
         {
             std::optional<local_addr_t> ret = std::nullopt;
 
-            if (auto it_a = _name_to_remote.find(name); it_a != _local_to_remote.end())
-            {
-                if (auto it_b = _remote_to_local.find(it_a->second); it_a != _remote_to_local.end())
-                {
-                    ret = it_b->second;
-                }
-            }
+            if (auto itr = _name_to_remote.find(name); itr != _local_to_remote.end())
+                ret = get_local_from_remote(itr->second);
 
             return ret;
         }
 
-        void map_remote_to_local(remote_addr_t remote, local_addr_t local)
-        {
-            _remote_to_local.emplace(remote, local);
-            _local_to_remote.emplace(local, remote);
-            _name_to_remote.emplace(remote.name(), remote);
-        }
-
-        void unmap_by_remote(const remote_addr_t& remote)
+        void unmap(const net_addr_t& remote)
         {
             auto name = remote.name();
 
@@ -91,7 +100,7 @@ namespace llarp
             }
         }
 
-        void unmap_by_local(const local_addr_t& local)
+        void unmap(const local_addr_t& local)
         {
             if (auto it_a = _local_to_remote.find(local); it_a != _local_to_remote.end())
             {
@@ -108,7 +117,7 @@ namespace llarp
         }
 
         // All types satisfying the concept RemoteAddrType have a ::name() overload
-        void unmap_by_name(const std::string& name)
+        void unmap(const std::string& name)
         {
             if (auto it_a = _name_to_remote.find(name); it_a != _name_to_remote.end())
             {
@@ -122,6 +131,16 @@ namespace llarp
                 }
                 _name_to_remote.erase(it_a);
             }
+        }
+
+        std::optional<local_addr_t> operator[](const net_addr_t& remote)
+        {
+            return get_local_from_remote(remote);
+        }
+
+        std::optional<net_addr_t> operator[](const local_addr_t& local)
+        {
+            return get_remote_from_local(local);
         }
     };
 }  //  namespace llarp

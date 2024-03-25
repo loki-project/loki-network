@@ -1,9 +1,9 @@
 #pragma once
 
-#include "util/aligned.hpp"
-#include "util/types.hpp"
+#include "address/keys.hpp"
 
 #include <llarp/crypto/types.hpp>
+#include <llarp/util/formattable.hpp>
 
 namespace llarp
 {
@@ -46,9 +46,6 @@ namespace llarp
     {
         return lhs.as_array() == rhs.as_array();
     }
-
-    template <>
-    inline constexpr bool IsToStringFormattable<RouterID> = true;
 }  // namespace llarp
 
 namespace std

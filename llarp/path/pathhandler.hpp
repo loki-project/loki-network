@@ -48,7 +48,7 @@ namespace llarp
             bool Attempt(const RouterID& router);
 
             /// decay limit entries
-            void Decay(llarp_time_t now);
+            void Decay(std::chrono::milliseconds now);
 
             /// return true if this router is currently limited
             bool Limited(const RouterID& router) const;
@@ -88,7 +88,7 @@ namespace llarp
         struct PathHandler
         {
           private:
-            llarp_time_t last_warn_time = 0s;
+            std::chrono::milliseconds last_warn_time = 0s;
 
             std::unordered_map<RouterID, std::weak_ptr<Path>> path_cache;
 
@@ -113,9 +113,7 @@ namespace llarp
             using Lock_t = util::NullLock;
             mutable Mtx_t paths_mutex;
 
-            // TODO: decompose into two lookups
-            //    PathID:RouterID (many:1)
-            //    RouterID:path_ptr (1:1)
+            // TODO: make into templated map object
             std::unordered_map<HopID, RouterID> _path_lookup;
             std::unordered_map<RouterID, std::shared_ptr<Path>> _paths;
 
@@ -133,8 +131,8 @@ namespace llarp
           public:
             Router& _router;
             size_t num_hops;
-            llarp_time_t _last_build = 0s;
-            llarp_time_t build_interval_limit = MIN_PATH_BUILD_INTERVAL;
+            std::chrono::milliseconds _last_build = 0s;
+            std::chrono::milliseconds build_interval_limit = MIN_PATH_BUILD_INTERVAL;
 
             std::set<RouterID> snode_blacklist;
 
@@ -178,7 +176,7 @@ namespace llarp
 
             virtual bool should_build_more() const;
 
-            void expire_paths(llarp_time_t now);
+            void expire_paths(std::chrono::milliseconds now);
 
             void add_path(std::shared_ptr<Path> path);
 
@@ -195,7 +193,7 @@ namespace llarp
                 size_t n, std::function<bool(std::shared_ptr<Path>)> filter, bool exact = false);
 
             /// count the number of paths that will exist at this timestamp in future
-            size_t paths_at_time(llarp_time_t futureTime) const;
+            size_t paths_at_time(std::chrono::milliseconds futureTime) const;
 
             virtual void reset_path_state();
 
@@ -221,14 +219,16 @@ namespace llarp
 
             bool should_remove() const;
 
-            llarp_time_t Now() const;
+            std::chrono::milliseconds now() const;
 
-            virtual void Tick(llarp_time_t now);
+            virtual void Tick(std::chrono::milliseconds now);
 
             void tick_paths();
 
             // This method should be overridden by deriving classes
             virtual void build_more(size_t n = 0) = 0;
+
+            bool build_path_to_random();
 
             bool build_path_aligned_to_remote(const RouterID& remote);
 
@@ -245,8 +245,5 @@ namespace llarp
             virtual std::optional<std::vector<RemoteRC>> get_hops_to_random();
         };
     }  // namespace path
-
-    template <>
-    inline constexpr bool IsToStringFormattable<path::BuildStats> = true;
 
 }  // namespace llarp

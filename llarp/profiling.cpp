@@ -320,7 +320,7 @@ namespace llarp
         return true;
     }
 
-    bool Profiling::should_save(llarp_time_t now) const
+    bool Profiling::should_save(std::chrono::milliseconds now) const
     {
         auto dlt = now - _last_save;
         return dlt > 1min;

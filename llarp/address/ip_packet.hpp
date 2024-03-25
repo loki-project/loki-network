@@ -169,7 +169,4 @@ namespace llarp
         std::string to_string();
     };
 
-    template <>
-    inline constexpr bool IsToStringFormattable<IPPacket> = true;
-
 }  // namespace llarp

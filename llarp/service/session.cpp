@@ -21,7 +21,7 @@ namespace llarp::service
         return remote.address();
     }
 
-    bool Session::IsExpired(llarp_time_t now, llarp_time_t lifetime) const
+    bool Session::IsExpired(std::chrono::milliseconds now, std::chrono::milliseconds lifetime) const
     {
         if (forever)
             return false;

@@ -119,14 +119,14 @@ namespace llarp
 
         std::set<RouterID> snode_blacklist;
 
-        std::unordered_map<service::Address, auth::AuthInfo> exit_auths;
+        std::unordered_map<ClientAddress, auth::AuthInfo> exit_auths;
         std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
 
         auth::AuthType auth_type = auth::AuthType::NONE;
         auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
         std::optional<std::string> auth_url;
         std::optional<std::string> auth_method;
-        std::unordered_set<service::Address> auth_whitelist;
+        std::unordered_set<ClientAddress> auth_whitelist;
         std::unordered_set<std::string> auth_static_tokens;
         std::set<fs::path> auth_files;
 
@@ -134,7 +134,7 @@ namespace llarp
 
         std::optional<net::TrafficPolicy> traffic_policy;
 
-        std::optional<llarp_time_t> path_alignment_timeout;
+        std::optional<std::chrono::milliseconds> path_alignment_timeout;
 
         /* TESTNET: Under modification */
 
@@ -163,19 +163,6 @@ namespace llarp
 
         // Used when in exit mode; pass down to exit::Endpoint // TODO: rename
         std::set<IPRange> _owned_ranges;
-
-        /* DEPRECATED */
-
-        // IP ranges mapped to remote client exits with an ONS name. Deprecating this because RemoteAddress
-        // can store and account for ONS names
-        // std::unordered_map<std::string, IPRange> _ons_range_map;
-        // IP_range_deprecated if_addr;
-        // std::optional<huint128_t> base_ipv6_range = std::nullopt;
-        // std::unordered_map<huint128_t, service::Address> addr_map;
-        // net::IPRangeMap<service::Address> range_map;
-        // net::IPRangeMap<std::string> ons_range_map;
-        // std::set<IP_range_deprecated> owned_ranges;
-        /*************************************/
 
         bool enable_route_poker;
         bool blackhole_routes;

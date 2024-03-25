@@ -55,6 +55,3 @@ namespace llarp::dns
         StatusObject ToJSON() const override;
     };
 }  // namespace llarp::dns
-
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::dns::Question> = true;

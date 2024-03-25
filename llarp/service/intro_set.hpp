@@ -21,15 +21,15 @@ namespace llarp::service
 {
     constexpr std::size_t MAX_INTROSET_SIZE = 4096;
     // 10 seconds clock skew permitted for introset expiration
-    constexpr llarp_time_t MAX_INTROSET_TIME_DELTA = 10s;
+    constexpr std::chrono::milliseconds MAX_INTROSET_TIME_DELTA = 10s;
 
     struct IntroSet
     {
         ServiceInfo address_keys;
-        std::vector<Introduction> intros;
+        IntroductionSet intros;
         PQPubKey sntru_pubkey;
         std::vector<llarp::dns::SRVTuple> SRVs;
-        llarp_time_t time_signed = 0s;
+        std::chrono::milliseconds time_signed = 0s;
 
         IntroSet() = default;
 
@@ -56,16 +56,14 @@ namespace llarp::service
 
         std::string to_string() const;
 
-        llarp_time_t GetNewestIntroExpiration() const;
+        std::chrono::milliseconds GetNewestIntroExpiration() const;
 
-        bool GetNewestIntro(Introduction& intro) const;
-
-        bool HasExpiredIntros(llarp_time_t now) const;
+        bool HasExpiredIntros(std::chrono::milliseconds now) const;
 
         /// return true if any of our intros expires soon given a delta
-        bool HasStaleIntros(llarp_time_t now, llarp_time_t delta) const;
+        bool HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const;
 
-        bool IsExpired(llarp_time_t now) const;
+        bool IsExpired(std::chrono::milliseconds now) const;
 
         std::vector<llarp::dns::SRVData> GetMatchingSRVRecords(std::string_view service_proto) const;
 
@@ -75,7 +73,7 @@ namespace llarp::service
 
         void bt_decode(oxenc::bt_dict_consumer& btdc);
 
-        bool verify(llarp_time_t now) const;
+        bool verify(std::chrono::milliseconds now) const;
 
         StatusObject ExtractStatus() const;
     };
@@ -100,7 +98,7 @@ namespace llarp::service
     struct EncryptedIntroSet
     {
         PubKey derived_signing_key;
-        llarp_time_t signed_at = 0s;
+        std::chrono::milliseconds signed_at = 0s;
         ustring introset_payload;
         SymmNonce nonce;
         Signature sig;
@@ -118,7 +116,7 @@ namespace llarp::service
 
         bool Sign(const PrivateKey& k);
 
-        bool IsExpired(llarp_time_t now) const;
+        bool IsExpired(std::chrono::milliseconds now) const;
 
         std::string bt_encode() const;
 
@@ -129,7 +127,7 @@ namespace llarp::service
         bool OtherIsNewer(const EncryptedIntroSet& other) const;
 
         /// verify signature and timestamp
-        bool verify(llarp_time_t now) const;
+        bool verify(std::chrono::milliseconds now) const;
 
         static bool verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig);
 
@@ -162,8 +160,3 @@ namespace llarp::service
     using IntroSetLookupHandler = std::function<void(const std::vector<IntroSet>&)>;
 
 }  // namespace llarp::service
-
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::service::IntroSet> = true;
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::service::EncryptedIntroSet> = true;

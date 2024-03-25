@@ -136,7 +136,7 @@ namespace llarp
         return selected;
     }
 
-    void NodeDB::Tick(llarp_time_t now)
+    void NodeDB::Tick(std::chrono::milliseconds now)
     {
         if (_next_flush_time == 0s)
             return;

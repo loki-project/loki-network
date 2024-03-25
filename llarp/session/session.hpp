@@ -1,23 +1,28 @@
 #pragma once
 
+#include <llarp/address/address.hpp>
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
 #include <llarp/path/pathhandler.hpp>
-#include <llarp/service/types.hpp>
 
 #include <deque>
 #include <queue>
 
 namespace llarp
 {
-    class EndpointBase;
     struct Router;
 
     namespace link
     {
         class TunnelManager;
     }
+
+    namespace handlers
+    {
+        struct LocalEndpoint;
+        struct RemoteHandler;
+    }  // namespace handlers
 
     /** Snode vs Client Session
         - client to client: shared secret (symmetric key) is negotiated
@@ -29,16 +34,20 @@ namespace llarp
 
     namespace session
     {
-        struct BaseSession : public llarp::path::PathHandler, public std::enable_shared_from_this<BaseSession>
+        struct OutboundSession final : public llarp::path::PathHandler,
+                                       public std::enable_shared_from_this<OutboundSession>
         {
-            BaseSession(
-                RouterID _router,
+          private:
+            OutboundSession(
+                RouterID _remote,
                 Router& r,
                 size_t hoplen,
-                EndpointBase& parent,
+                handlers::RemoteHandler& parent,
+                service::SessionTag _t,
                 std::shared_ptr<auth::SessionAuthPolicy> a);
 
-            ~BaseSession() override;
+          public:
+            ~OutboundSession() override;
 
             std::shared_ptr<path::PathHandler> get_self() override
             {
@@ -68,7 +77,7 @@ namespace llarp
 
             void path_died(std::shared_ptr<path::Path> p) override;
 
-            bool is_path_dead(std::shared_ptr<path::Path> p, llarp_time_t dlt);
+            bool is_path_dead(std::shared_ptr<path::Path> p, std::chrono::milliseconds dlt);
 
             void path_build_succeeded(const RouterID& remote, std::shared_ptr<path::Path> p) override;
 
@@ -78,7 +87,7 @@ namespace llarp
 
             bool is_ready() const;
 
-            const llarp::RouterID& Endpoint() const
+            const llarp::RouterID& remote_endpoint() const
             {
                 return _remote_router;
             }
@@ -91,7 +100,7 @@ namespace llarp
                 return _current_hop_id;
             }
 
-            bool is_expired(llarp_time_t now) const;
+            bool is_expired(std::chrono::milliseconds now) const;
 
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func = nullptr);
@@ -100,86 +109,84 @@ namespace llarp
 
             std::string name() const override
             {
-                return prefix() + _remote_router.to_string();
+                return prefix().append(_remote_router.to_string());
             }
 
-          protected:
-            RouterID _remote_router;  // remote {service,exit} pubkey
-            std::shared_ptr<auth::SessionAuthPolicy> _auth;
+            service::SessionTag tag()
+            {
+                return _tag;
+            }
 
-            virtual std::string prefix() const = 0;
+            const service::SessionTag& tag() const
+            {
+                return _tag;
+            }
 
           private:
+            RouterID _remote_router;  // TODO: remote {service,exit} pubkey
+            std::shared_ptr<auth::SessionAuthPolicy> _auth;
+
+            std::string prefix() const
+            {
+                return _prefix;
+            }
+
             HopID _current_hop_id;
+            std::shared_ptr<path::Path> _current_path;
 
-            // uint64_t _counter;
-            llarp_time_t _last_use;
+            service::SessionTag _tag;
 
-            // const bool _bundle_RC;
-            const EndpointBase& _parent;
-        };
+            std::chrono::milliseconds _last_use;
 
-        struct ExitSession final : public BaseSession
-        {
-            ExitSession(
-                RouterID snodeRouter,
-                Router& r,
-                size_t hoplen,
-                EndpointBase& parent,
-                std::shared_ptr<auth::SessionAuthPolicy> a)
-                : BaseSession{snodeRouter, r, hoplen, parent, a}
-            {}
+            const handlers::RemoteHandler& _parent;
 
-            ~ExitSession() override = default;
-
-            std::string prefix() const override
-            {
-                return "exit::"s;
-            }
-        };
-
-        struct ServiceSession final : public BaseSession
-        {
-            ServiceSession(
-                const RouterID& _remote,
-                Router& r,
-                size_t hop_len,
-                EndpointBase& parent,
-                std::shared_ptr<auth::SessionAuthPolicy> a);
-
-            ~ServiceSession() override = default;
-
-            std::string prefix() const override
-            {
-                return _is_snode_service ? "snode::"s : "loki::"s;
-            }
-
+            const bool _is_exit_service{false};
             const bool _is_snode_service{false};
+            const std::string _prefix{};
         };
 
         struct InboundSession
         {
-            InboundSession(Router& r, std::shared_ptr<path::Path> _path, RouterID _remote, EndpointBase& parent);
+            InboundSession(
+                Router& r,
+                std::shared_ptr<path::Path> _path,
+                ClientAddress _remote,
+                handlers::LocalEndpoint& parent,
+                service::SessionTag _t,
+                bool is_exit);
 
             ~InboundSession() = default;
 
             std::string name() const;
 
-            std::shared_ptr<path::Path> current_path()
+            const std::shared_ptr<path::Path>& current_path() const
             {
                 return _current_path;
             }
 
             void set_new_path(const std::shared_ptr<path::Path>& _new_path);
 
-          protected:
-            Router& _router;
-            EndpointBase& _parent;
+            void set_new_tag(const service::SessionTag& tag);
 
-            RouterID _remote;
+          private:
+            Router& _router;
+            handlers::LocalEndpoint& _parent;
+
+            service::SessionTag _tag;
+            ClientAddress _remote;
 
             std::shared_ptr<path::Path> _current_path;
+
+            const bool _is_exit_service{false};
+            const std::string _prefix{};
         };
+
+        template <typename session_t>
+        concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+            bool
+#endif
+                SessionType = std::is_same_v<OutboundSession, session_t> || std::is_same_v<InboundSession, session_t>;
 
     }  // namespace session
 }  // namespace llarp

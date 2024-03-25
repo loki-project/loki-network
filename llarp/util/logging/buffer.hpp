@@ -53,6 +53,4 @@ namespace llarp
         std::string to_string() const;
     };
 
-    template <>
-    inline constexpr bool IsToStringFormattable<buffer_printer> = true;
 }  // namespace llarp

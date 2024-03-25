@@ -1,8 +1,9 @@
 #pragma once
 
-#include <oxen/log/format.hpp>
+// #include <oxen/log/format.hpp>
 
-// #include <fmt/format.h>
+#include <fmt/format.h>
+#include <oxen/quic/format.hpp>
 
 #include <type_traits>
 
@@ -11,21 +12,15 @@
 
 namespace llarp
 {
-    // Types can opt-in to being formatting via .to_string() by specializing this to true.  This also
-    // allows scoped enums by instead looking for a call to `to_string(val)` (and so there should be
-    // a ToString function in the same namespace as the scoped enum to pick it up via ADL).
-    // template <typename T>
-    // constexpr bool IsToStringFormattable = false;
-    template <typename T, typename SFINAE = void>
-    inline constexpr bool IsToStringFormattable = false;
+    // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
+    template <typename T>
+    concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+        bool
+#endif
+            ToStringFormattable = oxen::quic::ToStringFormattable<T>;
 
-    // e.g.:
-    // template <> inline constexpr bool IsToStringFormattable<MyType> = true;
-
-#ifdef __cpp_lib_is_scoped_enum
-    using std::is_scoped_enum;
-    using std::is_scoped_enum_v;
-#else
+#ifndef __cpp_lib_is_scoped_enum
     template <typename T, bool = std::is_enum_v<T>>
     struct is_scoped_enum : std::false_type
     {};
@@ -36,6 +31,18 @@ namespace llarp
 
     template <typename T>
     constexpr bool is_scoped_enum_v = is_scoped_enum<T>::value;
+#endif
+
+    template <typename T>
+    concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+        bool
+#endif
+            ScopedEnum_t =
+#ifdef __cpp_lib_is_scoped_enum
+                std::is_scoped_enum_v<T>;
+#else
+            is_scoped_enum_v<T>;
 #endif
 
 }  // namespace llarp
@@ -66,16 +73,13 @@ namespace fmt
 
 namespace fmt
 {
-    template <typename T>
-    struct formatter<T, char, std::enable_if_t<llarp::IsToStringFormattable<T>>> : formatter<std::string_view>
+    template <llarp::ScopedEnum_t T>
+    struct formatter<T, char> : formatter<std::string_view>
     {
         template <typename FormatContext>
         auto format(const T& val, FormatContext& ctx) const
         {
-            if constexpr (llarp::is_scoped_enum_v<T>)
-                return formatter<std::string_view>::format(to_string(val), ctx);
-            else
-                return formatter<std::string_view>::format(val.to_string(), ctx);
+            return formatter<std::string_view>::format(to_string(val), ctx);
         }
     };
 

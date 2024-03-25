@@ -13,7 +13,7 @@
 
 namespace llarp::service
 {
-    Handler::Handler(std::string name, Router& r) : handlers::RemoteHandler{std::move(name), r}
+    Handler::Handler(std::string /* name */, Router& /* r */) /* : handlers::RemoteHandler{std::move(name), r} */
     {}
 
     Handler::~Handler() = default;
@@ -21,7 +21,7 @@ namespace llarp::service
     // bool Handler::EnsurePathTo(
     //     AddressVariant_t addr,
     //     std::function<void(std::optional<service::SessionTag>)> hook,
-    //     llarp_time_t)
+    //     std::chrono::milliseconds)
     // {
     //   if (std::holds_alternative<service::Address>(addr))
     //     return false;
@@ -244,7 +244,7 @@ namespace llarp::service
         // const huint128_t ip = if_addr();
         // key_to_IP[us] = ip;
         // ip_to_key[ip] = us;
-        // ip_activity[ip] = std::numeric_limits<llarp_time_t>::max();
+        // ip_activity[ip] = std::numeric_limits<std::chrono::milliseconds>::max();
         // snode_keys.insert(us);
 
         // TODO: move this into router

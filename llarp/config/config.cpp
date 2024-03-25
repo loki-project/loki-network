@@ -322,10 +322,10 @@ namespace llarp
                 "manually add a remote endpoint by .loki address to the access whitelist",
             },
             [this](std::string arg) {
-                service::Address addr;
-                if (not addr.FromString(arg))
-                    throw std::invalid_argument{fmt::format("bad loki address: {}", arg)};
-                auth_whitelist.emplace(std::move(addr));
+                if (auto addr = ClientAddress::from_client_addr(arg))
+                    auth_whitelist.emplace(std::move(*addr));
+                else
+                    throw std::invalid_argument{"bad loki address: {}"_format(arg)};
             });
 
         conf.define_option<fs::path>(
@@ -370,7 +370,7 @@ namespace llarp
             ReachableDefault,
             assignment_acceptor(is_reachable),
             Comment{
-                "Determines whether we will pubish our snapp's introset to the DHT.",
+                "Determines whether we will pubish our service's introset to the DHT.",
             });
 
         conf.define_option<int>(
@@ -504,9 +504,8 @@ namespace llarp
             },
             [this](std::string arg) {
                 if (arg.empty())
-                    return;
-                service::Address exit;
-                auth::AuthInfo auth;
+                    throw std::invalid_argument{"Empty argument passed to 'exit-auth'"};
+
                 const auto pos = arg.find(":");
 
                 if (pos == std::string::npos)
@@ -515,20 +514,22 @@ namespace llarp
                         "[network]:exit-auth invalid format, expects exit-address.loki:auth-code-goes-here");
                 }
 
-                const auto exit_str = arg.substr(0, pos);
-                auth.token = arg.substr(pos + 1);
+                const auto addr = arg.substr(0, pos);
+                auto auth = auth::AuthInfo{arg.substr(pos + 1)};
 
-                if (llarp::service::is_valid_ons(exit_str))
+                if (auto exit = ClientAddress::from_client_addr(addr))
                 {
-                    ons_exit_auths.emplace(exit_str, auth);
+                    exit_auths.emplace(*exit, auth);
+
+                    if (exit->is_ons())
+                    {
+                        ons_exit_auths.emplace(addr, auth);
+                    }
+
                     return;
                 }
 
-                if (not exit.FromString(exit_str))
-                {
-                    throw std::invalid_argument("[network]:exit-auth invalid exit address");
-                }
-                exit_auths.emplace(exit, auth);
+                throw std::invalid_argument("[network]:exit-auth invalid exit address");
             });
 
         conf.define_option<bool>(

@@ -13,7 +13,7 @@ namespace llarp::util
         DecayingHashTable(std::chrono::milliseconds cacheInterval = 1h) : m_CacheInterval(cacheInterval)
         {}
 
-        void Decay(llarp_time_t now)
+        void Decay(std::chrono::milliseconds now)
         {
             EraseIf([&](const auto& item) { return item.second.second + m_CacheInterval <= now; });
         }
@@ -26,7 +26,7 @@ namespace llarp::util
 
         /// return true if inserted
         /// return false if not inserted
-        bool Put(Key_t key, Value_t value, llarp_time_t now = 0s)
+        bool Put(Key_t key, Value_t value, std::chrono::milliseconds now = 0s)
         {
             if (now == 0s)
                 now = llarp::time_now_ms();
@@ -65,7 +65,7 @@ namespace llarp::util
             }
         }
 
-        llarp_time_t m_CacheInterval;
-        std::unordered_map<Key_t, std::pair<Value_t, llarp_time_t>, Hash_t> m_Values;
+        std::chrono::milliseconds m_CacheInterval;
+        std::unordered_map<Key_t, std::pair<Value_t, std::chrono::milliseconds>, Hash_t> m_Values;
     };
 }  // namespace llarp::util

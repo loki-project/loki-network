@@ -90,6 +90,4 @@ namespace llarp
         std::optional<Message> maybe_parse_dns_msg(IPPacket msg);
     }  // namespace dns
 
-    template <>
-    inline constexpr bool IsToStringFormattable<llarp::dns::Message> = true;
 }  // namespace llarp

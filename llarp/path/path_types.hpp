@@ -33,7 +33,7 @@ namespace llarp
             /// nonce for key exchange
             SymmNonce nonce;
             // lifetime
-            llarp_time_t lifetime = DEFAULT_LIFETIME;
+            std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
 
             StatusObject ExtractStatus() const;
 

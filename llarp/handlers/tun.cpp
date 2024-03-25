@@ -486,19 +486,6 @@ namespace llarp::handlers
         return msg;
     }
 
-    std::optional<std::variant<service::Address, RouterID>> TunEndpoint::get_addr_for_ip(ip ip) const
-    {
-        auto itr = _ip_to_addr.find(ip);
-
-        if (itr == _ip_to_addr.end())
-            return std::nullopt;
-
-        if (_is_snode_map.at(itr->second))
-            return RouterID{itr->second.as_array()};
-        else
-            return service::Address{itr->second.as_array()};
-    }
-
     bool TunEndpoint::handle_hooked_dns_message(dns::Message msg, std::function<void(dns::Message)> reply)
     {
         (void)msg;
@@ -1390,80 +1377,6 @@ namespace llarp::handlers
         return _local_ip;
     }
 
-    ip TunEndpoint::get_ip_for_addr(std::variant<service::Address, RouterID> addr)
-    {
-        llarp_time_t now = llarp::time_now_ms();
-        (void)addr;
-        // huint128_t nextIP = {0};
-        // AlignedBuffer<32> ident{};
-        // bool snode = false;
-
-        // var::visit([&ident](auto&& val) { ident = val.data(); }, addr);
-
-        // if (std::get_if<RouterID>(&addr))
-        // {
-        //     snode = true;
-        // }
-
-        // {
-        //     // previously allocated address
-        //     auto itr = _addr_to_ip.find(ident);
-        //     if (itr != _addr_to_ip.end())
-        //     {
-        //         // mark ip active
-        //         mark_ip_active(itr->second);
-        //         return itr->second;
-        //     }
-        // }
-        // allocate new address
-        if (_next_ip < _max_ip)
-        {
-            // do
-            // {
-            //     nextIP = ++_next_ip;
-            // } while (_ip_to_addr.find(nextIP) != _ip_to_addr.end() && _next_ip < _max_ip);
-            // if (nextIP < _max_ip)
-            // {
-            //     _addr_to_ip[ident] = nextIP;
-            //     _ip_to_addr[nextIP] = ident;
-            //     _is_snode_map[ident] = snode;
-            //     var::visit([&](auto&& remote) { llarp::Log Info(name(), " mapped ", remote, " to ", nextIP); },
-            //     addr); mark_ip_active(nextIP); return nextIP;
-            // }
-        }
-
-        // we are full
-        // expire least active ip
-        // TODO: prevent DoS
-        std::pair<huint128_t, llarp_time_t> oldest = {huint128_t{0}, 0s};
-
-        // find oldest entry
-        auto itr = _ip_activity.begin();
-        while (itr != _ip_activity.end())
-        {
-            if (itr->second <= now)
-            {
-                if ((now - itr->second) > oldest.second)
-                {
-                    oldest.first = itr->first;
-                    oldest.second = itr->second;
-                }
-            }
-            ++itr;
-        }
-        // remap address
-        // _ip_to_addr[oldest.first] = ident;
-        // _addr_to_ip[ident] = oldest.first;
-        // _is_snode_map[ident] = snode;
-        // nextIP = oldest.first;
-
-        // // mark ip active
-        // _ip_activity[nextIP] = std::max(_ip_activity[nextIP], now);
-
-        // return nextIP;
-        return {};
-    }
-
     bool TunEndpoint::is_ip_mapped(ip ip) const
     {
         return _ip_to_addr.find(ip) != _ip_to_addr.end();
@@ -1480,7 +1393,7 @@ namespace llarp::handlers
     {
         log::debug(logcat, "{} marking address {} perpetually active", name(), ip);
         // _ip_activity[ip] =
-        //     std::numeric_limits<llarp_time_t>::max();
+        //     std::numeric_limits<std::chrono::milliseconds>::max();
     }
 
     TunEndpoint::~TunEndpoint() = default;

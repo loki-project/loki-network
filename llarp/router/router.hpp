@@ -3,21 +3,18 @@
 #include "route_poker.hpp"
 
 #include <llarp/bootstrap.hpp>
-#include <llarp/profiling.hpp>
-#include <llarp/router_contact.hpp>
-
-// #include <llarp/config/config.hpp>
 #include <llarp/config/key_manager.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/ev/loop.hpp>
-#include <llarp/exit/endpoint.hpp>
-#include <llarp/exit/handler.hpp>
+#include <llarp/handlers/endpoint.hpp>
+#include <llarp/handlers/remote.hpp>
 #include <llarp/path/path_context.hpp>
-#include <llarp/rpc/lokid_rpc_client.hpp>
+#include <llarp/profiling.hpp>
+#include <llarp/router_contact.hpp>
+#include <llarp/rpc/rpc_client.hpp>
 #include <llarp/rpc/rpc_server.hpp>
-#include <llarp/service/handler.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/mem.hpp>
@@ -109,23 +106,29 @@ namespace llarp
         std::atomic<bool> _is_running{false};
 
         int _outbound_udp_socket{-1};
+
         bool _is_service_node{false};
+
+        bool _is_exit_node{false};
 
         bool _testing_disabled{false};
         bool _testnet{false};
         bool _bootstrap_seed{false};
-        bool _should_init_tun{true};
+        bool _should_init_tun{false};
 
         consensus::reachability_testing router_testing;
 
         std::optional<oxen::quic::Address> _public_address;  // public addr for relays
         oxen::quic::Address _listen_address;
 
-        std::unique_ptr<service::Endpoint> _service_endpoint;  // local service
-        std::unique_ptr<exit::Endpoint> _exit_endpoint;        // local exit node
+        // TESTNET: underway -- combining local endpoints
+        std::shared_ptr<handlers::RemoteHandler> _remote_handler;
+        std::shared_ptr<handlers::LocalEndpoint> _local_endpoint;
 
-        std::unique_ptr<service::Handler> _service_handler;  // remote services
-        std::unique_ptr<exit::Handler> _exit_handler;        // remote exit nodes
+        // std::shared_ptr<service::Handler> _service_handler;  // remote services
+        // std::shared_ptr<exit::Handler> _exit_handler;        // remote exit nodes
+        // std::shared_ptr<service::Endpoint> _service_endpoint;  // local service
+        // std::shared_ptr<exit::Endpoint> _exit_endpoint;        // local exit node
 
         // TunEndpoint or NullEndpoint, depending on lokinet configuration
         std::unique_ptr<handlers::BaseHandler> _api;
@@ -139,9 +142,9 @@ namespace llarp
         std::shared_ptr<NodeDB> _node_db;
         const oxenmq::TaggedThreadID _disk_thread;
 
-        llarp_time_t _started_at;
-        llarp_time_t _last_stats_report{0s};
-        llarp_time_t _next_decomm_warning{time_now_ms() + 15s};
+        std::chrono::milliseconds _started_at;
+        std::chrono::milliseconds _last_stats_report{0s};
+        std::chrono::milliseconds _next_decomm_warning{time_now_ms() + 15s};
 
         std::shared_ptr<llarp::KeyManager> _key_manager;
 
@@ -151,10 +154,10 @@ namespace llarp
 
         std::unique_ptr<rpc::RPCServer> _rpc_server;
 
-        const llarp_time_t _random_start_delay{
+        const std::chrono::milliseconds _random_start_delay{
             platform::is_simulation ? std::chrono::milliseconds{(llarp::randint() % 1250) + 2000} : 0s};
 
-        std::shared_ptr<rpc::LokidRpcClient> _rpc_client;
+        std::shared_ptr<rpc::RPCClient> _rpc_client;
         bool whitelist_received{false};
 
         oxenmq::address rpc_addr;
@@ -167,15 +170,13 @@ namespace llarp
         // should we be sending padded messages every interval?
         bool send_padding{false};
 
-        bool should_report_stats(llarp_time_t now) const;
+        bool should_report_stats(std::chrono::milliseconds now) const;
 
         std::string _stats_line();
 
         void report_stats();
 
         void save_rc();
-
-        bool from_config();
 
         bool insufficient_peers() const;
 
@@ -186,6 +187,10 @@ namespace llarp
         void init_net_if();
 
         void init_api();
+
+        void init_bootstrap();
+
+        void process_routerconfig();
 
         void process_netconfig();
 
@@ -253,7 +258,7 @@ namespace llarp
             return _lmq;
         }
 
-        const std::shared_ptr<rpc::LokidRpcClient>& rpc_client() const
+        const std::shared_ptr<rpc::RPCClient>& rpc_client() const
         {
             return _rpc_client;
         }
@@ -273,10 +278,11 @@ namespace llarp
             return _outbound_udp_socket;
         }
 
-        exit::Handler* exit_context()
-        {
-            return _exit_handler.get();
-        }
+        // TODO: double check this getter as a concept...
+        // exit::Handler* exit_context()
+        // {
+        //     return _exit_handler.get();
+        // }
 
         const std::shared_ptr<KeyManager>& key_manager() const
         {
@@ -359,9 +365,9 @@ namespace llarp
         /// return true if we look like we are allowed and able to test other routers
         bool can_test_routers() const;
 
-        llarp_time_t Uptime() const;
+        std::chrono::milliseconds Uptime() const;
 
-        llarp_time_t _last_tick = 0s;
+        std::chrono::milliseconds _last_tick = 0s;
 
         std::function<void(void)> _router_close_cb;
 
@@ -372,8 +378,8 @@ namespace llarp
 
         bool looks_alive() const
         {
-            const llarp_time_t current = now();
-            return current <= _last_tick || (current - _last_tick) <= llarp_time_t{30000};
+            const std::chrono::milliseconds current = now();
+            return current <= _last_tick || (current - _last_tick) <= std::chrono::milliseconds{30000};
         }
 
         const std::shared_ptr<RoutePoker>& route_poker() const
@@ -391,8 +397,9 @@ namespace llarp
 
         bool is_running() const;
 
-        /// return true if we are running in service node mode
         bool is_service_node() const;
+
+        bool is_exit_node() const;
 
         std::optional<std::string> OxendErrorState() const;
 
@@ -411,7 +418,7 @@ namespace llarp
         /// close all sessions and shutdown all links
         void stop_sessions();
 
-        void persist_connection_until(const RouterID& remote, llarp_time_t until);
+        void persist_connection_until(const RouterID& remote, std::chrono::milliseconds until);
 
         bool ensure_identity();
 
@@ -447,7 +454,7 @@ namespace llarp
         /// call internal router ticker
         void Tick();
 
-        llarp_time_t now() const
+        std::chrono::milliseconds now() const
         {
             return llarp::time_now_ms();
         }

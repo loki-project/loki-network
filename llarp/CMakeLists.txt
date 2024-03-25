@@ -24,16 +24,17 @@ lokinet_add_library(lokinet-core-utils
   auth/rpc_auth.cpp
   auth/session_auth.cpp
   
-  exit/handler.cpp
-  exit/endpoint.cpp
-  
   handlers/common.cpp
+  handlers/endpoint.cpp
   handlers/null.cpp
   handlers/remote.cpp
   handlers/tun.cpp
-
-  service/handler.cpp # link/ exit/
-  service/endpoint.cpp
+  
+  # deprecated for handlers/{endpoint,remote}.cpp
+  # exit/handler.cpp
+  # exit/endpoint.cpp
+  # service/handler.cpp # link/ exit/
+  # service/endpoint.cpp
   
   service/identity.cpp
   service/info.cpp
@@ -41,7 +42,6 @@ lokinet_add_library(lokinet-core-utils
   service/intro_set.cpp
   service/lns_tracker.cpp
   service/name.cpp
-  # service/session.cpp
   
   vpn/egres_packet_router.cpp
 )
@@ -61,20 +61,17 @@ lokinet_add_library(lokinet-core
   # service/async_key_exchange.cpp
   service/types.cpp
   service/endpoint_state.cpp
-  # service/name.cpp
   service/protocol.cpp
-  
   service/session.cpp
-  session/base_session.cpp
-  session/exit_session.cpp
+
+  session/outbound_session.cpp
   session/inbound_session.cpp
-  session/service_session.cpp
 )
 
 lokinet_add_library(lokinet-rpc
   rpc/json_binary_proxy.cpp
   rpc/json_conversions.cpp
-  rpc/lokid_rpc_client.cpp
+  rpc/rpc_client.cpp
   rpc/rpc_request_parser.cpp
   rpc/rpc_server.cpp
 )

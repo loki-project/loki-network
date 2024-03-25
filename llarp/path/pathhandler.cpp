@@ -22,7 +22,7 @@ namespace llarp::path
         return _edge_limiter.Insert(router);
     }
 
-    void BuildLimiter::Decay(llarp_time_t now)
+    void BuildLimiter::Decay(std::chrono::milliseconds now)
     {
         _edge_limiter.Decay(now);
     }
@@ -220,7 +220,7 @@ namespace llarp::path
         return selected;
     }
 
-    size_t PathHandler::paths_at_time(llarp_time_t futureTime) const
+    size_t PathHandler::paths_at_time(std::chrono::milliseconds futureTime) const
     {
         size_t num = 0;
         Lock_t l(paths_mutex);
@@ -321,8 +321,13 @@ namespace llarp::path
         }
     }
 
+    std::chrono::milliseconds PathHandler::now() const
+    {
+        return _router.now();
+    }
+
     // called within the scope of locked mutex
-    void PathHandler::expire_paths(llarp_time_t now)
+    void PathHandler::expire_paths(std::chrono::milliseconds now)
     {
         if (_paths.size() == 0)
             return;
@@ -391,7 +396,7 @@ namespace llarp::path
         return intros;
     }
 
-    void PathHandler::Tick(llarp_time_t now)
+    void PathHandler::Tick(std::chrono::milliseconds now)
     {
         Lock_t l{paths_mutex};
         std::unordered_set<RouterID> endpoints;
@@ -476,18 +481,6 @@ namespace llarp::path
         return _paths.size();
     }
 
-    std::optional<std::vector<RemoteRC>> PathHandler::get_hops_to_random()
-    {
-        auto filter = [&r = _router](const RemoteRC& rc) -> bool {
-            return not r.router_profiling().is_bad_for_path(rc.router_id(), 1);
-        };
-
-        if (auto maybe = _router.node_db()->get_random_rc_conditional(filter))
-            return aligned_hops_to_remote(maybe->router_id());
-
-        return std::nullopt;
-    }
-
     bool PathHandler::stop(bool)
     {
         _running = false;
@@ -533,6 +526,18 @@ namespace llarp::path
             return false;
 
         return num_paths() < num_paths_desired;
+    }
+
+    std::optional<std::vector<RemoteRC>> PathHandler::get_hops_to_random()
+    {
+        auto filter = [&r = _router](const RemoteRC& rc) -> bool {
+            return not r.router_profiling().is_bad_for_path(rc.router_id(), 1);
+        };
+
+        if (auto maybe = _router.node_db()->get_random_rc_conditional(filter))
+            return aligned_hops_to_remote(maybe->router_id());
+
+        return std::nullopt;
     }
 
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_to_remote(
@@ -599,21 +604,30 @@ namespace llarp::path
         return std::nullopt;
     }
 
-    bool PathHandler::build_path_aligned_to_remote(const RouterID& remote)
+    bool PathHandler::build_path_to_random()
     {
-        if (const auto maybe = aligned_hops_to_remote(remote); maybe.has_value())
+        if (auto maybe_hops = get_hops_to_random())
         {
-            log::info(logcat, "{} building path to {}", name(), remote);
-            build(*maybe);
+            log::debug(logcat, "{} building path to random remote", name());
+            build(*maybe_hops);
             return true;
         }
 
+        log::warning(logcat, "{} failed to get hops for path-build to random", name());
         return false;
     }
 
-    llarp_time_t PathHandler::Now() const
+    bool PathHandler::build_path_aligned_to_remote(const RouterID& remote)
     {
-        return _router.now();
+        if (auto maybe_hops = aligned_hops_to_remote(remote))
+        {
+            log::debug(logcat, "{} building path to {}", name(), remote);
+            build(*maybe_hops);
+            return true;
+        }
+
+        log::warning(logcat, "{} failed to get hops for path-build to {}", name(), remote);
+        return false;
     }
 
     void PathHandler::build(std::vector<RemoteRC> hops)

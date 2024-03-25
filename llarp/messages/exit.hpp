@@ -12,12 +12,11 @@ namespace llarp
 
     namespace ObtainExitMessage
     {
-
         // flag: 0 = Exit, 1 = Snode
         inline std::string sign_and_serialize(SecretKey sk, uint64_t flag, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
+            std::array<unsigned char, 64> sig;
 
             {
                 auto btdp = btlp.append_dict();
@@ -29,32 +28,31 @@ namespace llarp
                     throw std::runtime_error{"Error: ObtainExitMessage failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
 
         inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
-            std::string nonce(16, '\0');
+            std::array<unsigned char, 64> sig;
+            std::array<unsigned char, 16> nonce;
             randombytes(reinterpret_cast<uint8_t*>(nonce.data()), 16);
 
             {
                 oxenc::bt_dict_producer btdp;
 
                 btdp.append("T", tx_id);
-                btdp.append("Y", nonce);
+                btdp.append("Y", ustring_view{nonce.data(), nonce.size()});
 
                 if (crypto::sign(reinterpret_cast<uint8_t*>(sig.data()), sk, to_usv(btdp.view())))
                     throw std::runtime_error{
                         "Error: ObtainExitMessage response failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
-
     }  // namespace ObtainExitMessage
 
     namespace UpdateExitMessage
@@ -64,7 +62,7 @@ namespace llarp
         inline std::string sign_and_serialize(SecretKey sk, std::string path_id, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
+            std::array<unsigned char, 64> sig;
 
             {
                 auto btdp = btlp.append_dict();
@@ -76,29 +74,29 @@ namespace llarp
                     throw std::runtime_error{"Error: UpdateExitMessage failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
 
         inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
-            std::string nonce(16, '\0');
+            std::array<unsigned char, 64> sig;
+            std::array<unsigned char, 16> nonce;
             randombytes(reinterpret_cast<uint8_t*>(nonce.data()), 16);
 
             {
                 oxenc::bt_dict_producer btdp;
 
                 btdp.append("T", tx_id);
-                btdp.append("Y", nonce);
+                btdp.append("Y", ustring_view{nonce.data(), nonce.size()});
 
                 if (crypto::sign(reinterpret_cast<uint8_t*>(sig.data()), sk, to_usv(btdp.view())))
                     throw std::runtime_error{
                         "Error: UpdateExitMessage response failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
     }  // namespace UpdateExitMessage
@@ -110,44 +108,43 @@ namespace llarp
         inline std::string sign_and_serialize(SecretKey sk, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
-            std::string nonce(16, '\0');
+            std::array<unsigned char, 64> sig;
+            std::array<unsigned char, 16> nonce;
             randombytes(reinterpret_cast<uint8_t*>(nonce.data()), 16);
 
             {
                 auto btdp = btlp.append_dict();
 
                 btdp.append("T", tx_id);
-                btdp.append("Y", nonce);
+                btdp.append("Y", ustring_view{nonce.data(), nonce.size()});
 
                 if (not crypto::sign(reinterpret_cast<uint8_t*>(sig.data()), sk, to_usv(btdp.view())))
                     throw std::runtime_error{"Error: CloseExitMessage failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
 
         inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
         {
             oxenc::bt_list_producer btlp;
-            std::string sig(64, '\0');
-            std::string nonce(16, '\0');
+            std::array<unsigned char, 64> sig;
+            std::array<unsigned char, 16> nonce;
             randombytes(reinterpret_cast<uint8_t*>(nonce.data()), 16);
 
             {
                 oxenc::bt_dict_producer btdp;
 
                 btdp.append("T", tx_id);
-                btdp.append("Y", nonce);
+                btdp.append("Y", ustring_view{nonce.data(), nonce.size()});
 
                 if (crypto::sign(reinterpret_cast<uint8_t*>(sig.data()), sk, to_usv(btdp.view())))
                     throw std::runtime_error{"Error: CloseExitMessage response failed to sign and serialize contents!"};
             }
 
-            btlp.append(sig.data());
+            btlp.append(ustring_view{sig.data(), sig.size()});
             return std::move(btlp).str();
         }
     }  // namespace CloseExitMessage
-
 }  // namespace llarp

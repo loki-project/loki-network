@@ -1,12 +1,10 @@
 #pragma once
 
-#include "constants.hpp"
 #include "types.hpp"
 
 #include <llarp/util/buffer.hpp>
 
 #include <cstdint>
-#include <functional>
 
 namespace llarp
 {

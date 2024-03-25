@@ -154,16 +154,16 @@ namespace llarp
         bool is_public_addressable() const;
 
         /// does this RC expire soon? default delta is 1 minute
-        bool expires_within_delta(llarp_time_t now, llarp_time_t dlt = 1min) const;
+        bool expires_within_delta(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 1min) const;
 
         /// returns true if this RC is expired and should be removed
-        bool is_expired(llarp_time_t now) const;
+        bool is_expired(std::chrono::milliseconds now) const;
 
         /// returns time in ms until we expire or 0 if we have expired
-        llarp_time_t time_to_expiry(llarp_time_t now) const;
+        std::chrono::milliseconds time_to_expiry(std::chrono::milliseconds now) const;
 
         /// get the age of this RC in ms
-        llarp_time_t age(llarp_time_t now) const;
+        std::chrono::milliseconds age(std::chrono::milliseconds now) const;
 
         bool other_is_newer(const RouterContact& other) const
         {
@@ -247,7 +247,7 @@ namespace llarp
             resign();
         }
 
-        void set_timestamp(llarp_time_t ts)
+        void set_timestamp(std::chrono::milliseconds ts)
         {
             set_timestamp(rc_time{std::chrono::duration_cast<std::chrono::seconds>(ts)});
         }
@@ -299,13 +299,6 @@ namespace llarp
             _router_version.fill(0);
         }
     };
-
-    template <>
-    inline constexpr bool IsToStringFormattable<RouterContact> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<RemoteRC> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<LocalRC> = true;
 
     using RouterLookupHandler = std::function<void(const std::vector<RemoteRC>&)>;
 }  // namespace llarp

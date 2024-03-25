@@ -45,7 +45,7 @@ namespace llarp
 
             service::Introduction intro;
 
-            llarp_time_t buildStarted = 0s;
+            std::chrono::milliseconds buildStarted = 0s;
 
             Path(
                 Router& rtr,
@@ -65,7 +65,7 @@ namespace llarp
 
             StatusObject ExtractStatus() const;
 
-            void MarkActive(llarp_time_t now)
+            void MarkActive(std::chrono::milliseconds now)
             {
                 last_recv_msg = std::max(now, last_recv_msg);
             }
@@ -74,7 +74,7 @@ namespace llarp
 
             std::string HopsString() const;
 
-            llarp_time_t LastRemoteActivityAt() const override
+            std::chrono::milliseconds LastRemoteActivityAt() const override
             {
                 return last_recv_msg;
             }
@@ -85,12 +85,12 @@ namespace llarp
                 _established = true;
             }
 
-            llarp_time_t ExpireTime() const
+            std::chrono::milliseconds ExpireTime() const
             {
                 return buildStarted + hops[0].lifetime;
             }
 
-            bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt = 5s) const override
+            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const override
             {
                 return now >= (ExpireTime() - dlt);
             }
@@ -101,15 +101,15 @@ namespace llarp
 
             bool update_exit(uint64_t tx_id);
 
-            bool is_expired(llarp_time_t now) const override;
+            bool is_expired(std::chrono::milliseconds now) const override;
 
             /// build a new path on the same set of hops as us
             /// regenerates keys
             void rebuild();
 
-            void Tick(llarp_time_t now, Router* r);
+            void Tick(std::chrono::milliseconds now, Router* r);
 
-            bool find_name(std::string name, std::function<void(std::string)> func = nullptr);
+            bool resolve_ons(std::string name, std::function<void(std::string)> func = nullptr);
 
             bool find_intro(
                 const dht::Key_t& location,
@@ -141,7 +141,7 @@ namespace llarp
             // nope not deprecated :^DDDD
             HopID TXID() const;
 
-            RouterID pivot_router_id() const;
+            const RouterID& pivot_router_id() const;
 
             HopID RXID() const override;
 
@@ -161,13 +161,13 @@ namespace llarp
             bool SendLatencyMessage(Router* r);
 
             /// call obtained exit hooks
-            bool InformExitResult(llarp_time_t b);
+            bool InformExitResult(std::chrono::milliseconds b);
 
             std::atomic<bool> _established{false};
 
             Router& _router;
-            llarp_time_t last_recv_msg = 0s;
-            llarp_time_t last_latency_test = 0s;
+            std::chrono::milliseconds last_recv_msg = 0s;
+            std::chrono::milliseconds last_latency_test = 0s;
             uint64_t last_latency_test_id = 0;
             const std::string _short_name;
         };

@@ -15,9 +15,9 @@ namespace llarp
     namespace rpc
     {
         /// The LokidRpcClient uses loki-mq to talk to make API requests to lokid.
-        struct LokidRpcClient : public std::enable_shared_from_this<LokidRpcClient>
+        struct RPCClient : public std::enable_shared_from_this<RPCClient>
         {
-            explicit LokidRpcClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r);
+            explicit RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r);
 
             /// Connect to lokid async
             void connect_async(oxenmq::address url);

@@ -47,11 +47,11 @@ namespace llarp
             TransitHopInfo info;
             SharedSecret pathKey;
             SymmNonce nonceXOR;
-            llarp_time_t started = 0s;
+            std::chrono::milliseconds started = 0s;
             // 10 minutes default
-            llarp_time_t lifetime = DEFAULT_LIFETIME;
+            std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
             uint8_t version;
-            llarp_time_t last_activity = 0s;
+            std::chrono::milliseconds last_activity = 0s;
             bool terminal_hop{false};
 
             // If randomize is given, first randomizes `nonce`
@@ -84,18 +84,18 @@ namespace llarp
                 return info.upstream == us;
             }
 
-            llarp_time_t ExpireTime() const;
+            std::chrono::milliseconds ExpireTime() const;
 
-            llarp_time_t LastRemoteActivityAt() const override
+            std::chrono::milliseconds LastRemoteActivityAt() const override
             {
                 return last_activity;
             }
 
             std::string to_string() const;
 
-            bool is_expired(llarp_time_t now) const override;
+            bool is_expired(std::chrono::milliseconds now) const override;
 
-            bool ExpiresSoon(llarp_time_t now, llarp_time_t dlt) const override
+            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt) const override
             {
                 return now >= ExpireTime() - dlt;
             }
@@ -123,11 +123,6 @@ namespace llarp
             void SetSelfDestruct();
         };
     }  // namespace path
-
-    template <>
-    inline constexpr bool IsToStringFormattable<path::TransitHop> = true;
-    template <>
-    inline constexpr bool IsToStringFormattable<path::TransitHopInfo> = true;
 
 }  // namespace llarp
 

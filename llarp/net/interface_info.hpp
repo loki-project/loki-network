@@ -28,6 +28,3 @@ namespace llarp::net
         std::string to_string() const;
     };
 }  // namespace llarp::net
-
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::net::InterfaceInfo> = true;

@@ -134,7 +134,7 @@ namespace llarp::path
         transit_hops.emplace(std::move(upstream), hop);
     }
 
-    void PathContext::ExpirePaths(llarp_time_t now)
+    void PathContext::ExpirePaths(std::chrono::milliseconds now)
     {
         {
             auto itr = transit_hops.begin();

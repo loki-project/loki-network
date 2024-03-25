@@ -36,8 +36,8 @@ namespace llarp::service
         // SNodeConnectionMap snode_sessions;
         // PendingRoutersMap pending_routers;
 
-        llarp_time_t last_publish = 0s;
-        llarp_time_t last_publish_attempt = 0s;
+        std::chrono::milliseconds last_publish = 0s;
+        std::chrono::milliseconds last_publish_attempt = 0s;
         /// our introset
         IntroSet local_introset;
         /// on initialize functions

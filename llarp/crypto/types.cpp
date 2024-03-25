@@ -1,6 +1,6 @@
 #include "types.hpp"
 
-#include <llarp/router_id.hpp>
+#include <llarp/address/keys.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>
 
@@ -40,6 +40,11 @@ namespace llarp
     // {
     //     return lhs.as_array() == rhs.as_array();
     // }
+
+    PubKey SecretKey::to_pubkey() const
+    {
+        return PubKey(data() + 32);
+    }
 
     bool SecretKey::load_from_file(const fs::path& fname)
     {

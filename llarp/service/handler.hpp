@@ -1,6 +1,5 @@
 #pragma once
 
-// #include <llarp/dns/server.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/handlers/remote.hpp>
 #include <llarp/session/session.hpp>
@@ -18,26 +17,26 @@ namespace llarp::service
         client or a snode. This is NOT handling any thing related to clearnet
         exit nodes.
     */
-    struct Handler final : public handlers::RemoteHandler, public std::enable_shared_from_this<Handler>
+    struct Handler final : /* public handlers::RemoteHandler, */ public std::enable_shared_from_this<Handler>
     {
         Handler(std::string name, Router& r);
-        ~Handler() override;
+        ~Handler();
 
-        std::shared_ptr<PathHandler> get_self() override
-        {
-            return shared_from_this();
-        }
+        // std::shared_ptr<PathHandler> get_self()
+        // {
+        //     return shared_from_this();
+        // }
 
-        std::weak_ptr<PathHandler> get_weak() override
-        {
-            return weak_from_this();
-        }
+        // std::weak_ptr<PathHandler> get_weak()
+        // {
+        //     return weak_from_this();
+        // }
 
         StatusObject ExtractStatus() const;
 
-        bool should_hook_dns_msg(const dns::Message& msg) const;
+        // bool should_hook_dns_msg(const dns::Message& msg) const;
 
-        bool handle_hooked_dns_msg(dns::Message msg, std::function<void(dns::Message)>);
+        // bool handle_hooked_dns_msg(dns::Message msg, std::function<void(dns::Message)>);
 
         /// sets up networking and starts traffic
         bool Start();
@@ -47,7 +46,7 @@ namespace llarp::service
         // huint128_t GetIPForIdent(const PubKey pk);
 
       private:
-        void _configure() override;
+        void _configure();
         // huint128_t AllocateNewAddress();
         /// obtain ip for service node session, creates a new session if one does
         /// not existing already
@@ -74,7 +73,7 @@ namespace llarp::service
         // IPRange ip_range;
         // std::string if_name;
 
-        // std::unordered_map<huint128_t, llarp_time_t> ip_activity;
+        // std::unordered_map<huint128_t, std::chrono::milliseconds> ip_activity;
 
         // std::shared_ptr<vpn::NetworkInterface> if_net;
 

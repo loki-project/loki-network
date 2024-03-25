@@ -113,20 +113,20 @@ namespace llarp
         return {_srv_records.begin(), _srv_records.end()};
     }
 
-    std::shared_ptr<session::BaseSession> EndpointBase::get_session(service::SessionTag tag) const
-    {
-        if (auto itr = _session_lookup.find(tag); itr != _session_lookup.end())
-            return get_session(itr->second);
+    // std::shared_ptr<session::BaseSession> EndpointBase::get_session(const service::SessionTag& tag) const
+    // {
+    //     if (auto itr = _session_lookup.find(tag); itr != _session_lookup.end())
+    //         return get_session(itr->second);
 
-        return nullptr;
-    }
+    //     return nullptr;
+    // }
 
-    std::shared_ptr<session::BaseSession> EndpointBase::get_session(const RouterID& rid) const
-    {
-        if (auto itr = _sessions.find(rid); itr != _sessions.end())
-            return itr->second;
+    // std::shared_ptr<session::BaseSession> EndpointBase::get_session(const RouterID& rid) const
+    // {
+    //     if (auto itr = _sessions.find(rid); itr != _sessions.end())
+    //         return itr->second;
 
-        return nullptr;
-    }
+    //     return nullptr;
+    // }
 
 }  // namespace llarp

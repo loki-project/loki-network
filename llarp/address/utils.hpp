@@ -15,6 +15,13 @@
 
 namespace llarp
 {
+    namespace PREFIX
+    {
+        inline constexpr auto EXIT = "exit::"sv;
+        inline constexpr auto LOKI = "loki::"sv;
+        inline constexpr auto SNODE = "snode::"sv;
+    }  //  namespace PREFIX
+
     namespace TLD
     {
         inline constexpr auto RELAY = ".snode"sv;

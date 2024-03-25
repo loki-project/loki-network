@@ -65,11 +65,6 @@ namespace llarp::handlers
             return nullptr;
         };
 
-        virtual ip get_ip_for_addr(std::variant<service::Address, RouterID>) = 0;
-
-        /// get a key for ip address
-        virtual std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip ip) const = 0;
-
         /// handle packet io from service node or hidden service to frontend
         virtual bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) = 0;

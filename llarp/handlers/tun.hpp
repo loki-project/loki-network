@@ -6,7 +6,6 @@
 #include <llarp/dns/server.hpp>
 #include <llarp/net/ip.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/handler.hpp>
 #include <llarp/service/types.hpp>
 #include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -85,7 +84,7 @@ namespace llarp::handlers
 
         bool handle_hooked_dns_message(dns::Message query, std::function<void(dns::Message)> sendreply);
 
-        void tick_tun(llarp_time_t now);
+        void tick_tun(std::chrono::milliseconds now);
 
         bool start();
 
@@ -139,7 +138,7 @@ namespace llarp::handlers
             return _owned_ranges;
         }
 
-        llarp_time_t get_path_alignment_timeout() const /* override */
+        std::chrono::milliseconds get_path_alignment_timeout() const /* override */
         {
             return _path_alignment_timeout;
         }
@@ -149,16 +148,10 @@ namespace llarp::handlers
         /// returns true otherwise
         bool is_allowing_traffic(const IPPacket& pkt) const;
 
-        /// get a key for ip address
-        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip ip) const override;
-
         bool has_mapped_address(const AlignedBuffer<32>& addr) const
         {
             return _addr_to_ip.find(addr) != _addr_to_ip.end();
         }
-
-        /// get ip address for key unconditionally
-        ip get_ip_for_addr(std::variant<service::Address, RouterID> addr) override;
 
       protected:
         struct WritePacket
@@ -200,16 +193,6 @@ namespace llarp::handlers
         std::unordered_map<huint128_t, service::Address> _exit_to_ip;
 
       private:
-        /// given an ip address that is not mapped locally find the address it shall be forwarded to
-        /// optionally provide a custom selection strategy, if none is provided it will choose a
-        /// random entry from the available choices
-        /// return std::nullopt if we cannot route this address to an exit
-
-        // TODO: MOVE THIS TO EXIT/HANDLER
-        // std::optional<service::Address> get_exit_address_for_ip(
-        //     huint128_t ip,
-        //     std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat = nullptr);
-
         template <typename Addr_t, typename Endpoint_t>
         void send_dns_reply(
             Addr_t addr,
@@ -237,7 +220,7 @@ namespace llarp::handlers
         // TODO: change the IP's to the variant IP type in address/ip_range.hpp
 
         /// maps ip address to timestamp last active
-        std::unordered_map<huint128_t, llarp_time_t> _ip_activity;
+        std::unordered_map<huint128_t, std::chrono::milliseconds> _ip_activity;
         /// our local address and ip
         oxen::quic::Address _local_addr;
         ip _local_ip;
@@ -271,7 +254,7 @@ namespace llarp::handlers
         std::set<IPRange> _owned_ranges;
 
         /// how long to wait for path alignment
-        llarp_time_t _path_alignment_timeout;
+        std::chrono::milliseconds _path_alignment_timeout;
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;

@@ -82,6 +82,3 @@ namespace llarp::service
         void bt_encode(oxenc::bt_dict_producer& btdp) const;
     };
 }  // namespace llarp::service
-
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::service::ServiceInfo> = true;

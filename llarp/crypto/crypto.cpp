@@ -1,5 +1,7 @@
 #include "crypto.hpp"
 
+#include <llarp/address/keys.hpp>
+
 #include <oxenc/endian.h>
 #include <sodium/core.h>
 #include <sodium/crypto_aead_xchacha20poly1305.h>
@@ -412,7 +414,7 @@ namespace llarp
         (void)result;
         (void)sk_pk;
 
-        // encryption_keygen(keys);
+        encryption_keygen(keys);
     }
 
     bool crypto::check_identity_privkey(const llarp::SecretKey& keys)

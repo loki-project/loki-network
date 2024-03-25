@@ -13,19 +13,19 @@
 
 namespace llarp
 {
-    struct RemoteAddress
+    struct NetworkAddress
     {
       protected:
         std::string _tld;
 
-        explicit RemoteAddress(std::string_view tld) : _tld{std::move(tld)}
+        explicit NetworkAddress(std::string_view tld) : _tld{std::move(tld)}
         {}
 
         virtual std::string pub_key() const = 0;
 
       public:
-        RemoteAddress() = default;
-        virtual ~RemoteAddress() = default;
+        NetworkAddress() = default;
+        virtual ~NetworkAddress() = default;
 
         std::string to_string() const
         {
@@ -51,9 +51,13 @@ namespace llarp
     };
 
     template <typename addr_t>
-    concept RemoteAddrType = std::is_base_of_v<RemoteAddress, addr_t>;
+    concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+        bool
+#endif
+            NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
 
-    struct ClientAddress final : public RemoteAddress
+    struct ClientAddress final : public NetworkAddress
     {
       private:
         std::optional<ClientPubKey> _pubkey{std::nullopt};
@@ -73,15 +77,15 @@ namespace llarp
         ~ClientAddress() override = default;
 
         explicit ClientAddress(ClientPubKey cpk, std::optional<std::string> n = std::nullopt)
-            : RemoteAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}, _name{std::move(n)}
+            : NetworkAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}, _name{std::move(n)}
         {}
 
         ClientAddress(const ClientAddress& other)
-            : RemoteAddress{TLD::RELAY}, _pubkey{other._pubkey}, _name{other._name}
+            : NetworkAddress{TLD::RELAY}, _pubkey{other._pubkey}, _name{other._name}
         {}
 
         ClientAddress(ClientAddress&& other)
-            : RemoteAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}, _name{std::move(other._name)}
+            : NetworkAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}, _name{std::move(other._name)}
         {}
 
         ClientAddress& operator=(const ClientAddress& other) = default;
@@ -91,6 +95,7 @@ namespace llarp
         bool operator==(const ClientAddress& other) const;
         bool operator!=(const ClientAddress& other) const;
 
+        // Will throw invalid_argument with bad input
         static std::optional<ClientAddress> from_client_addr(std::string arg);
 
         bool set_pubkey(std::string pk)
@@ -119,7 +124,7 @@ namespace llarp
         }
     };
 
-    struct RelayAddress final : public RemoteAddress
+    struct RelayAddress final : public NetworkAddress
     {
       private:
         RelayPubKey _pubkey;
@@ -136,13 +141,13 @@ namespace llarp
         RelayAddress() = default;
         ~RelayAddress() override = default;
 
-        explicit RelayAddress(RelayPubKey cpk) : RemoteAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}
+        explicit RelayAddress(RelayPubKey cpk) : NetworkAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}
         {}
 
-        RelayAddress(const RelayAddress& other) : RemoteAddress{TLD::RELAY}, _pubkey{other._pubkey}
+        RelayAddress(const RelayAddress& other) : NetworkAddress{TLD::RELAY}, _pubkey{other._pubkey}
         {}
 
-        RelayAddress(RelayAddress&& other) : RemoteAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}
+        RelayAddress(RelayAddress&& other) : NetworkAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}
         {}
 
         RelayAddress& operator=(const RelayAddress& other) = default;
@@ -152,6 +157,7 @@ namespace llarp
         bool operator==(const RelayAddress& other) const;
         bool operator!=(const RelayAddress& other) const;
 
+        // Will throw invalid_argument with bad input
         static std::optional<RelayAddress> from_relay_addr(std::string arg);
 
         const RelayPubKey& pubkey()
@@ -164,30 +170,24 @@ namespace llarp
             return _pubkey.to_string();
         }
     };
-
-    template <>
-    inline constexpr bool IsToStringFormattable<RemoteAddress> = true;
-
-    template <typename T>
-    inline constexpr bool IsToStringFormattable<T, std::enable_if_t<std::is_base_of_v<RemoteAddress, T>>> = true;
 }  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::RemoteAddress>
+    struct hash<llarp::NetworkAddress>
     {
-        virtual size_t operator()(const llarp::RemoteAddress& r) const
+        virtual size_t operator()(const llarp::NetworkAddress& r) const
         {
             return std::hash<std::string>{}(r.to_string());
         }
     };
 
     template <>
-    struct hash<llarp::RelayAddress> : public hash<llarp::RemoteAddress>
+    struct hash<llarp::RelayAddress> : public hash<llarp::NetworkAddress>
     {};
 
     template <>
-    struct hash<llarp::ClientAddress> : public hash<llarp::RemoteAddress>
+    struct hash<llarp::ClientAddress> : public hash<llarp::NetworkAddress>
     {};
 }  //  namespace std

@@ -4,8 +4,6 @@
 
 #include <llarp/link/tunnel.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/endpoint.hpp>
-#include <llarp/service/handler.hpp>
 #include <llarp/vpn/egres_packet_router.hpp>
 
 namespace llarp::handlers
@@ -69,16 +67,6 @@ namespace llarp::handlers
         bool supports_ipv6() const override
         {
             return false;
-        }
-
-        ip get_ip_for_addr(std::variant<service::Address, RouterID>) override
-        {
-            return {};
-        }
-
-        std::optional<std::variant<service::Address, RouterID>> get_addr_for_ip(ip) const override
-        {
-            return std::nullopt;
         }
 
         vpn::EgresPacketRouter* egres_packet_router() override

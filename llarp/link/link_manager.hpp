@@ -145,7 +145,7 @@ namespace llarp
         std::atomic<bool> is_stopping;
 
         // sessions to persist -> timestamp to end persist at
-        std::unordered_map<RouterID, llarp_time_t> persisting_conns;
+        std::unordered_map<RouterID, std::chrono::milliseconds> persisting_conns;
 
         util::DecayingHashSet<RouterID> clients{path::DEFAULT_LIFETIME};
 
@@ -231,7 +231,7 @@ namespace llarp
 
         void stop();
 
-        void set_conn_persist(const RouterID& remote, llarp_time_t until);
+        void set_conn_persist(const RouterID& remote, std::chrono::milliseconds until);
 
         std::tuple<size_t, size_t, size_t, size_t> connection_stats() const;
 
@@ -241,7 +241,7 @@ namespace llarp
 
         bool is_service_node() const;
 
-        void check_persisting_conns(llarp_time_t now);
+        void check_persisting_conns(std::chrono::milliseconds now);
 
         StatusObject extract_status() const;
 
@@ -261,7 +261,7 @@ namespace llarp
 
       private:
         // DHT messages
-        void handle_find_name(std::string_view body, std::function<void(std::string)> respond);      // relay
+        void handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond);    // relay
         void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay
         void handle_publish_intro(std::string_view body, std::function<void(std::string)> respond);  // relay
 
@@ -275,6 +275,11 @@ namespace llarp
         void handle_update_exit(oxen::quic::message);  // relay
         void handle_close_exit(oxen::quic::message);   // relay
 
+        // Sessions
+        void handle_initiate_session(oxen::quic::message);
+        void handle_set_session_tag(oxen::quic::message);
+        void handle_set_session_path(oxen::quic::message);
+
         // Misc
         void handle_convo_intro(oxen::quic::message);
 
@@ -285,7 +290,7 @@ namespace llarp
             std::string_view,
             void (LinkManager::*)(std::string_view body, std::function<void(std::string)> respond)>
             path_requests = {
-                {"find_name"sv, &LinkManager::handle_find_name},
+                {"resolve_ons"sv, &LinkManager::handle_resolve_ons},
                 {"publish_intro"sv, &LinkManager::handle_publish_intro},
                 {"find_intro"sv, &LinkManager::handle_find_intro}};
 
@@ -304,7 +309,7 @@ namespace llarp
         void handle_inner_request(oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop);
 
         // DHT responses
-        void handle_find_name_response(oxen::quic::message);
+        void handle_resolve_ons_response(oxen::quic::message);
         void handle_find_intro_response(oxen::quic::message);
         void handle_publish_intro_response(oxen::quic::message);
 

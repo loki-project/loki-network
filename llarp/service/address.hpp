@@ -90,8 +90,6 @@ namespace llarp
         return std::nullopt;
     }
 
-    template <>
-    inline constexpr bool IsToStringFormattable<service::Address> = true;
 }  // namespace llarp
 
 namespace std

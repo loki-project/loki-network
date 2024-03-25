@@ -1,4 +1,4 @@
-#include "lokid_rpc_client.hpp"
+#include "rpc_client.hpp"
 
 #include <llarp/router/router.hpp>
 #include <llarp/util/logging.hpp>
@@ -33,7 +33,7 @@ namespace llarp::rpc
         }
     }
 
-    LokidRpcClient::LokidRpcClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r)
+    RPCClient::RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r)
         : m_lokiMQ{std::move(lmq)}, _router{std::move(r)}
     {
         // m_lokiMQ->log_level(toLokiMQLogLevel(LogLevel::Instance().curLevel));
@@ -47,7 +47,7 @@ namespace llarp::rpc
         _is_updating_list = false;
     }
 
-    void LokidRpcClient::connect_async(oxenmq::address url)
+    void RPCClient::connect_async(oxenmq::address url)
     {
         if (auto router = _router.lock())
         {
@@ -72,13 +72,13 @@ namespace llarp::rpc
         }
     }
 
-    void LokidRpcClient::command(std::string_view cmd)
+    void RPCClient::command(std::string_view cmd)
     {
         log::debug(logcat, "Oxend command: {}", cmd);
         m_lokiMQ->send(*m_Connection, std::move(cmd));
     }
 
-    void LokidRpcClient::handle_new_block(oxenmq::Message& msg)
+    void RPCClient::handle_new_block(oxenmq::Message& msg)
     {
         if (msg.data.size() != 2)
         {
@@ -106,7 +106,7 @@ namespace llarp::rpc
             update_service_node_list();
     }
 
-    void LokidRpcClient::update_service_node_list()
+    void RPCClient::update_service_node_list()
     {
         if (_is_updating_list.exchange(true))
             return;  // update already in progress
@@ -163,7 +163,7 @@ namespace llarp::rpc
             req.dump());
     }
 
-    void LokidRpcClient::start_pings()
+    void RPCClient::start_pings()
     {
         constexpr auto PingInterval = 30s;
 
@@ -216,7 +216,7 @@ namespace llarp::rpc
         m_lokiMQ->add_timer(std::move(makePingRequest), PingInterval);
     }
 
-    void LokidRpcClient::handle_new_service_node_list(const nlohmann::json& j)
+    void RPCClient::handle_new_service_node_list(const nlohmann::json& j)
     {
         std::unordered_map<RouterID, PubKey> keymap;
         std::vector<RouterID> activeNodeList, decommNodeList, unfundedNodeList;
@@ -274,7 +274,7 @@ namespace llarp::rpc
             log::warning(logcat, "Cannot update whitelist: router object has gone away");
     }
 
-    void LokidRpcClient::inform_connection(RouterID router, bool success)
+    void RPCClient::inform_connection(RouterID router, bool success)
     {
         if (auto r = _router.lock())
         {
@@ -299,7 +299,7 @@ namespace llarp::rpc
         }
     }
 
-    SecretKey LokidRpcClient::obtain_identity_key()
+    SecretKey RPCClient::obtain_identity_key()
     {
         std::promise<SecretKey> promise;
         request(
@@ -337,7 +337,7 @@ namespace llarp::rpc
         return ftr.get();
     }
 
-    void LokidRpcClient::lookup_ons_hash(
+    void RPCClient::lookup_ons_hash(
         std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler)
     {
         log::debug(logcat, "Looking Up ONS NameHash {}", namehash);

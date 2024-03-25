@@ -40,6 +40,3 @@ namespace llarp::dns
         RR_RData_t rData;
     };
 }  // namespace llarp::dns
-
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::dns::ResourceRecord> = true;

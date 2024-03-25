@@ -7,15 +7,16 @@
 #include <oxenc/bt.h>
 
 #include <iostream>
+#include <set>
 
 namespace llarp::service
 {
     struct Introduction
     {
-        RouterID router;
+        RouterID pivot_router;
         HopID path_id;
-        llarp_time_t latency = 0s;
-        llarp_time_t expiry = 0s;
+        std::chrono::milliseconds latency = 0s;
+        std::chrono::milliseconds expiry = 0s;
         uint64_t version = llarp::constants::proto_version;
 
         Introduction() = default;
@@ -23,12 +24,12 @@ namespace llarp::service
 
         StatusObject ExtractStatus() const;
 
-        bool is_expired(llarp_time_t now) const
+        bool is_expired(std::chrono::milliseconds now) const
         {
             return now >= expiry;
         }
 
-        bool expires_soon(llarp_time_t now, llarp_time_t dlt = 30s) const
+        bool expires_soon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 30s) const
         {
             return is_expired(now + dlt);
         }
@@ -47,33 +48,34 @@ namespace llarp::service
 
         bool operator<(const Introduction& other) const
         {
-            return std::tie(expiry, path_id, router, version, latency)
-                < std::tie(other.expiry, other.path_id, other.router, other.version, other.latency);
+            return std::tie(expiry, path_id, pivot_router, version, latency)
+                < std::tie(other.expiry, other.path_id, other.pivot_router, other.version, other.latency);
         }
 
         bool operator==(const Introduction& other) const
         {
-            return path_id == other.path_id && router == other.router;
+            return std::tie(expiry, path_id, pivot_router, version, latency)
+                == std::tie(other.expiry, other.path_id, other.pivot_router, other.version, other.latency);
         }
 
         bool operator!=(const Introduction& other) const
         {
-            return path_id != other.path_id || router != other.router;
+            return !(*this == other);
         }
     };
 
-    /// comparator for introset timestamp
-    struct CompareIntroTimestamp
+    /// comparator for introduction timestamp in order of nearest to furthest expiry time
+    struct IntroExpiryComparator
     {
         bool operator()(const Introduction& left, const Introduction& right) const
         {
-            return left.expiry > right.expiry;
+            return left.expiry < right.expiry;
         }
     };
-}  // namespace llarp::service
 
-template <>
-inline constexpr bool llarp::IsToStringFormattable<llarp::service::Introduction> = true;
+    using IntroductionSet = std::set<service::Introduction, service::IntroExpiryComparator>;
+
+}  // namespace llarp::service
 
 namespace std
 {
@@ -82,7 +84,7 @@ namespace std
     {
         size_t operator()(const llarp::service::Introduction& i) const
         {
-            return std::hash<llarp::PubKey>{}(i.router) ^ std::hash<llarp::HopID>{}(i.path_id);
+            return std::hash<llarp::PubKey>{}(i.pivot_router) ^ std::hash<llarp::HopID>{}(i.path_id);
         }
     };
 }  // namespace std

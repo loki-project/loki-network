@@ -20,11 +20,18 @@
 
 namespace llarp
 {
-    // clang-format off
-  namespace session { struct BaseSession; }
-  namespace path { struct Path; }
-  namespace routing { struct PathTransferMessage; }
-    // clang-format on
+    namespace session
+    {
+        struct OutboundSession;
+    }
+    namespace path
+    {
+        struct Path;
+    }
+    namespace routing
+    {
+        struct PathTransferMessage;
+    }
 
     namespace service
     {
@@ -54,18 +61,18 @@ namespace llarp
 
         namespace util
         {
-            static void ExpireSNodeSessions(/* llarp_time_t now, SNodeConnectionMap& sessions */);
+            static void ExpireSNodeSessions(/* std::chrono::milliseconds now, SNodeConnectionMap& sessions */);
 
-            static void DeregisterDeadSessions(/* llarp_time_t now, ConnectionMap& sessions */);
+            static void DeregisterDeadSessions(/* std::chrono::milliseconds now, ConnectionMap& sessions */);
 
             static void TickRemoteSessions(
-          /* llarp_time_t now,
+          /* std::chrono::milliseconds now,
           ConnectionMap& remoteSessions,
           ConnectionMap& deadSessions,
           std::unordered_map<SessionTag, Session>& sessions */);
 
             static void ExpireConvoSessions(
-                /* llarp_time_t now, std::unordered_map<SessionTag, Session>& sessions */);
+                /* std::chrono::milliseconds now, std::unordered_map<SessionTag, Session>& sessions */);
 
             static void StopRemoteSessions(/* ConnectionMap& remoteSessions */);
 
@@ -115,6 +122,4 @@ namespace llarp
         //     }
     }  // namespace service
 
-    template <>
-    inline constexpr bool IsToStringFormattable<service::ProtocolType> = true;
 }  // namespace llarp

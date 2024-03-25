@@ -228,7 +228,7 @@ namespace llarp::service
         return {};
     }
 
-    void Endpoint::Tick(llarp_time_t)
+    void Endpoint::Tick(std::chrono::milliseconds)
     {
         const auto now = llarp::time_now_ms();
         path::PathHandler::Tick(now);
@@ -503,7 +503,7 @@ namespace llarp::service
         // resetState(_state->snode_sessions, [](const auto& item) { return item.second; });
     }
 
-    // bool Endpoint::should_publish_intro(llarp_time_t now) const
+    // bool Endpoint::should_publish_intro(std::chrono::milliseconds now) const
     // {
     //   if (not _publish_introset)
     //     return false;
@@ -572,7 +572,13 @@ namespace llarp::service
 
     bool Endpoint::HandleDataDrop(std::shared_ptr<path::Path> p, const HopID& dst, uint64_t seq)
     {
-        log::warning(logcat, "{} message (sqno:{}) dropped by pivot {} via {}", name(), seq, p->pivot_router_id(), dst);
+        log::warning(
+            logcat,
+            "{} message (sqno:{}) dropped by pivot {} via {}",
+            name(),
+            seq,
+            p->pivot_router_id().to_string(),
+            dst.to_string());
         return true;
     }
 
@@ -749,7 +755,7 @@ namespace llarp::service
         regen_and_publish_introset();
     }
 
-    bool Endpoint::CheckPathIsDead(std::shared_ptr<path::Path>, llarp_time_t dlt)
+    bool Endpoint::CheckPathIsDead(std::shared_ptr<path::Path>, std::chrono::milliseconds dlt)
     {
         return dlt > path::ALIVE_TIMEOUT;
     }
@@ -775,7 +781,7 @@ namespace llarp::service
     // bool // Endpoint::EnsurePathTo(
     //     std::variant<Address, RouterID> addr,
     //     std::function<void(std::optional<ConvoTag>)> hook,
-    //     llarp_time_t timeout)
+    //     std::chrono::milliseconds timeout)
     // {
     //   if (auto ptr = std::get_if<Address>(&addr))
     //   {
@@ -897,7 +903,7 @@ namespace llarp::service
     // bool // Endpoint::EnsurePathToService(
     //     const Address remote,
     //     std::function<void(Address, OutboundContext*)> hook,
-    //     [[maybe_unused]] llarp_time_t timeout)
+    //     [[maybe_unused]] std::chrono::milliseconds timeout)
     // {
     //   if (not WantsOutboundSession(remote))
     //   {
@@ -998,7 +1004,7 @@ namespace llarp::service
     //   // get convotag with lowest estimated RTT
     //   if (auto ptr = std::get_if<Address>(&remote))
     //   {
-    //     llarp_time_t rtt = 30s;
+    //     std::chrono::milliseconds rtt = 30s;
     //     std::optional<SessionTag> ret = std::nullopt;
     //     for (const auto& [tag, session] : Sessions())
     //     {
@@ -1065,7 +1071,7 @@ namespace llarp::service
     //   return std::nullopt;
     // }
 
-    // bool Endpoint::ShouldBuildMore(llarp_time_t now) const
+    // bool Endpoint::ShouldBuildMore(std::chrono::milliseconds now) const
     // {
     //   if (BuildCooldownHit(now))
     //     return false;
@@ -1131,10 +1137,5 @@ namespace llarp::service
     //   if (_exit_map.Empty())
     //     router().route_poker()->put_down();
     // }
-
-    link::TunnelManager* Endpoint::GetQUICTunnel()
-    {
-        return _tunnel_manager.get();
-    }
 
 }  // namespace llarp::service

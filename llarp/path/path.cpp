@@ -36,7 +36,7 @@ namespace llarp::path
         }
 
         // initialize parts of the introduction
-        intro.router = hops[hsz - 1].rc.router_id();
+        intro.pivot_router = hops[hsz - 1].rc.router_id();
         intro.path_id = hops[hsz - 1].txID;
     }
 
@@ -86,14 +86,14 @@ namespace llarp::path
             "find_intro", FindIntroMessage::serialize(location, is_relayed, order), std::move(func));
     }
 
-    bool Path::find_name(std::string name, std::function<void(std::string)> func)
+    bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)
     {
-        return send_path_control_message("find_name", FindNameMessage::serialize(std::move(name)), std::move(func));
+        return send_path_control_message("resolve_ons", FindNameMessage::serialize(std::move(name)), std::move(func));
     }
 
     void Path::enable_exit_traffic()
     {
-        log::info(logcat, "{} {} granted exit", name(), pivot_router_id());
+        log::info(logcat, "{} {} granted exit", name(), pivot_router_id().to_string());
         // _role |= ePathRoleExit;
     }
 
@@ -181,9 +181,9 @@ namespace llarp::path
             });
     }
 
-    RouterID Path::pivot_router_id() const
+    const RouterID& Path::pivot_router_id() const
     {
-        return hops[hops.size() - 1].rc.router_id();
+        return intro.pivot_router;
     }
 
     HopID Path::TXID() const
@@ -324,7 +324,7 @@ namespace llarp::path
         return false;
     }
 
-    void Path::Tick(llarp_time_t now, Router* r)
+    void Path::Tick(std::chrono::milliseconds now, Router* r)
     {
         (void)r;
 
@@ -385,7 +385,7 @@ namespace llarp::path
     /// how long we wait for a path to become active again after it times out
     // constexpr auto PathReanimationTimeout = 45s;
 
-    bool Path::is_expired(llarp_time_t now) const
+    bool Path::is_expired(std::chrono::milliseconds now) const
     {
         (void)now;
         // if (_status == PathStatus::FAILED)
@@ -405,7 +405,7 @@ namespace llarp::path
 
     std::string Path::name() const
     {
-        return fmt::format("TX={} RX={}", TXID(), RXID());
+        return fmt::format("TX={} RX={}", TXID().to_string(), RXID().to_string());
     }
 
     /* TODO: replace this with sending an onion-ed data message
@@ -435,9 +435,9 @@ namespace llarp::path
     */
 
     template <typename Samples_t>
-    static llarp_time_t computeLatency(const Samples_t& samps)
+    static std::chrono::milliseconds computeLatency(const Samples_t& samps)
     {
-        llarp_time_t mean = 0s;
+        std::chrono::milliseconds mean = 0s;
         if (samps.empty())
             return mean;
         for (const auto& samp : samps)

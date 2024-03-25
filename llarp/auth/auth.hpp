@@ -57,7 +57,7 @@ namespace llarp::auth
         virtual void authenticate_async(
             std::shared_ptr<service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook) = 0;
 
-        /// return true if we are asynchronously processing authentication on this convotag
+        /// return true if we are asynchronously processing authentication on this sessiontag
         virtual bool auth_async_pending(service::SessionTag tag) const = 0;
     };
 
@@ -65,10 +65,11 @@ namespace llarp::auth
     {
       protected:
         SecretKey _session_key;
-        bool _is_snode_service{false};
+        const bool _is_snode_service{false};
+        const bool _is_exit_service{false};
 
       public:
-        SessionAuthPolicy(Router& r, const SecretKey& sk, bool _snode_service);
+        SessionAuthPolicy(Router& r, const SecretKey& sk, bool _snode_service, bool _is_exit = false);
 
         bool load_identity_from_file(const char* fname);
 
@@ -80,6 +81,11 @@ namespace llarp::auth
         bool is_snode_service() const
         {
             return _is_snode_service;
+        }
+
+        bool is_exit_service() const
+        {
+            return _is_exit_service;
         }
 
         std::weak_ptr<AuthPolicy> get_weak() override

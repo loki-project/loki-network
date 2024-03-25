@@ -10,6 +10,7 @@
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
+#include <llarp/router_id.hpp>
 
 #include <oxenc/bt_producer.h>
 #include <sodium/crypto_generichash_blake2b.h>
@@ -600,7 +601,7 @@ namespace llarp
         quic.reset();
     }
 
-    void LinkManager::set_conn_persist(const RouterID& remote, llarp_time_t until)
+    void LinkManager::set_conn_persist(const RouterID& remote, std::chrono::milliseconds until)
     {
         if (is_stopping)
             return;
@@ -619,7 +620,7 @@ namespace llarp
     }
 
     // TODO: this?  perhaps no longer necessary in the same way?
-    void LinkManager::check_persisting_conns(llarp_time_t)
+    void LinkManager::check_persisting_conns(std::chrono::milliseconds)
     {
         if (is_stopping)
             return;
@@ -970,7 +971,7 @@ namespace llarp
         m.respond(std::move(btdp).str());
     }
 
-    void LinkManager::handle_find_name(std::string_view body, std::function<void(std::string)> respond)
+    void LinkManager::handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond)
     {
         std::string name_hash;
 
@@ -998,7 +999,7 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_find_name_response(oxen::quic::message m)
+    void LinkManager::handle_resolve_ons_response(oxen::quic::message m)
     {
         if (m.timed_out)
         {
@@ -1819,7 +1820,7 @@ namespace llarp
         if (not hop)
             return;
 
-        // if terminal hop, payload should contain a request (e.g. "find_name"); handle and respond.
+        // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
         if (hop->terminal_hop)
         {
             hop->onion(payload, symnonce, false);
@@ -1918,6 +1919,11 @@ namespace llarp
             log::warning(logcat, "Exception: {}", e.what());
             return;
         }
+    }
+
+    void LinkManager::handle_initiate_session(oxen::quic::message m)
+    {
+        (void)m;
     }
 
 }  // namespace llarp
