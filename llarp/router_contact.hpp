@@ -124,7 +124,7 @@ namespace llarp
         {
             return fmt::format(
                 "[RC k={} updated={} v={} addr={}]",
-                _router_id.ToView(),
+                _router_id.to_view(),
                 _timestamp.time_since_epoch().count(),
                 RC_VERSION,
                 _addr.to_string());

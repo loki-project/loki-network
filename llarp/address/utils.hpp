@@ -24,10 +24,10 @@ namespace llarp
 
     namespace TLD
     {
-        inline constexpr auto RELAY = ".snode"sv;
-        inline constexpr auto CLIENT = ".loki"sv;
+        inline constexpr auto SNODE = ".snode"sv;
+        inline constexpr auto LOKI = ".loki"sv;
 
-        std::set<std::string_view> allowed = {RELAY, CLIENT};
+        std::set<std::string_view> allowed = {SNODE, LOKI};
     }  //  namespace TLD
 
     uint16_t checksum_ipv4(const void *header, uint8_t header_len);

@@ -27,12 +27,7 @@ namespace llarp::service
         try
         {
             oxenc::bt_dict_consumer btdc{bt_payload};
-
-            derived_signing_key = make_from_hex<PubKey>(btdc.require<std::string>("d"));
-            nonce.from_string(btdc.require<std::string>("n"));
-            signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
-            introset_payload = btdc.require<ustring>("x");
-            sig.from_string(btdc.require<std::string>("z"));
+            bt_decode(btdc);
         }
         catch (...)
         {
@@ -51,7 +46,7 @@ namespace llarp::service
         try
         {
             oxenc::bt_dict_consumer btdc{buf};
-            bt_decode(btdc);
+            return bt_decode(btdc);
         }
         catch (const std::exception& e)
         {
@@ -60,11 +55,9 @@ namespace llarp::service
             log::warning(logcat, "{}", err);
             throw std::runtime_error{err};
         }
-
-        return true;
     }
 
-    void EncryptedIntroSet::bt_decode(oxenc::bt_dict_consumer& btdc)
+    bool EncryptedIntroSet::bt_decode(oxenc::bt_dict_consumer& btdc)
     {
         try
         {
@@ -73,6 +66,8 @@ namespace llarp::service
             signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
             introset_payload = btdc.require<ustring>("x");
             sig.from_string(btdc.require<std::string>("z"));
+
+            return true;
         }
         catch (...)
         {
@@ -87,12 +82,12 @@ namespace llarp::service
 
         try
         {
-            btdp.append("d", derived_signing_key.ToView());
-            btdp.append("n", nonce.ToView());
+            btdp.append("d", derived_signing_key.to_view());
+            btdp.append("n", nonce.to_view());
             btdp.append("s", signed_at.count());
             btdp.append(
                 "x", std::string_view{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()});
-            btdp.append("z", sig.ToView());
+            btdp.append("z", sig.to_view());
         }
         catch (...)
         {
@@ -102,7 +97,15 @@ namespace llarp::service
         return std::move(btdp).str();
     }
 
-    bool EncryptedIntroSet::OtherIsNewer(const EncryptedIntroSet& other) const
+    std::optional<EncryptedIntroSet> EncryptedIntroSet::construct(std::string bt)
+    {
+        if (EncryptedIntroSet ret; ret.bt_decode(std::move(bt)))
+            return ret;
+
+        return std::nullopt;
+    }
+
+    bool EncryptedIntroSet::other_is_newer(const EncryptedIntroSet& other) const
     {
         return signed_at < other.signed_at;
     }
@@ -118,22 +121,27 @@ namespace llarp::service
             sig);
     }
 
-    IntroSet EncryptedIntroSet::decrypt(const PubKey& root) const
+    std::optional<IntroSet> EncryptedIntroSet::decrypt(const PubKey& root) const
     {
+        std::optional<IntroSet> ret = std::nullopt;
+
         SharedSecret k(root);
         std::string payload{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()};
 
-        crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce);
+        if (crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce))
+        {
+            ret = IntroSet{payload};
+        }
 
-        return IntroSet{payload};
+        return ret;
     }
 
-    bool EncryptedIntroSet::IsExpired(std::chrono::milliseconds now) const
+    bool EncryptedIntroSet::is_expired(std::chrono::milliseconds now) const
     {
         return now >= signed_at + path::DEFAULT_LIFETIME;
     }
 
-    bool EncryptedIntroSet::Sign(const PrivateKey& k)
+    bool EncryptedIntroSet::sign(const PrivateKey& k)
     {
         signed_at = llarp::time_now_ms();
         if (not k.to_pubkey(derived_signing_key))
@@ -150,7 +158,7 @@ namespace llarp::service
 
     bool EncryptedIntroSet::verify(std::chrono::milliseconds now) const
     {
-        if (IsExpired(now))
+        if (is_expired(now))
             return false;
 
         EncryptedIntroSet copy(*this);
@@ -214,62 +222,7 @@ namespace llarp::service
         try
         {
             oxenc::bt_dict_consumer btdc{bt_payload};
-
-            if (btdc.key() == "a")
-            {
-                auto subdict = btdc.consume_dict_consumer();
-                address_keys.bt_decode(subdict);
-            }
-
-            if (btdc.key() == "e")
-            {
-                auto subdict = btdc.consume_dict_consumer();
-                exit_policy->bt_decode(subdict);
-            }
-
-            if (btdc.key() == "i")
-            {
-                auto sublist = btdc.consume_list_consumer();
-                while (not sublist.is_finished())
-                {
-                    intros.insert(sublist.consume_string());
-                }
-            }
-
-            sntru_pubkey.from_string(btdc.require<std::string>("k"));
-
-            if (btdc.key() == "p")
-            {
-                auto sublist = btdc.consume_list_consumer();
-                while (not sublist.is_finished())
-                {
-                    supported_protocols.emplace_back(ProtocolType{sublist.consume_integer<uint64_t>()});
-                }
-            }
-
-            if (btdc.key() == "r")
-            {
-                auto sublist = btdc.consume_list_consumer();
-                while (not sublist.is_finished())
-                {
-                    owned_ranges.emplace(sublist.consume_string());
-                }
-            }
-
-            if (btdc.key() == "s")
-            {
-                // TODO: fuck everything about these tuples
-                // auto sublist = btdc.consume_list_consumer();
-                // while (not sublist.is_finished())
-                // {
-                //   // auto s = oxenc::
-                //   auto sd = SRVs.emplace_back();
-
-                // }
-            }
-
-            time_signed = std::chrono::milliseconds{btdc.require<uint64_t>("t")};
-            signature.from_string(btdc.require<std::string>("z"));
+            bt_decode(btdc);
         }
         catch (...)
         {
@@ -356,7 +309,7 @@ namespace llarp::service
 
                 while (not sublist.is_finished())
                 {
-                    SRVs.push_back(oxenc::bt_deserialize<llarp::dns::SRVTuple>(sublist.consume_string()));
+                    SRVs.emplace_back(sublist.consume_string());
                 }
             }
 
@@ -393,7 +346,7 @@ namespace llarp::service
                     i.bt_encode(sublist);
             }
 
-            btdp.append("k", sntru_pubkey.ToView());
+            btdp.append("k", sntru_pubkey.to_view());
 
             if (not supported_protocols.empty())
             {
@@ -413,11 +366,11 @@ namespace llarp::service
             {
                 auto sublist = btdp.append_list("s");
                 for (auto& s : SRVs)
-                    sublist.append(oxenc::bt_serialize(s));
+                    sublist.append(s.bt_encode());
             }
 
             btdp.append("t", time_signed.count());
-            btdp.append("z", signature.ToView());
+            btdp.append("z", signature.to_view());
         }
         catch (...)
         {
@@ -452,11 +405,11 @@ namespace llarp::service
     {
         std::vector<llarp::dns::SRVData> records;
 
-        for (const auto& tuple : SRVs)
+        for (const auto& srv : SRVs)
         {
-            if (std::get<0>(tuple) == service_proto)
+            if (srv.service_proto == service_proto)
             {
-                records.push_back(llarp::dns::SRVData::fromTuple(tuple));
+                records.push_back(srv);
             }
         }
 
@@ -504,6 +457,6 @@ namespace llarp::service
             sntru_pubkey,
             time_signed.count(),
             version,
-            signature.ToView());
+            signature.to_view());
     }
 }  // namespace llarp::service

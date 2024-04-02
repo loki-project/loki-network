@@ -51,9 +51,9 @@ namespace llarp::service
     {
         try
         {
-            subdict.append("k", pivot_router.ToView());
+            subdict.append("k", pivot_router.to_view());
             subdict.append("l", latency.count());
-            subdict.append("p", path_id.ToView());
+            subdict.append("p", path_id.to_view());
             subdict.append("x", expiry.count());
         }
         catch (...)

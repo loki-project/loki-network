@@ -246,7 +246,7 @@ namespace llarp
             return FromBytestring(&strbuf);
         }
 
-        std::string_view ToView() const
+        std::string_view to_view() const
         {
             return {reinterpret_cast<const char*>(data()), sz};
         }

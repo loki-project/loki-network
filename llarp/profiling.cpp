@@ -286,7 +286,7 @@ namespace llarp
     {
         for (const auto& [r_id, profile] : _profiles)
         {
-            auto subdict = dict.append_dict(r_id.ToView());
+            auto subdict = dict.append_dict(r_id.to_view());
             profile.bt_encode(subdict);
         }
     }

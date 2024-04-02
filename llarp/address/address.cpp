@@ -6,44 +6,43 @@ namespace llarp
 {
     static auto logcat = log::Cat("address");
 
-    std::optional<ClientAddress> ClientAddress::from_client_addr(std::string arg)
+    std::optional<NetworkAddress> NetworkAddress::from_network_addr(std::string arg)
     {
-        std::optional<ClientAddress> ret = std::nullopt;
+        std::optional<NetworkAddress> ret = std::nullopt;
 
-        if (not arg.ends_with(".loki"))
-            log::warning(logcat, "Invalid ClientAddress constructor input lacking '.loki' (input:{})", arg);
+        if (arg.ends_with(TLD::SNODE))
+        {
+            ret = NetworkAddress{arg, TLD::SNODE};
+        }
+        else if (arg.ends_with(TLD::LOKI))
+        {
+            ret = NetworkAddress{arg, TLD::LOKI};
+        }
         else
-            ret = ClientAddress{arg, service::is_valid_ons(arg)};
+            log::warning(logcat, "Invalid NetworkAddress constructor input (arg:{})", arg);
 
         return ret;
     }
 
-    ClientAddress::ClientAddress(std::string_view arg, bool is_ons) : NetworkAddress{TLD::CLIENT}, _is_ons{is_ons}
+    NetworkAddress::NetworkAddress(std::string_view arg, std::string_view tld) : _tld{tld}
     {
-        // This private constructor is only called after checking for a '.loki' suffix; only Santa checks twice
-        arg.remove_suffix(5);
+        if (not _pubkey.from_string(arg))
+            throw std::invalid_argument{"Invalid pubkey passed to NetworkAddress constructor: {}"_format(arg)};
 
-        // If this was constructed using an ONS name, we don't fill in the pubkey
-        if (not _is_ons)
-        {
-            if (not _pubkey->from_string(arg))
-                throw std::invalid_argument{"Invalid address passed to ClientAddress constructor: {}"_format(arg)};
-        }
-        else
-            _name = arg;
+        _is_client = tld == TLD::LOKI;
     }
 
-    bool ClientAddress::operator<(const ClientAddress& other) const
+    bool NetworkAddress::operator<(const NetworkAddress& other) const
     {
-        return std::tie(_pubkey, _name, _is_ons) < std::tie(other._pubkey, other._name, other._is_ons);
+        return std::tie(_pubkey, _is_client) < std::tie(other._pubkey, other._is_client);
     }
 
-    bool ClientAddress::operator==(const ClientAddress& other) const
+    bool NetworkAddress::operator==(const NetworkAddress& other) const
     {
-        return std::tie(_pubkey, _name, _is_ons) == std::tie(other._pubkey, other._name, other._is_ons);
+        return std::tie(_pubkey, _is_client) == std::tie(other._pubkey, other._is_client);
     }
 
-    bool ClientAddress::operator!=(const ClientAddress& other) const
+    bool NetworkAddress::operator!=(const NetworkAddress& other) const
     {
         return !(*this == other);
     }
@@ -53,19 +52,20 @@ namespace llarp
         std::optional<RelayAddress> ret = std::nullopt;
 
         if (not arg.ends_with(".snode"))
-            log::warning(logcat, "Invalid RelayAddress constructor input lacking '.loki' (input:{})", arg);
+            log::warning(logcat, "Invalid RelayAddress constructor input lacking '.snode' (input:{})", arg);
         else
             ret = RelayAddress{arg};
 
         return ret;
     }
 
-    RelayAddress::RelayAddress(std::string_view arg) : NetworkAddress{TLD::RELAY}
+    RelayAddress::RelayAddress(std::string_view arg)
     {
-        // This private constructor is only called after checking for a '.loki' suffix; only Santa checks twice
+        // This private constructor is only called after checking for a '.snode' suffix; only Santa checks twice
         arg.remove_suffix(6);
+
         if (not _pubkey.from_string(arg))
-            throw std::invalid_argument{"Invalid address passed to RelayAddress constructor: {}"_format(arg)};
+            throw std::invalid_argument{"Invalid pubkey passed to RelayAddress constructor: {}"_format(arg)};
     }
 
     bool RelayAddress::operator<(const RelayAddress& other) const

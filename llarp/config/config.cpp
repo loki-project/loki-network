@@ -322,7 +322,7 @@ namespace llarp
                 "manually add a remote endpoint by .loki address to the access whitelist",
             },
             [this](std::string arg) {
-                if (auto addr = ClientAddress::from_client_addr(arg))
+                if (auto addr = NetworkAddress::from_network_addr(arg))
                     auth_whitelist.emplace(std::move(*addr));
                 else
                     throw std::invalid_argument{"bad loki address: {}"_format(arg)};
@@ -484,7 +484,7 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (auto maybe_raddr = ClientAddress::from_client_addr(arg); maybe_raddr)
+                if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
                     _client_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
                 else
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
@@ -517,19 +517,16 @@ namespace llarp
                 const auto addr = arg.substr(0, pos);
                 auto auth = auth::AuthInfo{arg.substr(pos + 1)};
 
-                if (auto exit = ClientAddress::from_client_addr(addr))
+                if (service::is_valid_ons(addr))
+                {
+                    ons_exit_auths.emplace(addr, auth);
+                }
+                else if (auto exit = NetworkAddress::from_network_addr(addr); exit->is_client())
                 {
                     exit_auths.emplace(*exit, auth);
-
-                    if (exit->is_ons())
-                    {
-                        ons_exit_auths.emplace(addr, auth);
-                    }
-
-                    return;
                 }
-
-                throw std::invalid_argument("[network]:exit-auth invalid exit address");
+                else
+                    throw std::invalid_argument("[network]:exit-auth invalid exit address");
             });
 
         conf.define_option<bool>(
@@ -621,10 +618,10 @@ namespace llarp
             MultiValue,
             Comment{
                 "Map a remote `.loki` address to always use a fixed local IP. For example:",
-                "    mapaddr=whatever.loki:172.16.0.10",
-                "maps `whatever.loki` to `172.16.0.10` instead of using the next available IP.",
-                "The given IP address must be inside the range configured by ifaddr=",
-            },
+                "    mapaddr=<pubkey>.loki:172.16.0.10",
+                "maps `<pubkey>.loki` to `172.16.0.10` instead of using the next available IP.",
+                "The given IP address must be inside the range configured by ifaddr=, and the",
+                "remote `.loki` cannot be an ONS address"},
             [this](std::string arg) {
                 if (arg.empty())
                     return;
@@ -637,10 +634,13 @@ namespace llarp
                 auto addr_arg = arg.substr(0, pos);
                 auto ip_arg = arg.substr(pos + 1);
 
-                if (auto maybe_raddr = ClientAddress::from_client_addr(std::move(addr_arg)); maybe_raddr)
+                if (service::is_valid_ons(addr_arg))
+                    throw std::invalid_argument{"`mapaddr` cannot take an ONS entry: {}"_format(arg)};
+
+                if (auto maybe_raddr = NetworkAddress::from_network_addr(std::move(addr_arg)); maybe_raddr)
                 {
                     oxen::quic::Address addr{std::move(ip_arg), 0};
-                    _client_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
+                    _remote_exit_ip_routing.emplace(std::move(*maybe_raddr), std::move(addr));
                 }
                 else
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
@@ -681,11 +681,12 @@ namespace llarp
                 "and general description of DNS SRV record configuration.",
             },
             [this](std::string arg) {
-                llarp::dns::SRVData newSRV;
-                if (not newSRV.fromString(arg))
+                auto maybe_srv = dns::SRVData::from_srv_string(arg);
+
+                if (not maybe_srv)
                     throw std::invalid_argument{fmt::format("Invalid SRV Record string: {}", arg)};
 
-                srv_records.push_back(std::move(newSRV));
+                srv_records.push_back(std::move(*maybe_srv));
             });
 
         conf.define_option<int>(
@@ -754,13 +755,6 @@ namespace llarp
                     auto err = "Config could not load persisting address map file from path:{}"_format(file);
 
                     log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
-
-                    if (load_file)
-                    {
-                        log::info(logcat, "{} NOT FOUND", err);
-                    }
-                    else
-                        log::info(logcat, "{} STALE", err);
                 }
                 if (not data.empty())
                 {
@@ -805,29 +799,23 @@ namespace llarp
 
                             if (const auto* str = std::get_if<std::string>(&value))
                             {
-                                if (auto maybe_raddr = ClientAddress::from_client_addr(*str); maybe_raddr)
+                                if (auto maybe_netaddr = NetworkAddress::from_network_addr(*str))
                                 {
-                                    _persisting_clients.emplace(std::move(*maybe_raddr), std::move(addr));
-                                    continue;
+                                    if (maybe_netaddr->is_client())
+                                        _persisting_clients.emplace(std::move(*maybe_netaddr), std::move(addr));
+                                    else
+                                        _persisting_relays.emplace(std::move(*maybe_netaddr), std::move(addr));
                                 }
-                                if (auto maybe_raddr = RelayAddress::from_relay_addr(*str); maybe_raddr)
-                                {
-                                    _persisting_relays.emplace(std::move(*maybe_raddr), std::move(addr));
-                                    continue;
-                                }
-
-                                log::warning(logcat, "Invalid address in addr map: {}", *str);
-                                continue;
+                                else
+                                    log::warning(logcat, "Invalid address in addr map: {}", *str);
                             }
-
-                            log::warning(logcat, "Invalid first entry in addr map: not a string");
-                            continue;
+                            else
+                                log::warning(logcat, "Invalid first entry in addr map: not a string");
                         }
                         catch (...)
                         {
                             log::warning(
                                 logcat, "Exception caught parsing key:value pair in addr persist file (key:{})", key);
-                            continue;
                         }
                     }
                 }

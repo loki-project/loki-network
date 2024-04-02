@@ -7,7 +7,7 @@
 
 namespace llarp
 {
-    struct ClientAddress;
+    struct NetworkAddress;
 
     namespace service
     {
@@ -37,7 +37,7 @@ namespace llarp
 
             bool bt_decode(std::string bt);
 
-            std::optional<ClientAddress> decrypt(std::string_view ons_name) const;
+            std::optional<NetworkAddress> decrypt(std::string_view ons_name) const;
         };
 
         /// check if an ons name complies with the registration rules

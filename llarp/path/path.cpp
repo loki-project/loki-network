@@ -221,7 +221,7 @@ namespace llarp::path
         {
             if (!hops.empty())
                 hops_str += " -> ";
-            hops_str += hop.rc.router_id().ToView();
+            hops_str += hop.rc.router_id().to_view();
         }
         return hops_str;
     }

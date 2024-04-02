@@ -29,7 +29,7 @@ namespace llarp::handlers
             log::warning(logcat, "RemoteHandler only initiated {} path-builds (needed: {})", count, n);
     }
 
-    void RemoteHandler::resolve_ons(std::string ons, std::function<void(std::optional<ClientAddress>)> func)
+    void RemoteHandler::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
     {
         if (not service::is_valid_ons(ons))
         {
@@ -57,7 +57,7 @@ namespace llarp::handlers
             }
             catch (...)
             {
-                log::warning(logcat, "Exception caught parsing find_name response!");
+                log::warning(logcat, "Exception caught parsing 'find_name' response!");
             }
 
             log::warning(logcat, "Call to endpoint 'lookup_name' failed -- status:{}", status.value_or("<none given>"));
@@ -73,6 +73,55 @@ namespace llarp::handlers
                     logcat, "{} querying pivot:{} for name lookup (target: {})", name(), path->pivot_router_id(), ons);
 
                 path->resolve_ons(ons, response_handler);
+            }
+        }
+    }
+
+    void RemoteHandler::lookup_intro(
+        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSet>)> func)
+    {
+        log::debug(logcat, "{} looking up introset for remote:{}", name(), remote);
+
+        auto remote_key = dht::Key_t::derive_from_rid(remote);
+
+        auto response_handler = [remote, hook = std::move(func)](std::string response) {
+            if (auto encrypted = service::EncryptedIntroSet::construct(response);
+                auto intro = encrypted->decrypt(remote))
+            {
+                return hook(std::move(intro));
+            }
+
+            std::optional<std::string> status = std::nullopt;
+
+            try
+            {
+                oxenc::bt_dict_consumer btdc{response};
+
+                if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                    status = s;
+            }
+            catch (...)
+            {
+                log::warning(logcat, "Exception caught parsing 'find_intro' response!");
+            }
+
+            log::warning(logcat, "Call to endpoint 'find_intro' failed -- status:{}", status.value_or("<none given>"));
+            hook(std::nullopt);
+        };
+
+        {
+            Lock_t l{paths_mutex};
+
+            for (const auto& [rid, path] : _paths)
+            {
+                log::info(
+                    logcat,
+                    "{} querying pivot:{} for introset lookup (target: {})",
+                    name(),
+                    path->pivot_router_id(),
+                    remote);
+
+                path->find_intro(remote_key, is_relayed, order, response_handler);
             }
         }
     }
@@ -119,69 +168,57 @@ namespace llarp::handlers
         if (_if_name.empty())
             throw std::runtime_error("Interface name has been pre-processed and is not found!");
 
-        // Remote exit mapping (TODO: move to exit::handler...? Or combine classes...?)
-        for (const auto& [remote, addr] : _net_config._client_addrs)
+        for (const auto& [remote, addr] : _net_config._remote_exit_ip_routing)
         {
-            if (remote.is_ons())
-            {
-                // we have the ONS name, so look up the `.loki`
-                resolve_ons(remote.remote_name(), [this, addr](std::optional<ClientAddress> maybe_addr) {
-                    if (maybe_addr)
-                    {
-                        _client_address_map.insert_or_assign(addr, *maybe_addr);
-                        log::debug(
-                            logcat,
-                            "`ons_resolve` returned successfully -- ONS:{}, local address:{}",
-                            maybe_addr,
-                            addr);
-                    }
-                    // we already print a log::warning if failing in ::lookup_name
-                });
-            }
-            else
-            {
-                // we have the '.loki`, so map it buddy boy
-                _client_address_map.insert_or_assign(addr, remote);
-            }
+            _address_map.insert_or_assign(addr, remote);
         }
     }
 
-    bool initiate_session(RouterID remote, bool is_exit, bool is_snode)
+    bool RemoteHandler::initiate_session(RouterID remote, bool is_exit, bool is_snode)
     {
-        (void)remote;
-        (void)is_exit;
-        (void)is_snode;
+        if (is_exit and is_snode)
+            throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
+
+        auto counter = std::make_shared<size_t>(NUM_ONS_LOOKUP_PATHS);
+
+        // loop call here:
+        _router.loop()->call([this, remote, is_exit, is_snode]() {
+            lookup_intro(remote, false, 0, [](std::optional<service::IntroSet> enc) {
+
+            });
+        });
+
         return false;
     }
 
-    void RemoteHandler::map_remote_to_local_addr(ClientAddress remote, oxen::quic::Address local)
+    void RemoteHandler::map_remote_to_local_addr(NetworkAddress remote, oxen::quic::Address local)
     {
-        _client_address_map.insert_or_assign(std::move(local), std::move(remote));
+        _address_map.insert_or_assign(std::move(local), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_addr_by_remote(const ClientAddress& remote)
+    void RemoteHandler::unmap_local_addr_by_remote(const NetworkAddress& remote)
     {
-        _client_address_map.unmap(remote);
+        _address_map.unmap(remote);
     }
 
     void RemoteHandler::unmap_remote_by_name(const std::string& name)
     {
-        _client_address_map.unmap(name);
+        _address_map.unmap(name);
     }
 
-    void RemoteHandler::map_remote_to_local_range(ClientAddress remote, IPRange range)
+    void RemoteHandler::map_remote_to_local_range(NetworkAddress remote, IPRange range)
     {
-        _client_range_map.insert_or_assign(std::move(range), std::move(remote));
+        _range_map.insert_or_assign(std::move(range), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_range_by_remote(const ClientAddress& remote)
+    void RemoteHandler::unmap_local_range_by_remote(const NetworkAddress& remote)
     {
-        _client_range_map.unmap(remote);
+        _range_map.unmap(remote);
     }
 
     void RemoteHandler::unmap_range_by_name(const std::string& name)
     {
-        _client_range_map.unmap(name);
+        _range_map.unmap(name);
     }
 
 }  //  namespace llarp::handlers

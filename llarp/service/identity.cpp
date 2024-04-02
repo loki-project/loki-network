@@ -11,7 +11,7 @@ namespace llarp::service
     {
         oxenc::bt_dict_producer btdp;
 
-        btdp.append("s", signkey.ToView());
+        btdp.append("s", signkey.to_view());
         btdp.append("v", version);
 
         return std::move(btdp).str();
@@ -167,7 +167,7 @@ namespace llarp::service
 
         std::memcpy(encrypted.introset_payload.data(), bte.data(), bte.size());
 
-        if (not encrypted.Sign(derivedSignKey))
+        if (not encrypted.sign(derivedSignKey))
             return std::nullopt;
         return encrypted;
     }

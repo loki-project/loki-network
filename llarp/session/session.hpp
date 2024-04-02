@@ -150,7 +150,7 @@ namespace llarp
             InboundSession(
                 Router& r,
                 std::shared_ptr<path::Path> _path,
-                ClientAddress _remote,
+                NetworkAddress _remote,
                 handlers::LocalEndpoint& parent,
                 service::SessionTag _t,
                 bool is_exit);
@@ -173,7 +173,7 @@ namespace llarp
             handlers::LocalEndpoint& _parent;
 
             service::SessionTag _tag;
-            ClientAddress _remote;
+            NetworkAddress _remote;
 
             std::shared_ptr<path::Path> _current_path;
 

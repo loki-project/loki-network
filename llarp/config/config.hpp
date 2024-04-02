@@ -119,14 +119,14 @@ namespace llarp
 
         std::set<RouterID> snode_blacklist;
 
-        std::unordered_map<ClientAddress, auth::AuthInfo> exit_auths;
+        std::unordered_map<NetworkAddress, auth::AuthInfo> exit_auths;
         std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
 
         auth::AuthType auth_type = auth::AuthType::NONE;
         auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
         std::optional<std::string> auth_url;
         std::optional<std::string> auth_method;
-        std::unordered_set<ClientAddress> auth_whitelist;
+        std::unordered_set<NetworkAddress> auth_whitelist;
         std::unordered_set<std::string> auth_static_tokens;
         std::set<fs::path> auth_files;
 
@@ -140,8 +140,8 @@ namespace llarp
 
         std::optional<fs::path> addr_map_persist_file;
 
-        // Pass to TunEndpoint
-        std::unordered_map<ClientAddress, oxen::quic::Address> _persisting_clients;
+        // Pass to TunEndpoint (DISCUSS: can these be combined?)
+        std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_clients;
         std::unordered_map<RelayAddress, oxen::quic::Address> _persisting_relays;
 
         // only member that refers to an actual interface
@@ -155,13 +155,13 @@ namespace llarp
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
         // Remote client exit addresses mapped to fixed local IP addresses
-        std::unordered_map<ClientAddress, oxen::quic::Address> _client_addrs;
+        std::unordered_map<NetworkAddress, oxen::quic::Address> _remote_exit_ip_routing;
 
         // Remote client exit addresses mapped to local IP ranges. Addresses can be populated via client
         // PubKey or their ONS name // TODO: rename
-        std::unordered_map<ClientAddress, IPRange> _client_ranges;
+        std::unordered_map<NetworkAddress, IPRange> _client_ranges;
 
-        // Used when in exit mode; pass down to exit::Endpoint // TODO: rename
+        // Used when in exit mode; pass down to LocalEndpoint // TODO: rename
         std::set<IPRange> _owned_ranges;
 
         bool enable_route_poker;

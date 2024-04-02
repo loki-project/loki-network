@@ -1,6 +1,6 @@
 #include "srv_data.hpp"
 
-#include <llarp/util/bencode.h>
+// #include <llarp/util/bencode.h>
 #include <llarp/util/str.hpp>
 #include <llarp/util/types.hpp>
 
@@ -8,9 +8,33 @@
 
 namespace llarp::dns
 {
-    static auto logcat = log::Cat("dns");
+    static auto logcat = log::Cat("SRVData");
 
-    bool SRVData::IsValid() const
+    SRVData::SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target)
+        : service_proto{std::move(_proto)},
+          priority{_priority},
+          weight{_weight},
+          port{_port},
+          target{std::move(_target)}
+    {
+        if (not is_valid())
+            throw std::invalid_argument{"Invalid SRVData!"};
+    }
+
+    SRVData::SRVData(std::string bt)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{bt};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "SRVData parsing exception: {}", e.what());
+        }
+    }
+
+    bool SRVData::is_valid() const
     {
         // if target is of first two forms outlined above
         if (target == "." or target.size() == 0)
@@ -44,21 +68,7 @@ namespace llarp::dns
         return false;
     }
 
-    SRVTuple SRVData::toTuple() const
-    {
-        return std::make_tuple(service_proto, priority, weight, port, target);
-    }
-
-    SRVData SRVData::fromTuple(SRVTuple tuple)
-    {
-        SRVData s;
-
-        std::tie(s.service_proto, s.priority, s.weight, s.port, s.target) = std::move(tuple);
-
-        return s;
-    }
-
-    bool SRVData::fromString(std::string_view srvString)
+    bool SRVData::from_string(std::string_view srvString)
     {
         log::debug(logcat, "SRVData::fromString(\"{}\")", srvString);
 
@@ -96,32 +106,62 @@ namespace llarp::dns
         else
             target = "";
 
-        return IsValid();
+        return is_valid();
     }
 
     std::string SRVData::bt_encode() const
     {
-        return oxenc::bt_serialize(toTuple());
+        oxenc::bt_dict_producer btdp;
+
+        btdp.append("p", port);
+        btdp.append("s", service_proto);
+        btdp.append("t", target);
+        btdp.append("u", priority);
+        btdp.append("w", weight);
+
+        return std::move(btdp).str();
     }
 
-    bool SRVData::BDecode(llarp_buffer_t* buf)
+    bool SRVData::bt_decode(std::string buf)
     {
-        uint8_t* begin = buf->cur;
-        if (not bencode_discard(buf))
-            return false;
-        uint8_t* end = buf->cur;
-        std::string_view srvString{reinterpret_cast<char*>(begin), static_cast<std::size_t>(end - begin)};
         try
         {
-            SRVTuple tuple{};
-            oxenc::bt_deserialize(srvString, tuple);
-            *this = fromTuple(std::move(tuple));
-            return IsValid();
+            oxenc::bt_dict_consumer btdc{buf};
+            return bt_decode(btdc);
         }
-        catch (const oxenc::bt_deserialize_invalid&)
+        catch (const std::exception& e)
         {
+            log::warning(logcat, "SRVData parsing exception: {}", e.what());
             return false;
-        };
+        }
+    }
+
+    bool SRVData::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            port = btdc.require<uint16_t>("p");
+            service_proto = btdc.require<std::string>("s");
+            target = btdc.require<std::string>("t");
+            priority = btdc.require<uint16_t>("u");
+            weight = btdc.require<uint16_t>("w");
+
+            return is_valid();
+        }
+        catch (const std::exception& e)
+        {
+            auto err = "SRVData parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+    }
+
+    std::optional<SRVData> SRVData::from_srv_string(std::string buf)
+    {
+        if (SRVData ret; ret.from_string(std::move(buf)))
+            return ret;
+
+        return std::nullopt;
     }
 
     StatusObject SRVData::ExtractStatus() const

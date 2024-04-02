@@ -60,11 +60,11 @@ namespace llarp::service
 
     void ServiceInfo::bt_encode(oxenc::bt_dict_producer& btdp) const
     {
-        btdp.append("e", enckey.ToView());
-        btdp.append("s", signkey.ToView());
+        btdp.append("e", enckey.to_view());
+        btdp.append("s", signkey.to_view());
 
         if (not vanity.is_zero())
-            btdp.append("x", vanity.ToView());
+            btdp.append("x", vanity.to_view());
     }
 
     std::string ServiceInfo::name() const

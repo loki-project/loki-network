@@ -15,8 +15,8 @@ namespace llarp::path
     std::string make_onion_payload(const SymmNonce& nonce, const HopID& path_id, const ustring_view& inner_payload)
     {
         oxenc::bt_dict_producer next_dict;
-        next_dict.append("NONCE", nonce.ToView());
-        next_dict.append("PATHID", path_id.ToView());
+        next_dict.append("NONCE", nonce.to_view());
+        next_dict.append("PATHID", path_id.to_view());
         next_dict.append("PAYLOAD", inner_payload);
 
         return std::move(next_dict).str();

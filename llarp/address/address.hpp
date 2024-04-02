@@ -13,141 +13,108 @@
 
 namespace llarp
 {
+    /** NetworkAddress:
+        This address type conceptually encapsulates any addressible hidden service or exit node operating on the
+        network. This type is to be strictly used in contexts referring to remote exit nodes or hidden services
+        operated on clients and clients/relays respectively. It can be constructed a few specific ways:
+            - static ::from_network_addr(...) : this function expects a network address string terminated in '.loki'
+                or '.snode'.
+            - {Client,Relay}PubKey : these and the copy/move constructors cascade into the private constructor
+    */
     struct NetworkAddress
     {
-      protected:
+      private:
+        PubKey _pubkey;
+
         std::string _tld;
+        bool _is_client{false};
 
-        explicit NetworkAddress(std::string_view tld) : _tld{std::move(tld)}
+        explicit NetworkAddress(std::string_view addr, std::string_view tld);
+
+        template <RemotePubKeyType pubkey_t>
+        explicit NetworkAddress(pubkey_t pubkey, std::string_view tld) : NetworkAddress{pubkey.to_view(), tld}
         {}
-
-        virtual std::string pub_key() const = 0;
 
       public:
         NetworkAddress() = default;
-        virtual ~NetworkAddress() = default;
+        ~NetworkAddress() = default;
 
-        std::string to_string() const
-        {
-            return remote_name();
-        }
-
-        virtual std::string name() const = 0;
-
-        std::string tld() const
-        {
-            return _tld;
-        }
-
-        std::string remote_name() const
-        {
-            return name() + tld();
-        }
-
-        std::string remote_address() const
-        {
-            return pub_key() + tld();
-        }
-    };
-
-    template <typename addr_t>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
-
-    struct ClientAddress final : public NetworkAddress
-    {
-      private:
-        std::optional<ClientPubKey> _pubkey{std::nullopt};
-        std::optional<std::string> _name{std::nullopt};
-        bool _is_ons{false};
-
-        explicit ClientAddress(std::string_view addr, bool is_ons);
-
-      protected:
-        std::string pub_key() const override
-        {
-            return _pubkey ? _pubkey->to_string() : name();
-        }
-
-      public:
-        ClientAddress() = default;
-        ~ClientAddress() override = default;
-
-        explicit ClientAddress(ClientPubKey cpk, std::optional<std::string> n = std::nullopt)
-            : NetworkAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}, _name{std::move(n)}
+        explicit NetworkAddress(RelayPubKey rpk) : NetworkAddress{rpk, TLD::SNODE}
         {}
 
-        ClientAddress(const ClientAddress& other)
-            : NetworkAddress{TLD::RELAY}, _pubkey{other._pubkey}, _name{other._name}
+        explicit NetworkAddress(ClientPubKey cpk) : NetworkAddress{cpk, TLD::LOKI}
         {}
 
-        ClientAddress(ClientAddress&& other)
-            : NetworkAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}, _name{std::move(other._name)}
+        NetworkAddress(const NetworkAddress& other) : NetworkAddress{other._pubkey, other._tld}
         {}
 
-        ClientAddress& operator=(const ClientAddress& other) = default;
-        ClientAddress& operator=(ClientAddress&& other) = default;
+        NetworkAddress(NetworkAddress&& other) : NetworkAddress{std::move(other._pubkey), std::move(other._tld)}
+        {}
 
-        bool operator<(const ClientAddress& other) const;
-        bool operator==(const ClientAddress& other) const;
-        bool operator!=(const ClientAddress& other) const;
+        NetworkAddress& operator=(const NetworkAddress& other) = default;
+        NetworkAddress& operator=(NetworkAddress&& other) = default;
+
+        bool operator<(const NetworkAddress& other) const;
+        bool operator==(const NetworkAddress& other) const;
+        bool operator!=(const NetworkAddress& other) const;
 
         // Will throw invalid_argument with bad input
-        static std::optional<ClientAddress> from_client_addr(std::string arg);
+        static std::optional<NetworkAddress> from_network_addr(std::string arg);
 
-        bool set_pubkey(std::string pk)
+        bool is_client() const
         {
-            return _pubkey->from_string(std::move(pk));
+            return _is_client;
         }
 
-        bool set_pubkey(std::string_view pk)
+        bool is_relay() const
         {
-            return _pubkey->from_string(pk);
+            return !is_client();
         }
 
-        std::optional<ClientPubKey> pubkey()
+        const PubKey& pubkey() const
         {
             return _pubkey;
         }
 
-        bool is_ons() const
+        PubKey pubkey()
         {
-            return _is_ons;
+            return _pubkey;
         }
 
-        std::string name() const override
+        std::string name() const
         {
-            return _name.value_or(_pubkey->to_string());
+            return _pubkey.to_string();
+        }
+
+        std::string to_string() const
+        {
+            return name() + _tld;
         }
     };
 
-    struct RelayAddress final : public NetworkAddress
+    /** RelayAddress:
+        This address object encapsulates the concept of an addressible service node operating on the network as a
+        lokinet relay. This object is NOT meant to be used in any scope referring to a hidden service or exit node
+        being operated on that remote relay (not that service nodes operate exit nodes anyways) -- for that, use the
+        above NetworkAddress type.
+    */
+    struct RelayAddress
     {
       private:
         RelayPubKey _pubkey;
 
         explicit RelayAddress(std::string_view addr);
 
-      protected:
-        std::string pub_key() const override
-        {
-            return _pubkey.to_string();
-        }
-
       public:
         RelayAddress() = default;
-        ~RelayAddress() override = default;
+        ~RelayAddress() = default;
 
-        explicit RelayAddress(RelayPubKey cpk) : NetworkAddress{TLD::CLIENT}, _pubkey{std::move(cpk)}
+        explicit RelayAddress(RelayPubKey cpk) : _pubkey{std::move(cpk)}
         {}
 
-        RelayAddress(const RelayAddress& other) : NetworkAddress{TLD::RELAY}, _pubkey{other._pubkey}
-        {}
+        RelayAddress(const RelayAddress& other) = default;
 
-        RelayAddress(RelayAddress&& other) : NetworkAddress{TLD::RELAY}, _pubkey{std::move(other._pubkey)}
+        RelayAddress(RelayAddress&& other) : _pubkey{std::move(other._pubkey)}
         {}
 
         RelayAddress& operator=(const RelayAddress& other) = default;
@@ -165,11 +132,19 @@ namespace llarp
             return _pubkey;
         }
 
-        std::string name() const override
+        std::string to_string() const
         {
-            return _pubkey.to_string();
+            return _pubkey.to_string().append(TLD::SNODE);
         }
     };
+
+    template <typename addr_t>
+    concept
+#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
+        bool
+#endif
+            NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
+
 }  // namespace llarp
 
 namespace std
@@ -184,10 +159,11 @@ namespace std
     };
 
     template <>
-    struct hash<llarp::RelayAddress> : public hash<llarp::NetworkAddress>
-    {};
-
-    template <>
-    struct hash<llarp::ClientAddress> : public hash<llarp::NetworkAddress>
-    {};
+    struct hash<llarp::RelayAddress>
+    {
+        virtual size_t operator()(const llarp::RelayAddress& r) const
+        {
+            return std::hash<std::string>{}(r.to_string());
+        }
+    };
 }  //  namespace std

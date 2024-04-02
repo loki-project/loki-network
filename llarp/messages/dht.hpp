@@ -18,7 +18,7 @@ namespace llarp
             {
                 btdp.append("O", order);
                 btdp.append("R", is_relayed ? 1 : 0);
-                btdp.append("S", location.ToView());
+                btdp.append("S", location.to_view());
             }
             catch (...)
             {

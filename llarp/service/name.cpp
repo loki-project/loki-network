@@ -64,23 +64,23 @@ namespace llarp::service
         oxenc::bt_dict_producer btdp;
 
         btdp.append("c", ciphertext);
-        btdp.append("n", nonce.ToView());
+        btdp.append("n", nonce.to_view());
 
         return std::move(btdp).str();
     }
 
-    std::optional<ClientAddress> EncryptedONSRecord::decrypt(std::string_view ons_name) const
+    std::optional<NetworkAddress> EncryptedONSRecord::decrypt(std::string_view ons_name) const
     {
-        std::optional<ClientAddress> ret = std::nullopt;
+        std::optional<NetworkAddress> ret = std::nullopt;
 
         if (ciphertext.empty())
             return ret;
 
         if (auto maybe = crypto::maybe_decrypt_name(ciphertext, nonce, ons_name))
         {
-            auto _name = "{}.loki"_format(maybe->ToView());
+            auto _name = "{}.loki"_format(maybe->to_view());
 
-            if (auto addr = ClientAddress::from_client_addr(std::move(_name)))
+            if (auto addr = NetworkAddress::from_client_addr(std::move(_name)))
             {
                 if (addr->set_pubkey(ons_name))
                     ret = addr;

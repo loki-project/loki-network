@@ -11,55 +11,29 @@
 
 namespace llarp::dns
 {
+    inline constexpr size_t TARGET_MAX_SIZE{200};
+
     using SRVTuple = std::tuple<std::string, uint16_t, uint16_t, uint16_t, std::string>;
 
+    /** SRVData
+
+        bt-encoded keys:
+            'p' : port
+            's' : service protocol
+            't' : target
+            'u' : priority
+            'w' : weight
+    */
     struct SRVData
     {
-        static constexpr size_t TARGET_MAX_SIZE = 200;
+      private:
+        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+        bool from_string(std::string_view srvString);
 
-        std::string service_proto;  // service and protocol may as well be together
-
-        uint16_t priority;
-        uint16_t weight;
-        uint16_t port;
-
-        // target string for the SRV record to point to
-        // options:
-        //   empty                     - refer to query name
-        //   dot                       - authoritative "no such service available"
-        //   any other .loki or .snode - target is that .loki or .snode
-        std::string target;
-
-        // do some basic validation on the target string
-        // note: this is not a conclusive, regex solution,
-        // but rather some sanity/safety checks
-        bool IsValid() const;
-
-        SRVTuple toTuple() const;
-
-        auto toTupleRef() const
-        {
-            return std::tie(service_proto, priority, weight, port, target);
-        }
-
-        /// so we can put SRVData in a std::set
-        bool operator<(const SRVData& other) const
-        {
-            return toTupleRef() < other.toTupleRef();
-        }
-
-        bool operator==(const SRVData& other) const
-        {
-            return toTupleRef() == other.toTupleRef();
-        }
-
-        std::string bt_encode() const;
-
-        bool BDecode(llarp_buffer_t*);
-
-        StatusObject ExtractStatus() const;
-
-        static SRVData fromTuple(SRVTuple tuple);
+      public:
+        SRVData() = default;
+        explicit SRVData(std::string bt);
+        SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target);
 
         /* bind-like formatted string for SRV records in config file
          *
@@ -77,7 +51,49 @@ namespace llarp::dns
          *  - a name within the .loki or .snode subdomains. a target
          *    specified in this manner must not end with a full stop.
          */
-        bool fromString(std::string_view srvString);
+        static std::optional<SRVData> from_srv_string(std::string buf);
+
+        std::string service_proto;  // service and protocol may as well be together
+
+        uint16_t priority;
+        uint16_t weight;
+        uint16_t port;
+
+        // target string for the SRV record to point to
+        // options:
+        //   empty                     - refer to query name
+        //   dot                       - authoritative "no such service available"
+        //   any other .loki or .snode - target is that .loki or .snode
+        std::string target;
+
+        // do some basic validation on the target string
+        // note: this is not a conclusive, regex solution,
+        // but rather some sanity/safety checks
+        bool is_valid() const;
+
+        /// so we can put SRVData in a std::set
+        bool operator<(const SRVData& other) const
+        {
+            return std::tie(service_proto, priority, weight, port, target)
+                < std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
+        }
+
+        bool operator==(const SRVData& other) const
+        {
+            return std::tie(service_proto, priority, weight, port, target)
+                == std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
+        }
+
+        bool operator!=(const SRVData& other) const
+        {
+            return !(*this == other);
+        }
+
+        std::string bt_encode() const;
+
+        bool bt_decode(std::string buf);
+
+        StatusObject ExtractStatus() const;
     };
 
 }  // namespace llarp::dns

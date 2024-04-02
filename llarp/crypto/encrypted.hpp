@@ -2,7 +2,6 @@
 
 #include <llarp/constants/link_layer.hpp>
 #include <llarp/util/aligned.hpp>
-#include <llarp/util/bencode.h>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/mem.hpp>
 

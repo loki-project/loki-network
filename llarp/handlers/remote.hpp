@@ -22,20 +22,20 @@ namespace llarp
                                      public path::PathHandler,
                                      public std::enable_shared_from_this<RemoteHandler>
         {
-          protected:  // TODO: make this private if/when deprecating derived types
+          private:
             std::string _name;
 
-            // TODO: make this hold {Client,Relay}Address
-            address_map<oxen::quic::Address, ClientAddress> _client_address_map;
-            address_map<IPRange, ClientAddress> _client_range_map;
+            address_map<oxen::quic::Address, NetworkAddress> _address_map;
+
+            address_map<IPRange, NetworkAddress> _range_map;
 
             DnsConfig _dns_config;
             NetworkConfig _net_config;
 
             IPRange _local_range;
             oxen::quic::Address _local_addr;
-            ip _local_ip;
 
+            ip _local_ip;
             ip _next_ip;
 
             std::string _if_name;
@@ -74,15 +74,21 @@ namespace llarp
             }
 
             // lookup ONS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
-            void resolve_ons(std::string name, std::function<void(std::optional<ClientAddress>)> func = nullptr);
+            void resolve_ons(std::string name, std::function<void(std::optional<NetworkAddress>)> func = nullptr);
 
             void lookup_remote_srv(
                 std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler);
 
+            void lookup_intro(
+                RouterID remote,
+                bool is_relayed,
+                uint64_t order,
+                std::function<void(std::optional<service::IntroSet>)> func);
+
             template <NetworkAddrType net_addr_t>
             bool initiate_remote_service_session(net_addr_t& remote)
             {
-                if constexpr (std::is_same_v<decltype(remote), ClientAddress>)
+                if constexpr (std::is_same_v<decltype(remote), NetworkAddress>)
                 {
                     if (auto maybe_pk = remote.pubkey())
                     {
@@ -99,13 +105,10 @@ namespace llarp
                 return false;
             }
 
-            bool initiate_remote_exit_session(ClientAddress& remote)
+            bool initiate_remote_exit_session(NetworkAddress& remote)
             {
-                if (auto maybe_pk = remote.pubkey())
-                {
-                    RouterID rid{maybe_pk->data()};
-                    return initiate_session(rid, true, false);
-                }
+                RouterID rid{remote.pubkey().data()};
+                return initiate_session(rid, true, false);
             }
 
             // RemoteHandler does not build paths to the remote addresses it maintains sessions to; each OutboundSession
@@ -124,16 +127,16 @@ namespace llarp
             void Tick(std::chrono::milliseconds now) override;
 
             /*  Address Mapping - Public Mutators  */
-            void map_remote_to_local_addr(ClientAddress remote, oxen::quic::Address local);
+            void map_remote_to_local_addr(NetworkAddress remote, oxen::quic::Address local);
 
-            void unmap_local_addr_by_remote(const ClientAddress& remote);
+            void unmap_local_addr_by_remote(const NetworkAddress& remote);
 
             void unmap_remote_by_name(const std::string& name);
 
             /*  IPRange Mapping - Public Mutators  */
-            void map_remote_to_local_range(ClientAddress remote, IPRange range);
+            void map_remote_to_local_range(NetworkAddress remote, IPRange range);
 
-            void unmap_local_range_by_remote(const ClientAddress& remote);
+            void unmap_local_range_by_remote(const NetworkAddress& remote);
 
             void unmap_range_by_name(const std::string& name);
 

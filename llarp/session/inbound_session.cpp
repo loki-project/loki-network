@@ -7,7 +7,7 @@ namespace llarp::session
     InboundSession::InboundSession(
         Router& r,
         std::shared_ptr<path::Path> _path,
-        ClientAddress _r,
+        NetworkAddress _r,
         handlers::LocalEndpoint& p,
         service::SessionTag _t,
         bool is_exit)

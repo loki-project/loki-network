@@ -8,7 +8,7 @@
 namespace llarp::session
 {
     /** Fields for initiating sessions:
-        - 'i' : ClientAddress of initiator
+        - 'i' : PubKey of initiator
         - 's' : SessionTag for current session
         - 'x' : Authentication field
             - bt-encoded dict, values TBD
@@ -16,16 +16,14 @@ namespace llarp::session
     */
     namespace Initiate
     {
-        inline static std::string serialize(ClientAddress initiator, service::SessionTag tag)
+        inline static std::string serialize(PubKey initiator, service::SessionTag tag)
         {
             oxenc::bt_dict_producer btdp;
 
-            (void)initiator;
-            (void)tag;
-
             try
             {
-                //
+                btdp.append("i", initiator.to_view());
+                btdp.append("s", tag.to_view());
             }
             catch (...)
             {

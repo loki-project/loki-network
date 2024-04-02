@@ -116,7 +116,7 @@ namespace llarp::service
                 sender.bt_encode(subdict);
             }
 
-            btdp.append("t", tag.ToView());
+            btdp.append("t", tag.to_view());
         }
         catch (...)
         {
@@ -139,7 +139,7 @@ namespace llarp::service
                 sender.bt_encode(subdict);
             }
 
-            btdp.append("t", tag.ToView());
+            btdp.append("t", tag.to_view());
         }
         catch (...)
         {
@@ -161,13 +161,13 @@ namespace llarp::service
         try
         {
             btdp.append("A", "H");
-            btdp.append("C", cipher.ToView());
+            btdp.append("C", cipher.to_view());
             btdp.append("D", std::string_view{reinterpret_cast<const char*>(enc.data()), enc.size()});
-            btdp.append("F", path_id.ToView());
-            btdp.append("N", nonce.ToView());
+            btdp.append("F", path_id.to_view());
+            btdp.append("N", nonce.to_view());
             btdp.append("R", flag);
-            btdp.append("T", convo_tag.ToView());
-            btdp.append("Z", sig.ToView());
+            btdp.append("T", convo_tag.to_view());
+            btdp.append("Z", sig.to_view());
         }
         catch (...)
         {

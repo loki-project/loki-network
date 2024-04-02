@@ -1,8 +1,11 @@
 #pragma once
 
+#include <llarp/crypto/crypto.hpp>
 #include <llarp/router_id.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/formattable.hpp>
+
+#include <oxenc/base32z.h>
 
 #include <array>
 
@@ -22,18 +25,18 @@ namespace llarp::dht
         Key_t() : AlignedBuffer<SIZE>()
         {}
 
-        /// get snode address string
-        std::string SNode() const
-        {
-            const RouterID rid{as_array()};
-            return rid.to_string();
-        }
-
         StatusObject ExtractStatus() const;
 
         std::string to_string() const
         {
-            return SNode();
+            return oxenc::to_base32z(begin(), end());
+        }
+
+        static Key_t derive_from_rid(RouterID rid)
+        {
+            PubKey pk;
+            crypto::derive_subkey(pk, PubKey{rid.data()}, 1);
+            return Key_t{pk.as_array()};
         }
 
         Key_t operator^(const Key_t& other) const

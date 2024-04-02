@@ -426,7 +426,7 @@ namespace llarp
         conf._if_name = _if_name;
 
         // process remote client map; addresses muyst be within _local_ip_range
-        auto& client_addrs = conf._client_addrs;
+        auto& client_addrs = conf._remote_exit_ip_routing;
 
         for (auto itr = client_addrs.begin(); itr != client_addrs.end();)
         {

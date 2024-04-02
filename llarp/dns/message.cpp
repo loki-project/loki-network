@@ -300,7 +300,7 @@ namespace llarp::dns
 
         for (const auto& srv : records)
         {
-            if (not srv.IsValid())
+            if (not srv.is_valid())
             {
                 add_nx_reply();
                 return;

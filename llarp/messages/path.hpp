@@ -69,12 +69,12 @@ namespace llarp
             {
                 oxenc::bt_dict_producer btdp;
 
-                btdp.append("COMMKEY", hop.commkey.to_pubkey().ToView());
+                btdp.append("COMMKEY", hop.commkey.to_pubkey().to_view());
                 btdp.append("LIFETIME", path::DEFAULT_LIFETIME.count());
-                btdp.append("NONCE", hop.nonce.ToView());
-                btdp.append("RX", hop.rxID.ToView());
-                btdp.append("TX", hop.txID.ToView());
-                btdp.append("UPSTREAM", hop.upstream.ToView());
+                btdp.append("NONCE", hop.nonce.to_view());
+                btdp.append("RX", hop.rxID.to_view());
+                btdp.append("TX", hop.txID.to_view());
+                btdp.append("UPSTREAM", hop.upstream.to_view());
 
                 hop_info = std::move(btdp).str();
             }
@@ -107,8 +107,8 @@ namespace llarp
                 oxenc::bt_dict_producer btdp;
 
                 btdp.append("ENCRYPTED", hop_info);
-                btdp.append("NONCE", outer_nonce.ToView());
-                btdp.append("PUBKEY", framekey.to_pubkey().ToView());
+                btdp.append("NONCE", outer_nonce.to_view());
+                btdp.append("PUBKEY", framekey.to_pubkey().to_view());
 
                 hashed_data = std::move(btdp).str();
             }

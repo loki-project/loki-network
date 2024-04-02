@@ -312,7 +312,7 @@ namespace llarp::handlers
         else
             _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
 
-        for (const auto& item : conf._client_addrs)
+        for (const auto& item : conf._remote_exit_ip_routing)
         {
             (void)item;
             // if (not map_address(item.second, item.first, false))

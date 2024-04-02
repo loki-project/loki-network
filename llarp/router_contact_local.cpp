@@ -81,7 +81,7 @@ namespace llarp
         if (ACTIVE_NETID != llarp::LOKINET_DEFAULT_NETID)
             btdp.append("i", ACTIVE_NETID);
 
-        btdp.append("p", _router_id.ToView());
+        btdp.append("p", _router_id.to_view());
 
         btdp.append("t", _timestamp.time_since_epoch().count());
 

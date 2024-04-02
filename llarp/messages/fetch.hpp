@@ -15,7 +15,7 @@ namespace llarp
             try
             {
                 btdp.append_encoded("rc", rc.view());
-                btdp.append("sender", last_sender.ToView());
+                btdp.append("sender", last_sender.to_view());
             }
             catch (...)
             {
@@ -42,7 +42,7 @@ namespace llarp
                     auto sublist = btdp.append_list("explicit_ids");
 
                     for (const auto& rid : explicit_ids)
-                        sublist.append(rid.ToView());
+                        sublist.append(rid.to_view());
                 }
 
                 btdp.append("since", since.time_since_epoch() / 1s);
@@ -83,7 +83,7 @@ namespace llarp
                 auto sublist = btdp.append_list("explicit_ids");
 
                 for (const auto& rid : explicit_ids)
-                    sublist.append(rid.ToView());
+                    sublist.append(rid.to_view());
             }
             catch (...)
             {
@@ -104,7 +104,7 @@ namespace llarp
 
             try
             {
-                btdp.append("source", source.ToView());
+                btdp.append("source", source.to_view());
             }
             catch (...)
             {

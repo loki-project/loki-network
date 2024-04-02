@@ -266,7 +266,7 @@ namespace llarp::rpc
 
             if (not req.srvProto.empty())
             {
-                auto srvData = dns::SRVData::fromTuple(std::make_tuple(req.srvProto, 1, 1, req.port, ""));
+                dns::SRVData srvData{req.srvProto, 1, 1, req.port, ""};
                 endpoint->put_srv_record(std::move(srvData));
             }
 

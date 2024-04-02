@@ -28,7 +28,7 @@ namespace llarp::service
         ServiceInfo address_keys;
         IntroductionSet intros;
         PQPubKey sntru_pubkey;
-        std::vector<llarp::dns::SRVTuple> SRVs;
+        std::vector<dns::SRVData> SRVs;
         std::chrono::milliseconds time_signed = 0s;
 
         IntroSet() = default;
@@ -97,6 +97,11 @@ namespace llarp::service
     /// public version of the introset that is encrypted
     struct EncryptedIntroSet
     {
+      private:
+        explicit EncryptedIntroSet(std::string bt_payload);
+        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+
+      public:
         PubKey derived_signing_key;
         std::chrono::milliseconds signed_at = 0s;
         ustring introset_payload;
@@ -112,19 +117,15 @@ namespace llarp::service
             std::string nonce,
             std::string sig);
 
-        explicit EncryptedIntroSet(std::string bt_payload);
+        bool sign(const PrivateKey& k);
 
-        bool Sign(const PrivateKey& k);
-
-        bool IsExpired(std::chrono::milliseconds now) const;
+        bool is_expired(std::chrono::milliseconds now) const;
 
         std::string bt_encode() const;
 
         bool bt_decode(std::string_view buf);
 
-        void bt_decode(oxenc::bt_dict_consumer& btdc);
-
-        bool OtherIsNewer(const EncryptedIntroSet& other) const;
+        bool other_is_newer(const EncryptedIntroSet& other) const;
 
         /// verify signature and timestamp
         bool verify(std::chrono::milliseconds now) const;
@@ -133,11 +134,13 @@ namespace llarp::service
 
         static bool verify(std::string introset, std::string key, std::string sig);
 
+        static std::optional<EncryptedIntroSet> construct(std::string bt);
+
         std::string to_string() const;
 
         StatusObject ExtractStatus() const;
 
-        IntroSet decrypt(const PubKey& root) const;
+        std::optional<IntroSet> decrypt(const PubKey& root) const;
     };
 
     inline bool operator<(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)

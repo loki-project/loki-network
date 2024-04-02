@@ -532,7 +532,7 @@ namespace llarp
             const auto& remote_addr = rc->addr();
 
             if (auto rv = ep.establish_and_send(
-                    KeyedAddress{router.ToView(), remote_addr},
+                    KeyedAddress{router.to_view(), remote_addr},
                     *rc,
                     std::move(endpoint),
                     std::move(body),
@@ -564,7 +564,7 @@ namespace llarp
         const auto& remote_addr = rc.addr();
 
         if (auto rv = ep.establish_connection(
-                KeyedAddress{rid.ToView(), remote_addr}, rc, std::move(on_open), std::move(on_close));
+                KeyedAddress{rid.to_view(), remote_addr}, rc, std::move(on_open), std::move(on_close));
             rv)
         {
             log::info(logcat, "Begun establishing connection to {}", remote_addr);
@@ -955,7 +955,7 @@ namespace llarp
             const auto& known_rids = node_db->get_known_rids();
 
             for (const auto& rid : known_rids)
-                btlp.append(rid.ToView());
+                btlp.append(rid.to_view());
         }
 
         btdp.append_signature("signature", [this](ustring_view to_sign) {
@@ -1267,7 +1267,7 @@ namespace llarp
             send_control_message(
                 peer_key,
                 "find_intro",
-                FindIntroMessage::serialize(dht::Key_t{peer_key}, is_relayed, relay_order),
+                FindIntroMessage::serialize(addr, is_relayed, relay_order),
                 [respond = std::move(respond)](oxen::quic::message relay_response) mutable {
                     if (relay_response)
                         log::info(
@@ -1319,8 +1319,10 @@ namespace llarp
         // success case, neither timed out nor errored
         if (m)
         {
-            service::EncryptedIntroSet enc{payload};
-            _router.contacts().put_intro(std::move(enc));
+            if (auto enc = service::EncryptedIntroSet::construct(payload))
+            {
+                _router.contacts().put_intro(std::move(*enc));
+            }
         }
         else
         {
