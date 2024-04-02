@@ -220,7 +220,7 @@ namespace llarp::dns
                         // back to it).
                         set_opt("outgoing-range:", "1");
                         set_opt("outgoing-port-avoid:", "0-65535");
-                        set_opt("outgoing-port-permit:", "{}", apple::dns_trampoline_source_port);
+                        set_opt("outgoing-port-permit:", "{}"_format(apple::dns_trampoline_source_port));
                         return true;
                     }
                 }
@@ -292,21 +292,13 @@ namespace llarp::dns
                     set_opt("outgoing-interface:", host);
                     set_opt("outgoing-range:", "1");
                     set_opt("outgoing-port-avoid:", "0-65535");
-                    set_opt("outgoing-port-permit:", "{}", addr.port());
+                    set_opt("outgoing-port-permit:", "{}"_format(addr.port()));
                 }
             }
 
             void set_opt(const std::string& key, const std::string& val)
             {
                 ub_ctx_set_option(m_ctx, key.c_str(), val.c_str());
-            }
-
-            // Wrapper around the above that takes 3+ arguments: the 2nd arg gets formatted with the
-            // remaining args, and the formatted string passed to the above as `val`.
-            template <typename... FmtArgs, std::enable_if_t<sizeof...(FmtArgs), int> = 0>
-            void set_opt(const std::string& key, std::string_view format, FmtArgs&&... args)
-            {
-                set_opt(key, fmt::format(format, std::forward<FmtArgs>(args)...));
             }
 
             // Copy of the DNS config (a copy because on some platforms, like Apple, we change the

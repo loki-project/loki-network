@@ -8,11 +8,13 @@
 
 namespace llarp::handlers
 {
-    struct NullEndpoint final : public dns::Resolver_Base,
-                                public BaseHandler,
-                                public std::enable_shared_from_this<NullEndpoint>
+    inline const auto EMBEDDED = "embedded"s;
+
+    struct EmbeddedEndpoint final : public dns::Resolver_Base,
+                                    public BaseHandler,
+                                    public std::enable_shared_from_this<EmbeddedEndpoint>
     {
-        NullEndpoint(Router& r);
+        EmbeddedEndpoint(Router& r);
 
         vpn::NetworkInterface* get_vpn_interface() override
         {
@@ -26,12 +28,12 @@ namespace llarp::handlers
 
         std::string name() const override
         {
-            return "null"s;
+            return EMBEDDED;
         }
 
         std::string_view resolver_name() const override
         {
-            return "lokinet";
+            return LOKI_RESOLVER;
         }
 
         bool maybe_hook_dns(

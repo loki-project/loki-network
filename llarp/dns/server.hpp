@@ -256,6 +256,7 @@ namespace llarp::dns
             const oxen::quic::Address& resolver,
             const oxen::quic::Address& from,
             IPPacket buf);
+
         /// set which dns mode we are in.
         /// true for intercepting all queries. false for just .loki and .snode
         void set_dns_mode(bool all_queries);

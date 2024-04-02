@@ -7,7 +7,7 @@
 #include <llarp/dns/server.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/path/pathhandler.hpp>
+#include <llarp/path/path_handler.hpp>
 // #include <llarp/service/address.hpp>
 // #include <llarp/service/identity.hpp>
 // #include <llarp/service/protocol.hpp>

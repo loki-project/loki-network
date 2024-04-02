@@ -413,18 +413,26 @@ namespace llarp
 
         conf.define_option<std::string>(
             "network",
-            "owned-range",
+            "routed-range",
             MultiValue,
             Comment{
-                "When in exit mode announce we allow a private range in our introset.  For "
-                "example:",
-                "    owned-range=10.0.0.0/24",
+                "When in exit mode announce one or more IP ranges that this exit node routes",
+                "traffic for.  If omitted, the default is all public ranges.  Can be set to",
+                "public to indicate that this exit routes traffic to the public internet.",
+                "For example:",
+                "    routed-range=10.0.0.0/16",
+                "    routed-range=public",
+                "to advertise that this exit routes traffic to both the public internet, and to",
+                "10.0.x.y addresses.",
+                "",
+                "Note that this option does not automatically configure network routing; that",
+                "must be configured separately on the exit system to handle lokinet traffic.",
             },
             [this](std::string arg) {
                 if (auto range = IPRange::from_string(arg))
-                    _owned_ranges.insert(std::move(*range));
+                    _routed_ranges.insert(std::move(*range));
                 else
-                    throw std::invalid_argument{"Bad IP range passed to owned-range:{}"_format(arg)};
+                    throw std::invalid_argument{"Bad IP range passed to routed-range:{}"_format(arg)};
             });
 
         conf.define_option<std::string>(
@@ -452,6 +460,7 @@ namespace llarp
                 traffic_policy->protocols.emplace(arg);
             });
 
+        // TODO: accept ONS
         conf.define_option<std::string>(
             "network",
             "exit-node",
@@ -461,9 +470,9 @@ namespace llarp
                 "Specify a `.loki` address and an ip range to use as an exit broker.",
                 "Examples:",
                 "    exit-node=whatever.loki",
-                "would map all exit traffic through whatever.loki; and",
+                "would route all exit traffic through whatever.loki; and",
                 "    exit-node=stuff.loki:100.0.0.0/24",
-                "would map the IP range 100.0.0.0/24 through stuff.loki.",
+                "would route the IP range 100.0.0.0/24 through stuff.loki.",
                 "This option can be specified multiple times (to map different IP ranges).",
             },
             [this](std::string arg) {
@@ -474,7 +483,7 @@ namespace llarp
 
                 const auto pos = arg.find(":");
 
-                std::string input = (pos == std::string::npos) ? "::/0"s : arg.substr(pos + 1);
+                std::string input = (pos == std::string::npos) ? "0.0.0.0/0"s : arg.substr(pos + 1);
 
                 range = IPRange::from_string(std::move(input));
 
@@ -485,7 +494,7 @@ namespace llarp
                     arg = arg.substr(0, pos);
 
                 if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
-                    _client_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
+                    _exit_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
                 else
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
             });
@@ -609,8 +618,7 @@ namespace llarp
                 }
             });
 
-        // TODO: could be useful for snodes in the future, but currently only implemented for
-        // clients:
+        // TODO: make this accept '.snode' addresses
         conf.define_option<std::string>(
             "network",
             "mapaddr",
@@ -640,7 +648,7 @@ namespace llarp
                 if (auto maybe_raddr = NetworkAddress::from_network_addr(std::move(addr_arg)); maybe_raddr)
                 {
                     oxen::quic::Address addr{std::move(ip_arg), 0};
-                    _remote_exit_ip_routing.emplace(std::move(*maybe_raddr), std::move(addr));
+                    _reserved_local_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
                 }
                 else
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
@@ -801,10 +809,7 @@ namespace llarp
                             {
                                 if (auto maybe_netaddr = NetworkAddress::from_network_addr(*str))
                                 {
-                                    if (maybe_netaddr->is_client())
-                                        _persisting_clients.emplace(std::move(*maybe_netaddr), std::move(addr));
-                                    else
-                                        _persisting_relays.emplace(std::move(*maybe_netaddr), std::move(addr));
+                                    _persisting_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
                                 }
                                 else
                                     log::warning(logcat, "Invalid address in addr map: {}", *str);
@@ -1663,7 +1668,7 @@ namespace llarp
         config->load();
         config->logging.level = log::Level::off;
         config->api.enable_rpc_server = false;
-        config->network.endpoint_type = "null";
+        config->network.endpoint_type = "embedded";
         config->network.save_profiles = false;
         config->bootstrap.files.clear();
         return config;

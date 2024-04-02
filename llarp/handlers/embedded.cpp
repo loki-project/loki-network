@@ -1,10 +1,10 @@
-#include "null.hpp"
+#include "embedded.hpp"
 
 namespace llarp::handlers
 {
     static auto logcat = log::Cat("Null");
 
-    NullEndpoint::NullEndpoint(Router& r)
+    EmbeddedEndpoint::EmbeddedEndpoint(Router& r)
         : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, IPPacket pkt) {
               var::visit(
                   [&pkt](AddressVariant_t&& from) {
@@ -16,7 +16,7 @@ namespace llarp::handlers
         // r->loop()->add_ticker([this] { Pump(Now()); });
     }
 
-    bool NullEndpoint::handle_inbound_packet(
+    bool EmbeddedEndpoint::handle_inbound_packet(
         const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t)
     {
         log::trace(logcat, "Inbound packet on session:{}", tag);

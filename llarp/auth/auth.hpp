@@ -69,7 +69,7 @@ namespace llarp::auth
         const bool _is_exit_service{false};
 
       public:
-        SessionAuthPolicy(Router& r, const SecretKey& sk, bool _snode_service, bool _is_exit = false);
+        SessionAuthPolicy(Router& r, bool _snode_service, bool _is_exit = false);
 
         bool load_identity_from_file(const char* fname);
 

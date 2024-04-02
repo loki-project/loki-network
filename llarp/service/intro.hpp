@@ -14,7 +14,7 @@ namespace llarp::service
     struct Introduction
     {
         RouterID pivot_router;
-        HopID path_id;
+        HopID hop_id;
         std::chrono::milliseconds latency = 0s;
         std::chrono::milliseconds expiry = 0s;
         uint64_t version = llarp::constants::proto_version;
@@ -48,14 +48,14 @@ namespace llarp::service
 
         bool operator<(const Introduction& other) const
         {
-            return std::tie(expiry, path_id, pivot_router, version, latency)
-                < std::tie(other.expiry, other.path_id, other.pivot_router, other.version, other.latency);
+            return std::tie(expiry, hop_id, pivot_router, version, latency)
+                < std::tie(other.expiry, other.hop_id, other.pivot_router, other.version, other.latency);
         }
 
         bool operator==(const Introduction& other) const
         {
-            return std::tie(expiry, path_id, pivot_router, version, latency)
-                == std::tie(other.expiry, other.path_id, other.pivot_router, other.version, other.latency);
+            return std::tie(expiry, hop_id, pivot_router, version, latency)
+                == std::tie(other.expiry, other.hop_id, other.pivot_router, other.version, other.latency);
         }
 
         bool operator!=(const Introduction& other) const
@@ -84,7 +84,7 @@ namespace std
     {
         size_t operator()(const llarp::service::Introduction& i) const
         {
-            return std::hash<llarp::PubKey>{}(i.pivot_router) ^ std::hash<llarp::HopID>{}(i.path_id);
+            return std::hash<llarp::PubKey>{}(i.pivot_router) ^ std::hash<llarp::HopID>{}(i.hop_id);
         }
     };
 }  // namespace std

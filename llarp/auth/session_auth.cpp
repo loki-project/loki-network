@@ -4,8 +4,8 @@
 
 namespace llarp::auth
 {
-    SessionAuthPolicy::SessionAuthPolicy(Router& r, const SecretKey& sk, bool _snode_service, bool is_exit)
-        : AuthPolicy{r}, _session_key{sk}, _is_snode_service{_snode_service}, _is_exit_service{is_exit}
+    SessionAuthPolicy::SessionAuthPolicy(Router& r, bool _snode_service, bool is_exit)
+        : AuthPolicy{r}, _is_snode_service{_snode_service}, _is_exit_service{is_exit}
     {
         // These can both be false but CANNOT both be true
         if (_is_exit_service & _is_snode_service)

@@ -9,10 +9,12 @@ namespace llarp::service
     {
         using AlignedBuffer<16>::AlignedBuffer;
 
+        static SessionTag make_random();
+
         void Randomize() override;
 
+        // DISCUSS: TONUKE: maybe these...?
         sockaddr_in6 to_v6() const;
-
         void from_v6(sockaddr_in6 saddr);
     };
 }  // namespace llarp::service

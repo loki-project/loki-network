@@ -6,8 +6,8 @@ namespace llarp::handlers
 {
     static auto logcat = log::Cat("local_endpoint");
 
-    LocalEndpoint::LocalEndpoint(Router& r)
-        : path::PathHandler{r, 3, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}
+    LocalEndpoint::LocalEndpoint(std::string name, Router& r)
+        : path::PathHandler{r, 3, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}, _name{std::move(name)}
     {}
 
     const std::shared_ptr<EventLoop>& LocalEndpoint::loop()
@@ -39,17 +39,17 @@ namespace llarp::handlers
 
     bool LocalEndpoint::configure(NetworkConfig& netconf, DnsConfig& dnsconf)
     {
-        (void)netconf;
-        (void)dnsconf;
-
         _is_exit_node = _router.is_exit_node();
+        // _is_snode_service = _router.is
+
+        (void)dnsconf;
 
         if (_is_exit_node)
         {
-            if (not netconf._owned_ranges.empty())
+            if (not netconf._routed_ranges.empty())
             {
-                _owned_ranges.merge(netconf._owned_ranges);
-                _local_introset.owned_ranges = _owned_ranges;
+                _routed_ranges.merge(netconf._routed_ranges);
+                _local_introset._routed_ranges = _routed_ranges;
             }
 
             _local_introset.exit_policy = netconf.traffic_policy;

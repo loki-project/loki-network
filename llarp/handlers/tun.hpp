@@ -33,6 +33,8 @@
 
 namespace llarp::handlers
 {
+    inline const auto TUN = "tun"s;
+
     struct TunEndpoint final : public dns::Resolver_Base,
                                public BaseHandler,
                                public std::enable_shared_from_this<TunEndpoint>
@@ -47,7 +49,7 @@ namespace llarp::handlers
 
         std::string name() const override
         {
-            return "tun"s;
+            return TUN;
         }
 
         int rank() const override
@@ -57,7 +59,7 @@ namespace llarp::handlers
 
         std::string_view resolver_name() const override
         {
-            return "lokinet";
+            return LOKI_RESOLVER;
         }
 
         bool maybe_hook_dns(
@@ -131,11 +133,6 @@ namespace llarp::handlers
         std::optional<net::TrafficPolicy> get_traffic_policy() const /* override */
         {
             return _traffic_policy;
-        }
-
-        std::set<IPRange> get_owned_ranges() const /* override */
-        {
-            return _owned_ranges;
         }
 
         std::chrono::milliseconds get_path_alignment_timeout() const /* override */
@@ -249,9 +246,6 @@ namespace llarp::handlers
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
         std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
-
-        /// ranges we advetise as reachable
-        std::set<IPRange> _owned_ranges;
 
         /// how long to wait for path alignment
         std::chrono::milliseconds _path_alignment_timeout;

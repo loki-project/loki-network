@@ -18,6 +18,8 @@
 
 namespace llarp::handlers
 {
+    inline constexpr auto LOKI_RESOLVER = "lokinet"sv;
+
     /** This class holds methods common to handlers::{Tun,Null}Endpoints in regards to their packet
         routing and other API capabilities.
     */

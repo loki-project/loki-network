@@ -1,7 +1,7 @@
 #pragma once
 
 #include "abstracthophandler.hpp"
-#include "pathhandler.hpp"
+#include "path_handler.hpp"
 
 #include <llarp/constants/path.hpp>
 #include <llarp/crypto/types.hpp>
@@ -27,7 +27,7 @@ namespace llarp
 
     /*
       TODO:
-        - Add a boolean for "allow incoming session" or something
+        - redo shortname and Router::shortname
     */
 
     namespace path

@@ -4,7 +4,7 @@
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
-#include <llarp/path/pathhandler.hpp>
+#include <llarp/path/path_handler.hpp>
 
 #include <deque>
 #include <queue>
@@ -37,18 +37,40 @@ namespace llarp
         struct OutboundSession final : public llarp::path::PathHandler,
                                        public std::enable_shared_from_this<OutboundSession>
         {
-          private:
+          public:
             OutboundSession(
                 RouterID _remote,
                 Router& r,
-                size_t hoplen,
                 handlers::RemoteHandler& parent,
+                std::shared_ptr<path::Path> path,
                 service::SessionTag _t,
                 std::shared_ptr<auth::SessionAuthPolicy> a);
 
-          public:
             ~OutboundSession() override;
 
+          private:
+            RouterID _remote_router;
+            std::shared_ptr<auth::SessionAuthPolicy> _auth;
+
+            std::string prefix() const
+            {
+                return _prefix;
+            }
+
+            std::shared_ptr<path::Path> _current_path;
+            HopID _current_hop_id;
+
+            service::SessionTag _tag;
+
+            std::chrono::milliseconds _last_use;
+
+            const handlers::RemoteHandler& _parent;
+
+            const bool _is_exit_service{false};
+            const bool _is_snode_service{false};
+            const std::string _prefix{};
+
+          public:
             std::shared_ptr<path::PathHandler> get_self() override
             {
                 return shared_from_this();
@@ -121,28 +143,6 @@ namespace llarp
             {
                 return _tag;
             }
-
-          private:
-            RouterID _remote_router;  // TODO: remote {service,exit} pubkey
-            std::shared_ptr<auth::SessionAuthPolicy> _auth;
-
-            std::string prefix() const
-            {
-                return _prefix;
-            }
-
-            HopID _current_hop_id;
-            std::shared_ptr<path::Path> _current_path;
-
-            service::SessionTag _tag;
-
-            std::chrono::milliseconds _last_use;
-
-            const handlers::RemoteHandler& _parent;
-
-            const bool _is_exit_service{false};
-            const bool _is_snode_service{false};
-            const std::string _prefix{};
         };
 
         struct InboundSession

@@ -299,7 +299,7 @@ namespace llarp::service
 
                 while (not sublist.is_finished())
                 {
-                    owned_ranges.emplace(sublist.consume_string());
+                    _routed_ranges.emplace(sublist.consume_string());
                 }
             }
 
@@ -355,10 +355,10 @@ namespace llarp::service
                     sublist.append(static_cast<uint64_t>(p));
             }
 
-            if (not owned_ranges.empty())
+            if (not _routed_ranges.empty())
             {
                 auto sublist = btdp.append_list("r");
-                for (auto& r : owned_ranges)
+                for (auto& r : _routed_ranges)
                     r.bt_encode(sublist);
             }
 

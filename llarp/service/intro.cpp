@@ -10,7 +10,7 @@ namespace llarp::service
     {
         StatusObject obj{
             {"router", pivot_router.ToHex()},
-            {"path", path_id.ToHex()},
+            {"path", hop_id.ToHex()},
             {"expiresAt", to_json(expiry)},
             {"latency", to_json(latency)},
             {"version", uint64_t(version)}};
@@ -25,7 +25,7 @@ namespace llarp::service
 
             pivot_router.from_snode_address(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
-            path_id.from_string(btdc.require<std::string>("p"));
+            hop_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};
         }
         catch (...)
@@ -53,7 +53,7 @@ namespace llarp::service
         {
             subdict.append("k", pivot_router.to_view());
             subdict.append("l", latency.count());
-            subdict.append("p", path_id.to_view());
+            subdict.append("p", hop_id.to_view());
             subdict.append("x", expiry.count());
         }
         catch (...)
@@ -86,7 +86,7 @@ namespace llarp::service
         {
             pivot_router.from_string(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<int64_t>("l")};
-            path_id.from_string(btdc.require<std::string>("p"));
+            hop_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
         }
         catch (...)
@@ -99,7 +99,7 @@ namespace llarp::service
     void Introduction::clear()
     {
         pivot_router.zero();
-        path_id.zero();
+        hop_id.zero();
         latency = 0s;
         expiry = 0s;
     }
@@ -110,7 +110,7 @@ namespace llarp::service
             "[Intro k={} l={} p={} v={} x={}]",
             RouterID{pivot_router},
             latency.count(),
-            path_id,
+            hop_id,
             version,
             expiry.count());
     }

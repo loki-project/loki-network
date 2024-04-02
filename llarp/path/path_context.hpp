@@ -1,8 +1,8 @@
 #pragma once
 
 #include "abstracthophandler.hpp"
+#include "path_handler.hpp"
 #include "path_types.hpp"
-#include "pathhandler.hpp"
 #include "transit_hop.hpp"
 
 #include <llarp/ev/loop.hpp>

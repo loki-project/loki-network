@@ -6,7 +6,7 @@
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/node.hpp>
 #include <llarp/handlers/common.hpp>
-#include <llarp/handlers/null.hpp>
+#include <llarp/handlers/embedded.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/link/contacts.hpp>
 #include <llarp/link/link_manager.hpp>
@@ -426,7 +426,7 @@ namespace llarp
         conf._if_name = _if_name;
 
         // process remote client map; addresses muyst be within _local_ip_range
-        auto& client_addrs = conf._remote_exit_ip_routing;
+        auto& client_addrs = conf._reserved_local_addrs;
 
         for (auto itr = client_addrs.begin(); itr != client_addrs.end();)
         {
@@ -519,7 +519,7 @@ namespace llarp
         {"tun", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
         {"android", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
         {"ios", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
-        {"null", [](Router& r) { return std::make_unique<handlers::NullEndpoint>(r); }}};
+        {"embedded", [](Router& r) { return std::make_unique<handlers::EmbeddedEndpoint>(r); }}};
 
     void Router::init_api()
     {
@@ -613,7 +613,11 @@ namespace llarp
 
         init_bootstrap();
 
-        if (conf.network.endpoint_type != "null")
+        // TODO: add something sensible to the first parameter
+        _local_endpoint = std::make_shared<handlers::LocalEndpoint>("", *this);
+        _remote_handler = std::make_shared<handlers::RemoteHandler>("", *this);
+
+        if (conf.network.endpoint_type != "embedded")
         {
             _should_init_tun = true;
             init_net_if();

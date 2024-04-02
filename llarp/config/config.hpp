@@ -140,9 +140,8 @@ namespace llarp
 
         std::optional<fs::path> addr_map_persist_file;
 
-        // Pass to TunEndpoint (DISCUSS: can these be combined?)
-        std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_clients;
-        std::unordered_map<RelayAddress, oxen::quic::Address> _persisting_relays;
+        // Pass to TunEndpoint
+        std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_addrs;
 
         // only member that refers to an actual interface
         std::optional<std::string> _if_name;
@@ -155,14 +154,17 @@ namespace llarp
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
         // Remote client exit addresses mapped to fixed local IP addresses
-        std::unordered_map<NetworkAddress, oxen::quic::Address> _remote_exit_ip_routing;
+        // TODO:
+        //  - pass to TunEndpoint
+        //  - create separate "reserved_ips" mapping or load directly into TunEndpoint mapping (probably better)
+        //      - when a session is created, check here when assigning IP's
+        std::unordered_map<NetworkAddress, oxen::quic::Address> _reserved_local_addrs;
 
-        // Remote client exit addresses mapped to local IP ranges. Addresses can be populated via client
-        // PubKey or their ONS name // TODO: rename
-        std::unordered_map<NetworkAddress, IPRange> _client_ranges;
+        // Remote client exit addresses mapped to local IP ranges // TODO: make this accept ONS
+        std::unordered_map<NetworkAddress, IPRange> _exit_ranges;
 
-        // Used when in exit mode; pass down to LocalEndpoint // TODO: rename
-        std::set<IPRange> _owned_ranges;
+        // Used when in exit mode; pass down to LocalEndpoint
+        std::set<IPRange> _routed_ranges;
 
         bool enable_route_poker;
         bool blackhole_routes;

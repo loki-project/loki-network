@@ -89,16 +89,18 @@ namespace llarp
             // derive (outer) shared key
             if (!crypto::dh_client(shared, hop.rc.router_id(), framekey, outer_nonce))
             {
-                log::warning(messages::logcat, "DH client failed during hop info encryption!");
-                throw std::runtime_error{"DH failed during hop info encryption"};
+                auto err = "DH client failed during hop info encryption!"s;
+                log::warning(messages::logcat, "{}", err);
+                throw std::runtime_error{err};
             }
 
             // encrypt hop_info (mutates in-place)
             if (!crypto::xchacha20(
                     reinterpret_cast<unsigned char*>(hop_info.data()), hop_info.size(), shared, outer_nonce))
             {
-                log::warning(messages::logcat, "Hop info encryption failed!");
-                throw std::runtime_error{"Hop info encryption failed"};
+                auto err = "Hop info encryption failed!"s;
+                log::warning(messages::logcat, "{}", err);
+                throw std::runtime_error{err};
             }
 
             std::string hashed_data;
@@ -122,8 +124,9 @@ namespace llarp
                     hashed_data.size(),
                     shared))
             {
-                log::warning(messages::logcat, "Failed to generate HMAC for hop info");
-                throw std::runtime_error{"Failed to generate HMAC for hop info"};
+                auto err = "Failed to generate HMAC for hop info"s;
+                log::warning(messages::logcat, "{}", err);
+                throw std::runtime_error{err};
             }
 
             oxenc::bt_dict_producer btdp;

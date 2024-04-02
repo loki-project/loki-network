@@ -7,7 +7,7 @@
 #include <llarp/crypto/encrypted.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/ev/loop.hpp>
-#include <llarp/path/pathhandler.hpp>
+#include <llarp/path/path_handler.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/util/time.hpp>
 

@@ -37,7 +37,7 @@ namespace llarp::path
 
         // initialize parts of the introduction
         intro.pivot_router = hops[hsz - 1].rc.router_id();
-        intro.path_id = hops[hsz - 1].txID;
+        intro.hop_id = hops[hsz - 1].txID;
     }
 
     bool Path::operator<(const Path& other) const

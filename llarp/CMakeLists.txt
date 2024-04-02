@@ -26,7 +26,7 @@ lokinet_add_library(lokinet-core-utils
   
   handlers/common.cpp
   handlers/endpoint.cpp
-  handlers/null.cpp
+  handlers/embedded.cpp
   handlers/remote.cpp
   handlers/tun.cpp
   
@@ -225,7 +225,7 @@ lokinet_add_library(lokinet-path
   path/abstracthophandler.cpp
   path/path.cpp
   # path/path_context.cpp
-  path/pathhandler.cpp
+  path/path_handler.cpp
   path/transit_hop.cpp
 )
 

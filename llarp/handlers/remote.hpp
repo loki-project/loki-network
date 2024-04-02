@@ -88,17 +88,14 @@ namespace llarp
             template <NetworkAddrType net_addr_t>
             bool initiate_remote_service_session(net_addr_t& remote)
             {
+                RouterID rid{remote.pubkey().data()};
+
                 if constexpr (std::is_same_v<decltype(remote), NetworkAddress>)
                 {
-                    if (auto maybe_pk = remote.pubkey())
-                    {
-                        RouterID rid{maybe_pk.data()};
-                        return initiate_session(rid);
-                    }
+                    return initiate_session(rid, true, false);
                 }
                 if constexpr (std::is_same_v<decltype(remote), RelayAddress>)
                 {
-                    RouterID rid{remote.pubkey().data()};
                     return initiate_session(rid, false, true);
                 }
 
@@ -142,6 +139,10 @@ namespace llarp
 
           private:
             bool initiate_session(RouterID remote, bool is_exit = false, bool is_snode = false);
+
+            void make_session_path(RouterID remote, bool is_exit, bool is_snode);
+
+            void make_session(RouterID remote, std::shared_ptr<path::Path> path, bool is_exit, bool is_snode);
         };
     }  // namespace handlers
 }  // namespace llarp

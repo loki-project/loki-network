@@ -1376,6 +1376,7 @@ namespace llarp
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }
+
             if (!std::equal(digest.begin(), digest.end(), hash.data()))
             {
                 log::info(logcat, "HMAC mismatch on path build request");

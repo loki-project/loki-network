@@ -16,6 +16,7 @@ namespace llarp::handlers
     {
       private:
         bool _is_exit_node{false};
+        bool _is_snode_service{false};  // TODO:
         bool _is_v4;
 
         std::string _name;
@@ -31,10 +32,10 @@ namespace llarp::handlers
         std::chrono::milliseconds _last_introset_regen_attempt{0s};
 
         // From config -- only in exit mode
-        std::set<IPRange> _owned_ranges;
+        std::set<IPRange> _routed_ranges;
 
       public:
-        LocalEndpoint(Router& r);
+        LocalEndpoint(std::string name, Router& r);
 
         ~LocalEndpoint() override = default;
 

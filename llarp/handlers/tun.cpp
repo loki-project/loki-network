@@ -301,7 +301,6 @@ namespace llarp::handlers
 
         _dns_config = dnsConf;
         _traffic_policy = conf.traffic_policy;
-        _owned_ranges = conf._owned_ranges;
 
         _base_ipv6_range = conf._base_ipv6_range;
 
@@ -312,7 +311,7 @@ namespace llarp::handlers
         else
             _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
 
-        for (const auto& item : conf._remote_exit_ip_routing)
+        for (const auto& item : conf._reserved_local_addrs)
         {
             (void)item;
             // if (not map_address(item.second, item.first, false))
@@ -328,7 +327,7 @@ namespace llarp::handlers
 
         _persisting_addr_file = conf.addr_map_persist_file;
 
-        if (conf.addr_map_persist_file and not(conf._persisting_clients.empty() and conf._persisting_relays.empty()))
+        if (conf.addr_map_persist_file and not conf._persisting_addrs.empty())
         {
         }
 
