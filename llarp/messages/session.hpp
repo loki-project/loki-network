@@ -8,15 +8,13 @@
 namespace llarp
 {
     /** Fields for initiating sessions:
-        - 'd' : data
-            - 'n' : symmetric nonce
-            - 's' : shared key used to derive symmetric key
-            - 'x' : encrypted payload
-                - 'i' : RouterID of initiator
-                - 's' : SessionTag for current session
-                - 'u' : Authentication field
-                    - bt-encoded dict, values TBD
-        - 'h' : hash of dict 'd'
+        - 'n' : symmetric nonce
+        - 's' : shared key used to derive symmetric key
+        - 'x' : encrypted payload
+            - 'i' : RouterID of initiator
+            - 's' : SessionTag for current session
+            - 'u' : Authentication field
+                - bt-encoded dict, values TBD
     */
     namespace InitiateSession
     {
@@ -60,36 +58,11 @@ namespace llarp
                     throw std::runtime_error{err};
                 }
 
-                std::string data;
-
-                {
-                    oxenc::bt_dict_producer btdp;
-
-                    btdp.append("n", nonce.to_view());
-                    btdp.append("s", shared_key.to_view());
-                    btdp.append("x", payload);
-
-                    data = std::move(btdp).str();
-                }
-
-                std::string hash;
-                hash.reserve(SHORTHASHSIZE);
-
-                if (!crypto::hmac(
-                        reinterpret_cast<uint8_t*>(hash.data()),
-                        reinterpret_cast<uint8_t*>(data.data()),
-                        data.size(),
-                        shared))
-                {
-                    auto err = "Failed to generate HMAC for Session initiation payload!"s;
-                    log::warning(messages::logcat, "{}", err);
-                    throw std::runtime_error{err};
-                }
-
                 oxenc::bt_dict_producer btdp;
 
-                btdp.append("d", data);
-                btdp.append("h", hash);
+                btdp.append("n", nonce.to_view());
+                btdp.append("s", shared_key.to_view());
+                btdp.append("x", payload);
 
                 return std::move(btdp).str();
             }

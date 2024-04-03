@@ -1350,11 +1350,7 @@ namespace llarp
                 return;
             }
 
-            oxenc::bt_dict_consumer frame_info{payload_list.front()};
-            auto frame = frame_info.require<ustring>("FRAME");
-            auto hash = frame_info.require<ustring>("HASH");
-
-            oxenc::bt_dict_consumer hop_dict{frame};
+            oxenc::bt_dict_consumer hop_dict{payload_list.front()};
             auto hop_payload = hop_dict.require<ustring>("ENCRYPTED");
             auto outer_nonce = hop_dict.require<ustring>("NONCE");
             auto other_pubkey = hop_dict.require<ustring>("PUBKEY");
@@ -1364,22 +1360,6 @@ namespace llarp
             if (!crypto::dh_server(shared.data(), other_pubkey.data(), _router.pubkey(), outer_nonce.data()))
             {
                 log::info(logcat, "DH server initialization failed during path build");
-                m.respond(PathBuildMessage::BAD_CRYPTO, true);
-                return;
-            }
-
-            // hash data and check against given hash
-            ShortHash digest;
-            if (!crypto::hmac(digest.data(), frame.data(), frame.size(), shared))
-            {
-                log::error(logcat, "HMAC failed on path build request");
-                m.respond(PathBuildMessage::BAD_CRYPTO, true);
-                return;
-            }
-
-            if (!std::equal(digest.begin(), digest.end(), hash.data()))
-            {
-                log::info(logcat, "HMAC mismatch on path build request");
                 m.respond(PathBuildMessage::BAD_CRYPTO, true);
                 return;
             }

@@ -43,7 +43,7 @@ namespace llarp
         inline const auto BAD_CRYPTO = messages::serialize_response({{messages::STATUS_KEY, bad_crypto}});
 
         /* - For each hop:
-         * SetupHopKeys:
+         * setup_hop_keys:
          *   - Generate Ed keypair for the hop. ("commkey")
          *   - Use that key and the hop's pubkey for DH key exchange (makes "hop.shared")
          *     - Note: this *was* using hop's "enckey" but we're getting rid of that
@@ -53,7 +53,7 @@ namespace llarp
          *     - txID is the path ID for messages coming *from* the client/path origin
          *     - rxID is the path ID for messages going *to* it.
          *
-         * CreateHopInfoFrame:
+         * serialize:
          *   - bt-encode "hop info":
          *     - path lifetime
          *     - protocol version
@@ -67,8 +67,6 @@ namespace llarp
          *   - generate nonce for second encryption
          *   - encrypt "hop info" using this symmetric key
          *   - bt-encode nonce, "framekey" pubkey, encrypted "hop info"
-         *   - hash this bt-encoded string
-         *   - bt-encode hash and the frame in a dict, serialize
          *
          *  all of these "frames" go in a list, along with any needed dummy frames
          */
@@ -134,36 +132,11 @@ namespace llarp
                 throw std::runtime_error{err};
             }
 
-            std::string hashed_data;
-
-            {
-                oxenc::bt_dict_producer btdp;
-
-                btdp.append("ENCRYPTED", hop_info);
-                btdp.append("NONCE", outer_nonce.to_view());
-                btdp.append("PUBKEY", framekey.to_pubkey().to_view());
-
-                hashed_data = std::move(btdp).str();
-            }
-
-            std::string hash;
-            hash.reserve(SHORTHASHSIZE);
-
-            if (!crypto::hmac(
-                    reinterpret_cast<uint8_t*>(hash.data()),
-                    reinterpret_cast<uint8_t*>(hashed_data.data()),
-                    hashed_data.size(),
-                    shared))
-            {
-                auto err = "Failed to generate HMAC for hop info"s;
-                log::warning(messages::logcat, "{}", err);
-                throw std::runtime_error{err};
-            }
-
             oxenc::bt_dict_producer btdp;
 
-            btdp.append("FRAME", hashed_data);
-            btdp.append("HASH", hash);
+            btdp.append("ENCRYPTED", hop_info);
+            btdp.append("NONCE", outer_nonce.to_view());
+            btdp.append("PUBKEY", framekey.to_pubkey().to_view());
 
             return std::move(btdp).str();
         }
