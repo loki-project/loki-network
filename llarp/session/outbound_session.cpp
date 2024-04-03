@@ -129,7 +129,7 @@ namespace llarp::session
 
             if (send_close)
             {
-                log::info(logcat, "Sending close_exit on path {}", p->short_name());
+                log::info(logcat, "Sending close_exit on path {}", p->to_string());
                 send_path_close(p);
             }
 
@@ -158,9 +158,9 @@ namespace llarp::session
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
         if (p->close_exit(_auth->session_key(), p->TXID().bt_encode()))
-            log::info(logcat, "Sent path close on path {}", p->short_name());
+            log::info(logcat, "Sent path close on path {}", p->to_string());
         else
-            log::warning(logcat, "Failed to send path close on path {}", p->short_name());
+            log::warning(logcat, "Failed to send path close on path {}", p->to_string());
     }
 
     bool OutboundSession::is_ready() const

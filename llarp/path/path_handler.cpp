@@ -60,58 +60,6 @@ namespace llarp::path
         : _running{true}, num_paths_desired{num_paths}, _router{_r}, num_hops{_n_hops}
     {}
 
-    /* - For each hop:
-     * SetupHopKeys:
-     *   - Generate Ed keypair for the hop. ("commkey")
-     *   - Use that key and the hop's pubkey for DH key exchange (makes "hop.shared")
-     *     - Note: this *was* using hop's "enckey" but we're getting rid of that
-     *   - hop's "upstream" RouterID is next hop, or that hop's ID if it is terminal hop
-     *   - hop's chacha nonce is hash of symmetric key (hop.shared) from DH
-     *   - hop's "txID" and "rxID" are chosen before this step
-     *     - txID is the path ID for messages coming *from* the client/path origin
-     *     - rxID is the path ID for messages going *to* it.
-     *
-     * CreateHopInfoFrame:
-     *   - bt-encode "hop info":
-     *     - path lifetime
-     *     - protocol version
-     *     - txID
-     *     - rxID
-     *     - nonce
-     *     - upstream hop RouterID
-     *     - ephemeral public key (for DH)
-     *   - generate *second* ephemeral Ed keypair... ("framekey") TODO: why?
-     *   - generate DH symmetric key using "framekey" and hop's pubkey
-     *   - generate nonce for second encryption
-     *   - encrypt "hop info" using this symmetric key
-     *   - bt-encode nonce, "framekey" pubkey, encrypted "hop info"
-     *   - hash this bt-encoded string
-     *   - bt-encode hash and the frame in a dict, serialize
-     *
-     *  all of these "frames" go in a list, along with any needed dummy frames
-     */
-
-    void PathHandler::setup_hop_keys(path::PathHopConfig& hop, const RouterID& nextHop)
-    {
-        // generate key
-        crypto::encryption_keygen(hop.commkey);
-
-        hop.nonce.Randomize();
-        // do key exchange
-        if (!crypto::dh_client(hop.shared, hop.rc.router_id(), hop.commkey, hop.nonce))
-        {
-            auto err = fmt::format("{} failed to generate shared key for path build!", name());
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{std::move(err)};
-        }
-        // generate nonceXOR value self->hop->pathKey
-        ShortHash hash;
-        crypto::shorthash(hash, hop.shared.data(), hop.shared.size());
-        hop.nonceXOR = hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
-
-        hop.upstream = nextHop;
-    }
-
     void PathHandler::add_path(std::shared_ptr<Path> p)
     {
         return add_path(p->pivot_router_id(), p);
@@ -231,77 +179,6 @@ namespace llarp::path
                 ++num;
         }
         return num;
-    }
-
-    std::string PathHandler::create_hop_info_frame(const path::PathHopConfig& hop)
-    {
-        std::string hop_info;
-
-        {
-            oxenc::bt_dict_producer btdp;
-
-            btdp.append("COMMKEY", hop.commkey.to_pubkey().to_view());
-            btdp.append("LIFETIME", path::DEFAULT_LIFETIME.count());
-            btdp.append("NONCE", hop.nonce.to_view());
-            btdp.append("RX", hop.rxID.to_view());
-            btdp.append("TX", hop.txID.to_view());
-            btdp.append("UPSTREAM", hop.upstream.to_view());
-
-            hop_info = std::move(btdp).str();
-        }
-
-        SecretKey framekey;
-        crypto::encryption_keygen(framekey);
-
-        SharedSecret shared;
-        SymmNonce outer_nonce;
-        outer_nonce.Randomize();
-
-        // derive (outer) shared key
-        if (!crypto::dh_client(shared, hop.rc.router_id(), framekey, outer_nonce))
-        {
-            log::error(logcat, "DH client failed during hop info encryption!");
-            throw std::runtime_error{"DH failed during hop info encryption"};
-        }
-
-        // encrypt hop_info (mutates in-place)
-        if (!crypto::xchacha20(reinterpret_cast<uint8_t*>(hop_info.data()), hop_info.size(), shared, outer_nonce))
-        {
-            log::error(logcat, "Hop info encryption failed!");
-            throw std::runtime_error{"Hop info encryption failed"};
-        }
-
-        std::string hashed_data;
-
-        {
-            oxenc::bt_dict_producer btdp;
-
-            btdp.append("ENCRYPTED", hop_info);
-            btdp.append("NONCE", outer_nonce.to_view());
-            btdp.append("PUBKEY", framekey.to_pubkey().to_view());
-
-            hashed_data = std::move(btdp).str();
-        }
-
-        std::string hash;
-        hash.reserve(SHORTHASHSIZE);
-
-        if (!crypto::hmac(
-                reinterpret_cast<uint8_t*>(hash.data()),
-                reinterpret_cast<uint8_t*>(hashed_data.data()),
-                hashed_data.size(),
-                shared))
-        {
-            log::error(logcat, "Failed to generate HMAC for hop info");
-            throw std::runtime_error{"Failed to generate HMAC for hop info"};
-        }
-
-        oxenc::bt_dict_producer btdp;
-
-        btdp.append("FRAME", hashed_data);
-        btdp.append("HASH", hash);
-
-        return std::move(btdp).str();
     }
 
     void PathHandler::reset_path_state()
@@ -630,12 +507,12 @@ namespace llarp::path
         return false;
     }
 
-    void PathHandler::build(std::vector<RemoteRC> hops)
+    std::shared_ptr<Path> PathHandler::build1(std::vector<RemoteRC>& hops)
     {
         if (is_stopped())
         {
             log::info(logcat, "Path builder is stopped, aborting path build...");
-            return;
+            return nullptr;
         }
 
         _last_build = llarp::time_now_ms();
@@ -645,7 +522,7 @@ namespace llarp::path
         if (not _router.pathbuild_limiter().Attempt(edge))
         {
             log::warning(logcat, "{} building too quickly to edge router {}", name(), edge);
-            return;
+            return nullptr;
         }
 
         {
@@ -654,17 +531,19 @@ namespace llarp::path
             if (auto [it, b] = _paths.try_emplace(terminus, nullptr); not b)
             {
                 log::error(logcat, "Pending build to {} already underway... aborting...", terminus);
-                return;
+                return nullptr;
             }
         }
 
-        std::string path_shortName = "[path " + _router.ShortName() + "-";
-        path_shortName = path_shortName + std::to_string(_router.NextPathBuildNumber()) + "]";
+        auto path = std::make_shared<path::Path>(_router, hops, get_weak());
 
-        auto path = std::make_shared<path::Path>(_router, hops, get_weak(), std::move(path_shortName));
+        log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
 
-        log::info(logcat, "{} building path -> {} : {}", name(), path->short_name(), path->HopsString());
+        return path;
+    }
 
+    std::string PathHandler::build2(std::shared_ptr<Path>& path)
+    {
         oxenc::bt_list_producer frames;
         std::vector<std::string> frame_str(path::MAX_LEN);
         auto& path_hops = path->hops;
@@ -737,45 +616,54 @@ namespace llarp::path
         _router.path_context().AddOwnPath(get_self(), path);
         _build_stats.attempts++;
 
-        // TODO:
-        // Path build fail and success are handled poorly at best and changing how we
-        // handle these responses as well as how we store and use Paths as a whole might
-        // be worth doing sooner rather than later.  Leaving some TODOs below where fail
-        // and success live.
-        auto response_cb = [this, path, terminus](oxen::quic::message m) {
-            if (m)
-            {
-                path_build_succeeded(terminus, path);
-                return;
-            }
+        return std::move(frames).str();
+    }
 
-            try
-            {
-                // TODO: inform failure (what this means needs revisiting, badly)
-                if (m.timed_out)
-                {
-                    log::warning(logcat, "Path build request timed out!");
-                    path_build_failed(terminus, path, true);
-                }
-                else
-                {
-                    oxenc::bt_dict_consumer d{m.body()};
-                    auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                    log::warning(logcat, "Path build returned failure status: {}", status);
-                    path_build_failed(terminus, path);
-                }
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Exception caught parsing path build response: {}", e.what());
-            }
-        };
+    bool PathHandler::build3(
+        std::shared_ptr<Path>& path, std::string payload, std::function<void(oxen::quic::message)> handler)
+    {
+        return _router.send_control_message(path->upstream(), "path_build", std::move(payload), std::move(handler));
+    }
 
-        if (not _router.send_control_message(
-                path->upstream(), "path_build", std::move(frames).str(), std::move(response_cb)))
+    void PathHandler::build(std::vector<RemoteRC> hops)
+    {
+        if (auto new_path = build1(hops); new_path != nullptr)
         {
-            log::warning(logcat, "Error sending path_build control message");
-            path_build_failed(terminus, path);
+            auto payload = build2(new_path);
+            auto terminus = new_path->terminus();
+
+            if (not build3(new_path, std::move(payload), [this, new_path, terminus](oxen::quic::message m) {
+                    if (m)
+                    {
+                        path_build_succeeded(terminus, new_path);
+                        return;
+                    }
+
+                    try
+                    {
+                        // TODO: inform failure (what this means needs revisiting, badly)
+                        if (m.timed_out)
+                        {
+                            log::warning(logcat, "Path build request timed out!");
+                            path_build_failed(terminus, new_path, true);
+                        }
+                        else
+                        {
+                            oxenc::bt_dict_consumer d{m.body()};
+                            auto status = d.require<std::string_view>(messages::STATUS_KEY);
+                            log::warning(logcat, "Path build returned failure status: {}", status);
+                            path_build_failed(terminus, new_path);
+                        }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::warning(logcat, "Exception caught parsing path build response: {}", e.what());
+                    }
+                }))
+            {
+                log::warning(logcat, "Error sending path_build control message");
+                path_build_failed(terminus, new_path);
+            }
         }
     }
 
@@ -823,7 +711,7 @@ namespace llarp::path
 
     void PathHandler::path_died(std::shared_ptr<Path> p)
     {
-        log::warning(logcat, "{} path {} died post-build", name(), p->short_name());
+        log::warning(logcat, "{} path {} died post-build", name(), p->to_string());
         _build_stats.path_fails++;
     }
 

@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#include <llarp/util/formattable.hpp>
+#include <llarp/util/concept.hpp>
 
 #include <oxenc/bt_serialize.h>
 
@@ -106,11 +106,8 @@ namespace llarp
     };
 
     template <typename local_t>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>;
+    concept CONCEPT_COMPAT LocalAddrType =
+        std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>;
 }  //  namespace llarp
 
 namespace std

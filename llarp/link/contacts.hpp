@@ -24,7 +24,9 @@ namespace llarp
       public:
         Contacts(Router& r);
 
-        std::optional<service::EncryptedIntroSet> get_introset_by_location(const dht::Key_t& key) const;
+        std::optional<service::EncryptedIntroSet> get_introset(RouterID remote) const;
+
+        std::optional<service::EncryptedIntroSet> get_introset(const dht::Key_t& key) const;
 
         // TODO: rename every ExtractStatus function to be uniformly snake cased
         StatusObject ExtractStatus() const;

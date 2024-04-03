@@ -1,6 +1,6 @@
 #pragma once
 
-// #include <oxen/log/format.hpp>
+#include "concept.hpp"
 
 #include <fmt/format.h>
 #include <oxen/quic/format.hpp>
@@ -14,11 +14,7 @@ namespace llarp
 {
     // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
     template <typename T>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            ToStringFormattable = oxen::quic::ToStringFormattable<T>;
+    concept CONCEPT_COMPAT ToStringFormattable = oxen::quic::ToStringFormattable<T>;
 
 #ifndef __cpp_lib_is_scoped_enum
     template <typename T, bool = std::is_enum_v<T>>
@@ -34,15 +30,11 @@ namespace llarp
 #endif
 
     template <typename T>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            ScopedEnum_t =
+    concept CONCEPT_COMPAT ScopedEnum_t =
 #ifdef __cpp_lib_is_scoped_enum
-                std::is_scoped_enum_v<T>;
+        std::is_scoped_enum_v<T>;
 #else
-            is_scoped_enum_v<T>;
+        is_scoped_enum_v<T>;
 #endif
 
 }  // namespace llarp

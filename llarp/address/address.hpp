@@ -5,6 +5,7 @@
 
 #include <llarp/service/name.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/concept.hpp>
 #include <llarp/util/fs.hpp>
 
 #include <oxen/quic.hpp>
@@ -139,11 +140,7 @@ namespace llarp
     };
 
     template <typename addr_t>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
+    concept CONCEPT_COMPAT NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
 
 }  // namespace llarp
 

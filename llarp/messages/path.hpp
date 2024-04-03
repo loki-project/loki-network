@@ -4,6 +4,7 @@
 
 namespace llarp
 {
+
     namespace PathData
     {
         // this might be totally superfluous, but if we want to add more to the data messages,
@@ -41,6 +42,36 @@ namespace llarp
         inline const auto BAD_PATHID = messages::serialize_response({{messages::STATUS_KEY, bad_pathid}});
         inline const auto BAD_CRYPTO = messages::serialize_response({{messages::STATUS_KEY, bad_crypto}});
 
+        /* - For each hop:
+         * SetupHopKeys:
+         *   - Generate Ed keypair for the hop. ("commkey")
+         *   - Use that key and the hop's pubkey for DH key exchange (makes "hop.shared")
+         *     - Note: this *was* using hop's "enckey" but we're getting rid of that
+         *   - hop's "upstream" RouterID is next hop, or that hop's ID if it is terminal hop
+         *   - hop's chacha nonce is hash of symmetric key (hop.shared) from DH
+         *   - hop's "txID" and "rxID" are chosen before this step
+         *     - txID is the path ID for messages coming *from* the client/path origin
+         *     - rxID is the path ID for messages going *to* it.
+         *
+         * CreateHopInfoFrame:
+         *   - bt-encode "hop info":
+         *     - path lifetime
+         *     - protocol version
+         *     - txID
+         *     - rxID
+         *     - nonce
+         *     - upstream hop RouterID
+         *     - ephemeral public key (for DH)
+         *   - generate *second* ephemeral Ed keypair... ("framekey") TODO: why?
+         *   - generate DH symmetric key using "framekey" and hop's pubkey
+         *   - generate nonce for second encryption
+         *   - encrypt "hop info" using this symmetric key
+         *   - bt-encode nonce, "framekey" pubkey, encrypted "hop info"
+         *   - hash this bt-encoded string
+         *   - bt-encode hash and the frame in a dict, serialize
+         *
+         *  all of these "frames" go in a list, along with any needed dummy frames
+         */
         inline static void setup_hop_keys(path::PathHopConfig& hop, const RouterID& nextHop)
         {
             // generate key

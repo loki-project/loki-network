@@ -2,6 +2,7 @@
 
 #include <llarp/crypto/constants.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/concept.hpp>
 
 /** TODO:
     - re-configure string_view and ustring_view methods after deprecating RouterID
@@ -94,11 +95,7 @@ namespace llarp
     };
 
     template <typename addr_t>
-    concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-        bool
-#endif
-            RemotePubKeyType = std::is_base_of_v<PubKey, addr_t>;
+    concept CONCEPT_COMPAT RemotePubKeyType = std::is_base_of_v<PubKey, addr_t>;
 
     template <RemotePubKeyType addr_t>
     addr_t make_from_hex(const std::string& str)

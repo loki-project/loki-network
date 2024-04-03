@@ -1219,11 +1219,6 @@ namespace llarp
         _loop->call_later(200ms, [this] { AfterStopIssued(); });
     }
 
-    std::string Router::ShortName() const
-    {
-        return RouterID(pubkey()).to_string().substr(0, 8);
-    }
-
     uint32_t Router::NextPathBuildNumber()
     {
         return _path_build_count++;

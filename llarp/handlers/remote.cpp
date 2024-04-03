@@ -213,112 +213,39 @@ namespace llarp::handlers
         auto& hops = *maybe_hops;
         assert(remote == hops.back().router_id());
 
-        std::string path_shortName = "[path " + _router.ShortName() + "-";
-        path_shortName = path_shortName + std::to_string(_router.NextPathBuildNumber()) + "]";
+        auto path = std::make_shared<path::Path>(_router, hops, get_weak());
 
-        auto path = std::make_shared<path::Path>(_router, hops, get_weak(), std::move(path_shortName));
+        log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
 
-        log::info(logcat, "{} building path -> {} : {}", name(), path->short_name(), path->HopsString());
+        auto payload = build2(path);
 
-        oxenc::bt_list_producer frames;
-        std::vector<std::string> frame_str(path::MAX_LEN);
-        auto& path_hops = path->hops;
-        size_t n_hops = path_hops.size();
-        size_t last_len{0};
-
-        // each hop will be able to read the outer part of its frame and decrypt
-        // the inner part with that information.  It will then do an onion step on the
-        // remaining frames so the next hop can read the outer part of its frame,
-        // and so on.  As this de-onion happens from hop 1 to n, we create and onion
-        // the frames from hop n downto 1 (i.e. reverse order).  The first frame is
-        // not onioned.
-        //
-        // Onion-ing the frames in this way will prevent relays controlled by
-        // the same entity from knowing they are part of the same path
-        // (unless they're adjacent in the path; nothing we can do about that obviously).
-
-        // i from n_hops downto 0
-        size_t i = n_hops;
-
-        while (i > 0)
-        {
-            i--;
-            bool lastHop = (i == (n_hops - 1));
-
-            const auto& next_hop = lastHop ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
-
-            PathBuildMessage::setup_hop_keys(path_hops[i], next_hop);
-            frame_str[i] = PathBuildMessage::serialize(path_hops[i]);
-
-            // all frames should be the same length...not sure what that is yet
-            // it may vary if path lifetime is non-default, as that is encoded as an
-            // integer in decimal, but it should be constant for a given path
-            if (last_len != 0)
-                assert(frame_str[i].size() == last_len);
-
-            last_len = frame_str[i].size();
-
-            // onion each previously-created frame using the established shared secret and
-            // onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR, which the transit hop
-            // will have recovered after decrypting its frame.
-            // Note: final value passed to crypto::onion is xor factor, but that's for *after* the
-            // onion round to compute the return value, so we don't care about it.
-            for (size_t j = n_hops - 1; j > i; j--)
-            {
-                auto onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
-                crypto::onion(
-                    reinterpret_cast<unsigned char*>(frame_str[j].data()),
-                    frame_str[j].size(),
-                    path_hops[i].shared,
-                    onion_nonce,
-                    onion_nonce);
-            }
-        }
-
-        std::string dummy;
-        dummy.reserve(last_len);
-        // append dummy frames; path build request must always have MAX_LEN frames
-        for (i = n_hops; i < path::MAX_LEN; i++)
-        {
-            frame_str[i].resize(last_len);
-            randombytes(reinterpret_cast<uint8_t*>(frame_str[i].data()), frame_str[i].size());
-        }
-
-        for (auto& str : frame_str)  // NOLINT
-        {
-            frames.append(std::move(str));
-        }
-
-        auto response_cb = [this, path, remote, is_exit, is_snode](oxen::quic::message m) {
-            if (m)
-            {
-                log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
-                make_session(remote, std::move(path), is_exit, is_snode);
-                return;
-            }
-
-            try
-            {
-                if (m.timed_out)
+        if (not build3(path, std::move(payload), [this, path, remote, is_exit, is_snode](oxen::quic::message m) {
+                if (m)
                 {
-                    log::warning(logcat, "Path build request for session initiation timed out!");
+                    log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
+                    make_session(remote, std::move(path), is_exit, is_snode);
+                    return;
                 }
-                else
-                {
-                    oxenc::bt_dict_consumer d{m.body()};
-                    auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                    log::warning(logcat, "Path build returned failure status: {}", status);
-                }
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(
-                    logcat, "Exception caught parsing path build response for session initiation: {}", e.what());
-            }
-        };
 
-        if (not _router.send_control_message(
-                path->upstream(), "path_build", std::move(frames).str(), std::move(response_cb)))
+                try
+                {
+                    if (m.timed_out)
+                    {
+                        log::warning(logcat, "Path build request for session initiation timed out!");
+                    }
+                    else
+                    {
+                        oxenc::bt_dict_consumer d{m.body()};
+                        auto status = d.require<std::string_view>(messages::STATUS_KEY);
+                        log::warning(logcat, "Path build returned failure status: {}", status);
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(
+                        logcat, "Exception caught parsing path build response for session initiation: {}", e.what());
+                }
+            }))
         {
             log::warning(logcat, "Error sending path_build control message for session initiation");
         }
@@ -331,7 +258,7 @@ namespace llarp::handlers
 
         auto counter = std::make_shared<size_t>(NUM_ONS_LOOKUP_PATHS);
 
-        // loop call here:
+        // TODO: check if we have the intro first!
         _router.loop()->call([this, remote, is_exit, is_snode, counter]() {
             lookup_intro(
                 remote, false, 0, [this, remote, is_exit, is_snode, counter](std::optional<service::IntroSet> enc) {

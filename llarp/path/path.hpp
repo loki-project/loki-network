@@ -47,11 +47,7 @@ namespace llarp
 
             std::chrono::milliseconds buildStarted = 0s;
 
-            Path(
-                Router& rtr,
-                const std::vector<RemoteRC>& routers,
-                std::weak_ptr<PathHandler> parent,
-                std::string shortName);
+            Path(Router& rtr, const std::vector<RemoteRC>& routers, std::weak_ptr<PathHandler> parent);
 
             std::shared_ptr<Path> get_self()
             {
@@ -70,7 +66,7 @@ namespace llarp
                 last_recv_msg = std::max(now, last_recv_msg);
             }
 
-            const std::string& short_name() const;
+            std::string to_string() const;
 
             std::string HopsString() const;
 
@@ -147,6 +143,8 @@ namespace llarp
 
             RouterID upstream() const;
 
+            RouterID terminus() const;
+
             std::string name() const;
 
             bool operator<(const Path& other) const;
@@ -169,7 +167,6 @@ namespace llarp
             std::chrono::milliseconds last_recv_msg = 0s;
             std::chrono::milliseconds last_latency_test = 0s;
             uint64_t last_latency_test_id = 0;
-            const std::string _short_name;
         };
     }  // namespace path
 }  // namespace llarp

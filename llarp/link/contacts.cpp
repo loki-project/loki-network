@@ -5,14 +5,18 @@
 
 namespace llarp
 {
-    Contacts::Contacts(Router& r) : _router{r}, _local_key{r.pubkey()}
+    Contacts::Contacts(Router& r) : _router{r}, _local_key{dht::Key_t::derive_from_rid(r.pubkey())}
     {
         timer_keepalive = std::make_shared<int>(0);
-
         _introset_nodes = std::make_unique<dht::Bucket<dht::ISNode>>(_local_key, llarp::randint);
     }
 
-    std::optional<service::EncryptedIntroSet> Contacts::get_introset_by_location(const dht::Key_t& key) const
+    std::optional<service::EncryptedIntroSet> Contacts::get_introset(RouterID remote) const
+    {
+        return get_introset(dht::Key_t::derive_from_rid(remote));
+    }
+
+    std::optional<service::EncryptedIntroSet> Contacts::get_introset(const dht::Key_t& key) const
     {
         std::optional<service::EncryptedIntroSet> enc = std::nullopt;
 

@@ -5,6 +5,7 @@
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
 #include <llarp/path/path_handler.hpp>
+#include <llarp/util/concept.hpp>
 
 #include <deque>
 #include <queue>
@@ -182,11 +183,8 @@ namespace llarp
         };
 
         template <typename session_t>
-        concept
-#if (!(defined(__clang__)) && defined(__GNUC__) && __GNUC__ < 10)
-            bool
-#endif
-                SessionType = std::is_same_v<OutboundSession, session_t> || std::is_same_v<InboundSession, session_t>;
+        concept CONCEPT_COMPAT SessionType =
+            std::is_same_v<OutboundSession, session_t> || std::is_same_v<InboundSession, session_t>;
 
     }  // namespace session
 }  // namespace llarp

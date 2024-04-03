@@ -1285,7 +1285,7 @@ namespace llarp
         }
         else
         {
-            if (auto maybe_intro = _router.contacts().get_introset_by_location(addr))
+            if (auto maybe_intro = _router.contacts().get_introset(addr))
                 respond(serialize_response({{"INTROSET", maybe_intro->bt_encode()}}));
             else
             {

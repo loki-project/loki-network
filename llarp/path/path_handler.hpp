@@ -96,10 +96,6 @@ namespace llarp
 
             void associate_hop_ids(std::shared_ptr<Path> p);
 
-            void setup_hop_keys(path::PathHopConfig& hop, const RouterID& nextHop);
-
-            std::string create_hop_info_frame(const path::PathHopConfig& hop);
-
           protected:
             void dissociate_hop_ids(std::shared_ptr<Path> p);
 
@@ -234,6 +230,25 @@ namespace llarp
 
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
                 const RouterID& endpoint, const std::set<RouterID>& exclude = {});
+
+            // The build logic is segmented into functions designed to be called sequentially.
+            //  - build1() : This can be re-implemented by inheriting classes that want to pass off possession of the
+            //      newly created Path object, rather than emplacing it within its internal path mapping. This is useful
+            //      in cases like session initiation, where RemoteHandler wants to hand off the newly created path to
+            //      the OutboundSession object. Regardless, the implementation needs to return the created shared_ptr to
+            //      be passed by reference to build2(...) and build3(...).
+            //  - build2() : This contains the bulk of the code that is identical across all instances of path building.
+            //      It returns the payload holding the encoded frames for each hop.
+            //  - build3() : Inheriting classes can pass their own response handler functions as the second parameter,
+            //      allowing for differing lambda captures. This function returns the success/failure of the call to
+            //      path::send_control_message(...), allowing for the calling object to decide whether to log path-build
+            //      failures for that respective remote or not
+            std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);
+
+            std::string build2(std::shared_ptr<Path>& path);
+
+            bool build3(
+                std::shared_ptr<Path>& path, std::string payload, std::function<void(oxen::quic::message)> handler);
 
             void build(std::vector<RemoteRC> hops);
 

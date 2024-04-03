@@ -467,8 +467,6 @@ namespace llarp
         /// count the number of unique clients connected by pubkey
         size_t num_client_connections() const;
 
-        std::string ShortName() const;
-
         uint32_t NextPathBuildNumber();
 
         void AfterStopLinks();

@@ -11,8 +11,8 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("path");
 
-    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, std::string shortName)
-        : handler{std::move(pathset)}, _router{rtr}, _short_name{std::move(shortName)}
+    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset)
+        : handler{std::move(pathset)}, _router{rtr}
     {
         hops.resize(h.size());
         size_t hsz = h.size();
@@ -208,9 +208,14 @@ namespace llarp::path
         return hops[0].rc.router_id();
     }
 
-    const std::string& Path::short_name() const
+    RouterID Path::terminus() const
     {
-        return _short_name;
+        return hops.back().rc.router_id();
+    }
+
+    std::string Path::to_string() const
+    {
+        return "RID:{} -- TX:{}/RX:{}"_format(_router.local_rid(), TXID().to_view(), RXID().to_view());
     }
 
     std::string Path::HopsString() const
@@ -297,7 +302,7 @@ namespace llarp::path
             for (const auto& hop : hops)
                 new_hops.emplace_back(hop.rc);
 
-            log::info(logcat, "{} rebuilding on {}", name(), short_name());
+            log::info(logcat, "{} rebuilding on {}", name(), to_string());
             parent->build(new_hops);
         }
     }
