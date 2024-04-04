@@ -4,7 +4,6 @@
 
 namespace llarp
 {
-
     namespace PathData
     {
         // this might be totally superfluous, but if we want to add more to the data messages,
@@ -30,6 +29,8 @@ namespace llarp
 
     namespace PathBuildMessage
     {
+        static auto logcat = llarp::log::Cat("path-build");
+
         inline auto bad_frames = "BAD_FRAMES"sv;
         inline auto bad_crypto = "BAD_CRYPTO"sv;
         inline auto no_transit = "NOT ALLOWING TRANSIT"sv;
@@ -42,81 +43,50 @@ namespace llarp
         inline const auto BAD_PATHID = messages::serialize_response({{messages::STATUS_KEY, bad_pathid}});
         inline const auto BAD_CRYPTO = messages::serialize_response({{messages::STATUS_KEY, bad_crypto}});
 
-        /* - For each hop:
-         * setup_hop_keys:
-         *   - Generate Ed keypair for the hop. ("commkey")
-         *   - Use that key and the hop's pubkey for DH key exchange (makes "hop.shared")
-         *     - Note: this *was* using hop's "enckey" but we're getting rid of that
-         *   - hop's "upstream" RouterID is next hop, or that hop's ID if it is terminal hop
-         *   - hop's chacha nonce is hash of symmetric key (hop.shared) from DH
-         *   - hop's "txID" and "rxID" are chosen before this step
-         *     - txID is the path ID for messages coming *from* the client/path origin
-         *     - rxID is the path ID for messages going *to* it.
-         *
-         * serialize:
-         *   - bt-encode "hop info":
-         *     - path lifetime
-         *     - protocol version
-         *     - txID
-         *     - rxID
-         *     - nonce
-         *     - upstream hop RouterID
-         *     - ephemeral public key (for DH)
-         *   - generate *second* ephemeral Ed keypair... ("framekey") TODO: why?
-         *   - generate DH symmetric key using "framekey" and hop's pubkey
-         *   - generate nonce for second encryption
-         *   - encrypt "hop info" using this symmetric key
-         *   - bt-encode nonce, "framekey" pubkey, encrypted "hop info"
-         *
-         *  all of these "frames" go in a list, along with any needed dummy frames
-         */
-        inline static void setup_hop_keys(path::PathHopConfig& hop, const RouterID& nextHop)
+        /** For each hop:
+            - Generate an Ed keypair for the hop (`shared_key`)
+            - Generate a symmetric nonce for subsequent DH
+            - Derive the shared secret (`hop.shared`) for DH key-exchange using the ED keypair, hop pubkey, and
+                symmetric nonce
+            - Encrypt the hop info in-place using `hop.shared` and the generated symmetric nonce from DH
+            - Generate the XOR nonce by hashing the symmetric key from DH (`hop.shared`) and truncating
+
+            Bt-encoded contents:
+            - 'n' : symmetric nonce used for DH ey-exchange
+            - 's' : shared pubkey used to derive symmetric key
+            - 'x' : encrypted payload
+                - 'l' : path lifetime
+                - 'r' : rxID (the path ID for messages going *to* the hop)
+                - 't' : txID (the path ID for messages coming *from* the client/path origin)
+                - 'u' : upstream hop RouterID
+
+            All of these 'frames' are inserted sequentially into the list and padded with any needed dummy frames
+        */
+        inline static std::string serialize_hop(path::PathHopConfig& hop, const RouterID& nextHop)
         {
-            // generate key
-            crypto::encryption_keygen(hop.commkey);
-
-            hop.nonce.Randomize();
-            // do key exchange
-            if (!crypto::dh_client(hop.shared, hop.rc.router_id(), hop.commkey, hop.nonce))
-            {
-                auto err = fmt::format("Failed to generate shared key for path build!");
-                log::warning(messages::logcat, "{}", err);
-                throw std::runtime_error{std::move(err)};
-            }
-            // generate nonceXOR value self->hop->pathKey
-            ShortHash hash;
-            crypto::shorthash(hash, hop.shared.data(), hop.shared.size());
-            hop.nonceXOR = hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
-
-            hop.upstream = nextHop;
-        }
-
-        inline static std::string serialize(const path::PathHopConfig& hop)
-        {
-            std::string hop_info;
+            std::string hop_payload;
 
             {
                 oxenc::bt_dict_producer btdp;
 
-                btdp.append("COMMKEY", hop.commkey.to_pubkey().to_view());
-                btdp.append("LIFETIME", path::DEFAULT_LIFETIME.count());
-                btdp.append("NONCE", hop.nonce.to_view());
-                btdp.append("RX", hop.rxID.to_view());
-                btdp.append("TX", hop.txID.to_view());
-                btdp.append("UPSTREAM", hop.upstream.to_view());
+                btdp.append("l", path::DEFAULT_LIFETIME.count());
+                btdp.append("r", hop.rxID.to_view());
+                btdp.append("t", hop.txID.to_view());
+                btdp.append("u", hop.upstream.to_view());
 
-                hop_info = std::move(btdp).str();
+                hop_payload = std::move(btdp).str();
             }
 
-            SecretKey framekey;
-            crypto::encryption_keygen(framekey);
+            SecretKey shared_key;
+            crypto::encryption_keygen(shared_key);
 
-            SharedSecret shared;
-            SymmNonce outer_nonce;
-            outer_nonce.Randomize();
+            // SharedSecret shared;
+            // SymmNonce nonce;
+            // nonce.Randomize();
+            hop.nonce = SymmNonce::make_random();
 
-            // derive (outer) shared key
-            if (!crypto::dh_client(shared, hop.rc.router_id(), framekey, outer_nonce))
+            // derive shared key
+            if (!crypto::dh_client(hop.shared, hop.rc.router_id(), shared_key, hop.nonce))
             {
                 auto err = "DH client failed during hop info encryption!"s;
                 log::warning(messages::logcat, "{}", err);
@@ -125,36 +95,110 @@ namespace llarp
 
             // encrypt hop_info (mutates in-place)
             if (!crypto::xchacha20(
-                    reinterpret_cast<unsigned char*>(hop_info.data()), hop_info.size(), shared, outer_nonce))
+                    reinterpret_cast<unsigned char*>(hop_payload.data()), hop_payload.size(), hop.shared, hop.nonce))
             {
                 auto err = "Hop info encryption failed!"s;
                 log::warning(messages::logcat, "{}", err);
                 throw std::runtime_error{err};
             }
 
+            // generate nonceXOR value self->hop->pathKey
+            ShortHash hash;
+            crypto::shorthash(hash, hop.shared.data(), hop.shared.size());
+
+            hop.nonceXOR = hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+            hop.upstream = nextHop;
+
             oxenc::bt_dict_producer btdp;
 
-            btdp.append("ENCRYPTED", hop_info);
-            btdp.append("NONCE", outer_nonce.to_view());
-            btdp.append("PUBKEY", framekey.to_pubkey().to_view());
+            btdp.append("n", hop.nonce.to_view());
+            btdp.append("s", shared_key.to_pubkey().to_view());
+            btdp.append("x", hop_payload);
 
             return std::move(btdp).str();
         }
+
+        inline static std::tuple<ustring, ustring, ustring> deserialize_hop(
+            oxenc::bt_dict_consumer& btdc, const RouterID& local_pubkey)
+        {
+            ustring nonce, other_pubkey, hop_payload;
+
+            try
+            {
+                nonce = btdc.require<ustring>("n");
+                other_pubkey = btdc.require<ustring>("s");
+                hop_payload = btdc.require<ustring>("x");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing hop dict:{}", e.what());
+                throw;
+            }
+
+            SharedSecret shared;
+            // derive shared secret using ephemeral pubkey and our secret key (and nonce)
+            if (!crypto::dh_server(shared.data(), other_pubkey.data(), local_pubkey.data(), nonce.data()))
+            {
+                log::info(logcat, "DH server initialization failed during path build");
+                throw std::runtime_error{BAD_CRYPTO};
+            }
+
+            // decrypt frame with our hop info
+            if (!crypto::xchacha20(hop_payload.data(), hop_payload.size(), shared.data(), nonce.data()))
+            {
+                log::info(logcat, "Decrypt failed on path build request");
+                throw std::runtime_error{BAD_CRYPTO};
+            }
+
+            return {std::move(nonce), std::move(other_pubkey), std::move(hop_payload)};
+        }
     }  // namespace PathBuildMessage
 
-    namespace RelayCommitMessage
-    {}
+    namespace Onion
+    {
+        static auto logcat = llarp::log::Cat("onion");
 
-    namespace RelayStatusMessage
-    {}
+        /** Bt-encoded contents:
+            - 'h' : HopID of the next layer of the onion
+            - 'n' : Symmetric nonce used to encrypt the layer
+            - 'x' : Encrypted payload transmitted to next recipient
+        */
+        inline static std::string serialize(
+            const SymmNonce& nonce, const HopID& hop_id, const std::string_view& payload)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("h", hop_id.to_view());
+            btdp.append("n", nonce.to_view());
+            btdp.append("x", payload);
 
-    namespace PathConfirmMessage
-    {}
+            return std::move(btdp).str();
+        }
 
-    namespace PathLatencyMessage
-    {}
+        inline static std::string serialize(const SymmNonce& nonce, const HopID& hop_id, const ustring_view& payload)
+        {
+            return serialize(
+                nonce, hop_id, std::string_view{reinterpret_cast<const char*>(payload.data()), payload.size()});
+        }
 
-    namespace PathTransferMessage
-    {}
+        inline static std::tuple<ustring, ustring, ustring> deserialize(oxenc::bt_dict_consumer& btdc)
+        {
+            ustring hopid, nonce, payload;
+
+            try
+            {
+                hopid = btdc.require<ustring>("h");
+                nonce = btdc.require<ustring>("n");
+                payload = btdc.require<ustring>("x");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                throw;
+            }
+
+            return {std::move(hopid), std::move(nonce), std::move(payload)};
+        }
+
+    }  //  namespace Onion
 
 }  // namespace llarp

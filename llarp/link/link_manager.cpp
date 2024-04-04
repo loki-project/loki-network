@@ -1343,6 +1343,7 @@ namespace llarp
         try
         {
             auto payload_list = oxenc::bt_deserialize<std::deque<ustring>>(m.body());
+
             if (payload_list.size() != path::MAX_LEN)
             {
                 log::info(logcat, "Path build message with wrong number of frames");
@@ -1351,80 +1352,12 @@ namespace llarp
             }
 
             oxenc::bt_dict_consumer hop_dict{payload_list.front()};
-            auto hop_payload = hop_dict.require<ustring>("ENCRYPTED");
-            auto outer_nonce = hop_dict.require<ustring>("NONCE");
-            auto other_pubkey = hop_dict.require<ustring>("PUBKEY");
 
-            SharedSecret shared;
-            // derive shared secret using ephemeral pubkey and our secret key (and nonce)
-            if (!crypto::dh_server(shared.data(), other_pubkey.data(), _router.pubkey(), outer_nonce.data()))
-            {
-                log::info(logcat, "DH server initialization failed during path build");
-                m.respond(PathBuildMessage::BAD_CRYPTO, true);
-                return;
-            }
-
-            // decrypt frame with our hop info
-            if (!crypto::xchacha20(hop_payload.data(), hop_payload.size(), shared.data(), outer_nonce.data()))
-            {
-                log::info(logcat, "Decrypt failed on path build request");
-                m.respond(PathBuildMessage::BAD_CRYPTO, true);
-                return;
-            }
+            auto [nonce, other_pubkey, hop_payload] = PathBuildMessage::deserialize_hop(hop_dict, _router.local_rid());
 
             oxenc::bt_dict_consumer hop_info{hop_payload};
-            auto commkey = hop_info.require<std::string>("COMMKEY");
-            auto lifetime = hop_info.require<uint64_t>("LIFETIME");
-            auto inner_nonce = hop_info.require<ustring>("NONCE");
-            auto rx_id = hop_info.require<std::string>("RX");
-            auto tx_id = hop_info.require<std::string>("TX");
-            auto upstream = hop_info.require<std::string>("UPSTREAM");
 
-            // populate transit hop object with hop info
-            // TODO: IP / path build limiting clients
-            auto hop = std::make_shared<path::TransitHop>();
-            hop->info.downstream = from;
-
-            // extract pathIDs and check if zero or used
-            hop->info.txID.from_string(tx_id);
-            hop->info.rxID.from_string(rx_id);
-
-            if (hop->info.txID.is_zero() || hop->info.rxID.is_zero())
-            {
-                log::warning(logcat, "Invalid PathID; PathIDs must be non-zero");
-                m.respond(PathBuildMessage::BAD_PATHID, true);
-                return;
-            }
-
-            hop->info.upstream.from_snode_address(upstream);
-
-            if (_router.path_context().has_transit_hop(hop->info))
-            {
-                log::warning(logcat, "Invalid PathID; PathIDs must be unique");
-                m.respond(PathBuildMessage::BAD_PATHID, true);
-                return;
-            }
-
-            if (!crypto::dh_server(hop->pathKey.data(), other_pubkey.data(), _router.pubkey(), inner_nonce.data()))
-            {
-                log::warning(logcat, "DH failed during path build.");
-                m.respond(PathBuildMessage::BAD_CRYPTO, true);
-                return;
-            }
-            // generate hash of hop key for nonce mutation
-            ShortHash xor_hash;
-            crypto::shorthash(xor_hash, hop->pathKey.data(), hop->pathKey.size());
-            hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
-
-            // set and check path lifetime
-            hop->lifetime = 1ms * lifetime;
-
-            if (hop->lifetime >= path::DEFAULT_LIFETIME)
-            {
-                log::warning(logcat, "Path build attempt with too long of a lifetime.");
-                m.respond(PathBuildMessage::BAD_LIFETIME, true);
-                return;
-            }
+            auto hop = path::TransitHop::deserialize_hop(hop_info, from, _router, other_pubkey, nonce);
 
             hop->started = _router.now();
             _router.persist_connection_until(hop->info.downstream, hop->ExpireTime() + 10s);
@@ -1441,14 +1374,15 @@ namespace llarp
             // pop our frame, to be randomized after onion step and appended
             auto end_frame = std::move(payload_list.front());
             payload_list.pop_front();
-            auto onion_nonce = SymmNonce{inner_nonce.data()} ^ hop->nonceXOR;
+            auto onion_nonce = SymmNonce{nonce.data()} ^ hop->nonceXOR;
+
             // (de-)onion each further frame using the established shared secret and
-            // onion_nonce = inner_nonce ^ nonceXOR
+            // onion_nonce = nonce ^ nonceXOR
             // Note: final value passed to crypto::onion is xor factor, but that's for *after* the
             // onion round to compute the return value, so we don't care about it.
             for (auto& element : payload_list)
             {
-                crypto::onion(element.data(), element.size(), hop->pathKey, onion_nonce, onion_nonce);
+                crypto::onion(element.data(), element.size(), hop->shared, onion_nonce, onion_nonce);
             }
             // randomize final frame.  could probably paste our frame on the end and onion it with
             // the rest, but it gains nothing over random.
@@ -1480,7 +1414,9 @@ namespace llarp
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
+            // We can respond with the exception string, as all exceptions thrown in the parsing functions
+            // (ex: `TransitHop::deserialize_hop(...)`) contain the correct response bodies
+            m.respond(e.what(), true);
             return;
         }
     }
@@ -1777,15 +1713,12 @@ namespace llarp
 
     void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& from)
     {
-        ustring_view nonce, path_id_str;
-        std::string payload;
+        ustring nonce, hop_id_str, payload;
 
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            nonce = btdc.require<ustring_view>("NONCE");
-            path_id_str = btdc.require<ustring_view>("PATHID");
-            payload = btdc.require<std::string>("PAYLOAD");
+            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
         }
         catch (const std::exception& e)
         {
@@ -1793,8 +1726,8 @@ namespace llarp
             return;
         }
 
-        auto symnonce = SymmNonce{nonce.data()};
-        auto hop_id = HopID{path_id_str.data()};
+        auto symmnonce = SymmNonce{nonce.data()};
+        auto hop_id = HopID{hop_id_str.data()};
         auto hop = _router.path_context().GetTransitHop(from, hop_id);
 
         // TODO: use "path_control" for both directions?  If not, drop message on
@@ -1803,18 +1736,22 @@ namespace llarp
         if (not hop)
             return;
 
+        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
+
         // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
         if (hop->terminal_hop)
         {
-            hop->onion(payload, symnonce, false);
-            handle_inner_request(std::move(m), std::move(payload), std::move(hop));
+            handle_inner_request(
+                std::move(m),
+                std::string{reinterpret_cast<const char*>(payload.data()), payload.size()},
+                std::move(hop));
             return;
         }
 
         auto& next_id = hop_id == hop->info.rxID ? hop->info.txID : hop->info.rxID;
         auto& next_router = hop_id == hop->info.rxID ? hop->info.upstream : hop->info.downstream;
 
-        std::string new_payload = hop->onion_and_payload(payload, next_id, symnonce);
+        std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
 
         send_control_message(
             next_router,
@@ -1827,14 +1764,12 @@ namespace llarp
                 if (not hop)
                     return;
 
-                ustring_view nonce;
-                std::string payload, response_body;
+                ustring hop_id, nonce, payload;
 
                 try
                 {
                     oxenc::bt_dict_consumer btdc{response.body()};
-                    nonce = btdc.require<ustring_view>("NONCE");
-                    payload = btdc.require<std::string>("PAYLOAD");
+                    std::tie(hop_id, nonce, payload) = Onion::deserialize(btdc);
                 }
                 catch (const std::exception& e)
                 {
@@ -1842,8 +1777,8 @@ namespace llarp
                     return;
                 }
 
-                auto symnonce = SymmNonce{nonce.data()};
-                auto resp_payload = hop->onion_and_payload(payload, hop_id, symnonce);
+                auto symmnonce = SymmNonce{nonce.data()};
+                auto resp_payload = Onion::serialize(symmnonce, HopID{hop_id.data()}, payload);
                 prev_message.respond(std::move(resp_payload), false);
             });
     }
@@ -1879,7 +1814,8 @@ namespace llarp
             if (not hop)
                 return;  // transit hop gone, drop response
 
-            m.respond(hop->onion_and_payload(response, hop->info.rxID), false);
+            auto n = SymmNonce::make_random();
+            m.respond(Onion::serialize(n, hop->info.rxID, response), false);
         };
 
         std::invoke(itr->second, this, std::move(body), std::move(respond));

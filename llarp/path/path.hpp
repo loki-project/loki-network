@@ -1,6 +1,5 @@
 #pragma once
 
-#include "abstracthophandler.hpp"
 #include "path_handler.hpp"
 
 #include <llarp/constants/path.hpp>
@@ -37,7 +36,7 @@ namespace llarp
         struct PathHopConfig;
 
         /// A path we made
-        struct Path final : public AbstractHopHandler, public std::enable_shared_from_this<Path>
+        struct Path final : public std::enable_shared_from_this<Path>
         {
             std::vector<PathHopConfig> hops;
 
@@ -70,7 +69,7 @@ namespace llarp
 
             std::string HopsString() const;
 
-            std::chrono::milliseconds LastRemoteActivityAt() const override
+            std::chrono::milliseconds LastRemoteActivityAt() const
             {
                 return last_recv_msg;
             }
@@ -86,7 +85,7 @@ namespace llarp
                 return buildStarted + hops[0].lifetime;
             }
 
-            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const override
+            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const
             {
                 return now >= (ExpireTime() - dlt);
             }
@@ -97,7 +96,7 @@ namespace llarp
 
             bool update_exit(uint64_t tx_id);
 
-            bool is_expired(std::chrono::milliseconds now) const override;
+            bool is_expired(std::chrono::milliseconds now) const;
 
             /// build a new path on the same set of hops as us
             /// regenerates keys
@@ -127,9 +126,9 @@ namespace llarp
             /// func is called with a bt-encoded response string (if applicable), and
             /// a timeout flag (if set, response string will be empty)
             bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr) override;
+                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
 
-            bool send_path_data_message(std::string body) override;
+            bool send_path_data_message(std::string body);
 
             bool IsReady() const;
 
@@ -139,7 +138,7 @@ namespace llarp
 
             const RouterID& pivot_router_id() const;
 
-            HopID RXID() const override;
+            HopID RXID() const;
 
             RouterID upstream() const;
 

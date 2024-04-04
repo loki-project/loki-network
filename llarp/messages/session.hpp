@@ -9,7 +9,7 @@ namespace llarp
 {
     /** Fields for initiating sessions:
         - 'n' : symmetric nonce
-        - 's' : shared key used to derive symmetric key
+        - 's' : shared pubkey used to derive symmetric key
         - 'x' : encrypted payload
             - 'i' : RouterID of initiator
             - 's' : SessionTag for current session
@@ -61,7 +61,7 @@ namespace llarp
                 oxenc::bt_dict_producer btdp;
 
                 btdp.append("n", nonce.to_view());
-                btdp.append("s", shared_key.to_view());
+                btdp.append("s", shared_key.to_pubkey().to_view());
                 btdp.append("x", payload);
 
                 return std::move(btdp).str();

@@ -47,7 +47,7 @@ namespace llarp
             zero();
         }
 
-        explicit AlignedBuffer(const uint8_t* data)
+        AlignedBuffer(const uint8_t* data)
         {
             *this = data;
         }

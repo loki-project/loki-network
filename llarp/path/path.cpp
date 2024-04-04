@@ -115,7 +115,7 @@ namespace llarp::path
                 reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
         }
 
-        return make_onion_payload(nonce, TXID(), payload);
+        return Onion::serialize(nonce, TXID(), payload);
     }
 
     bool Path::send_path_data_message(std::string body)
@@ -147,14 +147,12 @@ namespace llarp::path
                     return;
                 }
 
-                SymmNonce nonce{};
-                std::string payload;
+                ustring hop_id_str, symmnonce, payload;
+
                 try
                 {
                     oxenc::bt_dict_consumer btdc{m.body()};
-
-                    auto nonce = SymmNonce{btdc.require<ustring_view>("NONCE").data()};
-                    auto payload = btdc.require<std::string>("PAYLOAD");
+                    std::tie(hop_id_str, symmnonce, payload) = Onion::deserialize(btdc);
                 }
                 catch (const std::exception& e)
                 {
@@ -162,6 +160,8 @@ namespace llarp::path
                     response_cb(messages::ERROR_RESPONSE);
                     return;
                 }
+
+                SymmNonce nonce{symmnonce.data()};
 
                 for (const auto& hop : self->hops)
                 {
@@ -177,7 +177,7 @@ namespace llarp::path
                 //       response is sensible (e.g. is a bt dict)?  Parsing and handling of the
                 //       contents (errors or otherwise) is the currently responsibility of the
                 //       callback.
-                response_cb(payload);
+                response_cb(std::string{reinterpret_cast<const char*>(payload.data()), payload.size()});
             });
     }
 

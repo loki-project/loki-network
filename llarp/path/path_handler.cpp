@@ -571,8 +571,8 @@ namespace llarp::path
 
             const auto& next_hop = lastHop ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
 
-            PathBuildMessage::setup_hop_keys(path_hops[i], next_hop);
-            frame_str[i] = PathBuildMessage::serialize(path_hops[i]);
+            // PathBuildMessage::setup_hop_keys(path_hops[i], next_hop);
+            frame_str[i] = PathBuildMessage::serialize_hop(path_hops[i], next_hop);
 
             // all frames should be the same length...not sure what that is yet
             // it may vary if path lifetime is non-default, as that is encoded as an
@@ -590,6 +590,7 @@ namespace llarp::path
             for (size_t j = n_hops - 1; j > i; j--)
             {
                 auto onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
+
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frame_str[j].data()),
                     frame_str[j].size(),

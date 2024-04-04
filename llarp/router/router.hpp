@@ -430,7 +430,7 @@ namespace llarp
 
         const uint8_t* pubkey() const
         {
-            return seckey_to_pubkey(_identity);
+            return local_rid().data();
         }
 
         /// send to remote router or queue for sending

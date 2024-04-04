@@ -99,12 +99,25 @@ namespace llarp
     using LongHash = AlignedBuffer<HASHSIZE>;
 
     struct Signature final : public AlignedBuffer<SIGSIZE>
+    {};
+
+    // using SymmNonce = AlignedBuffer<NONCESIZE>;
+
+    struct SymmNonce final : public AlignedBuffer<NONCESIZE>
     {
-        //
+        using AlignedBuffer<NONCESIZE>::AlignedBuffer;
+
+        SymmNonce operator^(const SymmNonce& other) const
+        {
+            SymmNonce ret;
+            std::transform(begin(), end(), other.begin(), ret.begin(), std::bit_xor<>());
+            return ret;
+        }
+
+        static SymmNonce make_random();
     };
 
     using TunnelNonce = AlignedBuffer<TUNNONCESIZE>;
-    using SymmNonce = AlignedBuffer<NONCESIZE>;
     using SymmKey = AlignedBuffer<32>;  // not used
 
     using PQCipherBlock = AlignedBuffer<PQ_CIPHERTEXTSIZE + 1>;

@@ -243,6 +243,8 @@ namespace llarp
             //      allowing for differing lambda captures. This function returns the success/failure of the call to
             //      path::send_control_message(...), allowing for the calling object to decide whether to log path-build
             //      failures for that respective remote or not
+            //  - build() : This function calls build{1,2,3} in the correct order and is used for the usual times that
+            //      PathBuilder initiates a path build
             std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);
 
             std::string build2(std::shared_ptr<Path>& path);

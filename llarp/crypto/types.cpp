@@ -115,4 +115,12 @@ namespace llarp
 
         return true;
     }
+
+    SymmNonce SymmNonce::make_random()
+    {
+        SymmNonce n;
+        n.Randomize();
+        return n;
+    }
+
 }  // namespace llarp

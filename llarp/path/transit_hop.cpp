@@ -1,51 +1,67 @@
 #include "transit_hop.hpp"
 
+#include <llarp/messages/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/buffer.hpp>
+#include <llarp/util/time.hpp>
 
 namespace llarp::path
 {
+    static auto logcat = log::Cat("transit-hop");
+
+    TransitHopInfo::TransitHopInfo(RouterID down) : downstream{std::move(down)}
+    {}
+
+    std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
+        oxenc::bt_dict_consumer& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce)
+    {
+        std::shared_ptr<TransitHop> hop;
+
+        uint64_t lifetime;
+        std::string rx_id, tx_id, upstream;
+
+        try
+        {
+            lifetime = btdc.require<uint64_t>("l");
+            rx_id = btdc.require<std::string>("r");
+            tx_id = btdc.require<std::string>("t");
+            upstream = btdc.require<std::string>("u");
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "TransitHop caught bt parsing exception:{}", e.what());
+            throw std::runtime_error{messages::ERROR_RESPONSE};
+        }
+
+        hop->info.txID.from_string(tx_id);
+        hop->info.rxID.from_string(rx_id);
+
+        if (hop->info.rxID.is_zero() || hop->info.txID.is_zero())
+            throw std::runtime_error{PathBuildMessage::BAD_PATHID};
+
+        hop->info.downstream = src;
+        hop->info.upstream.from_snode_address(upstream);
+
+        if (r.path_context().has_transit_hop(hop->info))
+            throw std::runtime_error{PathBuildMessage::BAD_PATHID};
+
+        if (!crypto::dh_server(hop->shared.data(), symmkey.data(), r.pubkey(), symmnonce.data()))
+            throw std::runtime_error{PathBuildMessage::BAD_CRYPTO};
+
+        // generate hash of hop key for nonce mutation
+        ShortHash xor_hash;
+        crypto::shorthash(xor_hash, hop->shared.data(), hop->shared.size());
+        hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+
+        if (hop->lifetime = 1ms * lifetime; hop->lifetime >= path::DEFAULT_LIFETIME)
+            throw std::runtime_error{PathBuildMessage::BAD_LIFETIME};
+
+        return hop;
+    }
+
     std::string TransitHopInfo::to_string() const
     {
         return fmt::format("[TransitHopInfo tx={} rx={} upstream={} downstream={}]", txID, rxID, upstream, downstream);
-    }
-
-    TransitHop::TransitHop() : AbstractHopHandler{}
-    {}
-
-    void TransitHop::onion(ustring& data, SymmNonce& nonce, bool randomize) const
-    {
-        if (randomize)
-            nonce.Randomize();
-        nonce = crypto::onion(data.data(), data.size(), pathKey, nonce, nonceXOR);
-    }
-
-    void TransitHop::onion(std::string& data, SymmNonce& nonce, bool randomize) const
-    {
-        if (randomize)
-            nonce.Randomize();
-        nonce = crypto::onion(reinterpret_cast<unsigned char*>(data.data()), data.size(), pathKey, nonce, nonceXOR);
-    }
-
-    std::string TransitHop::onion_and_payload(std::string& payload, HopID next_id, std::optional<SymmNonce> nonce) const
-    {
-        SymmNonce n;
-        auto& nref = nonce ? *nonce : n;
-        onion(payload, nref, not nonce);
-
-        return make_onion_payload(nref, next_id, payload);
-    }
-
-    // TODO: if we want terminal/pivot hops to be able to *initiate* a request rather than
-    //       simply responding/reacting to the client end's requests, these will need
-    //       an implementation.
-    bool TransitHop::send_path_control_message(std::string, std::string, std::function<void(std::string)>)
-    {
-        return true;
-    }
-    bool TransitHop::send_path_data_message(std::string)
-    {
-        return true;
     }
 
     bool TransitHop::is_expired(std::chrono::milliseconds now) const
@@ -57,33 +73,6 @@ namespace llarp::path
     {
         return started + lifetime;
     }
-
-    TransitHopInfo::TransitHopInfo(RouterID down) : downstream{std::move(down)}
-    {}
-
-    /* TODO: replace this with layer of onion + send data message
-    bool TransitHop::SendRoutingMessage(std::string payload, Router* r)
-    {
-      if (!IsEndpoint(r->pubkey()))
-        return false;
-
-      TunnelNonce N;
-      N.Randomize();
-      // pad to nearest MESSAGE_PAD_SIZE bytes
-      auto dlt = payload.size() % PAD_SIZE;
-
-      if (dlt)
-      {
-        dlt = PAD_SIZE - dlt;
-        // randomize padding
-        crypto::randbytes(reinterpret_cast<uint8_t*>(payload.data()), dlt);
-      }
-
-      // TODO: relay message along
-
-      return true;
-    }
-    */
 
     std::string TransitHop::to_string() const
     {

@@ -32,20 +32,27 @@ namespace llarp
 
         /// path dh creator's side
         bool dh_client(SharedSecret&, const PubKey&, const SecretKey&, const SymmNonce&);
+
         /// path dh relay side
         bool dh_server(SharedSecret&, const PubKey&, const SecretKey&, const SymmNonce&);
         bool dh_server(uint8_t* shared_secret, const uint8_t* other_pk, const uint8_t* local_pk, const uint8_t* nonce);
+
         /// blake2b 256 bit
         bool shorthash(ShortHash&, uint8_t*, size_t size);
+
         /// blake2s 256 bit hmac
         bool hmac(uint8_t*, uint8_t*, size_t, const SharedSecret&);
+
         /// ed25519 sign
         bool sign(Signature&, const SecretKey&, uint8_t* buf, size_t size);
+
         /// ed25519 sign, using pointers
         bool sign(uint8_t* sig, uint8_t* sk, uint8_t* buf, size_t size);
         bool sign(uint8_t* sig, const SecretKey& sk, ustring_view buf);
+
         /// ed25519 sign (custom with derived keys)
         bool sign(Signature&, const PrivateKey&, uint8_t* buf, size_t size);
+
         /// ed25519 verify
         bool verify(const PubKey&, ustring_view, ustring_view);
         bool verify(const PubKey&, uint8_t*, size_t, const Signature&);
@@ -64,16 +71,22 @@ namespace llarp
 
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);
+
         /// randomizer memory
         void randbytes(uint8_t*, size_t);
+
         /// generate signing keypair
         void identity_keygen(SecretKey&);
+
         /// generate encryption keypair
         void encryption_keygen(SecretKey&);
+
         /// generate post quantum encrytion key
         void pqe_keygen(PQKeyPair&);
+
         /// post quantum decrypt (buffer, sharedkey_dst, sec)
         bool pqe_decrypt(const PQCipherBlock&, SharedSecret&, const uint8_t*);
+
         /// post quantum encrypt (buffer, sharedkey_dst,  pub)
         bool pqe_encrypt(PQCipherBlock&, SharedSecret&, const PQPubKey&);
 
