@@ -18,12 +18,32 @@ namespace llarp
 
     namespace PathControl
     {
+        static auto logcat = llarp::log::Cat("path-control");
+
         inline static std::string serialize(std::string method, std::string body)
         {
             oxenc::bt_dict_producer btdp;
             btdp.append("BODY", body);
             btdp.append("METHOD", method);
             return std::move(btdp).str();
+        }
+
+        inline static std::tuple<std::string, std::string> deserialize(oxenc::bt_dict_consumer& btdc)
+        {
+            std::string body, method;
+
+            try
+            {
+                body = btdc.require<std::string>("BODY");
+                method = btdc.require<std::string>("METHOD");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                throw;
+            }
+
+            return {std::move(body), std::move(method)};
         }
     }  // namespace PathControl
 
@@ -80,27 +100,10 @@ namespace llarp
             SecretKey shared_key;
             crypto::encryption_keygen(shared_key);
 
-            // SharedSecret shared;
-            // SymmNonce nonce;
-            // nonce.Randomize();
             hop.nonce = SymmNonce::make_random();
 
-            // derive shared key
-            if (!crypto::dh_client(hop.shared, hop.rc.router_id(), shared_key, hop.nonce))
-            {
-                auto err = "DH client failed during hop info encryption!"s;
-                log::warning(messages::logcat, "{}", err);
-                throw std::runtime_error{err};
-            }
-
-            // encrypt hop_info (mutates in-place)
-            if (!crypto::xchacha20(
-                    reinterpret_cast<unsigned char*>(hop_payload.data()), hop_payload.size(), hop.shared, hop.nonce))
-            {
-                auto err = "Hop info encryption failed!"s;
-                log::warning(messages::logcat, "{}", err);
-                throw std::runtime_error{err};
-            }
+            crypto::derive_encrypt_outer_wrapping(
+                shared_key, hop.shared, hop.nonce, hop.rc.router_id(), to_usv(hop_payload));
 
             // generate nonceXOR value self->hop->pathKey
             ShortHash hash;
@@ -153,52 +156,4 @@ namespace llarp
             return {std::move(nonce), std::move(other_pubkey), std::move(hop_payload)};
         }
     }  // namespace PathBuildMessage
-
-    namespace Onion
-    {
-        static auto logcat = llarp::log::Cat("onion");
-
-        /** Bt-encoded contents:
-            - 'h' : HopID of the next layer of the onion
-            - 'n' : Symmetric nonce used to encrypt the layer
-            - 'x' : Encrypted payload transmitted to next recipient
-        */
-        inline static std::string serialize(
-            const SymmNonce& nonce, const HopID& hop_id, const std::string_view& payload)
-        {
-            oxenc::bt_dict_producer btdp;
-            btdp.append("h", hop_id.to_view());
-            btdp.append("n", nonce.to_view());
-            btdp.append("x", payload);
-
-            return std::move(btdp).str();
-        }
-
-        inline static std::string serialize(const SymmNonce& nonce, const HopID& hop_id, const ustring_view& payload)
-        {
-            return serialize(
-                nonce, hop_id, std::string_view{reinterpret_cast<const char*>(payload.data()), payload.size()});
-        }
-
-        inline static std::tuple<ustring, ustring, ustring> deserialize(oxenc::bt_dict_consumer& btdc)
-        {
-            ustring hopid, nonce, payload;
-
-            try
-            {
-                hopid = btdc.require<ustring>("h");
-                nonce = btdc.require<ustring>("n");
-                payload = btdc.require<ustring>("x");
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
-                throw;
-            }
-
-            return {std::move(hopid), std::move(nonce), std::move(payload)};
-        }
-
-    }  //  namespace Onion
-
 }  // namespace llarp

@@ -28,15 +28,50 @@ namespace llarp
         inline const auto OK_RESPONSE = serialize_response({{STATUS_KEY, "OK"}});
     }  // namespace messages
 
-    /// abstract base class for serialized messages
-    struct AbstractSerializable
+    namespace Onion
     {
-        virtual std::string bt_encode() const = 0;
-        virtual void bt_encode(oxenc::bt_dict_producer& btdp) const = 0;
-    };
+        static auto logcat = llarp::log::Cat("onion");
 
-    struct AbstractMessageHandler
-    {
-        virtual bool handle_message(AbstractSerializable&) = 0;
-    };
+        /** Bt-encoded contents:
+            - 'h' : HopID of the next layer of the onion
+            - 'n' : Symmetric nonce used to encrypt the layer
+            - 'x' : Encrypted payload transmitted to next recipient
+        */
+        inline static std::string serialize(
+            const SymmNonce& nonce, const HopID& hop_id, const std::string_view& payload)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("h", hop_id.to_view());
+            btdp.append("n", nonce.to_view());
+            btdp.append("x", payload);
+
+            return std::move(btdp).str();
+        }
+
+        inline static std::string serialize(const SymmNonce& nonce, const HopID& hop_id, const ustring_view& payload)
+        {
+            return serialize(
+                nonce, hop_id, std::string_view{reinterpret_cast<const char*>(payload.data()), payload.size()});
+        }
+
+        inline static std::tuple<ustring, ustring, ustring> deserialize(oxenc::bt_dict_consumer& btdc)
+        {
+            ustring hopid, nonce, payload;
+
+            try
+            {
+                hopid = btdc.require<ustring>("h");
+                nonce = btdc.require<ustring>("n");
+                payload = btdc.require<ustring>("x");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                throw;
+            }
+
+            return {std::move(hopid), std::move(nonce), std::move(payload)};
+        }
+    }  //  namespace Onion
+
 }  // namespace llarp

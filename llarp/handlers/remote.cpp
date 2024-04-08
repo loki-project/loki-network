@@ -184,7 +184,7 @@ namespace llarp::handlers
         // TODO: pass auth values from config to ::serialize after deciding what they are
         path->send_path_control_message(
             "session_init",
-            InitiateSession::serialize(_router.local_rid(), remote, tag),
+            InitiateSession::serialize(_router.local_rid(), remote, tag, auth),
             [this, remote, tag, path, auth](std::string response) {
                 // TODO: this will change after defining ::handle_session_init() function
                 if (response == messages::OK_RESPONSE)

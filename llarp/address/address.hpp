@@ -32,11 +32,11 @@ namespace llarp
 
         explicit NetworkAddress(std::string_view addr, std::string_view tld);
 
+      public:
         template <RemotePubKeyType pubkey_t>
         explicit NetworkAddress(pubkey_t pubkey, std::string_view tld) : NetworkAddress{pubkey.to_view(), tld}
         {}
 
-      public:
         NetworkAddress() = default;
         ~NetworkAddress() = default;
 

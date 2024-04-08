@@ -607,6 +607,7 @@ namespace llarp
             return;
 
         persisting_conns[remote] = std::max(until, persisting_conns[remote]);
+
         if (have_client_connection_to(remote))
         {
             // mark this as a client so we don't try to back connect
@@ -1384,6 +1385,7 @@ namespace llarp
             {
                 crypto::onion(element.data(), element.size(), hop->shared, onion_nonce, onion_nonce);
             }
+
             // randomize final frame.  could probably paste our frame on the end and onion it with
             // the rest, but it gains nothing over random.
             randombytes(end_frame.data(), end_frame.size());
@@ -1786,13 +1788,12 @@ namespace llarp
     void LinkManager::handle_inner_request(
         oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
     {
-        std::string_view body, method;
+        std::string body, method;
 
         try
         {
             oxenc::bt_dict_consumer btdc{payload};
-            body = btdc.require<std::string_view>("BODY");
-            method = btdc.require<std::string_view>("METHOD");
+            std::tie(body, method) = PathControl::deserialize(btdc);
         }
         catch (const std::exception& e)
         {

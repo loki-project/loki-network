@@ -153,7 +153,9 @@ namespace llarp
             bool operator!=(const Path& other) const;
 
           private:
-            std::string make_outer_payload(std::string payload);
+            std::string make_outer_payload(ustring_view payload);
+
+            std::string make_outer_payload(ustring_view payload, SymmNonce& nonce);
 
             bool SendLatencyMessage(Router* r);
 

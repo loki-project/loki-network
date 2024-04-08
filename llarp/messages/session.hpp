@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/auth/auth.hpp>
 #include <llarp/util/logging/buffer.hpp>
 
 namespace llarp
@@ -18,7 +19,8 @@ namespace llarp
     */
     namespace InitiateSession
     {
-        inline static std::string serialize(RouterID local, RouterID remote, service::SessionTag tag)
+        inline static std::string serialize(
+            RouterID local, RouterID remote, service::SessionTag tag, std::shared_ptr<auth::SessionAuthPolicy>& auth)
         {
             try
             {
@@ -30,7 +32,8 @@ namespace llarp
                     btdp.append("i", local.to_view());
                     btdp.append("s", tag.to_view());
                     // DISCUSS: this auth field
-                    btdp.append("u", "");
+                    if (auto token = auth->fetch_auth_token())
+                        btdp.append("u", *token);
 
                     payload = std::move(btdp).str();
                 }
@@ -39,24 +42,9 @@ namespace llarp
                 crypto::encryption_keygen(shared_key);
 
                 SharedSecret shared;
-                SymmNonce nonce;
-                nonce.Randomize();
+                auto nonce = SymmNonce::make_random();
 
-                // derive (outer) shared key
-                if (!crypto::dh_client(shared, remote, shared_key, nonce))
-                {
-                    auto err = "DH client failed during session initiation!"s;
-                    log::warning(messages::logcat, "{}", err);
-                    throw std::runtime_error{"err"};
-                }
-
-                // encrypt hop_info (mutates in-place)
-                if (!crypto::xchacha20(reinterpret_cast<unsigned char*>(payload.data()), payload.size(), shared, nonce))
-                {
-                    auto err = "Session initiation payload encryption failed!"s;
-                    log::warning(messages::logcat, "{}", err);
-                    throw std::runtime_error{err};
-                }
+                crypto::derive_encrypt_outer_wrapping(shared_key, shared, nonce, remote, to_usv(payload));
 
                 oxenc::bt_dict_producer btdp;
 

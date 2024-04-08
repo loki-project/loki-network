@@ -22,15 +22,8 @@ namespace llarp
             HopID txID, rxID;
             // router contact of router
             RemoteRC rc;
-
-            // temp public encryption key
-            // SecretKey commkey;  // TONUKE:
             /// nonce for key exchange
-            // SymmNonce nonce;    // TONUKE:
-
-            // added as a potential solution
             SymmNonce nonce;
-
             /// shared secret at this hop
             SharedSecret shared;
             /// hash of shared secret used for nonce mutation

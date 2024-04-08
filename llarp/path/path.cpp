@@ -103,25 +103,29 @@ namespace llarp::path
         // _role &= ePathRoleExit;
     }
 
-    std::string Path::make_outer_payload(std::string payload)
+    std::string Path::make_outer_payload(ustring_view payload, SymmNonce& nonce)
     {
-        SymmNonce nonce;
-        nonce.Randomize();
-
         // chacha and mutate nonce for each hop
         for (const auto& hop : hops)
         {
             nonce = crypto::onion(
-                reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
+                const_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
         }
 
         return Onion::serialize(nonce, TXID(), payload);
     }
 
+    std::string Path::make_outer_payload(ustring_view payload)
+    {
+        auto nonce = SymmNonce::make_random();
+
+        return make_outer_payload(payload, nonce);
+    }
+
     bool Path::send_path_data_message(std::string body)
     {
         auto payload = PathData::serialize(std::move(body));
-        auto outer_payload = make_outer_payload(payload);
+        auto outer_payload = make_outer_payload(to_usv(payload));
 
         return _router.send_data_message(upstream(), std::move(outer_payload));
     }
@@ -129,7 +133,7 @@ namespace llarp::path
     bool Path::send_path_control_message(std::string method, std::string body, std::function<void(std::string)> func)
     {
         auto payload = PathControl::serialize(std::move(method), std::move(body));
-        auto outer_payload = make_outer_payload(payload);
+        auto outer_payload = make_outer_payload(to_usv(payload));
 
         return _router.send_control_message(
             upstream(),

@@ -342,6 +342,7 @@ namespace llarp
                     throw std::invalid_argument{fmt::format("cannot load auth file {}: file does not exist", arg)};
                 auth_files.emplace(std::move(arg));
             });
+
         conf.define_option<std::string>(
             "network",
             "auth-file-type",

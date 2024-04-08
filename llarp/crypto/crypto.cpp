@@ -268,6 +268,30 @@ namespace llarp
         return crypto_sign_verify_detached(sig, buf, size, pub) != -1;
     }
 
+    void crypto::derive_encrypt_outer_wrapping(
+        SecretKey& shared_key,
+        SharedSecret& secret,
+        const SymmNonce& nonce,
+        const RouterID& remote,
+        ustring_view payload)
+    {
+        // derive shared key
+        if (!crypto::dh_client(secret, remote, shared_key, nonce))
+        {
+            auto err = "DH client failed during shared key derivation!"s;
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{"err"};
+        }
+
+        // encrypt hop_info (mutates in-place)
+        if (!crypto::xchacha20(const_cast<unsigned char*>(payload.data()), payload.size(), secret, nonce))
+        {
+            auto err = "Payload symmetric encryption failed!"s;
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+    }
+
     /// clamp a 32 byte ec point
     static void clamp_ed25519(uint8_t* out)
     {

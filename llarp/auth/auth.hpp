@@ -2,6 +2,7 @@
 
 #include "types.hpp"
 
+#include <llarp/address/address.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/service/address.hpp>
 #include <llarp/service/protocol.hpp>
@@ -63,15 +64,18 @@ namespace llarp::auth
 
     struct SessionAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<SessionAuthPolicy>
     {
-      protected:
+      private:
         SecretKey _session_key;
+        NetworkAddress _remote;
         const bool _is_snode_service{false};
         const bool _is_exit_service{false};
 
       public:
-        SessionAuthPolicy(Router& r, bool _snode_service, bool _is_exit = false);
+        SessionAuthPolicy(Router& r, RouterID& remote, bool _snode_service, bool _is_exit = false);
 
         bool load_identity_from_file(const char* fname);
+
+        std::optional<std::string_view> fetch_auth_token();
 
         const SecretKey& session_key() const
         {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "identity.hpp"
-// #include "info.hpp"
 #include "intro.hpp"
 
 #include <llarp/crypto/encrypted.hpp>

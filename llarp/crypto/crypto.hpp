@@ -2,6 +2,7 @@
 
 #include "types.hpp"
 
+#include <llarp/router_id.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <cstdint>
@@ -58,6 +59,16 @@ namespace llarp
         bool verify(const PubKey&, uint8_t*, size_t, const Signature&);
         bool verify(ustring_view, ustring_view, ustring_view);
         bool verify(uint8_t*, uint8_t*, size_t, uint8_t*);
+
+        /// Used in path-build and session initiation messages. Derives a shared secret key for symmetric DH, encrypting
+        /// the given payload inplace. Will throw on failure of either the client DH derivation or the xchacha20
+        /// payload mutation
+        void derive_encrypt_outer_wrapping(
+            SecretKey& shared_key,
+            SharedSecret& secret,
+            const SymmNonce& nonce,
+            const RouterID& remote,
+            ustring_view payload);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
