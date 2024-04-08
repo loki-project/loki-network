@@ -61,7 +61,7 @@ namespace llarp
         bool verify(uint8_t*, uint8_t*, size_t, uint8_t*);
 
         /// Used in path-build and session initiation messages. Derives a shared secret key for symmetric DH, encrypting
-        /// the given payload inplace. Will throw on failure of either the client DH derivation or the xchacha20
+        /// the given payload in-place. Will throw on failure of either the client DH derivation or the xchacha20
         /// payload mutation
         void derive_encrypt_outer_wrapping(
             SecretKey& shared_key,
@@ -69,6 +69,12 @@ namespace llarp
             const SymmNonce& nonce,
             const RouterID& remote,
             ustring_view payload);
+
+        /// Used in receiving path-build and session initiation messages. Derives a shared secret key using an ephemeral
+        /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
+        /// the server DH derivation or the xchacha20 payload mutation
+        void derive_decrypt_outer_wrapping(
+            const RouterID& local, const RouterID& remote, const SymmNonce& nonce, ustring_view encrypted);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.

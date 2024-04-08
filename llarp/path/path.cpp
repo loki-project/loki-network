@@ -11,8 +11,8 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("path");
 
-    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset)
-        : handler{std::move(pathset)}, _router{rtr}
+    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, bool is_session)
+        : handler{std::move(pathset)}, _router{rtr}, _is_session_path{is_session}
     {
         hops.resize(h.size());
         size_t hsz = h.size();

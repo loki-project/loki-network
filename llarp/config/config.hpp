@@ -119,6 +119,7 @@ namespace llarp
 
         std::set<RouterID> snode_blacklist;
 
+        // Used by RemoteHandler to provide auth tokens for remote exits
         std::unordered_map<NetworkAddress, auth::AuthInfo> exit_auths;
         std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
 
@@ -126,8 +127,10 @@ namespace llarp
         auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
         std::optional<std::string> auth_url;
         std::optional<std::string> auth_method;
+
         std::unordered_set<NetworkAddress> auth_whitelist;
         std::unordered_set<std::string> auth_static_tokens;
+
         std::set<fs::path> auth_files;
 
         std::vector<llarp::dns::SRVData> srv_records;
@@ -141,6 +144,9 @@ namespace llarp
         std::optional<fs::path> addr_map_persist_file;
 
         // Pass to TunEndpoint
+        // TODO:
+        //  - make this accept '.snode' addresses
+        //  - does not need to suppport ONS
         std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_addrs;
 
         // only member that refers to an actual interface
@@ -153,14 +159,17 @@ namespace llarp
 
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
-        // Remote client exit addresses mapped to fixed local IP addresses
+        // Remote exit or hidden service addresses mapped to fixed local IP addresses
         // TODO:
+        //  - make this accept '.snode' addresses
+        //  - does not need to support ONS
         //  - pass to TunEndpoint
         //  - create separate "reserved_ips" mapping or load directly into TunEndpoint mapping (probably better)
         //      - when a session is created, check here when assigning IP's
         std::unordered_map<NetworkAddress, oxen::quic::Address> _reserved_local_addrs;
 
-        // Remote client exit addresses mapped to local IP ranges // TODO: make this accept ONS
+        // Remote client exit addresses mapped to local IP ranges
+        // TODO: make this accept ONS
         std::unordered_map<NetworkAddress, IPRange> _exit_ranges;
 
         // Used when in exit mode; pass down to LocalEndpoint

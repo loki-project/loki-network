@@ -98,6 +98,11 @@ namespace llarp::handlers
         _local_introset.supported_protocols.clear();
     }
 
+    void LocalEndpoint::handle_initiation_session(ustring decrypted_payload)
+    {
+        (void)decrypted_payload;
+    }
+
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
     {
         (void)introset;

@@ -46,7 +46,11 @@ namespace llarp
 
             std::chrono::milliseconds buildStarted = 0s;
 
-            Path(Router& rtr, const std::vector<RemoteRC>& routers, std::weak_ptr<PathHandler> parent);
+            Path(
+                Router& rtr,
+                const std::vector<RemoteRC>& routers,
+                std::weak_ptr<PathHandler> parent,
+                bool is_session = false);
 
             std::shared_ptr<Path> get_self()
             {
@@ -146,6 +150,11 @@ namespace llarp
 
             std::string name() const;
 
+            bool is_session_path() const
+            {
+                return _is_session_path;
+            }
+
             bool operator<(const Path& other) const;
 
             bool operator==(const Path& other) const;
@@ -165,6 +174,8 @@ namespace llarp
             std::atomic<bool> _established{false};
 
             Router& _router;
+
+            bool _is_session_path{false};
             std::chrono::milliseconds last_recv_msg = 0s;
             std::chrono::milliseconds last_latency_test = 0s;
             uint64_t last_latency_test_id = 0;

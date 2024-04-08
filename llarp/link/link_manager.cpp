@@ -7,6 +7,7 @@
 #include <llarp/messages/exit.hpp>
 #include <llarp/messages/fetch.hpp>
 #include <llarp/messages/path.hpp>
+#include <llarp/messages/session.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
@@ -1286,7 +1287,7 @@ namespace llarp
         }
         else
         {
-            if (auto maybe_intro = _router.contacts().get_introset(addr))
+            if (auto maybe_intro = _router.contacts().get_encrypted_introset(addr))
                 respond(serialize_response({{"INTROSET", maybe_intro->bt_encode()}}));
             else
             {
@@ -1822,11 +1823,32 @@ namespace llarp
         std::invoke(itr->second, this, std::move(body), std::move(respond));
     }
 
-    void LinkManager::handle_convo_intro(oxen::quic::message m)
+    void LinkManager::handle_initiate_session(oxen::quic::message m)
     {
         if (not m)
         {
-            log::info(logcat, "Path control message timed out!");
+            log::info(logcat, "Initiate session message timed out!");
+            return;
+        }
+
+        try
+        {
+            oxenc::bt_dict_consumer btdc{m.body()};
+            auto decrypted = InitiateSession::deserialize_decrypt(btdc, _router.local_rid());
+            return _router.local_endpoint()->handle_initiation_session(std::move(decrypted));
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return;
+        }
+    }
+
+    void LinkManager::handle_convo_intro(oxen::quic::message m)
+    {
+        if (m.timed_out)
+        {
+            log::info(logcat, "Convo intro message timed out!");
             return;
         }
 
@@ -1839,11 +1861,6 @@ namespace llarp
             log::warning(logcat, "Exception: {}", e.what());
             return;
         }
-    }
-
-    void LinkManager::handle_initiate_session(oxen::quic::message m)
-    {
-        (void)m;
     }
 
 }  // namespace llarp

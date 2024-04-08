@@ -461,7 +461,6 @@ namespace llarp
                 traffic_policy->protocols.emplace(arg);
             });
 
-        // TODO: accept ONS
         conf.define_option<std::string>(
             "network",
             "exit-node",
@@ -619,7 +618,6 @@ namespace llarp
                 }
             });
 
-        // TODO: make this accept '.snode' addresses
         conf.define_option<std::string>(
             "network",
             "mapaddr",

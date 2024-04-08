@@ -1,5 +1,6 @@
 #include "remote.hpp"
 
+#include <llarp/link/contacts.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
 #include <llarp/router/router.hpp>
@@ -81,14 +82,21 @@ namespace llarp::handlers
     void RemoteHandler::lookup_intro(
         RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSet>)> func)
     {
-        log::debug(logcat, "{} looking up introset for remote:{}", name(), remote);
+        if (auto maybe_intro = _router.contacts().get_decrypted_introset(remote))
+        {
+            log::debug(logcat, "{} found decrypted introset locally for remote:{}", name(), remote);
+            return func(std::move(maybe_intro));
+        }
 
+        log::debug(logcat, "{} looking up introset for remote:{}", name(), remote);
         auto remote_key = dht::Key_t::derive_from_rid(remote);
 
-        auto response_handler = [remote, hook = std::move(func)](std::string response) {
+        auto response_handler = [this, remote, hook = std::move(func)](std::string response) {
             if (auto encrypted = service::EncryptedIntroSet::construct(response);
                 auto intro = encrypted->decrypt(remote))
             {
+                log::debug(logcat, "Storing introset for remote:{}", remote);
+                _router.contacts().put_intro(std::move(*encrypted));
                 return hook(std::move(intro));
             }
 
@@ -181,15 +189,15 @@ namespace llarp::handlers
         auto auth = std::make_shared<auth::SessionAuthPolicy>(_router, is_snode, is_exit);
         auto tag = service::SessionTag::make_random();
 
-        // TODO: pass auth values from config to ::serialize after deciding what they are
         path->send_path_control_message(
             "session_init",
-            InitiateSession::serialize(_router.local_rid(), remote, tag, auth),
+            InitiateSession::serialize_encrypt(_router.local_rid(), remote, tag, auth->fetch_auth_token()),
             [this, remote, tag, path, auth](std::string response) {
                 // TODO: this will change after defining ::handle_session_init() function
                 if (response == messages::OK_RESPONSE)
                 {
-                    auto outbound = session::OutboundSession{remote, _router, *this, path, tag, auth};
+                    auto outbound =
+                        session::OutboundSession{remote, *this, std::move(path), std::move(tag), std::move(auth)};
 
                     // emplace outbound in session map
 
@@ -200,54 +208,73 @@ namespace llarp::handlers
             });
     }
 
-    void RemoteHandler::make_session_path(RouterID remote, bool is_exit, bool is_snode)
+    void RemoteHandler::make_session_path(service::IntroductionSet intros, RouterID remote, bool is_exit, bool is_snode)
     {
-        auto maybe_hops = aligned_hops_to_remote(remote);
+        // we can recurse through this function as we remove the first pivot of the set of introductions every
+        // invocation
+        if (intros.empty())
+        {
+            log::critical(
+                logcat, "Exhausted all pivots associated with remote (rid:{}); failed to make session!", remote);
+            return;
+        }
+
+        auto intro = intros.extract(intros.begin()).value();
+        auto pivot = intro.pivot_router;
+
+        log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
+
+        auto maybe_hops = aligned_hops_to_remote(pivot);
 
         if (not maybe_hops)
         {
-            log::error(logcat, "Failed to get hops for path-build to {}", remote);
+            log::error(logcat, "Failed to get hops for path-build to pivot:{}", pivot);
             return;
         }
 
         auto& hops = *maybe_hops;
-        assert(remote == hops.back().router_id());
+        assert(pivot == hops.back().router_id());
 
-        auto path = std::make_shared<path::Path>(_router, hops, get_weak());
+        auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true);
 
         log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
 
         auto payload = build2(path);
 
-        if (not build3(path, std::move(payload), [this, path, remote, is_exit, is_snode](oxen::quic::message m) {
-                if (m)
-                {
-                    log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
-                    make_session(remote, std::move(path), is_exit, is_snode);
-                    return;
-                }
+        if (not build3(
+                path, std::move(payload), [this, path, intros, remote, is_exit, is_snode](oxen::quic::message m) {
+                    if (m)
+                    {
+                        log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
+                        return make_session(std::move(remote), std::move(path), is_exit, is_snode);
+                    }
 
-                try
-                {
-                    if (m.timed_out)
+                    try
                     {
-                        log::warning(logcat, "Path build request for session initiation timed out!");
+                        if (m.timed_out)
+                        {
+                            log::warning(logcat, "Path build request for session initiation timed out!");
+                        }
+                        else
+                        {
+                            oxenc::bt_dict_consumer d{m.body()};
+                            auto status = d.require<std::string_view>(messages::STATUS_KEY);
+                            log::warning(logcat, "Path build returned failure status: {}", status);
+                        }
                     }
-                    else
+                    catch (const std::exception& e)
                     {
-                        oxenc::bt_dict_consumer d{m.body()};
-                        auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                        log::warning(logcat, "Path build returned failure status: {}", status);
+                        log::warning(
+                            logcat,
+                            "Exception caught parsing path build response for session initiation: {}",
+                            e.what());
                     }
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(
-                        logcat, "Exception caught parsing path build response for session initiation: {}", e.what());
-                }
-            }))
+
+                    // recurse with introduction set minus the recently attempted pivot
+                    make_session_path(std::move(intros), std::move(remote), is_exit, is_snode);
+                }))
         {
-            log::warning(logcat, "Error sending path_build control message for session initiation");
+            log::critical(logcat, "Error sending path_build control message for session initiation!");
         }
     }
 
@@ -258,20 +285,18 @@ namespace llarp::handlers
 
         auto counter = std::make_shared<size_t>(NUM_ONS_LOOKUP_PATHS);
 
-        // TODO: check if we have the intro first!
         _router.loop()->call([this, remote, is_exit, is_snode, counter]() {
             lookup_intro(
-                remote, false, 0, [this, remote, is_exit, is_snode, counter](std::optional<service::IntroSet> enc) {
+                remote, false, 0, [this, remote, is_exit, is_snode, counter](std::optional<service::IntroSet> intro) {
                     // already have a successful return
                     if (*counter == 0)
                         return;
 
-                    if (enc)
+                    if (intro)
                     {
-                        // TODO: use returned IntroSet
                         *counter = 0;
                         log::info(logcat, "Session initiation returned successful 'lookup_intro'...");
-                        make_session_path(remote, is_exit, is_snode);
+                        make_session_path(std::move(intro->intros), remote, is_exit, is_snode);
                     }
                     else if (--*counter == 0)
                     {

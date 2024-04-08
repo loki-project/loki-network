@@ -292,6 +292,27 @@ namespace llarp
         }
     }
 
+    void crypto::derive_decrypt_outer_wrapping(
+        const RouterID& local, const RouterID& remote, const SymmNonce& nonce, ustring_view encrypted)
+    {
+        SharedSecret shared;
+        // derive shared secret using ephemeral pubkey and our secret key (and nonce)
+        if (!crypto::dh_server(shared.data(), remote.data(), local.data(), nonce.data()))
+        {
+            auto err = "DH server failed during shared key derivation!"s;
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        // decrypt hop_info (mutates in-place)
+        if (!crypto::xchacha20(const_cast<unsigned char*>(encrypted.data()), encrypted.size(), shared, nonce))
+        {
+            auto err = "Payload symmetric decryption failed!"s;
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+    }
+
     /// clamp a 32 byte ec point
     static void clamp_ed25519(uint8_t* out)
     {

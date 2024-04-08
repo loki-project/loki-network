@@ -116,6 +116,14 @@ namespace llarp
         return true;
     }
 
+    SymmNonce SymmNonce::make(std::string nonce)
+    {
+        SymmNonce n;
+        if (!n.from_string(nonce))
+            throw std::invalid_argument{"Invalid nonce passed to static constructor function:{}"_format(nonce)};
+        return n;
+    }
+
     SymmNonce SymmNonce::make_random()
     {
         SymmNonce n;

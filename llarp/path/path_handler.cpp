@@ -418,7 +418,7 @@ namespace llarp::path
     }
 
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_to_remote(
-        const RouterID& endpoint, const std::set<RouterID>& exclude)
+        const RouterID& pivot, const std::set<RouterID>& exclude)
     {
         const auto& path_config = _router.config()->paths;
 
@@ -437,7 +437,7 @@ namespace llarp::path
         RemoteRC remote_rc;
         to_exclude.insert(remote_rc.router_id());  // we will manually add this last
 
-        if (const auto maybe = _router.node_db()->get_rc(endpoint))
+        if (const auto maybe = _router.node_db()->get_rc(pivot))
         {
             remote_rc = *maybe;
         }
@@ -571,7 +571,6 @@ namespace llarp::path
 
             const auto& next_hop = lastHop ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
 
-            // PathBuildMessage::setup_hop_keys(path_hops[i], next_hop);
             frame_str[i] = PathBuildMessage::serialize_hop(path_hops[i], next_hop);
 
             // all frames should be the same length...not sure what that is yet

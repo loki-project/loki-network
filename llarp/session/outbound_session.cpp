@@ -14,18 +14,17 @@ namespace llarp::session
 
     OutboundSession::OutboundSession(
         RouterID _remote,
-        Router& r,
         handlers::RemoteHandler& parent,
         std::shared_ptr<path::Path> path,
         service::SessionTag _t,
         std::shared_ptr<auth::SessionAuthPolicy> a)
-        : PathHandler{r, NUM_SESSION_PATHS},
+        : PathHandler{parent._router, NUM_SESSION_PATHS},
           _remote_router{std::move(_remote)},
           _auth{std::move(a)},
           _current_path{std::move(path)},
           _current_hop_id{_current_path->intro.hop_id},
           _tag{std::move(_t)},
-          _last_use{r.now()},
+          _last_use{_router.now()},
           _parent{parent},
           _is_exit_service{_auth->is_exit_service()},
           _is_snode_service{_auth->is_snode_service()},

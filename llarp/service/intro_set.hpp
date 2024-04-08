@@ -119,7 +119,7 @@ namespace llarp::service
 
         bool sign(const PrivateKey& k);
 
-        bool is_expired(std::chrono::milliseconds now) const;
+        bool is_expired(std::chrono::milliseconds now = time_now_ms()) const;
 
         std::string bt_encode() const;
 

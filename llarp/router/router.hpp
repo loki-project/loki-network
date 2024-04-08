@@ -121,14 +121,9 @@ namespace llarp
         std::optional<oxen::quic::Address> _public_address;  // public addr for relays
         oxen::quic::Address _listen_address;
 
-        // TESTNET: underway -- combining local endpoints
+        // TESTNET: underway
         std::shared_ptr<handlers::RemoteHandler> _remote_handler;
         std::shared_ptr<handlers::LocalEndpoint> _local_endpoint;
-
-        // std::shared_ptr<service::Handler> _service_handler;  // remote services
-        // std::shared_ptr<exit::Handler> _exit_handler;        // remote exit nodes
-        // std::shared_ptr<service::Endpoint> _service_endpoint;  // local service
-        // std::shared_ptr<exit::Endpoint> _exit_endpoint;        // local exit node
 
         // TunEndpoint or NullEndpoint, depending on lokinet configuration
         std::unique_ptr<handlers::BaseHandler> _api;
@@ -230,6 +225,16 @@ namespace llarp
         bool needs_rebootstrap() const;
 
         void for_each_connection(std::function<void(link::Connection&)> func);
+
+        const std::shared_ptr<handlers::RemoteHandler>& remote_handler() const
+        {
+            return _remote_handler;
+        }
+
+        const std::shared_ptr<handlers::LocalEndpoint>& local_endpoint() const
+        {
+            return _local_endpoint;
+        }
 
         const Contacts& contacts() const
         {

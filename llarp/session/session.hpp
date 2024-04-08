@@ -41,7 +41,6 @@ namespace llarp
           public:
             OutboundSession(
                 RouterID _remote,
-                Router& r,
                 handlers::RemoteHandler& parent,
                 std::shared_ptr<path::Path> path,
                 service::SessionTag _t,

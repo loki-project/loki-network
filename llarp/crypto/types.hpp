@@ -114,6 +114,8 @@ namespace llarp
             return ret;
         }
 
+        static SymmNonce make(std::string n);
+
         static SymmNonce make_random();
     };
 

@@ -229,7 +229,7 @@ namespace llarp
             bool build_path_aligned_to_remote(const RouterID& remote);
 
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
-                const RouterID& endpoint, const std::set<RouterID>& exclude = {});
+                const RouterID& pivot, const std::set<RouterID>& exclude = {});
 
             // The build logic is segmented into functions designed to be called sequentially.
             //  - build1() : This can be re-implemented by inheriting classes that want to pass off possession of the
@@ -242,7 +242,7 @@ namespace llarp
             //  - build3() : Inheriting classes can pass their own response handler functions as the second parameter,
             //      allowing for differing lambda captures. This function returns the success/failure of the call to
             //      path::send_control_message(...), allowing for the calling object to decide whether to log path-build
-            //      failures for that respective remote or not
+            //      failures for that respective remote or not.
             //  - build() : This function calls build{1,2,3} in the correct order and is used for the usual times that
             //      PathBuilder initiates a path build
             std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);

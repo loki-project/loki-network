@@ -50,6 +50,8 @@ namespace llarp::handlers
         void lookup_intro(
             const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
 
+        void handle_initiation_session(ustring decrypted_payload);
+
         const service::IntroSet& intro_set() const
         {
             return _local_introset;

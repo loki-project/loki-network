@@ -11,18 +11,24 @@ namespace llarp
         _introset_nodes = std::make_unique<dht::Bucket<dht::ISNode>>(_local_key, llarp::randint);
     }
 
-    std::optional<service::EncryptedIntroSet> Contacts::get_introset(RouterID remote) const
+    std::optional<service::IntroSet> Contacts::get_decrypted_introset(RouterID remote) const
     {
-        return get_introset(dht::Key_t::derive_from_rid(remote));
+        std::optional<service::IntroSet> ret = std::nullopt;
+
+        if (auto encrypted = get_encrypted_introset(dht::Key_t::derive_from_rid(remote));
+            auto intro = encrypted->decrypt(remote))
+            ret = *intro;
+
+        return ret;
     }
 
-    std::optional<service::EncryptedIntroSet> Contacts::get_introset(const dht::Key_t& key) const
+    std::optional<service::EncryptedIntroSet> Contacts::get_encrypted_introset(const dht::Key_t& key) const
     {
         std::optional<service::EncryptedIntroSet> enc = std::nullopt;
 
         auto& introsets = _introset_nodes->nodes;
 
-        if (auto itr = introsets.find(key); itr != introsets.end())
+        if (auto itr = introsets.find(key); itr != introsets.end() && not itr->second.introset.is_expired())
             enc = itr->second.introset;
 
         return enc;

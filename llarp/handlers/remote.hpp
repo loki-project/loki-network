@@ -140,7 +140,7 @@ namespace llarp
           private:
             bool initiate_session(RouterID remote, bool is_exit = false, bool is_snode = false);
 
-            void make_session_path(RouterID remote, bool is_exit, bool is_snode);
+            void make_session_path(service::IntroductionSet intros, RouterID remote, bool is_exit, bool is_snode);
 
             void make_session(RouterID remote, std::shared_ptr<path::Path> path, bool is_exit, bool is_snode);
         };

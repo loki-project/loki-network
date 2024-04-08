@@ -19,8 +19,10 @@ namespace llarp
     */
     namespace InitiateSession
     {
-        inline static std::string serialize(
-            RouterID local, RouterID remote, service::SessionTag tag, std::shared_ptr<auth::SessionAuthPolicy>& auth)
+        static auto logcat = llarp::log::Cat("session-init");
+
+        inline static std::string serialize_encrypt(
+            RouterID& local, RouterID& remote, service::SessionTag& tag, std::optional<std::string_view> auth_token)
         {
             try
             {
@@ -32,8 +34,8 @@ namespace llarp
                     btdp.append("i", local.to_view());
                     btdp.append("s", tag.to_view());
                     // DISCUSS: this auth field
-                    if (auto token = auth->fetch_auth_token())
-                        btdp.append("u", *token);
+                    if (auth_token)
+                        btdp.append("u", *auth_token);
 
                     payload = std::move(btdp).str();
                 }
@@ -60,6 +62,30 @@ namespace llarp
                 throw;
             }
         };
+
+        inline static ustring deserialize_decrypt(oxenc::bt_dict_consumer& btdc, const RouterID& local)
+        {
+            try
+            {
+                SymmNonce nonce;
+                RouterID shared_pubkey;
+                ustring payload;
+
+                nonce = SymmNonce::make(btdc.require<std::string>("n"));
+                shared_pubkey = RouterID{btdc.require<std::string>("s")};
+                payload = btdc.require<ustring>("x");
+
+                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, payload);
+
+                return payload;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                throw;
+            }
+        }
+
     }  // namespace InitiateSession
 
     /** Fields for setting a session tag:
