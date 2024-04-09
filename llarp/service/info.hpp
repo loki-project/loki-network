@@ -1,8 +1,8 @@
 #pragma once
 
-#include "address.hpp"
 #include "vanity.hpp"
 
+#include <llarp/address/address.hpp>
 #include <llarp/crypto/types.hpp>
 
 #include <oxenc/bt.h>
@@ -16,7 +16,7 @@ namespace llarp::service
       private:
         PubKey enckey;
         PubKey signkey;
-        mutable Address _cached_addr;
+        mutable NetworkAddress _cached_addr;
 
       public:
         VanityNonce vanity;
@@ -31,10 +31,9 @@ namespace llarp::service
 
         const PubKey& encryption_pubkey() const
         {
-            if (_cached_addr.is_zero())
-            {
-                calculate_address(_cached_addr.as_array());
-            }
+            if (_cached_addr.is_empty())
+                calculate_address(_cached_addr.pubkey());
+
             return enckey;
         }
 
@@ -63,17 +62,16 @@ namespace llarp::service
 
         bool update_address();
 
-        const Address& address() const
+        const NetworkAddress& address() const
         {
-            if (_cached_addr.is_zero())
-            {
-                calculate_address(_cached_addr.as_array());
-            }
+            if (_cached_addr.is_empty())
+                calculate_address(_cached_addr.pubkey());
+
             return _cached_addr;
         }
 
         /// calculate our address
-        bool calculate_address(std::array<uint8_t, 32>& data) const;
+        bool calculate_address(PubKey& data) const;
 
         bool bt_decode(std::string_view buf);
 

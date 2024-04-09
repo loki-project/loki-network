@@ -5,8 +5,6 @@
 #include <llarp/address/ip_range.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/router/route_poker.hpp>
-#include <llarp/service/address.hpp>
-#include <llarp/service/endpoint.hpp>
 
 #include <oxen/log/omq_logger.hpp>
 #include <oxenmq/address.h>

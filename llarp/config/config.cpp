@@ -824,7 +824,7 @@ namespace llarp
 
                             if (auto maybe_netaddr = NetworkAddress::from_network_addr(*arg))
                             {
-                                _persisting_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
+                                _reserved_local_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
                             }
                             else
                                 log::warning(logcat, "{}: {}", addrmap_errorstr, *arg);

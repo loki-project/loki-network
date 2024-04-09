@@ -44,7 +44,7 @@ namespace llarp::service
 
         bool IsExpired(std::chrono::milliseconds now, std::chrono::milliseconds lifetime = SessionLifetime) const;
 
-        Address Addr() const;
+        // Address Addr() const;
     };
 
 }  // namespace llarp::service

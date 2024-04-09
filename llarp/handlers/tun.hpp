@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <llarp/address/ip_packet.hpp>
+#include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
 #include <llarp/net/ip.hpp>
 #include <llarp/net/net.hpp>
@@ -71,7 +72,7 @@ namespace llarp::handlers
         // Reconfigures DNS servers and restarts libunbound with the new servers.
         void reconfigure_dns(std::vector<oxen::quic::Address> servers);
 
-        bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
+        bool configure() override;
 
         std::string get_if_name() const override;
 
@@ -92,7 +93,9 @@ namespace llarp::handlers
 
         bool stop();
 
-        bool is_snode() const;
+        bool is_service_node() const;
+
+        bool is_exit_node() const;
 
         /// set up tun interface, blocking
         bool setup_tun();
@@ -105,10 +108,10 @@ namespace llarp::handlers
         //   return _dns;
         // };
 
-        /// overrides Endpoint
+        /// overrides BaseHandler
         bool setup_networking() override;
 
-        /// overrides Endpoint
+        /// overrides BaseHandler
         bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) override;
 
@@ -118,24 +121,21 @@ namespace llarp::handlers
         /// we got a packet from the user
         void handle_user_packet(llarp::IPPacket pkt);
 
-        // TODO: change this to the new IP type after changing the member
         /// get the local interface's address
-        ip get_if_addr() const /* override */;
+        oxen::quic::Address get_if_addr() const;
 
         /// we have an interface addr
-        bool has_if_addr() const /* override */
+        bool has_if_addr() const
         {
             return true;
         }
 
-        bool has_local_ip(const ip& ip) const;
-
-        std::optional<net::TrafficPolicy> get_traffic_policy() const /* override */
+        std::optional<net::TrafficPolicy> get_traffic_policy() const
         {
             return _traffic_policy;
         }
 
-        std::chrono::milliseconds get_path_alignment_timeout() const /* override */
+        std::chrono::milliseconds get_path_alignment_timeout() const
         {
             return _path_alignment_timeout;
         }
@@ -145,10 +145,7 @@ namespace llarp::handlers
         /// returns true otherwise
         bool is_allowing_traffic(const IPPacket& pkt) const;
 
-        bool has_mapped_address(const AlignedBuffer<32>& addr) const
-        {
-            return _addr_to_ip.find(addr) != _addr_to_ip.end();
-        }
+        bool has_mapped_address(const NetworkAddress& addr) const;
 
       protected:
         struct WritePacket
@@ -162,32 +159,7 @@ namespace llarp::handlers
             }
         };
 
-        /// return true if we have a remote loki address for this ip address
-        bool is_ip_mapped(ip ipv4) const;
-
-        /// mark this address as active
-        void mark_ip_active(ip ip);
-
-        /// mark this address as active forever
-        void mark_ip_active_forever(ip ip);
-
-        /// flush writing ip packets to interface
-        void flush_write();
-
-        // TONUKE: errythang buddy (move to handlers)
-        /// maps ip to key (host byte order)
-        std::unordered_map<ip, AlignedBuffer<32>> _ip_to_addr;
-
-        /// maps key to ip (host byte order)
-        std::unordered_map<AlignedBuffer<32>, ip> _addr_to_ip;
-
-        /// maps key to true if key is a service node, maps key to false if key is
-        /// a hidden service
-        // TONUKE: this stupid POS
-        std::unordered_map<AlignedBuffer<32>, bool> _is_snode_map;
-
-        /// maps ip address to an exit endpoint, useful when we have multiple exits on a range
-        std::unordered_map<huint128_t, service::Address> _exit_to_ip;
+        address_map<oxen::quic::Address, NetworkAddress> local_ip_mapping;
 
       private:
         template <typename Addr_t, typename Endpoint_t>
@@ -212,12 +184,6 @@ namespace llarp::handlers
         /// dns subsystem for this endpoint
         std::shared_ptr<dns::Server> _dns;
 
-        DnsConfig _dns_config;
-
-        // TODO: change the IP's to the variant IP type in address/ip_range.hpp
-
-        /// maps ip address to timestamp last active
-        std::unordered_map<huint128_t, std::chrono::milliseconds> _ip_activity;
         /// our local address and ip
         oxen::quic::Address _local_addr;
         ip _local_ip;
@@ -248,7 +214,7 @@ namespace llarp::handlers
         std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
 
         /// how long to wait for path alignment
-        std::chrono::milliseconds _path_alignment_timeout;
+        std::chrono::milliseconds _path_alignment_timeout{30s};
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;

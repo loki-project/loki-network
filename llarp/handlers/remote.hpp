@@ -1,10 +1,10 @@
 #pragma once
 
-#include <llarp/address/ip_range.hpp>
 #include <llarp/address/map.hpp>
 #include <llarp/auth/auth.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/endpoint_base.hpp>
+#include <llarp/service/intro_set.hpp>
 #include <llarp/session/session.hpp>
 
 namespace llarp

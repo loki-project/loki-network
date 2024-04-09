@@ -59,6 +59,11 @@ namespace llarp
         bool operator==(const NetworkAddress& other) const;
         bool operator!=(const NetworkAddress& other) const;
 
+        bool is_empty() const
+        {
+            return _pubkey.is_zero() and _tld.empty();
+        }
+
         // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
         // or '.snode'
         static std::optional<NetworkAddress> from_network_addr(std::string arg);
@@ -78,7 +83,7 @@ namespace llarp
             return _pubkey;
         }
 
-        PubKey pubkey()
+        PubKey& pubkey()
         {
             return _pubkey;
         }

@@ -5,7 +5,7 @@
 #include <llarp/config/config.hpp>
 #include <llarp/config/ini.hpp>
 #include <llarp/constants/version.hpp>
-#include <llarp/dns/dns.hpp>
+#include <llarp/dns/server.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>

@@ -11,7 +11,8 @@ namespace llarp
 {
     static auto logcat = llarp::log::Cat("router_version");
 
-    RouterVersion::RouterVersion(const Version_t& router, uint64_t proto) : _version(router), _proto(proto)
+    RouterVersion::RouterVersion(const std::array<uint16_t, 3>& router, uint64_t proto)
+        : _version(router), _proto(proto)
     {}
 
     bool RouterVersion::is_compatible_with(const RouterVersion& other) const

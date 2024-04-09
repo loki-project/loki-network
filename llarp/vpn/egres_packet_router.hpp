@@ -1,5 +1,6 @@
 #pragma once
 
+#include <llarp/address/address.hpp>
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/net/net_int.hpp>
@@ -9,13 +10,13 @@
 
 namespace llarp::vpn
 {
-    using EgresPacketHandlerFunc = std::function<void(AddressVariant_t, IPPacket)>;
+    using EgresPacketHandlerFunc = std::function<void(NetworkAddress, IPPacket)>;
 
     struct EgresLayer4Handler
     {
         virtual ~EgresLayer4Handler() = default;
 
-        virtual void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) = 0;
+        virtual void HandleIPPacketFrom(NetworkAddress from, IPPacket pkt) = 0;
 
         virtual void AddSubHandler(uint16_t, EgresPacketHandlerFunc){};
         virtual void RemoveSubHandler(uint16_t){};
@@ -31,7 +32,7 @@ namespace llarp::vpn
         explicit EgresPacketRouter(EgresPacketHandlerFunc baseHandler);
 
         /// feed in an ip packet for handling
-        void HandleIPPacketFrom(AddressVariant_t, UDPPacket pkt);
+        void HandleIPPacketFrom(NetworkAddress, IPPacket pkt);
 
         /// add a non udp packet handler using ip protocol proto
         void AddIProtoHandler(uint8_t proto, EgresPacketHandlerFunc func);

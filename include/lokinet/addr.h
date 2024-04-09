@@ -1,5 +1,5 @@
 #pragma once
-#include "lokinet_context.h"
+#include "context.h"
 
 #ifdef __cplusplus
 extern "C"

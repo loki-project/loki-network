@@ -523,7 +523,6 @@ namespace llarp
     void Router::init_api()
     {
         auto& net_config = _config->network;
-        auto& dns_config = _config->dns;
         auto& type = net_config.endpoint_type;
         auto& key_file = net_config.keyfile;
 
@@ -535,7 +534,7 @@ namespace llarp
                 throw std::runtime_error{"Failed to construct API endpoint of type {}"_format(type)};
 
             _api->load_key_file(key_file, *this);
-            _api->configure(net_config, dns_config);
+            _api->configure();
         }
         else
             throw std::runtime_error{"API endpoint of type {} does not exist"_format(type)};
@@ -632,10 +631,7 @@ namespace llarp
         //  all snodes have Tun
         //
         // TODO: change this for snodes running hidden service
-        if (not is_service_node())
-        {
-            init_api();
-        }
+        init_api();
 
         if (not ensure_identity())
             throw std::runtime_error{"EnsureIdentity() failed"};

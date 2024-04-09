@@ -5,7 +5,6 @@
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/link/tunnel.hpp>
-#include <llarp/service/address.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/service/types.hpp>
 #include <llarp/session/map.hpp>
@@ -38,7 +37,7 @@ namespace llarp
         std::unordered_set<dns::SRVData> _srv_records;
 
       public:
-        bool _publish_introset{true};
+        bool should_publish_introset{true};
 
         // TODO: replace with session_map type
         // std::unordered_map<service::SessionTag, RouterID> _session_lookup;

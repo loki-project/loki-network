@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lokinet_export.h"
+#include "export.h"
 
 #include <stdbool.h>
 #include <stdint.h>

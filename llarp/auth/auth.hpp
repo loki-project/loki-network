@@ -4,8 +4,7 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/service/address.hpp>
-#include <llarp/service/protocol.hpp>
+#include <llarp/router_id.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/util/str.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -20,11 +19,6 @@
 namespace llarp
 {
     struct Router;
-
-    namespace service
-    {
-        struct Endpoint;
-    }
 }  // namespace llarp
 
 namespace llarp::auth
@@ -52,14 +46,6 @@ namespace llarp::auth
         {
             return _router;
         }
-
-        /// asynchronously determine if we accept new convotag from remote service, call hook with
-        /// result later
-        virtual void authenticate_async(
-            std::shared_ptr<service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook) = 0;
-
-        /// return true if we are asynchronously processing authentication on this sessiontag
-        virtual bool auth_async_pending(service::SessionTag tag) const = 0;
     };
 
     struct SessionAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<SessionAuthPolicy>
@@ -101,11 +87,6 @@ namespace llarp::auth
         {
             return shared_from_this();
         }
-
-        void authenticate_async(
-            std::shared_ptr<service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook) override;
-
-        bool auth_async_pending(service::SessionTag tag) const override;
     };
 
     struct FileAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<FileAuthPolicy>
@@ -123,11 +104,6 @@ namespace llarp::auth
         {
             return shared_from_this();
         }
-
-        void authenticate_async(
-            std::shared_ptr<service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook) override;
-
-        bool auth_async_pending(service::SessionTag tag) const override;
 
       private:
         const std::set<fs::path> _files;
@@ -147,10 +123,9 @@ namespace llarp::auth
             Router& r,
             std::string url,
             std::string method,
-            std::unordered_set<llarp::service::Address> addr_whitelist,
+            std::unordered_set<NetworkAddress> addr_whitelist,
             std::unordered_set<std::string> token_whitelist,
-            std::shared_ptr<oxenmq::OxenMQ> lmq,
-            std::shared_ptr<service::Endpoint> endpoint);
+            std::shared_ptr<oxenmq::OxenMQ> lmq);
 
         ~RPCAuthPolicy() override = default;
 
@@ -166,19 +141,13 @@ namespace llarp::auth
 
         void start();
 
-        void authenticate_async(
-            std::shared_ptr<llarp::service::ProtocolMessage> msg, std::function<void(std::string, bool)> hook) override;
-
-        bool auth_async_pending(service::SessionTag tag) const override;
-
       private:
         const std::string _url;
         const std::string _method;
-        const std::unordered_set<llarp::service::Address> _whitelist;
+        const std::unordered_set<NetworkAddress> _whitelist;
         const std::unordered_set<std::string> _static_tokens;
 
         std::shared_ptr<oxenmq::OxenMQ> _omq;
-        std::shared_ptr<service::Endpoint> _ep;
         std::optional<oxenmq::ConnectionID> _omq_conn;
         std::unordered_set<service::SessionTag> _pending_sessions;
     };

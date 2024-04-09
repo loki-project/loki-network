@@ -48,27 +48,30 @@ namespace llarp::handlers
     void LocalEndpoint::configure()
     {
         // auto _dns_config = _router.config()->dns;
-        auto _net_config = _router.config()->network;
+        auto net_config = _router.config()->network;
+
+        if (net_config.is_reachable)
+            should_publish_introset = true;
 
         _is_exit_node = _router.is_exit_node();
         _is_snode_service = _router.is_service_node();
 
         if (_is_exit_node)
         {
-            if (not _net_config._routed_ranges.empty())
+            if (not net_config._routed_ranges.empty())
             {
-                _routed_ranges.merge(_net_config._routed_ranges);
+                _routed_ranges.merge(net_config._routed_ranges);
                 _local_introset._routed_ranges = _routed_ranges;
             }
 
-            _exit_policy = _net_config.traffic_policy;
+            _exit_policy = net_config.traffic_policy;
             _local_introset.exit_policy = _exit_policy;
         }
 
-        _if_name = *_net_config._if_name;
-        _local_range = *_net_config._local_ip_range;
-        _local_addr = *_net_config._local_addr;
-        _local_ip = *_net_config._local_ip;
+        _if_name = *net_config._if_name;
+        _local_range = *net_config._local_ip_range;
+        _local_addr = *net_config._local_addr;
+        _local_ip = *net_config._local_ip;
 
         _is_v4 = _local_range.is_ipv4();
     }

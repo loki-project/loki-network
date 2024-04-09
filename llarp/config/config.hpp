@@ -14,7 +14,6 @@
 #include <llarp/net/net_int.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/router_contact.hpp>
-#include <llarp/service/address.hpp>
 #include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
@@ -141,10 +140,8 @@ namespace llarp
 
         /* TESTNET: Under modification */
 
+        // Contents of this file are read directly into ::_reserved_local_addrs
         std::optional<fs::path> addr_map_persist_file;
-
-        // Pass to TunEndpoint -- combine with _reserved_local_addrs
-        std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_addrs;
 
         // the only member that refers to an actual interface
         std::optional<std::string> _if_name;
@@ -158,8 +155,7 @@ namespace llarp
 
         // Remote exit or hidden service addresses mapped to fixed local IP addresses
         // TODO:
-        //  - pass to TunEndpoint
-        //  - create separate "reserved_ips" mapping or load directly into TunEndpoint mapping (probably better)
+        //  - pass to TunEndpoint, load directly into TunEndpoint mapping
         //      - when a session is created, check here when assigning IP's
         std::unordered_map<NetworkAddress, oxen::quic::Address> _reserved_local_addrs;
 

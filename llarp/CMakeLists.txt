@@ -30,17 +30,10 @@ lokinet_add_library(lokinet-core-utils
   handlers/remote.cpp
   handlers/tun.cpp
   
-  # deprecated for handlers/{endpoint,remote}.cpp
-  # exit/handler.cpp
-  # exit/endpoint.cpp
-  # service/handler.cpp # link/ exit/
-  # service/endpoint.cpp
-  
   service/identity.cpp
   service/info.cpp
   service/intro.cpp # path
   service/intro_set.cpp
-  service/lns_tracker.cpp
   service/name.cpp
   
   vpn/egres_packet_router.cpp
@@ -50,19 +43,13 @@ lokinet_add_library(lokinet-core
   context.cpp
   
   consensus/reachability_testing.cpp
-
-  # handlers/tun.cpp
   
   link/link_manager.cpp
   
   router/router.cpp
   router/route_poker.cpp
   
-  # service/async_key_exchange.cpp
   service/types.cpp
-  service/endpoint_state.cpp
-  service/protocol.cpp
-  service/session.cpp
 
   session/outbound_session.cpp
   session/inbound_session.cpp
@@ -119,7 +106,6 @@ lokinet_add_library(lokinet-time-place
   router_id.cpp
   router_version.cpp  # to be deleted shortly
 
-  service/address.cpp
   service/tag.cpp
 )
 

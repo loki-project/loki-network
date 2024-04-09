@@ -20,7 +20,7 @@ namespace llarp::vpn
             _ports.erase(localport);
         }
 
-        void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
+        void HandleIPPacketFrom(NetworkAddress from, IPPacket pkt) override
         {
             (void)from;
             (void)pkt;
@@ -46,7 +46,7 @@ namespace llarp::vpn
         explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
         {}
 
-        void HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt) override
+        void HandleIPPacketFrom(NetworkAddress from, IPPacket pkt) override
         {
             // TOFIX: this
             (void)from;
@@ -58,7 +58,7 @@ namespace llarp::vpn
     EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
     {}
 
-    void EgresPacketRouter::HandleIPPacketFrom(AddressVariant_t from, UDPPacket pkt)
+    void EgresPacketRouter::HandleIPPacketFrom(NetworkAddress from, IPPacket pkt)
     {
         (void)from;
         (void)pkt;

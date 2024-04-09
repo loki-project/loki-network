@@ -2,18 +2,21 @@
 
 namespace llarp::handlers
 {
-    static auto logcat = log::Cat("Null");
+    static auto logcat = log::Cat("EmbeddedEndpoint");
 
     EmbeddedEndpoint::EmbeddedEndpoint(Router& r)
-        : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](AddressVariant_t from, IPPacket pkt) {
-              var::visit(
-                  [&pkt](AddressVariant_t&& from) {
-                      log::error(logcat, "Unhandled traffic from {} (pkt size:{}B)", from, pkt.size());
-                  },
-                  from);
+        : BaseHandler{r}, _packet_router{new vpn::EgresPacketRouter{[](NetworkAddress from, IPPacket pkt) {
+              (void)from;
+              (void)pkt;
+              // TODO: something smart here!
           }}}
     {
         // r->loop()->add_ticker([this] { Pump(Now()); });
+    }
+
+    bool EmbeddedEndpoint::configure()
+    {
+        return true;
     }
 
     bool EmbeddedEndpoint::handle_inbound_packet(

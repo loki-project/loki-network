@@ -14,7 +14,6 @@
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/endpoint_state.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/service/types.hpp>
 #include <llarp/util/str.hpp>
@@ -139,10 +138,12 @@ namespace llarp::handlers
 
     void TunEndpoint::setup_dns()
     {
+        auto& dns_config = _router.config()->dns;
         const auto& info = get_vpn_interface()->Info();
-        if (_dns_config.raw)
+
+        if (dns_config.raw)
         {
-            auto dns = std::make_shared<TunDNS>(this, _dns_config);
+            auto dns = std::make_shared<TunDNS>(this, dns_config);
             _dns = dns;
 
             _packet_router->add_udp_handler(uint16_t{53}, [this, dns](UDPPacket pkt) {
@@ -164,12 +165,12 @@ namespace llarp::handlers
             });
         }
         else
-            _dns = std::make_shared<dns::Server>(router().loop(), _dns_config, info.index);
+            _dns = std::make_shared<dns::Server>(router().loop(), dns_config, info.index);
 
         _dns->add_resolver(weak_from_this());
         _dns->start();
 
-        if (_dns_config.raw)
+        if (dns_config.raw)
         {
             if (auto vpn = router().vpn_platform())
             {
@@ -260,31 +261,22 @@ namespace llarp::handlers
         }
     }
 
-    bool TunEndpoint::configure(const NetworkConfig& conf, const DnsConfig& dnsConf)
+    bool TunEndpoint::configure()
     {
-        // if (conf.is_reachable)
-        // {
-        //   _publish_introset = true;
-        //   log::info(logcat, "TunEndpoint setting to be reachable by default");
-        // }
-        // else
-        // {
-        //   _publish_introset = false;
-        //   log::info(logcat, "TunEndpoint setting to be not reachable by default");
-        // }
+        auto& net_conf = _router.config()->network;
 
-        if (conf.auth_type == auth::AuthType::FILE)
+        if (net_conf.auth_type == auth::AuthType::FILE)
         {
             // _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(router(),
             // conf.auth_files, conf.auth_file_type);
         }
-        else if (conf.auth_type != auth::AuthType::NONE)
+        else if (net_conf.auth_type != auth::AuthType::NONE)
         {
             std::string url, method;
-            if (conf.auth_url.has_value() and conf.auth_method.has_value())
+            if (net_conf.auth_url.has_value() and net_conf.auth_method.has_value())
             {
-                url = *conf.auth_url;
-                method = *conf.auth_method;
+                url = *net_conf.auth_url;
+                method = *net_conf.auth_method;
             }
             // TODO:
             // auto auth = auth::make_auth_policy<auth::RPCAuthPolicy>(
@@ -299,155 +291,32 @@ namespace llarp::handlers
             // _auth_policy = std::move(auth);
         }
 
-        _dns_config = dnsConf;
-        _traffic_policy = conf.traffic_policy;
+        _traffic_policy = net_conf.traffic_policy;
 
-        _base_ipv6_range = conf._base_ipv6_range;
+        _base_ipv6_range = net_conf._base_ipv6_range;
 
-        if (conf.path_alignment_timeout)
+        if (net_conf.path_alignment_timeout)
         {
-            _path_alignment_timeout = *conf.path_alignment_timeout;
-        }
-        else
-            _path_alignment_timeout = service::DEFAULT_PATH_ALIGN_TIMEOUT;
+            if (is_service_node())
+                throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
 
-        for (const auto& item : conf._reserved_local_addrs)
-        {
-            (void)item;
-            // if (not map_address(item.second, item.first, false))
-            //     return false;
+            _path_alignment_timeout = *net_conf.path_alignment_timeout;
         }
 
-        _if_name = *conf._if_name;
-        _local_range = *conf._local_ip_range;
-        _local_addr = *conf._local_addr;
-        _local_ip = *conf._local_ip;
+        _if_name = *net_conf._if_name;
+        _local_range = *net_conf._local_ip_range;
+        _local_addr = *net_conf._local_addr;
+        _local_ip = *net_conf._local_ip;
 
         _use_v6 = not _local_range.is_ipv4();
 
-        _persisting_addr_file = conf.addr_map_persist_file;
+        _persisting_addr_file = net_conf.addr_map_persist_file;
 
-        if (conf.addr_map_persist_file and not conf._persisting_addrs.empty())
+        if (not net_conf._reserved_local_addrs.empty())
         {
-        }
-
-        if (_persisting_addr_file)
-        {
-            const auto& file = *_persisting_addr_file;
-
-            if (fs::exists(file))
+            for (auto& [remote, local] : net_conf._reserved_local_addrs)
             {
-                bool load_file = true;
-                {
-                    constexpr auto LastModifiedWindow = 1min;
-                    const auto lastmodified = fs::last_write_time(file);
-                    const auto now = decltype(lastmodified)::clock::now();
-
-                    if (now < lastmodified or now - lastmodified > LastModifiedWindow)
-                    {
-                        load_file = false;
-                    }
-                }
-
-                std::vector<char> data;
-
-                if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary); maybe and load_file)
-                {
-                    log::info(logcat, "{} loading persisting address map file from path:{}", name(), file);
-
-                    maybe->seekg(0, std::ios_base::end);
-                    const size_t len = maybe->tellg();
-
-                    maybe->seekg(0, std::ios_base::beg);
-                    data.resize(len);
-
-                    log::debug(logcat, "{} reading {}B", name(), len);
-
-                    maybe->read(data.data(), data.size());
-                }
-                else
-                {
-                    auto err = "{} could not load persisting address map file from path:{} --"_format(name(), file);
-
-                    log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
-
-                    if (load_file)
-                    {
-                        log::info(logcat, "{} NOT FOUND", err);
-                    }
-                    else
-                        log::info(logcat, "{} STALE", err);
-                }
-                if (not data.empty())
-                {
-                    std::string_view bdata{data.data(), data.size()};
-
-                    log::trace(logcat, "{} parsing address map data: {}", name(), bdata);
-
-                    const auto parsed = oxenc::bt_deserialize<oxenc::bt_dict>(bdata);
-
-                    for (const auto& [key, value] : parsed)
-                    {
-                        ip ip{};
-
-                        // if (not ip.FromString(key))
-                        // {
-                        //     log::warning(logcat, "{} malformed IP in addr map data: {}", name(), key);
-                        //     continue;
-                        // }
-                        if (_local_ip == ip)
-                            continue;
-                        if (not _local_range.contains(ip))
-                        {
-                            // log::warning(logcat, "{} out of range IP in addr map data", name(), ip);
-                            continue;
-                        }
-
-                        AddressVariant_t addr;
-
-                        if (const auto* str = std::get_if<std::string>(&value))
-                        {
-                            if (auto maybe = parse_address(*str))
-                            {
-                                addr = *maybe;
-                            }
-                            else
-                            {
-                                log::warning(logcat, "{} invalid address in addr map: {}", name(), *str);
-                                continue;
-                            }
-                        }
-                        else
-                        {
-                            log::warning(logcat, "{} invalid first entry in addr map: not a string!", name());
-                            continue;
-                        }
-                        if (const auto* loki = std::get_if<service::Address>(&addr))
-                        {
-                            _ip_to_addr.emplace(ip, loki->data());
-                            _addr_to_ip.emplace(loki->data(), ip);
-                            _is_snode_map[*loki] = false;
-
-                            log::info(logcat, "{} remapped {} to {}", name(), ip, *loki);
-                        }
-                        if (const auto* snode = std::get_if<RouterID>(&addr))
-                        {
-                            _ip_to_addr.emplace(ip, snode->data());
-                            _addr_to_ip.emplace(snode->data(), ip);
-                            _is_snode_map[*snode] = true;
-
-                            log::info(logcat, "{} remapped {} to {}", name(), ip, *snode);
-                        }
-                        if (_next_ip < ip)
-                            _next_ip = ip;
-                        // make sure we dont unmap this guy
-                        mark_ip_active(ip);
-                    }
-                }
-            }
-            else
-            {
-                log::info(logcat, "{} skipping loading addr map at {} as it does not currently exist", name(), file);
+                local_ip_mapping.insert_or_assign(local, remote);
             }
         }
 
@@ -459,11 +328,6 @@ namespace llarp::handlers
         // });
         // }
         return true;
-    }
-
-    bool TunEndpoint::has_local_ip(const ip& ip) const
-    {
-        return _ip_to_addr.find(ip) != _ip_to_addr.end();
     }
 
     static bool is_random_snode(const dns::Message& msg)
@@ -875,7 +739,7 @@ namespace llarp::handlers
     // FIXME: pass in which question it should be addressing
     bool TunEndpoint::should_hook_dns_message(const dns::Message& msg) const
     {
-        llarp::service::Address addr;
+        // llarp::service::Address addr;
         if (msg.questions.size() == 1)
         {
             /// hook every .loki
@@ -916,10 +780,14 @@ namespace llarp::handlers
         return setup_networking();
     }
 
-    bool TunEndpoint::is_snode() const
+    bool TunEndpoint::is_service_node() const
     {
-        // TODO : implement me
-        return false;
+        return _router.is_service_node();
+    }
+
+    bool TunEndpoint::is_exit_node() const
+    {
+        return _router.is_exit_node();
     }
 
     bool TunEndpoint::setup_tun()
@@ -929,12 +797,9 @@ namespace llarp::handlers
         log::info(logcat, "{} set {} to have address {}", name(), _if_name, _local_addr);
         // log::info(logcat, "{} allocated up to {} on range {}", name(), _max_ip, _local_range);
 
-        const service::Address ourAddr = _identity.pub.address();
+        auto& local_netaddr = _identity.pub.address();
 
-        if (not map_address(ourAddr, get_if_addr(), false))
-        {
-            return false;
-        }
+        local_ip_mapping.insert_or_assign(get_if_addr(), local_netaddr);
 
         vpn::InterfaceInfo info;
         info.addrs.emplace_back(_local_range);
@@ -990,7 +855,7 @@ namespace llarp::handlers
         log::info(logcat, "{} setting up DNS...", name());
         setup_dns();
         // loop()->call_soon([this]() { router().route_poker()->set_dns_mode(false); });
-        return has_mapped_address(ourAddr);
+        return has_mapped_address(local_netaddr);
     }
 
     // std::unordered_map<std::string, std::string>
@@ -1229,8 +1094,10 @@ namespace llarp::handlers
 
     bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
-        if (auto exitPolicy = get_traffic_policy())
-            return exitPolicy->allow_ip_traffic(pkt);
+        // if (auto exitPolicy = get_traffic_policy())
+        //     return exitPolicy->allow_ip_traffic(pkt);
+
+        (void)pkt;
 
         return true;
     }
@@ -1263,7 +1130,7 @@ namespace llarp::handlers
         if (t != service::ProtocolType::TrafficV4 && t != service::ProtocolType::TrafficV6
             && t != service::ProtocolType::Exit)
             return false;
-        std::variant<service::Address, RouterID> addr;
+        // std::variant<service::Address, RouterID> addr;
         // if (auto maybe = GetEndpointWithConvoTag(tag))
         // {
         //   addr = *maybe;
@@ -1344,9 +1211,8 @@ namespace llarp::handlers
     bool TunEndpoint::handle_write_ip_packet(const llarp_buffer_t& b, huint128_t src, huint128_t dst, uint64_t seqno)
     {
         ManagedBuffer buf(b);
-        WritePacket write;
-        write.seqno = seqno;
-        auto& pkt = write.pkt;
+        IPPacket pkt;
+
         // load
         if (!pkt.load(buf.underlying.base))
         {
@@ -1362,6 +1228,7 @@ namespace llarp::handlers
         // }
         (void)src;
         (void)dst;
+        (void)seqno;
 
         // TODO: send this along but without a fucking huint182_t
         // m_NetworkToUserPktQueue.push(std::move(write));
@@ -1371,28 +1238,14 @@ namespace llarp::handlers
         return true;
     }
 
-    ip TunEndpoint::get_if_addr() const
+    bool TunEndpoint::has_mapped_address(const NetworkAddress& addr) const
     {
-        return _local_ip;
+        return local_ip_mapping.has_remote(addr);
     }
 
-    bool TunEndpoint::is_ip_mapped(ip ip) const
+    oxen::quic::Address TunEndpoint::get_if_addr() const
     {
-        return _ip_to_addr.find(ip) != _ip_to_addr.end();
-    }
-
-    void TunEndpoint::mark_ip_active(ip ip)
-    {
-        log::debug(logcat, "{} marking address {} active", name(), ip);
-        // _ip_activity[ip] =
-        // std::max(llarp::time_now_ms(), _ip_activity[ip]);
-    }
-
-    void TunEndpoint::mark_ip_active_forever(ip ip)
-    {
-        log::debug(logcat, "{} marking address {} perpetually active", name(), ip);
-        // _ip_activity[ip] =
-        //     std::numeric_limits<std::chrono::milliseconds>::max();
+        return _local_addr;
     }
 
     TunEndpoint::~TunEndpoint() = default;

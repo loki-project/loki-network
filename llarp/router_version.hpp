@@ -13,11 +13,9 @@ namespace llarp
 {
     struct RouterVersion
     {
-        using Version_t = std::array<uint16_t, 3>;
-
         RouterVersion() = default;
 
-        explicit RouterVersion(const Version_t& routerVersion, uint64_t protoVersion);
+        explicit RouterVersion(const std::array<uint16_t, 3>& routerVersion, uint64_t protoVersion);
 
         std::string bt_encode() const;
 
@@ -51,7 +49,7 @@ namespace llarp
         }
 
       private:
-        Version_t _version = {{0, 0, 0}};
+        std::array<uint16_t, 3> _version = {{0, 0, 0}};
         int64_t _proto = llarp::constants::proto_version;
     };
 

@@ -8,7 +8,7 @@ namespace llarp::service
             {"lastSend", to_json(lastSend)},
             {"lastRecv", to_json(lastRecv)},
             {"replyIntro", replyIntro.ExtractStatus()},
-            {"remote", Addr().to_string()},
+            // {"remote", Addr().to_string()},
             {"seqno", seqno},
             {"tx", messagesSend},
             {"rx", messagesRecv},
@@ -16,10 +16,10 @@ namespace llarp::service
         return obj;
     }
 
-    Address Session::Addr() const
-    {
-        return remote.address();
-    }
+    // Address Session::Addr() const
+    // {
+    //     return remote.address();
+    // }
 
     bool Session::IsExpired(std::chrono::milliseconds now, std::chrono::milliseconds lifetime) const
     {

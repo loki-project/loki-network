@@ -4,7 +4,6 @@
 #include <llarp/dns/server.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/address.hpp>
 #include <llarp/service/identity.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/session/session.hpp>
@@ -56,7 +55,7 @@ namespace llarp::handlers
 
         virtual bool supports_ipv6() const = 0;
 
-        virtual bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) = 0;
+        virtual bool configure() = 0;
 
         virtual bool setup_networking() = 0;
 

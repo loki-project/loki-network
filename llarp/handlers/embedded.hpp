@@ -51,12 +51,7 @@ namespace llarp::handlers
         }
 
         // TODO: this
-        bool configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override
-        {
-            (void)conf;
-            (void)dnsConf;
-            return true;
-        }
+        bool configure() override;
 
         bool handle_inbound_packet(
             const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t) override;

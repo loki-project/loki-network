@@ -21,6 +21,7 @@ namespace llarp::service
         {
             vanity = *nonce;
         }
+
         return update_address();
     }
 
@@ -69,27 +70,29 @@ namespace llarp::service
 
     std::string ServiceInfo::name() const
     {
-        if (_cached_addr.is_zero())
+        if (_cached_addr.is_empty())
         {
-            Address addr;
-            calculate_address(addr.as_array());
-            return addr.to_string();
+            PubKey pk;
+            calculate_address(pk);
+            return pk.to_string();
         }
+
         return _cached_addr.to_string();
     }
 
-    bool ServiceInfo::calculate_address(std::array<uint8_t, 32>& data) const
+    bool ServiceInfo::calculate_address(PubKey& data) const
     {
-        data = signkey.as_array();
+        data = PubKey{signkey.as_array()};
         return true;
     }
 
     bool ServiceInfo::update_address()
     {
-        if (_cached_addr.is_zero())
+        if (_cached_addr.is_empty())
         {
-            return calculate_address(_cached_addr.as_array());
+            return calculate_address(_cached_addr.pubkey());
         }
+
         return true;
     }
 

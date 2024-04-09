@@ -78,6 +78,11 @@ namespace llarp
             return ret;
         }
 
+        bool has_remote(const net_addr_t& remote) const
+        {
+            return _remote_to_local.contains(remote);
+        }
+
         void unmap(const net_addr_t& remote)
         {
             auto name = remote.name();
