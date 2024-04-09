@@ -43,7 +43,7 @@ namespace llarp::handlers
             log::warning(logcat, "Failed to route packet convotag: {}", tag);
             return false;
         }
-        if (t != service::ProtocolType::QUIC)
+        if (t != service::ProtocolType::TCP2QUIC)
             return false;
 
         // auto* quic = GetQUICTunnel();

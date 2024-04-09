@@ -163,7 +163,7 @@ namespace llarp::service
             btdp.append("A", "H");
             btdp.append("C", cipher.to_view());
             btdp.append("D", std::string_view{reinterpret_cast<const char*>(enc.data()), enc.size()});
-            btdp.append("F", path_id.to_view());
+            btdp.append("F", hop_id.to_view());
             btdp.append("N", nonce.to_view());
             btdp.append("R", flag);
             btdp.append("T", convo_tag.to_view());
@@ -314,7 +314,7 @@ namespace llarp::service
 
             std::shared_ptr<ProtocolMessage> msg = std::move(self->msg);
             std::shared_ptr<path::Path> path = std::move(self->path);
-            const HopID from = self->frame.path_id;
+            const HopID from = self->frame.hop_id;
             msg->handler = self->handler;
             // self->handler->AsyncProcessAuthMessage(
             //     msg,

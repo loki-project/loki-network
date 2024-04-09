@@ -627,6 +627,11 @@ namespace llarp
         }
 
         // API config
+        //  all instances have an API
+        //  all clients have Tun or Null
+        //  all snodes have Tun
+        //
+        // TODO: change this for snodes running hidden service
         if (not is_service_node())
         {
             init_api();

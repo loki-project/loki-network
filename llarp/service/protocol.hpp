@@ -77,7 +77,7 @@ namespace llarp
             uint64_t flag;  // set to indicate in plaintext a nack, aka "dont try again"
             SymmNonce nonce;
             Signature sig;
-            HopID path_id;
+            HopID hop_id;
             service::SessionTag convo_tag;
 
             ProtocolFrameMessage(const ProtocolFrameMessage& other) = default;
@@ -122,7 +122,7 @@ namespace llarp
             {
                 cipher.zero();
                 enc.Clear();
-                path_id.zero();
+                hop_id.zero();
                 convo_tag.zero();
                 nonce.zero();
                 sig.zero();

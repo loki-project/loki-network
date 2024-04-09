@@ -3,7 +3,7 @@
 // #include "protocol.hpp"
 #include "session.hpp"
 
-#include <llarp/path/path.hpp>
+// #include <llarp/path/path.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/queue.hpp>
 
@@ -44,7 +44,7 @@ namespace llarp
             TrafficV6 = 2UL,
             Exit = 3UL,
             Auth = 4UL,
-            QUIC = 5UL,
+            TCP2QUIC = 5UL,
         };
 
         inline constexpr std::string_view to_string(ProtocolType t)
@@ -55,7 +55,7 @@ namespace llarp
                 : t == ProtocolType::TrafficV6 ? "TrafficV6"sv
                 : t == ProtocolType::Exit      ? "Exit"sv
                 : t == ProtocolType::Auth      ? "Auth"sv
-                : t == ProtocolType::QUIC      ? "QUIC"sv
+                : t == ProtocolType::TCP2QUIC  ? "TCP->QUIC"sv
                                                : "(unknown-protocol-type)"sv;
         }
 

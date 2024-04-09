@@ -26,12 +26,8 @@ namespace llarp::dns
     */
     struct SRVData
     {
-      private:
-        bool bt_decode(oxenc::bt_dict_consumer& btdc);
-        bool from_string(std::string_view srvString);
-
-      public:
         SRVData() = default;
+        // SRVData constructor expecting a bt-encoded dictionary
         explicit SRVData(std::string bt);
         SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target);
 
@@ -94,6 +90,10 @@ namespace llarp::dns
         bool bt_decode(std::string buf);
 
         StatusObject ExtractStatus() const;
+
+      private:
+        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+        bool from_string(std::string_view srvString);
     };
 
 }  // namespace llarp::dns

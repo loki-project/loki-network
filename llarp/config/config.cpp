@@ -234,7 +234,7 @@ namespace llarp
         static constexpr Default SaveProfilesDefault{true};
         static constexpr Default ReachableDefault{true};
         static constexpr Default HopsDefault{4};
-        static constexpr Default PathsDefault{6};
+        static constexpr Default PathsDefault{4};
         static constexpr Default IP6RangeDefault{"fd00::"};
 
         conf.define_option<bool>(

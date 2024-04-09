@@ -54,9 +54,9 @@ namespace llarp
     inline constexpr size_t INTROSET_RELAY_REDUNDANCY{2};
 
     /// number of dht locations handled per relay
-    inline constexpr size_t INTROSET_REQS_PER_RELAY{2};
-
-    inline constexpr size_t INTROSET_STORAGE_REDUNDANCY{(INTROSET_RELAY_REDUNDANCY * INTROSET_REQS_PER_RELAY)};
+    // DISCUSS: do we need this??
+    // inline constexpr size_t INTROSET_REQS_PER_RELAY{2};
+    // inline constexpr size_t INTROSET_STORAGE_REDUNDANCY{(INTROSET_RELAY_REDUNDANCY * INTROSET_REQS_PER_RELAY)};
 
     // TESTNET: these constants are shortened for testing purposes
     inline constexpr std::chrono::milliseconds TESTNET_GOSSIP_INTERVAL{15min};
@@ -198,6 +198,11 @@ namespace llarp
 
       public:
         bool fully_meshed() const;
+
+        bool using_tun_if() const
+        {
+            return _should_init_tun;
+        }
 
         bool testnet() const
         {

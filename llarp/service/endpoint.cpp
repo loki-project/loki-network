@@ -675,7 +675,7 @@ namespace llarp::service
         ProtocolFrameMessage f{};
         f.flag = int(not success);
         f.convo_tag = tag;
-        f.path_id = path->intro.path_id;
+        f.hop_id = path->intro.hop_id;
         f.nonce.Randomize();
 
         if (success)

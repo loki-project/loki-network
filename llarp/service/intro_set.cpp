@@ -129,9 +129,7 @@ namespace llarp::service
         std::string payload{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()};
 
         if (crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce))
-        {
             ret = IntroSet{payload};
-        }
 
         return ret;
     }
@@ -156,9 +154,9 @@ namespace llarp::service
         return true;
     }
 
-    bool EncryptedIntroSet::verify(std::chrono::milliseconds now) const
+    bool EncryptedIntroSet::verify() const
     {
-        if (is_expired(now))
+        if (is_expired())
             return false;
 
         EncryptedIntroSet copy(*this);

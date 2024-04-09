@@ -128,12 +128,13 @@ namespace llarp::service
         bool other_is_newer(const EncryptedIntroSet& other) const;
 
         /// verify signature and timestamp
-        bool verify(std::chrono::milliseconds now) const;
+        bool verify() const;
 
         static bool verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig);
 
         static bool verify(std::string introset, std::string key, std::string sig);
 
+        // this constructor will throw if ::bt_decode fails
         static std::optional<EncryptedIntroSet> construct(std::string bt);
 
         std::string to_string() const;

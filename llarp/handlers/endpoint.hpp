@@ -31,8 +31,10 @@ namespace llarp::handlers
 
         std::chrono::milliseconds _last_introset_regen_attempt{0s};
 
-        // From config -- only in exit mode
+        // Ranges reachable via our endpoint -- Exit mode only!
         std::set<IPRange> _routed_ranges;
+        // policies about traffic that we are willing to carry -- Exit mode only!
+        std::optional<net::TrafficPolicy> _exit_policy = std::nullopt;
 
       public:
         LocalEndpoint(Router& r);

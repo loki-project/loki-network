@@ -5,6 +5,7 @@
 #include <llarp/messages/path.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
+#include <llarp/service/intro_set.hpp>
 #include <llarp/util/buffer.hpp>
 
 namespace llarp::path
@@ -84,6 +85,16 @@ namespace llarp::path
     {
         return send_path_control_message(
             "find_intro", FindIntroMessage::serialize(location, is_relayed, order), std::move(func));
+    }
+
+    bool Path::publish_intro(
+        const service::EncryptedIntroSet& introset,
+        bool is_relayed,
+        uint64_t order,
+        std::function<void(std::string)> func)
+    {
+        return send_path_control_message(
+            "publish_intro", PublishIntroMessage::serialize(introset, is_relayed, order), std::move(func));
     }
 
     bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)

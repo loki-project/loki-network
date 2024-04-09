@@ -292,15 +292,6 @@ namespace llarp
                 {"publish_intro"sv, &LinkManager::handle_publish_intro},
                 {"find_intro"sv, &LinkManager::handle_find_intro}};
 
-        // these requests are direct, i.e. not over a path;
-        // the rest are relay->relay
-        std::unordered_map<
-            std::string_view,
-            void (LinkManager::*)(std::string_view body, std::function<void(std::string)> respond)>
-            direct_requests = {
-                {"publish_intro"sv, &LinkManager::handle_publish_intro},
-                {"find_intro"sv, &LinkManager::handle_find_intro}};
-
         // Path relaying
         void handle_path_control(oxen::quic::message, const RouterID& from);
 

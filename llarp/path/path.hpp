@@ -5,8 +5,6 @@
 #include <llarp/constants/path.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
-#include <llarp/router_id.hpp>
-#include <llarp/service/intro.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -24,10 +22,10 @@ namespace llarp
 {
     struct Router;
 
-    /*
-      TODO:
-        - redo shortname and Router::shortname
-    */
+    namespace service
+    {
+        struct EncryptedIntroSet;
+    }
 
     namespace path
     {
@@ -112,6 +110,12 @@ namespace llarp
 
             bool find_intro(
                 const dht::Key_t& location,
+                bool is_relayed = false,
+                uint64_t order = 0,
+                std::function<void(std::string)> func = nullptr);
+
+            bool publish_intro(
+                const service::EncryptedIntroSet& introset,
                 bool is_relayed = false,
                 uint64_t order = 0,
                 std::function<void(std::string)> func = nullptr);

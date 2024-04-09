@@ -7,7 +7,7 @@ namespace llarp::handlers
     static auto logcat = log::Cat("local_endpoint");
 
     LocalEndpoint::LocalEndpoint(Router& r)
-        : path::PathHandler{r, 3, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}
+        : path::PathHandler{r, path::DEFAULT_PATHS_HELD, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}
     {}
 
     const std::shared_ptr<EventLoop>& LocalEndpoint::loop()
@@ -19,6 +19,14 @@ namespace llarp::handlers
     {
         // TODO: Investigate the usage or the term exit RE: service nodes acting as exits
         // ^^ lol
+        _local_introset.SRVs.clear();
+
+        for (const auto& srv : srv_records())
+        {
+            _local_introset.SRVs.emplace_back(srv);
+        }
+
+        regen_and_publish_introset();
     }
 
     void LocalEndpoint::build_more(size_t n)
@@ -53,13 +61,16 @@ namespace llarp::handlers
                 _local_introset._routed_ranges = _routed_ranges;
             }
 
-            _local_introset.exit_policy = _net_config.traffic_policy;
+            _exit_policy = _net_config.traffic_policy;
+            _local_introset.exit_policy = _exit_policy;
         }
 
         _if_name = *_net_config._if_name;
         _local_range = *_net_config._local_ip_range;
         _local_addr = *_net_config._local_addr;
         _local_ip = *_net_config._local_ip;
+
+        _is_v4 = _local_range.is_ipv4();
     }
 
     void LocalEndpoint::lookup_intro(
@@ -76,17 +87,19 @@ namespace llarp::handlers
             for that session
         -
     */
+    // TODO: this
     void LocalEndpoint::regen_and_publish_introset()
     {
         const auto now = llarp::time_now_ms();
         _last_introset_regen_attempt = now;
-        std::set<service::Introduction, service::IntroExpiryComparator> intros;
+
+        std::set<service::Introduction, service::IntroExpiryComparator> path_intros;
 
         if (auto maybe_intros = get_path_intros_conditional([now](const service::Introduction& intro) -> bool {
                 return not intro.expires_soon(now, path::INTRO_STALE_THRESHOLD);
             }))
         {
-            intros.merge(*maybe_intros);
+            path_intros.merge(*maybe_intros);
         }
         else
         {
@@ -94,7 +107,46 @@ namespace llarp::handlers
             return build_more(1);
         }
 
-        _local_introset.supported_protocols.clear();
+        auto& intro_protos = _local_introset.supported_protocols;
+        intro_protos.clear();
+
+        if (_router.using_tun_if())
+        {
+            intro_protos.push_back(_is_v4 ? service::ProtocolType::TrafficV4 : service::ProtocolType::TrafficV6);
+
+            if (_is_exit_node)
+            {
+                intro_protos.push_back(service::ProtocolType::Exit);
+                _local_introset.exit_policy = _exit_policy;
+                _local_introset._routed_ranges = _routed_ranges;
+            }
+        }
+
+        intro_protos.push_back(service::ProtocolType::TCP2QUIC);
+
+        auto& intros = _local_introset.intros;
+        intros.clear();
+
+        for (auto& intro : path_intros)
+        {
+            if (intros.size() < num_paths_desired)
+                intros.emplace(std::move(intro));
+        }
+
+        // We already check that path_intros is not empty, so we can assert here
+        assert(not intros.empty());
+
+        if (auto maybe_encrypted = _identity.encrypt_and_sign_introset(_local_introset, now))
+        {
+            if (publish_introset(*maybe_encrypted))
+            {
+                log::debug(logcat, "{} republished encrypted introset", name());
+            }
+            else
+                log::warning(logcat, "{} failed to republish encrypted introset!", name());
+        }
+        else
+            log::warning(logcat, "{} failed to encrypt and sign introset!", name());
     }
 
     void LocalEndpoint::handle_initiation_session(ustring decrypted_payload)
@@ -104,8 +156,20 @@ namespace llarp::handlers
 
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
     {
-        (void)introset;
-        return true;
+        bool ret{true};
+
+        {
+            Lock_t l{paths_mutex};
+
+            for (const auto& [rid, path] : _paths)
+            {
+                log::info(logcat, "{} publishing introset to pivot {}", name(), path->pivot_router_id());
+
+                ret += path->publish_intro(introset, true);
+            }
+        }
+
+        return ret;
     }
 
 }  //  namespace llarp::handlers

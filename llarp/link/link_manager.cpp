@@ -207,7 +207,7 @@ namespace llarp
             _router.loop()->call([this, msg = std::move(m)]() mutable { handle_gossip_rc(std::move(msg)); });
         });
 
-        for (auto& method : direct_requests)
+        for (auto& method : path_requests)
         {
             s->register_handler(
                 std::string{method.first}, [this, func = std::move(method.second)](oxen::quic::message m) {
@@ -1043,9 +1043,9 @@ namespace llarp
 
     void LinkManager::handle_publish_intro(std::string_view body, std::function<void(std::string)> respond)
     {
-        std::string introset, derived_signing_key, payload, sig, nonce;
+        service::EncryptedIntroSet enc;
+        std::string introset;
         uint64_t is_relayed, relay_order;
-        std::chrono::milliseconds signed_at;
 
         try
         {
@@ -1055,13 +1055,7 @@ namespace llarp
             relay_order = btdc_a.require<uint64_t>("O");
             is_relayed = btdc_a.require<uint64_t>("R");
 
-            oxenc::bt_dict_consumer btdc_b{introset.data()};
-
-            derived_signing_key = btdc_b.require<std::string>("d");
-            nonce = btdc_b.require<std::string>("n");
-            signed_at = std::chrono::milliseconds{btdc_b.require<uint64_t>("s")};
-            payload = btdc_b.require<std::string>("x");
-            sig = btdc_b.require<std::string>("z");
+            enc = *service::EncryptedIntroSet::construct(std::move(introset));
         }
         catch (const std::exception& e)
         {
@@ -1070,38 +1064,28 @@ namespace llarp
             return;
         }
 
-        const auto now = _router.now();
-        const auto addr = dht::Key_t{reinterpret_cast<uint8_t*>(derived_signing_key.data())};
+        const auto addr = dht::Key_t{reinterpret_cast<uint8_t*>(enc.derived_signing_key.data())};
         const auto local_key = _router.rc().router_id();
 
-        if (not service::EncryptedIntroSet::verify(introset, derived_signing_key, sig))
+        if (not enc.verify())
         {
             log::error(logcat, "Received PublishIntroMessage with invalid introset: {}", introset);
             respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_INTROSET}}));
             return;
         }
 
-        if (now + service::MAX_INTROSET_TIME_DELTA > signed_at + path::DEFAULT_LIFETIME)
-        {
-            log::error(logcat, "Received PublishIntroMessage with expired introset: {}", introset);
-            respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::EXPIRED}}));
-            return;
-        }
+        auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
 
-        auto closest_rcs = _router.node_db()->find_many_closest_to(addr, INTROSET_STORAGE_REDUNDANCY);
-
-        if (closest_rcs.size() != INTROSET_STORAGE_REDUNDANCY)
+        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
         {
             log::error(logcat, "Received PublishIntroMessage but only know {} nodes", closest_rcs.size());
             respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INSUFFICIENT}}));
             return;
         }
 
-        service::EncryptedIntroSet enc{derived_signing_key, signed_at, payload, nonce, sig};
-
         if (is_relayed)
         {
-            if (relay_order >= INTROSET_STORAGE_REDUNDANCY)
+            if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
                 log::error(logcat, "Received PublishIntroMessage with invalide relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_ORDER}}));
@@ -1121,7 +1105,7 @@ namespace llarp
                     relay_order);
 
                 _router.contacts().put_intro(std::move(enc));
-                respond(serialize_response({{messages::STATUS_KEY, ""}}));
+                respond(messages::OK_RESPONSE);
             }
             else
             {
@@ -1130,7 +1114,7 @@ namespace llarp
                 send_control_message(
                     peer_key,
                     "publish_intro",
-                    PublishIntroMessage::serialize(introset, relay_order, is_relayed),
+                    PublishIntroMessage::serialize(enc, relay_order, is_relayed),
                     [respond = std::move(respond)](oxen::quic::message m) {
                         if (m.timed_out)
                             return;  // drop if timed out; requester will have timed out as well
@@ -1158,7 +1142,7 @@ namespace llarp
             log::info(logcat, "Received PublishIntroMessage for {}; we are candidate {}", addr, relay_order);
 
             _router.contacts().put_intro(std::move(enc));
-            respond(serialize_response({{messages::STATUS_KEY, ""}}));
+            respond(messages::OK_RESPONSE);
         }
         else
             log::warning(logcat, "Received non-relayed PublishIntroMessage from {}; we are not the candidate", addr);
@@ -1242,16 +1226,16 @@ namespace llarp
 
         if (is_relayed)
         {
-            if (relay_order >= INTROSET_STORAGE_REDUNDANCY)
+            if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
                 log::warning(logcat, "Received FindIntroMessage with invalid relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INVALID_ORDER}}));
                 return;
             }
 
-            auto closest_rcs = _router.node_db()->find_many_closest_to(addr, INTROSET_STORAGE_REDUNDANCY);
+            auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
 
-            if (closest_rcs.size() != INTROSET_STORAGE_REDUNDANCY)
+            if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
             {
                 log::error(logcat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INSUFFICIENT_NODES}}));
