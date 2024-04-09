@@ -329,9 +329,8 @@ namespace llarp
 
         fs::path default_bootstrap = conf.router.data_dir / "bootstrap.signed";
 
-        auto& bootstrap = _node_db->bootstrap_list();
-
-        bootstrap.populate_bootstraps(bootstrap_paths, default_bootstrap, not _bootstrap_seed);
+        _node_db->bootstrap_list().populate_bootstraps(bootstrap_paths, default_bootstrap, not _bootstrap_seed);
+        _node_db->store_bootstraps();
     }
 
     void Router::process_routerconfig()
@@ -613,9 +612,13 @@ namespace llarp
 
         init_bootstrap();
 
-        // TODO: add something sensible to the first parameter
-        _local_endpoint = std::make_shared<handlers::LocalEndpoint>("", *this);
-        _remote_handler = std::make_shared<handlers::RemoteHandler>("", *this);
+        _node_db->load_from_disk();
+
+        _local_endpoint = std::make_shared<handlers::LocalEndpoint>(*this);
+        _local_endpoint->configure();
+
+        _remote_handler = std::make_shared<handlers::RemoteHandler>(*this);
+        _remote_handler->configure();
 
         if (conf.network.endpoint_type != "embedded")
         {
@@ -1027,9 +1030,6 @@ namespace llarp
 
         _link_manager = LinkManager::make(*this);
 
-        // Init components after relevant config settings loaded
-        _link_manager->init();
-
         if (is_service_node())
         {
             if (not router_contact.is_public_addressable())
@@ -1059,10 +1059,7 @@ namespace llarp
             router_contact.set_router_id(seckey_to_pubkey(identity()));  // resigns RC
         }
 
-        log::info(logcat, "Loading NodeDB from disk...");
-        _node_db->load_from_disk();
-        _node_db->store_bootstraps();
-
+        // This must be constructed AFTER router creates its LocalRC
         log::info(logcat, "Creating Introset Contacts...");
         _contacts = std::make_unique<Contacts>(*this);
 
@@ -1070,7 +1067,10 @@ namespace llarp
 
         _route_poker->start();
 
-        _is_running.store(true);
+        // Resolve needed ONS values now that we have the necessary things prefigured
+        _remote_handler->resolve_ons_mappings();
+
+        _is_running = true;
 
         _started_at = now();
 

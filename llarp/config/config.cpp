@@ -493,7 +493,9 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
+                if (service::is_valid_ons(arg))
+                    _ons_ranges.emplace(std::move(arg), std::move(*range));
+                else if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
                     _exit_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
                 else
                     throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
@@ -711,6 +713,8 @@ namespace llarp
                 path_alignment_timeout = std::chrono::seconds{val};
             });
 
+        constexpr auto addrmap_errorstr = "Invalid entry in persist-addrmap-file:"sv;
+
         conf.define_option<fs::path>(
             "network",
             "persist-addrmap-file",
@@ -722,7 +726,7 @@ namespace llarp
                 "is not specified then the local IP of remote lokinet targets will not persist across",
                 "restarts of lokinet.",
             },
-            [this](fs::path file) {
+            [this, &addrmap_errorstr](fs::path file) {
                 if (file.empty())
                     throw std::invalid_argument("persist-addrmap-file cannot be empty");
 
@@ -761,7 +765,7 @@ namespace llarp
                 {
                     auto err = "Config could not load persisting address map file from path:{}"_format(file);
 
-                    log::info(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
+                    log::warning(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
                 }
                 if (not data.empty())
                 {
@@ -798,28 +802,40 @@ namespace llarp
                             {
                                 log::warning(
                                     logcat,
-                                    "Out of range IP in addr map data: IP:{}, local range:{}",
-                                    addr.host(),
-                                    _local_ip_range);
+                                    "{}: {}",
+                                    addrmap_errorstr,
+                                    "out of range IP! (local range:{}, IP:{})"_format(_local_ip_range, addr.host()));
                                 continue;
                             }
 
-                            if (const auto* str = std::get_if<std::string>(&value))
+                            const auto* arg = std::get_if<std::string>(&value);
+
+                            if (not arg)
                             {
-                                if (auto maybe_netaddr = NetworkAddress::from_network_addr(*str))
-                                {
-                                    _persisting_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
-                                }
-                                else
-                                    log::warning(logcat, "Invalid address in addr map: {}", *str);
+                                log::warning(logcat, "{}: {}", addrmap_errorstr, "not a string!");
+                                continue;
+                            }
+
+                            if (service::is_valid_ons(*arg))
+                            {
+                                log::warning(logcat, "{}: {}", addrmap_errorstr, "cannot accept ONS names!");
+                                continue;
+                            }
+
+                            if (auto maybe_netaddr = NetworkAddress::from_network_addr(*arg))
+                            {
+                                _persisting_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
                             }
                             else
-                                log::warning(logcat, "Invalid first entry in addr map: not a string");
+                                log::warning(logcat, "{}: {}", addrmap_errorstr, *arg);
                         }
-                        catch (...)
+                        catch (const std::exception& e)
                         {
                             log::warning(
-                                logcat, "Exception caught parsing key:value pair in addr persist file (key:{})", key);
+                                logcat,
+                                "Exception caught parsing key:value (key:{}) pair in addr persist file:{}",
+                                key,
+                                e.what());
                         }
                     }
                 }

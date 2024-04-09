@@ -226,13 +226,16 @@ namespace llarp
 
     LinkManager::LinkManager(Router& r)
         : _router{r},
+          node_db{_router.node_db()},
           _is_service_node{_router.is_service_node()},
           quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), size_t{32}},
               {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), size_t{32}})},
           ep{startup_endpoint(), *this}
-    {}
+    {
+        is_stopping = false;
+    }
 
     std::unique_ptr<LinkManager> LinkManager::make(Router& r)
     {
@@ -632,12 +635,6 @@ namespace llarp
     StatusObject LinkManager::extract_status() const
     {
         return {};
-    }
-
-    void LinkManager::init()
-    {
-        is_stopping = false;
-        node_db = _router.node_db();
     }
 
     void LinkManager::connect_to_random(size_t num_conns, bool client_only)

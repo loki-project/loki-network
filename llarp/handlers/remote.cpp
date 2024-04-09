@@ -9,8 +9,7 @@ namespace llarp::handlers
 {
     static auto logcat = log::Cat("remote_handler");
 
-    RemoteHandler::RemoteHandler(std::string name, Router& r)
-        : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}, _name{std::move(name)}
+    RemoteHandler::RemoteHandler(Router& r) : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}
     {}
 
     RemoteHandler::~RemoteHandler() = default;
@@ -29,6 +28,27 @@ namespace llarp::handlers
             log::debug(logcat, "RemoteHandler successfully initiated {} path-builds", n);
         else
             log::warning(logcat, "RemoteHandler only initiated {} path-builds (needed: {})", count, n);
+    }
+
+    void RemoteHandler::resolve_ons_mappings()
+    {
+        auto& ons_ranges = _router.config()->network._ons_ranges;
+
+        for (auto itr = ons_ranges.begin(); itr != ons_ranges.end();)
+        {
+            resolve_ons(
+                std::move(itr->first),
+                [this, ip_range = std::move(itr->second)](std::optional<NetworkAddress> maybe_addr) {
+                    if (maybe_addr)
+                    {
+                        log::debug(logcat, "Successfully resolved ONS lookup for {}", *maybe_addr);
+                        map_remote_to_local_range(std::move(*maybe_addr), std::move(ip_range));
+                    }
+                    // we don't need to print a fail message, as it is logged prior to invoking with std::nullopt
+                });
+
+            itr = ons_ranges.erase(itr);
+        }
     }
 
     void RemoteHandler::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
@@ -159,29 +179,28 @@ namespace llarp::handlers
         // ^^ lol
     }
 
-    void RemoteHandler::configure(const NetworkConfig& networkConfig, const DnsConfig& dnsConfig)
+    void RemoteHandler::configure()
     {
-        _dns_config = dnsConfig;
-        _net_config = networkConfig;
+        auto dns_config = _router.config()->dns;
+        auto net_config = _router.config()->network;
 
-        _local_range = *_net_config._local_ip_range;
+        _local_range = *net_config._local_ip_range;
 
         if (!_local_range.address().is_addressable())
             throw std::runtime_error("IPRange has been pre-processed and is not free!");
 
         _use_v6 = not _local_range.is_ipv4();
-        _local_addr = *_net_config._local_addr;
-        _local_ip = *_net_config._local_ip;
-        _if_name = *_net_config._if_name;
+        _local_addr = *net_config._local_addr;
+        _local_ip = *net_config._local_ip;
+        _if_name = *net_config._if_name;
 
         if (_if_name.empty())
             throw std::runtime_error("Interface name has been pre-processed and is not found!");
 
-        // TODO: move this to TunEndpoint!!!
-        // for (const auto& [remote, addr] : _net_config._remote_exit_ip_routing)
-        // {
-        //     _address_map.insert_or_assign(addr, remote);
-        // }
+        for (auto& [addr, range] : net_config._exit_ranges)
+        {
+            map_remote_to_local_range(addr, range);
+        }
     }
 
     void RemoteHandler::make_session(RouterID remote, std::shared_ptr<path::Path> path, bool is_exit, bool is_snode)

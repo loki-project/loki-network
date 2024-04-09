@@ -189,7 +189,6 @@ namespace llarp
 
         void process_netconfig();
 
-      protected:
         std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};
         std::chrono::system_clock::time_point next_rc_gossip{last_rc_gossip};
         std::chrono::system_clock::time_point next_initial_fetch_attempt{last_rc_gossip};

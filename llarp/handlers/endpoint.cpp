@@ -6,8 +6,8 @@ namespace llarp::handlers
 {
     static auto logcat = log::Cat("local_endpoint");
 
-    LocalEndpoint::LocalEndpoint(std::string name, Router& r)
-        : path::PathHandler{r, 3, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}, _name{std::move(name)}
+    LocalEndpoint::LocalEndpoint(Router& r)
+        : path::PathHandler{r, 3, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}
     {}
 
     const std::shared_ptr<EventLoop>& LocalEndpoint::loop()
@@ -37,30 +37,29 @@ namespace llarp::handlers
             log::warning(logcat, "LocalEndpoint only initiated {} path-builds (needed: {})", count, n);
     }
 
-    bool LocalEndpoint::configure(NetworkConfig& netconf, DnsConfig& dnsconf)
+    void LocalEndpoint::configure()
     {
-        _is_exit_node = _router.is_exit_node();
-        // _is_snode_service = _router.is
+        // auto _dns_config = _router.config()->dns;
+        auto _net_config = _router.config()->network;
 
-        (void)dnsconf;
+        _is_exit_node = _router.is_exit_node();
+        _is_snode_service = _router.is_service_node();
 
         if (_is_exit_node)
         {
-            if (not netconf._routed_ranges.empty())
+            if (not _net_config._routed_ranges.empty())
             {
-                _routed_ranges.merge(netconf._routed_ranges);
+                _routed_ranges.merge(_net_config._routed_ranges);
                 _local_introset._routed_ranges = _routed_ranges;
             }
 
-            _local_introset.exit_policy = netconf.traffic_policy;
+            _local_introset.exit_policy = _net_config.traffic_policy;
         }
 
-        _if_name = *netconf._if_name;
-        _local_range = *netconf._local_ip_range;
-        _local_addr = *netconf._local_addr;
-        _local_ip = *netconf._local_ip;
-
-        return true;
+        _if_name = *_net_config._if_name;
+        _local_range = *_net_config._local_ip_range;
+        _local_addr = *_net_config._local_addr;
+        _local_ip = *_net_config._local_ip;
     }
 
     void LocalEndpoint::lookup_intro(

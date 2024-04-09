@@ -22,7 +22,7 @@ namespace llarp
         std::unique_ptr<dht::Bucket<dht::ISNode>> _introset_nodes;
 
       public:
-        Contacts(Router& r);
+        explicit Contacts(Router& r);
 
         std::optional<service::IntroSet> get_decrypted_introset(RouterID remote) const;
 

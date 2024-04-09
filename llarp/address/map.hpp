@@ -8,10 +8,6 @@
 
 namespace llarp
 {
-    /** TODO:
-        - add overloaded [] operators
-    */
-
     /** This class will accept any types satisfying the concepts LocalAddrType and RemoteAddrType
             LocalAddrType: oxen::quic::Address or IPRange
             NetworkAddrType: must be inherited from NetworkAddress

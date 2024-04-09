@@ -59,7 +59,8 @@ namespace llarp
         bool operator==(const NetworkAddress& other) const;
         bool operator!=(const NetworkAddress& other) const;
 
-        // Will throw invalid_argument with bad input
+        // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
+        // or '.snode'
         static std::optional<NetworkAddress> from_network_addr(std::string arg);
 
         bool is_client() const
@@ -89,7 +90,7 @@ namespace llarp
 
         std::string to_string() const
         {
-            return name() + _tld;
+            return name().append(_tld);
         }
     };
 

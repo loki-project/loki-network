@@ -19,7 +19,7 @@ namespace llarp::handlers
         bool _is_snode_service{false};  // TODO:
         bool _is_v4;
 
-        std::string _name;
+        std::string _name{"LocalEndpoint"};
 
         std::string _if_name;
         oxen::quic::Address _local_addr;
@@ -35,11 +35,11 @@ namespace llarp::handlers
         std::set<IPRange> _routed_ranges;
 
       public:
-        LocalEndpoint(std::string name, Router& r);
+        LocalEndpoint(Router& r);
 
         ~LocalEndpoint() override = default;
 
-        bool configure(NetworkConfig& conf, DnsConfig& dnsConf);
+        void configure();
 
         void regen_and_publish_introset();
 

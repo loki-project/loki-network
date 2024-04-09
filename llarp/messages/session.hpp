@@ -22,7 +22,10 @@ namespace llarp
         static auto logcat = llarp::log::Cat("session-init");
 
         inline static std::string serialize_encrypt(
-            RouterID& local, RouterID& remote, service::SessionTag& tag, std::optional<std::string_view> auth_token)
+            const RouterID& local,
+            const RouterID& remote,
+            service::SessionTag& tag,
+            std::optional<std::string_view> auth_token)
         {
             try
             {

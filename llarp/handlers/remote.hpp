@@ -23,14 +23,11 @@ namespace llarp
                                      public std::enable_shared_from_this<RemoteHandler>
         {
           private:
-            std::string _name;
+            std::string _name{"RemoteHandler"};
 
             address_map<oxen::quic::Address, NetworkAddress> _address_map;
 
             address_map<IPRange, NetworkAddress> _range_map;
-
-            DnsConfig _dns_config;
-            NetworkConfig _net_config;
 
             IPRange _local_range;
             oxen::quic::Address _local_addr;
@@ -43,7 +40,7 @@ namespace llarp
             bool _use_v6;
 
           public:
-            RemoteHandler(std::string name, Router& r);
+            RemoteHandler(Router& r);
             ~RemoteHandler() override;
 
             std::shared_ptr<PathHandler> get_self() override
@@ -56,7 +53,7 @@ namespace llarp
                 return weak_from_this();
             }
 
-            void configure(const NetworkConfig& networkConfig, const DnsConfig& dnsConfig);
+            void configure();
 
             std::string name() const override
             {
@@ -84,6 +81,9 @@ namespace llarp
                 bool is_relayed,
                 uint64_t order,
                 std::function<void(std::optional<service::IntroSet>)> func);
+
+            // resolves any config mappings that parsed ONS addresses to their pubkey network address
+            void resolve_ons_mappings();
 
             template <NetworkAddrType net_addr_t>
             bool initiate_remote_service_session(net_addr_t& remote)

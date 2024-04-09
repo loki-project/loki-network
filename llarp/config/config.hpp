@@ -143,13 +143,10 @@ namespace llarp
 
         std::optional<fs::path> addr_map_persist_file;
 
-        // Pass to TunEndpoint
-        // TODO:
-        //  - make this accept '.snode' addresses
-        //  - does not need to suppport ONS
+        // Pass to TunEndpoint -- combine with _reserved_local_addrs
         std::unordered_map<NetworkAddress, oxen::quic::Address> _persisting_addrs;
 
-        // only member that refers to an actual interface
+        // the only member that refers to an actual interface
         std::optional<std::string> _if_name;
 
         // If _local_ip_range is set, the following two optionals are also set
@@ -161,16 +158,16 @@ namespace llarp
 
         // Remote exit or hidden service addresses mapped to fixed local IP addresses
         // TODO:
-        //  - make this accept '.snode' addresses
-        //  - does not need to support ONS
         //  - pass to TunEndpoint
         //  - create separate "reserved_ips" mapping or load directly into TunEndpoint mapping (probably better)
         //      - when a session is created, check here when assigning IP's
         std::unordered_map<NetworkAddress, oxen::quic::Address> _reserved_local_addrs;
 
         // Remote client exit addresses mapped to local IP ranges
-        // TODO: make this accept ONS
         std::unordered_map<NetworkAddress, IPRange> _exit_ranges;
+
+        // Remote client ONS exit addresses mapped to local IP ranges pending ONS address resolution
+        std::unordered_map<std::string, IPRange> _ons_ranges;
 
         // Used when in exit mode; pass down to LocalEndpoint
         std::set<IPRange> _routed_ranges;

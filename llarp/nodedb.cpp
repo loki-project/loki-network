@@ -807,19 +807,30 @@ namespace llarp
 
     void NodeDB::store_bootstraps()
     {
+        log::trace(logcat, "NodeDB storing bootstraps...");
+
         if (_bootstraps.empty())
             return;
 
-        for (const auto& rc : _bootstraps)
-        {
-            put_rc(rc);
-        }
+        size_t counter{0};
 
-        log::critical(logcat, "NodeDB stored {} bootstrap routers", _bootstraps.size());
+        for (const auto& rc : _bootstraps)
+            counter += put_rc(rc);
+
+        auto bsz = _bootstraps.size();
+        auto success = counter == bsz;
+        auto msg = "NodeDB {}successfully stored {}/{} bootstrap routers"_format(success ? "" : "un", counter, bsz);
+
+        if (success)
+            log::debug(logcat, "{}", msg);
+        else
+            log::critical(logcat, "{}", msg);
     }
 
     void NodeDB::load_from_disk()
     {
+        log::debug(logcat, "Loading NodeDB from disk...");
+
         if (_root.empty())
             return;
 
@@ -917,6 +928,7 @@ namespace llarp
 
     bool NodeDB::put_rc(RemoteRC rc, rc_time now)
     {
+        bool ret{true};
         const auto& rid = rc.router_id();
 
         if (rid == _router.local_rid())
@@ -926,11 +938,12 @@ namespace llarp
         rc_lookup.erase(rid);
 
         auto [itr, b] = known_rcs.insert(std::move(rc));
-        rc_lookup.emplace(rid, *itr);
-        known_rids.insert(rid);
+        ret &= b;
+        ret &= rc_lookup.emplace(rid, *itr).second;
+        ret &= known_rids.insert(rid).second;
 
         last_rc_update_times[rid] = now;
-        return true;
+        return ret;
     }
 
     size_t NodeDB::num_rcs() const

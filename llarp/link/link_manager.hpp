@@ -149,17 +149,17 @@ namespace llarp
 
         util::DecayingHashSet<RouterID> clients{path::DEFAULT_LIFETIME};
 
+        Router& _router;
+
         std::shared_ptr<NodeDB> node_db;
 
         oxen::quic::Address addr;
 
-        Router& _router;
-
         const bool _is_service_node;
 
-        // FIXME: Lokinet currently expects to be able to kill all network functionality before
-        // finishing other shutdown things, including destroying this class, and that is all in
-        // Network's destructor, so we need to be able to destroy it before this class.
+        // NOTE: DO NOT CHANGE THE ORDER OF THESE THREE OBJECTS
+        // The quic Network must be created prior to the GNUTLS credentials, which are necessary for the creation of the
+        // quic endpoint. These are delegate initialized in the LinkManager constructor sequentially
         std::unique_ptr<oxen::quic::Network> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
         link::Endpoint ep;
@@ -244,8 +244,6 @@ namespace llarp
         void check_persisting_conns(std::chrono::milliseconds now);
 
         StatusObject extract_status() const;
-
-        void init();
 
         void for_each_connection(std::function<void(link::Connection&)> func);
 
