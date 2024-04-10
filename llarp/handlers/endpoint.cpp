@@ -47,7 +47,6 @@ namespace llarp::handlers
 
     void LocalEndpoint::configure()
     {
-        // auto _dns_config = _router.config()->dns;
         auto net_config = _router.config()->network;
 
         if (net_config.is_reachable)
@@ -67,6 +66,9 @@ namespace llarp::handlers
             _exit_policy = net_config.traffic_policy;
             _local_introset.exit_policy = _exit_policy;
         }
+
+        if (not net_config.srv_records.empty())
+            _local_introset.SRVs = std::move(net_config.srv_records);
 
         _if_name = *net_config._if_name;
         _local_range = *net_config._local_ip_range;

@@ -128,7 +128,4 @@ namespace llarp
 
     /// PKE(result, publickey, secretkey, nonce)
     using path_dh_func = bool (*)(SharedSecret&, const PubKey&, const SecretKey&, const TunnelNonce&);
-
-    /// SH(result, body)
-    using shorthash_func = bool (*)(ShortHash&, const llarp_buffer_t&);
 }  // namespace llarp

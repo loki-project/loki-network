@@ -1,6 +1,5 @@
 #include "srv_data.hpp"
 
-// #include <llarp/util/bencode.h>
 #include <llarp/util/str.hpp>
 #include <llarp/util/types.hpp>
 

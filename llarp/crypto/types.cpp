@@ -10,37 +10,6 @@
 
 namespace llarp
 {
-    // bool PubKey::from_hex(const std::string& str)
-    // {
-    //     if (str.size() != 2 * size())
-    //         return false;
-    //     oxenc::from_hex(str.begin(), str.end(), begin());
-    //     return true;
-    // }
-
-    // PubKey PubKey::make_from_hex(const std::string& s)
-    // {
-    //     PubKey p;
-    //     oxenc::from_hex(s.begin(), s.end(), p.begin());
-    //     return p;
-    // }
-
-    // std::string PubKey::to_string() const
-    // {
-    //     return oxenc::to_hex(begin(), end());
-    // }
-
-    // PubKey& PubKey::operator=(const uint8_t* ptr)
-    // {
-    //     std::copy(ptr, ptr + SIZE, begin());
-    //     return *this;
-    // }
-
-    // bool operator==(const PubKey& lhs, const PubKey& rhs)
-    // {
-    //     return lhs.as_array() == rhs.as_array();
-    // }
-
     PubKey SecretKey::to_pubkey() const
     {
         return PubKey(data() + 32);
@@ -49,7 +18,9 @@ namespace llarp
     bool SecretKey::load_from_file(const fs::path& fname)
     {
         size_t sz;
-        std::array<uint8_t, 128> tmp;
+        std::string tmp;
+        tmp.resize(128);
+
         try
         {
             sz = util::file_to_buffer(fname, tmp.data(), tmp.size());
@@ -66,8 +37,7 @@ namespace llarp
             return true;
         }
 
-        llarp_buffer_t buf(tmp);
-        return BDecode(&buf);
+        return bt_decode(tmp);
     }
 
     bool SecretKey::recalculate()

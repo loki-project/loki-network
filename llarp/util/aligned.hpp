@@ -1,9 +1,9 @@
 #pragma once
 
-#include "bencode.h"
 #include "formattable.hpp"
 #include "logging.hpp"
 
+#include <oxenc/bt.h>
 #include <oxenc/hex.h>
 
 #include <algorithm>
@@ -202,18 +202,6 @@ namespace llarp
             return _data.cend();
         }
 
-        // TODO: move to .cpp file to add static logcat def
-        bool FromBytestring(llarp_buffer_t* buf)
-        {
-            if (buf->sz != sz)
-            {
-                // log::error(logcat, "bdecode buffer size mismatch {}!={}", buf->sz, sz);
-                return false;
-            }
-            memcpy(data(), buf->base, sz);
-            return true;
-        }
-
         bool from_string(std::string_view b)
         {
             if (b.size() != sz)
@@ -226,24 +214,15 @@ namespace llarp
             return true;
         }
 
-        bool bt_encode(llarp_buffer_t* buf) const
-        {
-            return bencode_write_bytestring(buf, data(), sz);
-        }
-
         std::string bt_encode() const
         {
-            return {reinterpret_cast<const char*>(data()), sz};
+            return oxenc::bt_serialize(_data);
         }
 
-        bool BDecode(llarp_buffer_t* buf)
+        bool bt_decode(std::string buf)
         {
-            llarp_buffer_t strbuf;
-            if (!bencode_read_string(buf, &strbuf))
-            {
-                return false;
-            }
-            return FromBytestring(&strbuf);
+            oxenc::bt_deserialize<decltype(*this)>(buf, *this);
+            return true;
         }
 
         std::string_view to_view() const

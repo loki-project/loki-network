@@ -2,6 +2,7 @@
 
 #include <llarp/crypto/constants.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/buffer.hpp>
 #include <llarp/util/concept.hpp>
 
 /** TODO:

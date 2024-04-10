@@ -3,8 +3,8 @@
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
-#include <llarp/path/path_context.hpp>
 #include <llarp/router/router.hpp>
+#include <llarp/util/formattable.hpp>
 
 #include <utility>
 
@@ -87,7 +87,7 @@ namespace llarp::session
         path::PathHandler::path_build_succeeded(remote, p);
 
         // TODO: add callback here
-        if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->TXID().bt_encode()))
+        if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->TXID().to_string()))
             log::info(logcat, "Asking {} for exit", _remote_router);
         else
             log::warning(logcat, "Failed to send exit request");
@@ -156,7 +156,7 @@ namespace llarp::session
 
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
-        if (p->close_exit(_auth->session_key(), p->TXID().bt_encode()))
+        if (p->close_exit(_auth->session_key(), p->TXID().to_string()))
             log::info(logcat, "Sent path close on path {}", p->to_string());
         else
             log::warning(logcat, "Failed to send path close on path {}", p->to_string());

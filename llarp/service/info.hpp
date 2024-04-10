@@ -3,6 +3,7 @@
 #include "vanity.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/constants/proto.hpp>
 #include <llarp/crypto/types.hpp>
 
 #include <oxenc/bt.h>

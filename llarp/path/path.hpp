@@ -34,7 +34,7 @@ namespace llarp
         struct PathHopConfig;
 
         /// A path we made
-        struct Path final : public std::enable_shared_from_this<Path>
+        struct Path : public std::enable_shared_from_this<Path>
         {
             std::vector<PathHopConfig> hops;
 

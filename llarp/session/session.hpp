@@ -5,7 +5,6 @@
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
 #include <llarp/path/path_handler.hpp>
-#include <llarp/util/concept.hpp>
 
 #include <deque>
 #include <queue>
