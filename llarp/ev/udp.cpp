@@ -2,7 +2,7 @@
 
 namespace llarp
 {
-    static auto logcat = log::Cat("UDP");
+    static auto logcat = log::Cat("ev-udp");
 
     inline constexpr size_t MAX_BATCH =
 #if defined(OXEN_LIBQUIC_UDP_SENDMMSG) || defined(OXEN_LIBQUIC_UDP_GSO)
@@ -11,10 +11,10 @@ namespace llarp
         1;
 #endif
 
-    UDPHandle::UDPHandle(loop_ptr ev, const oxen::quic::Address& bind, udp_pkt_hook cb)
+    UDPHandle::UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, udp_pkt_hook cb)
+        : _loop{ev}
     {
-        socket = std::make_unique<UDPSocket>(ev.get(), bind, std::move(cb));
-
+        socket = std::make_unique<UDPSocket>(ev->loop().get(), bind, std::move(cb));
         _local = socket->address();
     }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "udp.hpp"
+#include "types.hpp"
 
 #include <llarp/net/interface_info.hpp>
 #include <llarp/util/buffer.hpp>
@@ -98,10 +98,29 @@ namespace llarp
                 true);
         }
 
+        // Returns a pointer deleter that defers invocation of a custom deleter to the event loop
+        template <typename T, typename Callable>
+        auto wrapped_deleter(Callable&& f)
+        {
+            return _loop->wrapped_deleter<T>(std::forward<Callable>(f));
+        }
+
+        // Similar in concept to std::make_shared<T>, but it creates the shared pointer with a
+        // custom deleter that dispatches actual object destruction to the network's event loop for
+        // thread safety.
         template <typename T, typename... Args>
         std::shared_ptr<T> make_shared(Args&&... args)
         {
             return _loop->make_shared<T>(std::forward<Args>(args)...);
+        }
+
+        // Similar to the above make_shared, but instead of forwarding arguments for the
+        // construction of the object, it creates the shared_ptr from the already created object ptr
+        // and wraps the object's deleter in a wrapped_deleter
+        template <typename T, typename Callable>
+        std::shared_ptr<T> shared_ptr(T* obj, Callable&& deleter)
+        {
+            return _loop->shared_ptr<T, Callable>(std::forward<T>(obj), std::forward<Callable>(deleter));
         }
 
         template <typename Callable>

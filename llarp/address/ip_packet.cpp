@@ -29,20 +29,37 @@ namespace llarp
     {}
 
     IPPacket::IPPacket(std::vector<uint8_t> data) : IPPacket{data.data(), data.size()}
-    {
-        _init_internals();
-    }
+    {}
 
     IPPacket::IPPacket(const uint8_t* buf, size_t len)
     {
         if (len < MIN_PACKET_SIZE)
         {
             _buf.resize(0);
-            return;
+        }
+        else
+        {
+            _buf.resize(len);
+            std::copy_n(buf, len, _buf.data());
         }
 
-        _buf.resize(len);
-        std::copy_n(buf, len, _buf.data());
+        _init_internals();
+    }
+
+    IPPacket IPPacket::from_udp(UDPPacket pkt)
+    {
+        auto& data = pkt.data;
+        return IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()};
+    }
+
+    std::optional<IPPacket> IPPacket::from_buffer(const uint8_t* buf, size_t len)
+    {
+        std::optional<IPPacket> ret = std::nullopt;
+
+        if (IPPacket b; b.load(buf, len))
+            ret.emplace(std::move(b));
+
+        return ret;
     }
 
     void IPPacket::_init_internals()
@@ -279,12 +296,6 @@ namespace llarp
             return pkt;
         }
         return std::nullopt;
-    }
-
-    IPPacket IPPacket::from_udp(UDPPacket pkt)
-    {
-        auto& data = pkt.data;
-        return IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()};
     }
 
     UDPPacket IPPacket::make_udp()

@@ -23,7 +23,7 @@ namespace llarp::win32
 {
     namespace
     {
-        auto logcat = log::Cat("wintun");
+        static auto logcat = log::Cat("wintun");
         constexpr auto PoolName = "lokinet";
 
         WINTUN_CREATE_ADAPTER_FUNC* create_adapter = nullptr;

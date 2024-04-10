@@ -94,8 +94,9 @@ lokinet_add_library(lokinet-time-place
   address/keys.cpp
   address/utils.cpp
 
-  ev/udp.cpp
   ev/loop.cpp
+  ev/tcp.cpp
+  ev/udp.cpp
 
   net/ip.cpp
   net/net_int.cpp

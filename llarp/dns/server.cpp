@@ -35,7 +35,7 @@ namespace llarp::dns
         oxen::quic::Address _local_addr;
 
       public:
-        explicit UDPReader(Server& dns, const loop_ptr& loop, oxen::quic::Address bind) : _dns{dns}
+        explicit UDPReader(Server& dns, const std::shared_ptr<EventLoop>& loop, oxen::quic::Address bind) : _dns{dns}
         {
             _udp = std::make_unique<UDPHandle>(loop, bind, [&](UDPPacket pkt) {
                 auto& src = pkt.path.local;

@@ -1,20 +1,23 @@
 #pragma once
 
-#include "types.hpp"
+#include "loop.hpp"
 
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 
 namespace llarp
 {
-    struct UDPHandle
+    class EventLoop;
+
+    class UDPHandle
     {
       public:
         UDPHandle() = delete;
-        explicit UDPHandle(loop_ptr ev, const oxen::quic::Address& bind, udp_pkt_hook cb);
+        explicit UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, udp_pkt_hook cb);
         ~UDPHandle();
 
       private:
+        std::shared_ptr<EventLoop> _loop;
         std::unique_ptr<UDPSocket> socket;
         oxen::quic::Address _local;
 

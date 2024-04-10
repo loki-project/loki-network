@@ -1,5 +1,7 @@
 #pragma once
 
+#include <llarp/util/buffer.hpp>
+
 #include <oxen/quic.hpp>
 
 namespace llarp
@@ -10,6 +12,7 @@ namespace llarp
 
     using udp_pkt_hook = std::function<void(UDPPacket&& pkt)>;
     using ip_pkt_hook = std::function<void(IPPacket)>;
+    using rcv_data_hook = std::function<void(ustring)>;
 
     using UDPSocket = oxen::quic::UDPSocket;
 

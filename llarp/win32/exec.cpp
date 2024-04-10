@@ -10,7 +10,7 @@ namespace llarp::win32
 {
     namespace
     {
-        auto logcat = log::Cat("win32:exec");
+        static auto logcat = log::Cat("win32:exec");
 
         /// get the directory for system32 which contains all the executables we use
         std::string SystemExeDir()

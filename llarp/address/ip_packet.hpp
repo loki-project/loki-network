@@ -38,6 +38,7 @@ namespace llarp
         explicit IPPacket(const uint8_t* buf, size_t len);
 
         static IPPacket from_udp(UDPPacket pkt);
+        static std::optional<IPPacket> from_buffer(const uint8_t* buf, size_t len);
 
         UDPPacket make_udp();
 
