@@ -19,9 +19,9 @@ namespace llarp
         return oxenc::to_base32z(begin(), begin() + 5);
     }
 
-    StatusObject RouterID::ExtractStatus() const
+    nlohmann::json RouterID::ExtractStatus() const
     {
-        StatusObject obj{{"snode", to_string()}, {"hex", ToHex()}};
+        nlohmann::json obj{{"snode", to_string()}, {"hex", ToHex()}};
         return obj;
     }
 

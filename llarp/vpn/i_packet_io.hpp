@@ -1,7 +1,6 @@
 #pragma once
 
 #include <llarp/address/ip_packet.hpp>
-#include <llarp/util/types.hpp>
 
 #include <functional>
 

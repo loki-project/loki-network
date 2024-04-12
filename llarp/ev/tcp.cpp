@@ -37,19 +37,6 @@ namespace llarp
 
         auto *handle = reinterpret_cast<TCPHandle *>(user_arg);
         assert(handle);
-
-        auto bfd = bufferevent_getfd(bev);
-
-        if (auto maybe_str = handle->get_socket_stream(bfd))
-        {
-            log::trace(logcat, "TCP handle passing received data to corresponding stream!");
-            maybe_str->send(ustring_view{buf.data(), nwrite});
-        }
-        else
-        {
-            log::error(logcat, "TCP handle could not find corresponding stream to fd:{}", bfd);
-            handle->close_socket(bfd);
-        }
     };
 
     static void tcp_event_cb(struct bufferevent *bev, short what, void *user_arg)
@@ -82,6 +69,8 @@ namespace llarp
         auto *b = evconnlistener_get_base(listener);
         auto *bevent = bufferevent_socket_new(b, fd, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
 
+        // TODO: make TCPSocket here!
+
         bufferevent_setcb(bevent, tcp_read_cb, nullptr, tcp_event_cb, user_arg);
         bufferevent_enable(bevent, EV_READ | EV_WRITE);
 
@@ -100,7 +89,8 @@ namespace llarp
         // DISCUSS: close everything here?
     };
 
-    TCPSocket::TCPSocket(struct bufferevent *_bev, const oxen::quic::Address &_src) : bev{_bev}, src{_src}
+    TCPSocket::TCPSocket(struct bufferevent *_bev, evutil_socket_t _fd, const oxen::quic::Address &_src)
+        : bev{_bev}, fd{_fd}, src{_src}
     {}
 
     TCPSocket::~TCPSocket()
@@ -109,31 +99,15 @@ namespace llarp
         log::debug(logcat, "TCPSocket shut down!");
     }
 
-    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, const oxen::quic::Address &bind, rcv_data_hook cb)
-        : _ev{ev_loop}, _receive_cb{std::move(cb)}
+    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, const oxen::quic::Address &bind, tcpsock_hook cb)
+        : _ev{ev_loop}, _socket_maker{std::move(cb)}
     {
         assert(_ev);
 
-        if (!_receive_cb)
+        if (!_socket_maker)
             throw std::logic_error{"TCPSocket construction requires a non-empty receive callback"};
 
         _init_internals(bind);
-    }
-
-    std::shared_ptr<oxen::quic::Stream> TCPHandle::get_socket_stream(evutil_socket_t fd)
-    {
-        if (auto itr = routing.find(fd); itr != routing.end())
-        {
-            if (auto str = itr->second->stream.lock())
-                return str;
-        }
-
-        return nullptr;
-    }
-
-    void TCPHandle::close_socket(evutil_socket_t fd)
-    {
-        routing.erase(fd);
     }
 
     void TCPHandle::_init_internals(const oxen::quic::Address &bind)

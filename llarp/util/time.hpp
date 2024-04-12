@@ -1,6 +1,7 @@
 #pragma once
 
-#include "types.hpp"
+#include "buffer.hpp"
+#include "formattable.hpp"
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
@@ -33,11 +34,8 @@ namespace llarp
     // Returns a string such as "27m13s ago" or "in 1h12m" or "now".  You get precision of minutes
     // (for >=1h), seconds (>=10s), or milliseconds.  The `now_threshold` argument controls how
     // close to current time (default 1s) the time has to be to get the "now" argument.
-    std::string short_time_from_now(const TimePoint_t& t, const std::chrono::milliseconds& now_threshold = 1s);
-
-    // Makes a duration human readable.  This always has full millisecond precision, but formats up
-    // to hours. E.g. "-4h04m12.123s" or "1234h00m09.876s.
-    std::string to_string(std::chrono::milliseconds t);
+    std::string short_time_from_now(
+        const std::chrono::system_clock::time_point& t, const std::chrono::milliseconds& now_threshold = 1s);
 
     inline timeval loop_time_to_timeval(loop_time t)
     {

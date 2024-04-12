@@ -314,7 +314,7 @@ namespace llarp::vpn
 
         void default_route_via_interface(NetworkInterface& vpn, int cmd, int flags)
         {
-            const auto& info = vpn.Info();
+            const auto& info = vpn.interface_info();
 
             const auto maybe = Net().get_interface_addr(info.ifname);
             if (not maybe)
@@ -340,7 +340,7 @@ namespace llarp::vpn
 
         void route_via_interface(int cmd, int flags, NetworkInterface& vpn, IPRange range)
         {
-            const auto& info = vpn.Info();
+            const auto& info = vpn.interface_info();
             if (range.is_ipv4())
             {
                 const auto maybe = Net().get_interface_addr(info.ifname);
@@ -431,7 +431,7 @@ namespace llarp::vpn
 
         std::vector<oxen::quic::Address> get_non_interface_gateways(NetworkInterface& vpn) override
         {
-            const auto& ifname = vpn.Info().ifname;
+            const auto& ifname = vpn.interface_info().ifname;
             std::vector<oxen::quic::Address> gateways{};
 
             std::ifstream inf{"/proc/net/route"};

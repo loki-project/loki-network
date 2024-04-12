@@ -6,9 +6,9 @@ namespace llarp::service
 {
     static auto logcat = log::Cat("introduction");
 
-    StatusObject Introduction::ExtractStatus() const
+    nlohmann::json Introduction::ExtractStatus() const
     {
-        StatusObject obj{
+        nlohmann::json obj{
             {"router", pivot_router.ToHex()},
             {"path", hop_id.ToHex()},
             {"expiresAt", to_json(expiry)},

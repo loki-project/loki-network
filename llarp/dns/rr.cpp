@@ -73,9 +73,9 @@ namespace llarp::dns
         return true;
     }
 
-    StatusObject ResourceRecord::ToJSON() const
+    nlohmann::json ResourceRecord::ToJSON() const
     {
-        return StatusObject{
+        return nlohmann::json{
             {"name", rr_name},
             {"type", rr_type},
             {"class", rr_class},

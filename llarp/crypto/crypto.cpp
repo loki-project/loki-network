@@ -19,6 +19,8 @@
 #include <crypt.h>
 #endif
 
+using namespace std::literals;
+
 namespace llarp
 {
     static auto logcat = log::Cat("crypto");

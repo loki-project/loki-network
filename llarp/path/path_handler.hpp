@@ -7,7 +7,6 @@
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
-#include <llarp/util/types.hpp>
 
 #include <atomic>
 #include <set>
@@ -68,7 +67,7 @@ namespace llarp
             uint64_t path_fails = 0;   // path failures post-build
             uint64_t timeouts = 0;
 
-            StatusObject ExtractStatus() const;
+            nlohmann::json ExtractStatus() const;
 
             double SuccessRatio() const;
 
@@ -171,7 +170,7 @@ namespace llarp
             std::optional<std::set<service::Introduction>> get_path_intros_conditional(
                 std::function<bool(const service::Introduction&)> filter) const;
 
-            StatusObject ExtractStatus() const;
+            nlohmann::json ExtractStatus() const;
 
             virtual bool should_build_more() const;
 

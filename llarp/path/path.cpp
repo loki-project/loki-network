@@ -246,9 +246,9 @@ namespace llarp::path
         return hops_str;
     }
 
-    StatusObject PathHopConfig::ExtractStatus() const
+    nlohmann::json PathHopConfig::ExtractStatus() const
     {
-        StatusObject obj{
+        nlohmann::json obj{
             {"ip", rc.addr().to_string()},
             {"lifetime", to_json(lifetime)},
             {"router", rc.router_id().ToHex()},
@@ -257,11 +257,11 @@ namespace llarp::path
         return obj;
     }
 
-    StatusObject Path::ExtractStatus() const
+    nlohmann::json Path::ExtractStatus() const
     {
         auto now = llarp::time_now_ms();
 
-        StatusObject obj{
+        nlohmann::json obj{
             {"intro", intro.ExtractStatus()},
             {"lastRecvMsg", to_json(last_recv_msg)},
             {"lastLatencyTest", to_json(last_latency_test)},
@@ -275,8 +275,8 @@ namespace llarp::path
             // {"hasExit", SupportsAnyRoles(ePathRoleExit)}
         };
 
-        std::vector<StatusObject> hopsObj;
-        std::transform(hops.begin(), hops.end(), std::back_inserter(hopsObj), [](const auto& hop) -> StatusObject {
+        std::vector<nlohmann::json> hopsObj;
+        std::transform(hops.begin(), hops.end(), std::back_inserter(hopsObj), [](const auto& hop) -> nlohmann::json {
             return hop.ExtractStatus();
         });
         obj["hops"] = hopsObj;

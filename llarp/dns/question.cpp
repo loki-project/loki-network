@@ -51,9 +51,9 @@ namespace llarp::dns
         return true;
     }
 
-    StatusObject Question::ToJSON() const
+    nlohmann::json Question::ToJSON() const
     {
-        return StatusObject{{"qname", qname}, {"qtype", qtype}, {"qclass", qclass}};
+        return nlohmann::json{{"qname", qname}, {"qtype", qtype}, {"qclass", qclass}};
     }
 
     bool Question::IsName(const std::string& other) const

@@ -128,8 +128,24 @@ namespace llarp::handlers
         }
     };
 
-    TunEndpoint::TunEndpoint(Router& r) : BaseHandler{r}, _packet_router{}
+    TunEndpoint::TunEndpoint(Router& r) : _router{r}, _packet_router{}
     {
+        auto& keyfile = _router.config()->network.keyfile;
+
+        try
+        {
+            if (keyfile.has_value())
+                _identity.ensure_keys(*keyfile, _router.key_manager()->needs_backup());
+            else
+                _identity.regenerate_keys();
+        }
+        catch (const std::exception& e)
+        {
+            auto err = "API endpoint keyfile failed to load: {}"_format(e.what());
+            log::error(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
         _packet_router =
             std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_user_packet(std::move(pkt)); });
 
@@ -138,8 +154,10 @@ namespace llarp::handlers
 
     void TunEndpoint::setup_dns()
     {
+        log::info(logcat, "{} setting up DNS...", name());
+
         auto& dns_config = _router.config()->dns;
-        const auto& info = get_vpn_interface()->Info();
+        const auto& info = get_vpn_interface()->interface_info();
 
         if (dns_config.raw)
         {
@@ -165,14 +183,14 @@ namespace llarp::handlers
             });
         }
         else
-            _dns = std::make_shared<dns::Server>(router().loop(), dns_config, info.index);
+            _dns = std::make_shared<dns::Server>(_router.loop(), dns_config, info.index);
 
         _dns->add_resolver(weak_from_this());
         _dns->start();
 
         if (dns_config.raw)
         {
-            if (auto vpn = router().vpn_platform())
+            if (auto vpn = _router.vpn_platform())
             {
                 // get the first local address we know of
                 std::optional<oxen::quic::Address> localaddr;
@@ -207,7 +225,7 @@ namespace llarp::handlers
         }
     }
 
-    StatusObject TunEndpoint::ExtractStatus() const
+    nlohmann::json TunEndpoint::ExtractStatus() const
     {
         // auto obj = service::Endpoint::ExtractStatus();
         // obj["ifaddr"] = m_OurRange.to_string();
@@ -227,10 +245,10 @@ namespace llarp::handlers
         // if (not m_DnsConfig.bind_addr.empty())
         //   obj["localResolver"] = localRes[0];
 
-        // StatusObject ips{};
+        // nlohmann::json ips{};
         // for (const auto& item : m_IPActivity)
         // {
-        //   StatusObject ipObj{{"lastActive", to_json(item.second)}};
+        //   nlohmann::json ipObj{{"lastActive", to_json(item.second)}};
         //   std::string remoteStr;
         //   AlignedBuffer<32> addr = m_IPToAddr.at(item.first);
         //   if (m_SNodes.at(addr))
@@ -261,7 +279,7 @@ namespace llarp::handlers
         }
     }
 
-    bool TunEndpoint::configure()
+    void TunEndpoint::configure()
     {
         auto& net_conf = _router.config()->network;
 
@@ -292,7 +310,6 @@ namespace llarp::handlers
         }
 
         _traffic_policy = net_conf.traffic_policy;
-
         _base_ipv6_range = net_conf._base_ipv6_range;
 
         if (net_conf.path_alignment_timeout)
@@ -308,7 +325,7 @@ namespace llarp::handlers
         _local_addr = *net_conf._local_addr;
         _local_ip = *net_conf._local_ip;
 
-        _use_v6 = not _local_range.is_ipv4();
+        _is_ipv6 = not _local_range.is_ipv4();
 
         _persisting_addr_file = net_conf.addr_map_persist_file;
 
@@ -320,6 +337,50 @@ namespace llarp::handlers
             }
         }
 
+        _local_netaddr = NetworkAddress::from_pubkey(_router.pubkey(), not _router.is_service_node());
+        local_ip_mapping.insert_or_assign(get_if_addr(), _local_netaddr);
+
+        vpn::InterfaceInfo info;
+        info.addrs.emplace_back(_local_range);
+
+        if (_base_ipv6_range)
+        {
+            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+            info.addrs.emplace_back(*_base_ipv6_range);
+        }
+
+        info.ifname = _if_name;
+        log::info(logcat, "{} setting up network...", name());
+
+        _net_if = router().vpn_platform()->CreateInterface(std::move(info), &_router);
+
+        _if_name = _net_if->interface_info().ifname;
+        log::info(logcat, "{} got network interface:{}", name(), _if_name);
+
+        auto handle_packet = [netif = _net_if, pktrouter = _packet_router](IPPacket pkt) {
+            // TODO: packets used to have reply hooks
+            // pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
+            pktrouter->handle_ip_packet(std::move(pkt));
+        };
+
+        if (not router().loop()->add_network_interface(_net_if, std::move(handle_packet)))
+        {
+            auto err = "{} failed to add network interface!"_format(name());
+            log::error(logcat, "{}", err);
+            throw std::runtime_error{std::move(err)};
+        }
+
+        _local_ipv6 = _is_ipv6 ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
+
+        if constexpr (not llarp::platform::is_apple)
+        {
+            if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+            {
+                _local_ipv6 = *maybe;
+                log::info(logcat, "{} has ipv6 address:{}", name(), _local_ipv6);
+            }
+        }
+
         // if (auto* quic = GetQUICTunnel())
         // {
         // TODO:
@@ -327,7 +388,9 @@ namespace llarp::handlers
         //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
         // });
         // }
-        return true;
+
+        setup_dns();
+        assert(has_mapped_address(_local_netaddr));
     }
 
     static bool is_random_snode(const dns::Message& msg)
@@ -733,7 +796,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::supports_ipv6() const
     {
-        return _use_v6;
+        return _is_ipv6;
     }
 
     // FIXME: pass in which question it should be addressing
@@ -775,11 +838,6 @@ namespace llarp::handlers
 #endif
     }
 
-    bool TunEndpoint::start()
-    {
-        return setup_networking();
-    }
-
     bool TunEndpoint::is_service_node() const
     {
         return _router.is_service_node();
@@ -788,94 +846,6 @@ namespace llarp::handlers
     bool TunEndpoint::is_exit_node() const
     {
         return _router.is_exit_node();
-    }
-
-    bool TunEndpoint::setup_tun()
-    {
-        _next_ip = _local_ip;
-        // _max_ip = _local_range.HighestAddr();
-        log::info(logcat, "{} set {} to have address {}", name(), _if_name, _local_addr);
-        // log::info(logcat, "{} allocated up to {} on range {}", name(), _max_ip, _local_range);
-
-        auto& local_netaddr = _identity.pub.address();
-
-        local_ip_mapping.insert_or_assign(get_if_addr(), local_netaddr);
-
-        vpn::InterfaceInfo info;
-        info.addrs.emplace_back(_local_range);
-
-        if (_base_ipv6_range)
-        {
-            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
-            info.addrs.emplace_back(*_base_ipv6_range);
-        }
-
-        info.ifname = _if_name;
-
-        log::info(logcat, "{} setting up network...", name());
-
-        try
-        {
-            _net_if = router().vpn_platform()->CreateInterface(std::move(info), &_router);
-        }
-        catch (std::exception& ex)
-        {
-            log::error(logcat, "{} failed to set up network interface: ", name(), ex.what());
-            return false;
-        }
-
-        _if_name = _net_if->Info().ifname;
-        log::info(logcat, "{} got network interface:{}", name(), _if_name);
-
-        auto handle_packet = [netif = _net_if, pktrouter = _packet_router](UDPPacket pkt) {
-            // TODO: packets used to have reply hooks
-            // pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
-            pktrouter->handle_ip_packet(std::move(pkt));
-        };
-
-        if (not router().loop()->add_network_interface(_net_if, std::move(handle_packet)))
-        {
-            log::error(logcat, "{} failed to add network interface!", name());
-            return false;
-        }
-
-        _local_ipv6 = _local_range.is_ipv4()
-            ? oxen::quic::Address{_local_range.address().to_ipv6(), _local_range.address().port()}
-            : _local_range.address();
-
-        if constexpr (not llarp::platform::is_apple)
-        {
-            if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
-            {
-                _local_ipv6 = *maybe;
-                log::info(logcat, "{} has ipv6 address:{}", name(), _local_ipv6);
-            }
-        }
-
-        log::info(logcat, "{} setting up DNS...", name());
-        setup_dns();
-        // loop()->call_soon([this]() { router().route_poker()->set_dns_mode(false); });
-        return has_mapped_address(local_netaddr);
-    }
-
-    // std::unordered_map<std::string, std::string>
-    // TunEndpoint::NotifyParams() const
-    // {
-    //   auto env = Endpoint::NotifyParams();
-    //   env.emplace("IP_ADDR", m_OurIP.to_string());
-    //   env.emplace("IF_ADDR", m_OurRange.to_string());
-    //   env.emplace("IF_NAME", m_IfName);
-    //   std::string strictConnect;
-    //   for (const auto& addr : m_StrictConnectAddrs)
-    //     strictConnect += addr.to_string() + " ";
-    //   env.emplace("STRICT_CONNECT_ADDRS", strictConnect);
-    //   return env;
-    // }
-
-    bool TunEndpoint::setup_networking()
-    {
-        log::info(logcat, "Set Up networking for {}", name());
-        return setup_tun();
     }
 
     bool TunEndpoint::stop()

@@ -5,7 +5,6 @@
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path.hpp>
-#include <llarp/util/types.hpp>
 
 namespace llarp::service
 {
@@ -34,7 +33,7 @@ namespace llarp::service
         std::chrono::milliseconds lastSend{};
         std::chrono::milliseconds lastRecv{};
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
         /// called to indicate we recieved on this session
         void RX();

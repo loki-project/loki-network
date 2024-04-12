@@ -120,9 +120,9 @@ namespace llarp
         return true;
     }
 
-    StatusObject RouterContact::extract_status() const
+    nlohmann::json RouterContact::extract_status() const
     {
-        StatusObject obj{
+        nlohmann::json obj{
             {"lastUpdated", _timestamp.time_since_epoch().count()},
             {"publicRouter", is_public_addressable()},
             {"identity", _router_id.to_string()},
@@ -132,7 +132,7 @@ namespace llarp
         // {
         //   obj["routerVersion"] = routerVersion->to_string();
         // }
-        // std::vector<StatusObject> srv;
+        // std::vector<nlohmann::json> srv;
         // for (const auto& record : srvRecords)
         // {
         //   srv.emplace_back(record.ExtractStatus());

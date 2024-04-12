@@ -10,6 +10,7 @@
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/endpoint.hpp>
 #include <llarp/handlers/remote.hpp>
+#include <llarp/handlers/tun.hpp>
 #include <llarp/path/path_context.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router_contact.hpp>
@@ -21,7 +22,6 @@
 #include <llarp/util/service_manager.hpp>
 #include <llarp/util/str.hpp>
 #include <llarp/util/time.hpp>
-#include <llarp/util/types.hpp>
 #include <llarp/vpn/platform.hpp>
 
 #include <oxenmq/address.h>
@@ -37,11 +37,6 @@
 
 namespace llarp
 {
-    namespace handlers
-    {
-        struct BaseHandler;
-    }
-
     namespace link
     {
         struct Connection;
@@ -125,13 +120,14 @@ namespace llarp
         std::shared_ptr<handlers::RemoteHandler> _remote_handler;
         std::shared_ptr<handlers::LocalEndpoint> _local_endpoint;
 
-        // TunEndpoint or NullEndpoint, depending on lokinet configuration
-        std::unique_ptr<handlers::BaseHandler> _api;
+        // Only created in full client and relay instances (not embedded clients)
+        std::unique_ptr<handlers::TunEndpoint> _tun;
 
         std::shared_ptr<EventLoop> _loop;
         std::shared_ptr<vpn::Platform> _vpn;
         path::PathContext paths;
         SecretKey _identity;
+        RouterID _id_pubkey;
         SecretKey _encryption;
         std::shared_ptr<Contacts> _contacts;
         std::shared_ptr<NodeDB> _node_db;
@@ -179,9 +175,7 @@ namespace llarp
 
         void init_rpc();
 
-        void init_net_if();
-
-        void init_api();
+        void init_tun();
 
         void init_bootstrap();
 
@@ -340,9 +334,9 @@ namespace llarp
 
         oxen::quic::Address listen_addr() const;
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
-        StatusObject ExtractSummaryStatus() const;
+        nlohmann::json ExtractSummaryStatus() const;
 
         const std::set<RouterID>& get_whitelist() const;
 
@@ -437,10 +431,15 @@ namespace llarp
 
         bool PathToRouterAllowed(const RouterID& router) const;
 
-        const uint8_t* pubkey() const
+        const RouterID& pubkey() const
         {
-            return local_rid().data();
+            return _id_pubkey;
         }
+
+        // const uint8_t* pubkey() const
+        // {
+        //     return seckey_to_pubkey(_identity);
+        // }
 
         /// send to remote router or queue for sending
         /// returns false on overflow

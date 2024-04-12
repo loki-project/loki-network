@@ -50,7 +50,7 @@ namespace llarp
         : _loop{std::make_shared<oxen::quic::Loop>(std::move(loop_ptr), thread_id)}
     {}
 
-    bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler)
+    bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler)
     {
         (void)netif;
         (void)handler;

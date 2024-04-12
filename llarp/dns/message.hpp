@@ -33,7 +33,7 @@ namespace llarp
 
             bool Decode(llarp_buffer_t* buf) override;
 
-            StatusObject ToJSON() const override;
+            nlohmann::json ToJSON() const override;
 
             bool operator==(const MessageHeader& other) const
             {
@@ -50,7 +50,7 @@ namespace llarp
             Message(Message&& other);
             Message(const Message& other);
 
-            StatusObject ToJSON() const override;
+            nlohmann::json ToJSON() const override;
 
             void add_nx_reply(RR_TTL_t ttl = 1);
 

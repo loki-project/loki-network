@@ -62,7 +62,7 @@ namespace llarp::session
         p->rebuild();
     }
 
-    StatusObject OutboundSession::ExtractStatus() const
+    nlohmann::json OutboundSession::ExtractStatus() const
     {
         auto obj = path::PathHandler::ExtractStatus();
         obj["lastExitUse"] = to_json(_last_use);

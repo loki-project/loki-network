@@ -3,6 +3,7 @@
 #include "keys.hpp"
 #include "utils.hpp"
 
+#include <llarp/router_id.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/concept.hpp>
@@ -27,30 +28,22 @@ namespace llarp
       private:
         PubKey _pubkey;
 
-        std::string _tld;
         bool _is_client{false};
+        std::string _tld;
 
+        // This private constructor expects a '.snode' or '.loki' suffix
         explicit NetworkAddress(std::string_view addr, std::string_view tld);
 
-      public:
-        template <RemotePubKeyType pubkey_t>
-        explicit NetworkAddress(pubkey_t pubkey, std::string_view tld) : NetworkAddress{pubkey.to_view(), tld}
+        // This private constructor expects NO '.snode' or '.loki' suffix
+        explicit NetworkAddress(RouterID rid, bool is_client) : _pubkey{std::move(rid)}, _is_client{is_client}
         {}
 
+      public:
         NetworkAddress() = default;
         ~NetworkAddress() = default;
 
-        explicit NetworkAddress(RelayPubKey rpk) : NetworkAddress{rpk, TLD::SNODE}
-        {}
-
-        explicit NetworkAddress(ClientPubKey cpk) : NetworkAddress{cpk, TLD::LOKI}
-        {}
-
-        NetworkAddress(const NetworkAddress& other) : NetworkAddress{other._pubkey, other._tld}
-        {}
-
-        NetworkAddress(NetworkAddress&& other) : NetworkAddress{std::move(other._pubkey), std::move(other._tld)}
-        {}
+        NetworkAddress(const NetworkAddress& other) = default;
+        NetworkAddress(NetworkAddress&& other) = default;
 
         NetworkAddress& operator=(const NetworkAddress& other) = default;
         NetworkAddress& operator=(NetworkAddress&& other) = default;
@@ -66,7 +59,10 @@ namespace llarp
 
         // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
         // or '.snode'
-        static std::optional<NetworkAddress> from_network_addr(std::string arg);
+        static std::optional<NetworkAddress> from_network_addr(const std::string& arg);
+
+        // Assumes that the pubkey passed is NOT terminated in either a '.loki' or '.snode' suffix
+        static NetworkAddress from_pubkey(const RouterID& rid, bool is_client);
 
         bool is_client() const
         {
@@ -104,11 +100,14 @@ namespace llarp
         lokinet relay. This object is NOT meant to be used in any scope referring to a hidden service or exit node
         being operated on that remote relay (not that service nodes operate exit nodes anyways) -- for that, use the
         above NetworkAddress type.
+
+        This object will become more differentiated from NetworkAddress once {Relay,Client}PubKey is implemented.
+        That is a whole other can of worms...
     */
     struct RelayAddress
     {
       private:
-        RelayPubKey _pubkey;
+        PubKey _pubkey;
 
         explicit RelayAddress(std::string_view addr);
 
@@ -116,7 +115,7 @@ namespace llarp
         RelayAddress() = default;
         ~RelayAddress() = default;
 
-        explicit RelayAddress(RelayPubKey cpk) : _pubkey{std::move(cpk)}
+        explicit RelayAddress(PubKey cpk) : _pubkey{std::move(cpk)}
         {}
 
         RelayAddress(const RelayAddress& other) = default;
@@ -134,7 +133,7 @@ namespace llarp
         // Will throw invalid_argument with bad input
         static std::optional<RelayAddress> from_relay_addr(std::string arg);
 
-        const RelayPubKey& pubkey()
+        const PubKey& pubkey()
         {
             return _pubkey;
         }

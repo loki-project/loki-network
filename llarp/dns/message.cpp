@@ -47,9 +47,9 @@ namespace llarp::dns
         return true;
     }
 
-    StatusObject MessageHeader::ToJSON() const
+    nlohmann::json MessageHeader::ToJSON() const
     {
-        return StatusObject{};
+        return nlohmann::json{};
     }
 
     Message::Message(Message&& other)
@@ -129,10 +129,10 @@ namespace llarp::dns
         return true;
     }
 
-    StatusObject Message::ToJSON() const
+    nlohmann::json Message::ToJSON() const
     {
-        std::vector<StatusObject> ques;
-        std::vector<StatusObject> ans;
+        std::vector<nlohmann::json> ques;
+        std::vector<nlohmann::json> ans;
         for (const auto& q : questions)
         {
             ques.push_back(q.ToJSON());
@@ -141,7 +141,7 @@ namespace llarp::dns
         {
             ans.push_back(a.ToJSON());
         }
-        return StatusObject{{"questions", ques}, {"answers", ans}};
+        return nlohmann::json{{"questions", ques}, {"answers", ans}};
     }
 
     std::vector<uint8_t> Message::to_buffer() const

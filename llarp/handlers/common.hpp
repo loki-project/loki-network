@@ -17,7 +17,6 @@
 
 namespace llarp::handlers
 {
-    inline constexpr auto LOKI_RESOLVER = "lokinet"sv;
 
     /** This class holds methods common to handlers::{Tun,Null}Endpoints in regards to their packet
         routing and other API capabilities.
@@ -59,7 +58,7 @@ namespace llarp::handlers
 
         virtual bool setup_networking() = 0;
 
-        virtual void load_key_file(std::optional<fs::path> p, Router& r);
+        virtual void load_key_file(std::optional<fs::path> p);
 
         virtual vpn::EgresPacketRouter* egres_packet_router()
         {

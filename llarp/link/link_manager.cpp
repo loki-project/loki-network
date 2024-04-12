@@ -481,7 +481,7 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing message to ");
+        log::critical(logcat, "Queueing message to {}", remote);
 
         _router.loop()->call(
             [this, remote, endpoint = std::move(endpoint), body = std::move(body), f = std::move(func)]() {
@@ -632,7 +632,7 @@ namespace llarp
     }
 
     // TODO: this
-    StatusObject LinkManager::extract_status() const
+    nlohmann::json LinkManager::extract_status() const
     {
         return {};
     }

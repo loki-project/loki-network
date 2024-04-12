@@ -19,7 +19,7 @@ namespace llarp::handlers
         bool _is_snode_service{false};  // TODO:
         bool _is_v4;
 
-        std::string _name{"LocalEndpoint"};
+        const std::string _name{"LocalEndpoint"};
 
         std::string _if_name;
         oxen::quic::Address _local_addr;

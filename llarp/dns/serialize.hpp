@@ -1,7 +1,8 @@
 #pragma once
 
 #include <llarp/util/buffer.hpp>
-#include <llarp/util/types.hpp>
+
+#include <nlohmann/json.hpp>
 
 #include <vector>
 
@@ -19,7 +20,7 @@ namespace llarp::dns
         virtual bool Decode(llarp_buffer_t* buf) = 0;
 
         /// convert this whatever into json
-        virtual StatusObject ToJSON() const = 0;
+        virtual nlohmann::json ToJSON() const = 0;
     };
 
     bool EncodeRData(llarp_buffer_t* buf, const std::vector<uint8_t>& rdata);

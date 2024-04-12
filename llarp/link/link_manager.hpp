@@ -243,7 +243,7 @@ namespace llarp
 
         void check_persisting_conns(std::chrono::milliseconds now);
 
-        StatusObject extract_status() const;
+        nlohmann::json extract_status() const;
 
         void for_each_connection(std::function<void(link::Connection&)> func);
 

@@ -5,13 +5,14 @@
 #include <llarp/crypto/constants.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
-#include <llarp/util/types.hpp>
 
 #include <charconv>
 #include <optional>
 #include <set>
 #include <string_view>
 #include <system_error>
+
+using namespace std::literals;
 
 namespace llarp
 {

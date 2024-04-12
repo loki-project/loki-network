@@ -6,12 +6,12 @@ namespace llarp::handlers
 {
     static auto logcat = llarp::log::Cat("base_handler");
 
-    void BaseHandler::load_key_file(std::optional<fs::path> p, Router& r)
+    void BaseHandler::load_key_file(std::optional<fs::path> p)
     {
         try
         {
             if (p.has_value())
-                _identity.ensure_keys(*p, r.key_manager()->needs_backup());
+                _identity.ensure_keys(*p, _router.key_manager()->needs_backup());
             else
                 _identity.regenerate_keys();
         }

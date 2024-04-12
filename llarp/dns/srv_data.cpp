@@ -1,7 +1,6 @@
 #include "srv_data.hpp"
 
 #include <llarp/util/str.hpp>
-#include <llarp/util/types.hpp>
 
 #include <oxenc/bt_serialize.h>
 
@@ -163,9 +162,9 @@ namespace llarp::dns
         return std::nullopt;
     }
 
-    StatusObject SRVData::ExtractStatus() const
+    nlohmann::json SRVData::ExtractStatus() const
     {
-        return StatusObject{
+        return nlohmann::json{
             {"proto", service_proto}, {"priority", priority}, {"weight", weight}, {"port", port}, {"target", target}};
     }
 }  // namespace llarp::dns

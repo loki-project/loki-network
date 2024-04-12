@@ -59,7 +59,7 @@ namespace llarp
             return _loop->in_event_loop();
         }
 
-        bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, udp_pkt_hook handler);
+        bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler);
 
         template <typename Callable>
         void call(Callable&& f)

@@ -9,8 +9,6 @@ namespace llarp::vpn
 {
     struct Layer4Handler;
 
-    // DISCUSS: do we need this fucking protocol mapping shit??
-
     class PacketRouter
     {
         ip_pkt_hook _handler;
@@ -21,7 +19,7 @@ namespace llarp::vpn
         explicit PacketRouter(ip_pkt_hook baseHandler);
 
         /// feed in an ip packet for handling
-        void handle_ip_packet(UDPPacket pkt);
+        void handle_ip_packet(IPPacket pkt);
 
         /// add a non udp packet handler using ip protocol proto
         void add_ip_proto_handler(uint8_t proto, ip_pkt_hook func);

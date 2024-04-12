@@ -5,6 +5,8 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/util/formattable.hpp>
 
+#include <nlohmann/json.hpp>
+
 namespace llarp
 {
     struct RouterID : public PubKey
@@ -27,7 +29,7 @@ namespace llarp
         RouterID(std::string_view data) : RouterID(to_usv(data))
         {}
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
         std::string to_string() const;
 

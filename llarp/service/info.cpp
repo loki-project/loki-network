@@ -1,7 +1,5 @@
 #include "info.hpp"
 
-#include "address.hpp"
-
 #include <llarp/crypto/crypto.hpp>
 
 namespace llarp::service

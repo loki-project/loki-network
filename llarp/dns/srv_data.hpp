@@ -4,8 +4,6 @@
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <llarp/util/types.hpp>
-
 #include <string_view>
 #include <tuple>
 
@@ -89,7 +87,7 @@ namespace llarp::dns
 
         bool bt_decode(std::string buf);
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
       private:
         bool bt_decode(oxenc::bt_dict_consumer& btdc);

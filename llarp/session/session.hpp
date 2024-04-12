@@ -92,7 +92,7 @@ namespace llarp
 
             void build_more(size_t n = 0) override;
 
-            StatusObject ExtractStatus() const;
+            nlohmann::json ExtractStatus() const;
 
             void reset_path_state() override;
 

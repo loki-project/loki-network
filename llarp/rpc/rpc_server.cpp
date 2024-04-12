@@ -131,7 +131,7 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Version& version)
     {
-        StatusObject result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
+        nlohmann::json result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
 
         SetJSONResponse(result, version.response);
     }
@@ -196,7 +196,7 @@ namespace llarp::rpc
             // auto [addr, id] = quic->open(
             //     req.remoteHost, req.port, [](auto&&) {}, laddr);
 
-            StatusObject status;
+            nlohmann::json status;
             // status["addr"] = addr.to_string();
             // status["id"] = id;
 
@@ -258,7 +258,7 @@ namespace llarp::rpc
                 return;
             }
 
-            StatusObject result;
+            nlohmann::json result;
             result["id"] = id;
             std::string localAddress;
             var::visit([&](auto&& addr) { localAddress = addr.to_string(); }, endpoint->local_address());
@@ -310,7 +310,7 @@ namespace llarp::rpc
         //     if (session and session->IsReady())
         //     {
         //       const auto ip = net::TruncateV6(endpoint->GetIPForIdent(PubKey{routerID}));
-        //       StatusObject status{{"ip", ip.to_string()}};
+        //       nlohmann::json status{{"ip", ip.to_string()}};
         //       SetJSONResponse(status, lookupsnode.response);
         //       return;
         //     }

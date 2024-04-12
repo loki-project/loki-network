@@ -2,7 +2,6 @@
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path_types.hpp>
-#include <llarp/util/types.hpp>
 
 #include <oxenc/bt.h>
 
@@ -22,7 +21,7 @@ namespace llarp::service
         Introduction() = default;
         Introduction(std::string buf);
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
         bool is_expired(std::chrono::milliseconds now) const
         {

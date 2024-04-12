@@ -253,9 +253,9 @@ namespace llarp::net
         return true;
     }
 
-    StatusObject ProtocolInfo::ExtractStatus() const
+    nlohmann::json ProtocolInfo::ExtractStatus() const
     {
-        StatusObject status{
+        nlohmann::json status{
             {"protocol", static_cast<uint32_t>(protocol)},
         };
         if (port)
@@ -263,19 +263,19 @@ namespace llarp::net
         return status;
     }
 
-    StatusObject TrafficPolicy::ExtractStatus() const
+    nlohmann::json TrafficPolicy::ExtractStatus() const
     {
-        std::vector<StatusObject> rangesStatus;
+        std::vector<nlohmann::json> rangesStatus;
         std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
             return range.to_string();
         });
 
-        std::vector<StatusObject> protosStatus;
+        std::vector<nlohmann::json> protosStatus;
         std::transform(protocols.begin(), protocols.end(), std::back_inserter(protosStatus), [](const auto& proto) {
             return proto.ExtractStatus();
         });
 
-        return StatusObject{{"ranges", rangesStatus}, {"protocols", protosStatus}};
+        return nlohmann::json{{"ranges", rangesStatus}, {"protocols", protosStatus}};
     }
 
 }  // namespace llarp::net

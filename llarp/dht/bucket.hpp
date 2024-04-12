@@ -3,8 +3,6 @@
 #include "kademlia.hpp"
 #include "key.hpp"
 
-#include <llarp/util/types.hpp>
-
 #include <map>
 #include <set>
 #include <vector>
@@ -22,9 +20,9 @@ namespace llarp::dht
         Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r))
         {}
 
-        StatusObject ExtractStatus() const
+        nlohmann::json ExtractStatus() const
         {
-            StatusObject obj{};
+            nlohmann::json obj{};
             for (const auto& item : nodes)
             {
                 obj[item.first.to_string()] = item.second.ExtractStatus();

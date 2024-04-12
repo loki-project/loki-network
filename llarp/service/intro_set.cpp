@@ -18,7 +18,7 @@ namespace llarp::service
           introset_payload{reinterpret_cast<uint8_t*>(enc_payload.data()), enc_payload.size()},
           nonce{reinterpret_cast<uint8_t*>(nonce.data())}
     {
-        derived_signing_key = make_from_hex<PubKey>(signing_key);
+        derived_signing_key.from_hex(signing_key);
         sig.from_string(std::move(s));
     }
 
@@ -35,7 +35,7 @@ namespace llarp::service
         }
     }
 
-    StatusObject EncryptedIntroSet::ExtractStatus() const
+    nlohmann::json EncryptedIntroSet::ExtractStatus() const
     {
         const auto sz = introset_payload.size();
         return {{"location", derived_signing_key.to_string()}, {"signedAt", to_json(signed_at)}, {"size", sz}};
@@ -180,33 +180,33 @@ namespace llarp::service
             reinterpret_cast<uint8_t*>(sig.data()));
     }
 
-    StatusObject IntroSet::ExtractStatus() const
+    nlohmann::json IntroSet::ExtractStatus() const
     {
-        StatusObject obj{{"published", to_json(time_signed)}};
+        nlohmann::json obj{{"published", to_json(time_signed)}};
         // TODO: this
-        // std::vector<StatusObject> introsObjs;
+        // std::vector<nlohmann::json> introsObjs;
         // std::transform(
         //     intros.begin(),
         //     intros.end(),
         //     std::back_inserter(introsObjs),
-        //     [](const auto& intro) -> StatusObject { return intro.ExtractStatus(); });
+        //     [](const auto& intro) -> nlohmann::json { return intro.ExtractStatus(); });
         // obj["intros"] = introsObjs;
         // if (!topic.IsZero())
         //   obj["topic"] = topic.to_string();
 
-        // std::vector<StatusObject> protocols;
+        // std::vector<nlohmann::json> protocols;
         // std::transform(
         //     supported_protocols.begin(),
         //     supported_protocols.end(),
         //     std::back_inserter(protocols),
-        //     [](const auto& proto) -> StatusObject { return service::to_string(proto); });
+        //     [](const auto& proto) -> nlohmann::json { return service::to_string(proto); });
         // obj["protos"] = protocols;
-        // std::vector<StatusObject> ranges;
+        // std::vector<nlohmann::json> ranges;
         // std::transform(
         //     owned_ranges.begin(),
         //     owned_ranges.end(),
         //     std::back_inserter(ranges),
-        //     [](const auto& range) -> StatusObject { return range.to_string(); });
+        //     [](const auto& range) -> nlohmann::json { return range.to_string(); });
 
         // obj["advertisedRanges"] = ranges;
         // if (exit_policy)

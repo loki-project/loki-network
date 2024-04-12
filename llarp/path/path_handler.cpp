@@ -32,9 +32,9 @@ namespace llarp::path
         return _edge_limiter.Contains(router);
     }
 
-    StatusObject BuildStats::ExtractStatus() const
+    nlohmann::json BuildStats::ExtractStatus() const
     {
-        return StatusObject{
+        return nlohmann::json{
             {"success", success}, {"attempts", attempts}, {"timeouts", timeouts}, {"fails", build_fails}};
     }
 
@@ -314,14 +314,14 @@ namespace llarp::path
         }
     }
 
-    StatusObject PathHandler::ExtractStatus() const
+    nlohmann::json PathHandler::ExtractStatus() const
     {
-        StatusObject obj{
+        nlohmann::json obj{
             {"buildStats", _build_stats.ExtractStatus()},
             {"numHops", uint64_t{num_hops}},
             {"numPaths", uint64_t{num_paths_desired}}};
         std::transform(
-            _paths.begin(), _paths.end(), std::back_inserter(obj["paths"]), [](const auto& item) -> StatusObject {
+            _paths.begin(), _paths.end(), std::back_inserter(obj["paths"]), [](const auto& item) -> nlohmann::json {
                 return item.second->ExtractStatus();
             });
         return obj;

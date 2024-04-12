@@ -17,38 +17,22 @@
 #include <type_traits>
 #include <variant>
 
-/**
-  DISCUSS:
-    - Q: Where should {Tun,Null}Endpoint live in the heirarchy?
-
-    - Q: Does it make more sense for {Tun,Null}Endpoint to bypass service::Handler and directly
-      inherit from PathBuilder?
-      - A: Likely. The addition of handlers::RemoteHandler to the inheritance of service::Handler
-        and exit::Handler strengthen this argument, as those functionalities are not necessary for
-        {Tun,Null}Endpoint.
-    - Q: Is EndpointBase necessary? Or is session management outside the scope of {Tun,Null}Endpoint
-      - A: Likely not. But will leave it in at the moment. The previous implementation brought in
-        EndpointBase via service::Endpoint, and it seems reachability in regards to introsets may
-        be important.
-*/
-
 namespace llarp::handlers
 {
-    inline const auto TUN = "tun"s;
+    inline constexpr auto TUN = "tun"sv;
+    inline constexpr auto LOKI_RESOLVER = "lokinet"sv;
 
-    struct TunEndpoint final : public dns::Resolver_Base,
-                               public BaseHandler,
-                               public std::enable_shared_from_this<TunEndpoint>
+    struct TunEndpoint : public dns::Resolver_Base, public std::enable_shared_from_this<TunEndpoint>
     {
         TunEndpoint(Router& r);
         ~TunEndpoint() override;
 
-        vpn::NetworkInterface* get_vpn_interface() override
+        vpn::NetworkInterface* get_vpn_interface()
         {
             return _net_if.get();
         }
 
-        std::string name() const override
+        std::string_view name() const
         {
             return TUN;
         }
@@ -72,16 +56,13 @@ namespace llarp::handlers
         // Reconfigures DNS servers and restarts libunbound with the new servers.
         void reconfigure_dns(std::vector<oxen::quic::Address> servers);
 
-        bool configure() override;
+        void configure();
 
-        std::string get_if_name() const override;
+        std::string get_if_name() const;
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
-        // std::unordered_map<std::string, std::string>
-        // NotifyParams() const override;
-
-        bool supports_ipv6() const override;
+        bool supports_ipv6() const;
 
         bool should_hook_dns_message(const dns::Message& msg) const;
 
@@ -89,31 +70,21 @@ namespace llarp::handlers
 
         void tick_tun(std::chrono::milliseconds now);
 
-        bool start();
-
         bool stop();
 
         bool is_service_node() const;
 
         bool is_exit_node() const;
 
-        /// set up tun interface, blocking
-        bool setup_tun();
-
         void setup_dns();
 
-        /// overrides Endpoint
         // std::shared_ptr<dns::Server> DNS() const override
         // {
         //   return _dns;
         // };
 
-        /// overrides BaseHandler
-        bool setup_networking() override;
-
-        /// overrides BaseHandler
         bool handle_inbound_packet(
-            const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno) override;
+            const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno);
 
         /// handle inbound traffic
         bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
@@ -146,6 +117,16 @@ namespace llarp::handlers
         bool is_allowing_traffic(const IPPacket& pkt) const;
 
         bool has_mapped_address(const NetworkAddress& addr) const;
+
+        const Router& router() const
+        {
+            return _router;
+        }
+
+        Router& router()
+        {
+            return _router;
+        }
 
       protected:
         struct WritePacket
@@ -181,12 +162,17 @@ namespace llarp::handlers
             reply(*query);
         }
 
+        Router& _router;
+
         /// dns subsystem for this endpoint
         std::shared_ptr<dns::Server> _dns;
 
         /// our local address and ip
         oxen::quic::Address _local_addr;
         ip _local_ip;
+
+        /// Our local Network Address holding our network pubkey
+        NetworkAddress _local_netaddr;
 
         /// our network interface's ipv6 address
         oxen::quic::Address _local_ipv6;
@@ -202,7 +188,7 @@ namespace llarp::handlers
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
-        bool _use_v6;
+        bool _is_ipv6;
         std::string _if_name;
 
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
@@ -218,6 +204,8 @@ namespace llarp::handlers
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;
+
+        service::Identity _identity;
 
         /// for raw packet dns
         std::shared_ptr<vpn::I_Packet_IO> _raw_DNS;

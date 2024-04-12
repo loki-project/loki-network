@@ -4,7 +4,6 @@
 
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/fs.hpp>
-#include <llarp/util/types.hpp>
 
 #include <algorithm>
 #include <iostream>

@@ -2,16 +2,16 @@
 
 #include "concept.hpp"
 
-#include <fmt/format.h>
+// #include <fmt/format.h>
+#include <oxen/log/format.hpp>
 #include <oxen/quic/format.hpp>
 
 #include <type_traits>
 
-// Formattable types can specialize this to true and will get automatic fmt formattering support via
-// their .to_string() method.
-
 namespace llarp
 {
+    using namespace oxen::log::literals;
+
     // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
     template <typename T>
     concept CONCEPT_COMPAT ToStringFormattable = oxen::quic::ToStringFormattable<T>;

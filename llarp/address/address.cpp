@@ -6,7 +6,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("address");
 
-    std::optional<NetworkAddress> NetworkAddress::from_network_addr(std::string arg)
+    std::optional<NetworkAddress> NetworkAddress::from_network_addr(const std::string& arg)
     {
         std::optional<NetworkAddress> ret = std::nullopt;
 
@@ -22,6 +22,11 @@ namespace llarp
             log::warning(logcat, "Invalid NetworkAddress constructor input (arg:{})", arg);
 
         return ret;
+    }
+
+    NetworkAddress NetworkAddress::from_pubkey(const RouterID& rid, bool is_client)
+    {
+        return NetworkAddress{rid, is_client};
     }
 
     NetworkAddress::NetworkAddress(std::string_view arg, std::string_view tld) : _tld{tld}

@@ -45,7 +45,7 @@ namespace llarp::path
         if (r.path_context().has_transit_hop(hop->info))
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
-        if (!crypto::dh_server(hop->shared.data(), symmkey.data(), r.pubkey(), symmnonce.data()))
+        if (!crypto::dh_server(hop->shared.data(), symmkey.data(), r.pubkey().data(), symmnonce.data()))
             throw std::runtime_error{PathBuildMessage::BAD_CRYPTO};
 
         // generate hash of hop key for nonce mutation

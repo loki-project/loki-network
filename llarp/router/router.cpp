@@ -5,16 +5,13 @@
 #include <llarp/constants/time.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/node.hpp>
-#include <llarp/handlers/common.hpp>
-#include <llarp/handlers/embedded.hpp>
-#include <llarp/handlers/tun.hpp>
 #include <llarp/link/contacts.hpp>
 #include <llarp/link/link_manager.hpp>
 #include <llarp/messages/dht.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
+#include <llarp/util/formattable.hpp>
 #include <llarp/util/logging.hpp>
-#include <llarp/util/types.hpp>
 
 #include <cstdlib>
 #include <iterator>
@@ -56,20 +53,20 @@ namespace llarp
         _lmq->MAX_MSG_SIZE = -1;
     }
 
-    StatusObject Router::ExtractStatus() const
+    nlohmann::json Router::ExtractStatus() const
     {
         if (not _is_running)
-            StatusObject{{"running", false}};
+            nlohmann::json{{"running", false}};
 
-        return StatusObject{
+        return nlohmann::json{
             {"running", true}, {"numNodesKnown", _node_db->num_rcs()}, {"links", _link_manager->extract_status()}};
     }
 
     // TODO: investigate changes needed for libquic integration
-    StatusObject Router::ExtractSummaryStatus() const
+    nlohmann::json Router::ExtractSummaryStatus() const
     {
         // if (!is_running)
-        //   return StatusObject{{"running", false}};
+        //   return nlohmann::json{{"running", false}};
 
         // auto services = _hidden_service_context.ExtractStatus();
 
@@ -140,7 +137,7 @@ namespace llarp
         // }
         // double ratio = static_cast<double>(success) / (attempts + 1);
 
-        StatusObject stats{
+        nlohmann::json stats{
             {"running", true},
             {"version", llarp::LOKINET_VERSION_FULL},
             {"uptime", to_json(Uptime())},
@@ -234,9 +231,9 @@ namespace llarp
                 try
                 {
                     _identity = rpc_client()->obtain_identity_key();
-                    const RouterID pk{pubkey()};
+                    _id_pubkey = seckey_to_pubkey(_identity);
 
-                    log::warning(logcat, "Obtained lokid identity key: {}", pk);
+                    log::warning(logcat, "Obtained lokid identity key: {}", _id_pubkey);
                     rpc_client()->start_pings();
                     break;
                 }
@@ -253,6 +250,7 @@ namespace llarp
         else
         {
             _identity = _key_manager->identity_key;
+            _id_pubkey = seckey_to_pubkey(_identity);
         }
 
         if (_identity.is_zero())
@@ -477,67 +475,14 @@ namespace llarp
         }
     }
 
-    void Router::init_net_if()
+    void Router::init_tun()
     {
-        auto& network_config = _config->network;
-
-        vpn::InterfaceInfo info;
-
-        info.ifname = *network_config._if_name;
-        info.addrs.emplace_back(*network_config._local_ip_range);
-
-        auto if_net = vpn_platform()->CreateInterface(std::move(info), this);
-
-        if (not if_net)
+        if (_tun = std::make_unique<handlers::TunEndpoint>(*this); _tun != nullptr)
         {
-            auto err = "Could not create net interface"s;
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{err};
-        }
-        if (not loop()->add_network_interface(
-                if_net, [](UDPPacket pkt [[maybe_unused]]) { /* OnInetPacket(std::move(pkt)); */ }))
-        {
-            auto err = "Could not create tunnel for net interface"s;
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{err};
-        }
-
-        // _router->loop()->add_ticker([this] { Flush(); });
-#ifndef _WIN32
-        // TOFIX:
-        // resolver =
-        //     std::make_shared<dns::Server>(_router->loop(), dns_conf,
-        //     if_nametoindex(if_name.c_str()));
-        // resolver->Start();
-#endif
-    }
-
-    using api_constructor = std::function<std::unique_ptr<handlers::BaseHandler>(Router&)>;
-
-    const std::map<std::string, api_constructor> api_constructors = {
-        {"tun", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
-        {"android", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
-        {"ios", [](Router& r) { return std::make_unique<handlers::TunEndpoint>(r); }},
-        {"embedded", [](Router& r) { return std::make_unique<handlers::EmbeddedEndpoint>(r); }}};
-
-    void Router::init_api()
-    {
-        auto& net_config = _config->network;
-        auto& type = net_config.endpoint_type;
-        auto& key_file = net_config.keyfile;
-
-        if (auto itr = api_constructors.find(type); itr != api_constructors.end())
-        {
-            _api = itr->second(*this);
-
-            if (not _api)
-                throw std::runtime_error{"Failed to construct API endpoint of type {}"_format(type)};
-
-            _api->load_key_file(key_file, *this);
-            _api->configure();
+            _tun->configure();
         }
         else
-            throw std::runtime_error{"API endpoint of type {} does not exist"_format(type)};
+            throw std::runtime_error{"Failed to construct TunEndpoint!"};
     }
 
     bool Router::configure(std::shared_ptr<Config> c, std::shared_ptr<NodeDB> nodedb)
@@ -619,19 +564,15 @@ namespace llarp
         _remote_handler = std::make_shared<handlers::RemoteHandler>(*this);
         _remote_handler->configure();
 
-        if (conf.network.endpoint_type != "embedded")
-        {
-            _should_init_tun = true;
-            init_net_if();
-        }
-
         // API config
-        //  all instances have an API
-        //  all clients have Tun or Null
-        //  all snodes have Tun
-        //
-        // TODO: change this for snodes running hidden service
-        init_api();
+        //  Full clients have TUN
+        //  Embedded clients have nothing
+        //  All relays have TUN
+
+        if (_should_init_tun = conf.network.init_tun; _should_init_tun)
+        {
+            init_tun();
+        }
 
         if (not ensure_identity())
             throw std::runtime_error{"EnsureIdentity() failed"};

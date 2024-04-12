@@ -2,9 +2,9 @@
 
 namespace llarp::service
 {
-    StatusObject Session::ExtractStatus() const
+    nlohmann::json Session::ExtractStatus() const
     {
-        StatusObject obj{
+        nlohmann::json obj{
             {"lastSend", to_json(lastSend)},
             {"lastRecv", to_json(lastRecv)},
             {"replyIntro", replyIntro.ExtractStatus()},

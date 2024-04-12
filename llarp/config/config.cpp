@@ -1683,7 +1683,7 @@ namespace llarp
         config->load();
         config->logging.level = log::Level::off;
         config->api.enable_rpc_server = false;
-        config->network.endpoint_type = "embedded";
+        config->network.init_tun = false;
         config->network.save_profiles = false;
         config->bootstrap.files.clear();
         return config;

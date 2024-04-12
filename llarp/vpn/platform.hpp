@@ -57,7 +57,7 @@ namespace llarp::vpn
         NetworkInterface(const NetworkInterface&) = delete;
         NetworkInterface(NetworkInterface&&) = delete;
 
-        const InterfaceInfo& Info() const
+        const InterfaceInfo& interface_info() const
         {
             return _info;
         }
@@ -116,7 +116,7 @@ namespace llarp::vpn
         virtual ~Platform() = default;
 
         /// create and start a network interface
-        inline std::shared_ptr<NetworkInterface> CreateInterface(InterfaceInfo info, Router* router)
+        std::shared_ptr<NetworkInterface> CreateInterface(InterfaceInfo info, Router* router)
         {
             if (auto netif = ObtainInterface(std::move(info), router))
             {

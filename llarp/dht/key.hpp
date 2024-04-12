@@ -25,7 +25,7 @@ namespace llarp::dht
         Key_t() : AlignedBuffer<SIZE>()
         {}
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
         std::string to_string() const
         {

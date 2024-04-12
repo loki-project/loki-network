@@ -13,15 +13,23 @@ extern "C"
 #include <event2/listener.h>
 }
 
+/** TODO:
+    - set up session_map in EndpointBase
+      - OutboundSession will create the path
+    - separate Socket and Handle from QUIC-like "ownership" model
+    - TCPHandle has a socket creation callback instead of a data callback
+      - Fire socket creation cb on accepting connection
+      - Socket creation cb could be given a created socket to set the callbacks on
+    - QUIC stream held by TCPSocket needs to have a receive data callback that writes to the TCP connection
+*/
+
 namespace llarp
 {
-    class TCPHandle;
-
     struct TCPSocket
     {
         TCPSocket() = delete;
 
-        TCPSocket(struct bufferevent* _bev, const oxen::quic::Address& _src);
+        TCPSocket(struct bufferevent* _bev, evutil_socket_t _fd, const oxen::quic::Address& _src);
 
         /// Non-copyable and non-moveable
         TCPSocket(const TCPSocket& s) = delete;
@@ -32,10 +40,13 @@ namespace llarp
         ~TCPSocket();
 
         struct bufferevent* bev;
+        evutil_socket_t fd;
         oxen::quic::Address src;
 
         std::weak_ptr<oxen::quic::Stream> stream;
     };
+
+    using tcpsock_hook = std::function<std::shared_ptr<TCPSocket>()>;
 
     class TCPHandle
     {
@@ -49,7 +60,7 @@ namespace llarp
             ;
         TCPHandle() = delete;
 
-        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, rcv_data_hook cb);
+        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, tcpsock_hook cb);
 
         ~TCPHandle();
 
@@ -59,19 +70,13 @@ namespace llarp
 
         socket_t _sock;
         oxen::quic::Address _bound;
-        rcv_data_hook _receive_cb;
+        tcpsock_hook _socket_maker;
 
         std::unordered_map<evutil_socket_t, std::shared_ptr<TCPSocket>> routing;
 
         void _init_internals(const oxen::quic::Address& bind);
 
       public:
-        // void map_buffer_socket(evutil_socket_t fd)
-
-        std::shared_ptr<oxen::quic::Stream> get_socket_stream(evutil_socket_t fd);
-
-        void close_socket(evutil_socket_t fd);
-
         oxen::quic::Address bind()
         {
             return _bound;

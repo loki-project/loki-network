@@ -1,5 +1,4 @@
 #pragma once
-#include <llarp/util/types.hpp>
 
 #include <functional>
 #include <vector>

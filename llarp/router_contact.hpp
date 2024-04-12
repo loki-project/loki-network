@@ -8,7 +8,6 @@
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/time.hpp>
-#include <llarp/util/types.hpp>
 
 #include <nlohmann/json.hpp>
 #include <oxen/quic.hpp>
@@ -113,7 +112,7 @@ namespace llarp
         /// should we serialize the exit info?
         static const bool serializeExit = true;
 
-        StatusObject extract_status() const;
+        nlohmann::json extract_status() const;
 
         nlohmann::json to_json() const
         {

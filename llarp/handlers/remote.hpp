@@ -23,10 +23,9 @@ namespace llarp
                                      public std::enable_shared_from_this<RemoteHandler>
         {
           private:
-            std::string _name{"RemoteHandler"};
+            const std::string _name{"RemoteHandler"};
 
             address_map<oxen::quic::Address, NetworkAddress> _address_map;
-
             address_map<IPRange, NetworkAddress> _range_map;
 
             IPRange _local_range;

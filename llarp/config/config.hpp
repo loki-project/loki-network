@@ -108,13 +108,12 @@ namespace llarp
 
         std::optional<fs::path> keyfile;
 
-        std::string endpoint_type{"tun"};
-
         std::optional<int> hops;
         std::optional<int> paths;
 
-        bool allow_exit = false;
-        bool is_reachable = false;
+        bool allow_exit{false};
+        bool is_reachable{false};
+        bool init_tun{true};
 
         std::set<RouterID> snode_blacklist;
 

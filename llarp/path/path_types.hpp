@@ -33,7 +33,7 @@ namespace llarp
             // lifetime
             std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
 
-            StatusObject ExtractStatus() const;
+            nlohmann::json ExtractStatus() const;
 
             bool operator<(const PathHopConfig& other) const
             {

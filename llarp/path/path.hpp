@@ -60,7 +60,7 @@ namespace llarp
                 return weak_from_this();
             }
 
-            StatusObject ExtractStatus() const;
+            nlohmann::json ExtractStatus() const;
 
             void MarkActive(std::chrono::milliseconds now)
             {

@@ -9,7 +9,6 @@
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/util/time.hpp>
-#include <llarp/util/types.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -75,7 +74,7 @@ namespace llarp::service
 
         bool verify(std::chrono::milliseconds now) const;
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
     };
 
     inline bool operator<(const IntroSet& lhs, const IntroSet& rhs)
@@ -139,7 +138,7 @@ namespace llarp::service
 
         std::string to_string() const;
 
-        StatusObject ExtractStatus() const;
+        nlohmann::json ExtractStatus() const;
 
         std::optional<IntroSet> decrypt(const PubKey& root) const;
     };

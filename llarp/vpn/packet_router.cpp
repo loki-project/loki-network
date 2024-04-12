@@ -50,7 +50,7 @@ namespace llarp::vpn
     PacketRouter::PacketRouter(ip_pkt_hook baseHandler) : _handler{std::move(baseHandler)}
     {}
 
-    void PacketRouter::handle_ip_packet(UDPPacket pkt)
+    void PacketRouter::handle_ip_packet(IPPacket pkt)
     {
         (void)pkt;
         // const auto proto = pkt.Header()->protocol;

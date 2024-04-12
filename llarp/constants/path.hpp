@@ -1,7 +1,6 @@
 #pragma once
 
 #include <llarp/util/time.hpp>
-#include <llarp/util/types.hpp>
 
 #include <chrono>
 #include <cstddef>

@@ -34,9 +34,9 @@ namespace llarp
         return enc;
     }
 
-    StatusObject Contacts::ExtractStatus() const
+    nlohmann::json Contacts::ExtractStatus() const
     {
-        StatusObject obj{{"services", _introset_nodes->ExtractStatus()}, {"local_key", _local_key.ToHex()}};
+        nlohmann::json obj{{"services", _introset_nodes->ExtractStatus()}, {"local_key", _local_key.ToHex()}};
         return obj;
     }
 

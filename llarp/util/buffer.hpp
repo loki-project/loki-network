@@ -2,7 +2,6 @@
 
 #include "common.hpp"
 #include "mem.h"
-#include "types.hpp"
 
 #include <algorithm>
 #include <cassert>
