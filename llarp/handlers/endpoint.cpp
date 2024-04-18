@@ -1,5 +1,6 @@
 #include "endpoint.hpp"
 
+#include <llarp/messages/session.hpp>
 #include <llarp/router/router.hpp>
 
 namespace llarp::handlers
@@ -154,9 +155,33 @@ namespace llarp::handlers
             log::warning(logcat, "{} failed to encrypt and sign introset!", name());
     }
 
-    void LocalEndpoint::handle_initiation_session(ustring decrypted_payload)
+    void LocalEndpoint::handle_initiate_session(ustring decrypted_payload)
     {
-        (void)decrypted_payload;
+        RouterID initiator;
+        service::SessionTag tag;
+        HopID terminal_txid;
+        std::optional<std::string> maybe_auth;
+
+        try
+        {
+            oxenc::bt_dict_consumer btdc{decrypted_payload};
+            std::tie(initiator, tag, terminal_txid, maybe_auth) = InitiateSession::deserialize(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "{} failed to deserialize decrypted session initiation payload!", name());
+            return;
+        }
+
+        auto hop = _router.path_context()->get_transit_hop(_router.pubkey(), terminal_txid);
+
+        if (hop == nullptr)
+        {
+            log::warning(
+                logcat, "Could not find TransitHop for inbound session (tag:{}) from remote (rid:{})", tag, initiator);
+            return;
+        }
+        // we got the TransitHop of the recently built path for this session
     }
 
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)

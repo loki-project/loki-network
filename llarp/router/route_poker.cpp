@@ -198,7 +198,7 @@ namespace llarp
                 // explicit route pokes for first hops
                 router.for_each_connection([this](link::Connection conn) { add_route(conn.conn->remote()); });
 
-                add_route(router.link_manager().local());
+                add_route(router.link_manager()->local());
                 // add default route
                 // const auto ep = router.hidden_service_context().GetDefault();
                 // if (auto* vpn = ep->GetVPNInterface())

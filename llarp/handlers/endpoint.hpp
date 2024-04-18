@@ -11,12 +11,12 @@ namespace llarp::handlers
         hidden services and exits, ::LocalEndpoint manages the locally operated hidden service or exit node
     */
     struct LocalEndpoint final : public path::PathHandler,
-                                 public EndpointBase,
+                                 public EndpointBase<session::InboundSession>,
                                  public std::enable_shared_from_this<LocalEndpoint>
     {
       private:
         bool _is_exit_node{false};
-        bool _is_snode_service{false};  // TODO:
+        bool _is_snode_service{false};
         bool _is_v4;
 
         const std::string _name{"LocalEndpoint"};
@@ -33,6 +33,7 @@ namespace llarp::handlers
 
         // Ranges reachable via our endpoint -- Exit mode only!
         std::set<IPRange> _routed_ranges;
+
         // policies about traffic that we are willing to carry -- Exit mode only!
         std::optional<net::TrafficPolicy> _exit_policy = std::nullopt;
 
@@ -40,6 +41,16 @@ namespace llarp::handlers
         LocalEndpoint(Router& r);
 
         ~LocalEndpoint() override = default;
+
+        bool is_exit_node() const
+        {
+            return _is_exit_node;
+        }
+
+        bool is_snode_service() const
+        {
+            return _is_snode_service;
+        }
 
         void configure();
 
@@ -52,7 +63,7 @@ namespace llarp::handlers
         void lookup_intro(
             const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
 
-        void handle_initiation_session(ustring decrypted_payload);
+        void handle_initiate_session(ustring decrypted_payload);
 
         const service::IntroSet& intro_set() const
         {

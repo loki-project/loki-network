@@ -2,11 +2,11 @@
 
 #include <llarp/config/config.hpp>
 #include <llarp/constants/proto.hpp>
-#include <llarp/constants/time.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/node.hpp>
 #include <llarp/link/contacts.hpp>
 #include <llarp/link/link_manager.hpp>
+#include <llarp/link/tunnel.hpp>
 #include <llarp/messages/dht.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
@@ -43,7 +43,6 @@ namespace llarp
           _lmq{std::make_shared<oxenmq::OxenMQ>()},
           _loop{std::move(loop)},
           _vpn{std::move(vpnPlatform)},
-          paths{this},
           _disk_thread{_lmq->add_tagged_thread("disk")},
           _key_manager{std::make_shared<KeyManager>()},
           _rpc_server{nullptr},
@@ -482,7 +481,7 @@ namespace llarp
             _tun->configure();
         }
         else
-            throw std::runtime_error{"Failed to construct TunEndpoint!"};
+            throw std::runtime_error{"Failed to construct TunEndpoint API!"};
     }
 
     bool Router::configure(std::shared_ptr<Config> c, std::shared_ptr<NodeDB> nodedb)
@@ -555,8 +554,17 @@ namespace llarp
         process_netconfig();
 
         init_bootstrap();
-
         _node_db->load_from_disk();
+
+        if (not ensure_identity())
+            throw std::runtime_error{"EnsureIdentity() failed"};
+
+        _path_context = std::make_shared<path::PathContext>(_id_pubkey);
+
+        router_contact =
+            LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
+
+        // TODO: decide between factory functions and constructors
 
         _local_endpoint = std::make_shared<handlers::LocalEndpoint>(*this);
         _local_endpoint->configure();
@@ -564,18 +572,18 @@ namespace llarp
         _remote_handler = std::make_shared<handlers::RemoteHandler>(*this);
         _remote_handler->configure();
 
+        _link_manager = LinkManager::make(*this);
+
+        _quic_tun = QUICTunnel::make(*this);
+
         // API config
         //  Full clients have TUN
         //  Embedded clients have nothing
         //  All relays have TUN
-
         if (_should_init_tun = conf.network.init_tun; _should_init_tun)
         {
             init_tun();
         }
-
-        if (not ensure_identity())
-            throw std::runtime_error{"EnsureIdentity() failed"};
 
         return true;
     }
@@ -940,7 +948,7 @@ namespace llarp
 
         _node_db->Tick(now);
 
-        paths.ExpirePaths(now);
+        _path_context->expire_paths(now);
 
         // update tick timestamp
         _last_tick = llarp::time_now_ms();
@@ -966,11 +974,6 @@ namespace llarp
 
         if (_is_running || _is_stopping)
             return false;
-
-        router_contact =
-            LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
-
-        _link_manager = LinkManager::make(*this);
 
         if (is_service_node())
         {
@@ -1180,7 +1183,7 @@ namespace llarp
     bool Router::init_service_node()
     {
         log::info(logcat, "Router accepting transit traffic...");
-        paths.allow_transit();
+        _path_context->allow_transit();
         // TODO:
         // _exit_context.add_exit_endpoint("default", _config->network, _config->dns);
         return true;

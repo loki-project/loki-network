@@ -24,7 +24,7 @@ namespace llarp::vpn
         /// add a non udp packet handler using ip protocol proto
         void add_ip_proto_handler(uint8_t proto, ip_pkt_hook func);
 
-        /// helper that adds a udp packet handler for UDP destinted for localport
+        /// helper that adds a udp packet handler for UDP destined for localport
         void add_udp_handler(uint16_t port, udp_pkt_hook func);
 
         /// remove a udp handler that is already set up by bound port

@@ -4,8 +4,6 @@
 
 namespace llarp
 {
-    using namespace std::literals;
-
     std::unordered_map<std::string, BootstrapList> load_bootstrap_fallbacks()
     {
         std::unordered_map<std::string, BootstrapList> fallbacks;

@@ -15,13 +15,19 @@
 
 namespace llarp
 {
+    /** NOTE:
+        - These classes are purposely differentiated at the moment. At first pass, they seem like they could be easily
+            combined into one shared class utilizing some sort of variant or templating
+        - This may eventually be true, but the currently enforced heterogeneity is intended to leave space for a
+            near-future replacement of RouterID and PubKey with ClientKey and RelayKey
+    */
+
     /** NetworkAddress:
         This address type conceptually encapsulates any addressible hidden service or exit node operating on the
         network. This type is to be strictly used in contexts referring to remote exit nodes or hidden services
         operated on clients and clients/relays respectively. It can be constructed a few specific ways:
             - static ::from_network_addr(...) : this function expects a network address string terminated in '.loki'
                 or '.snode'.
-            - {Client,Relay}PubKey : these and the copy/move constructors cascade into the private constructor
     */
     struct NetworkAddress
     {
@@ -84,6 +90,16 @@ namespace llarp
             return _pubkey;
         }
 
+        const RouterID& router_id() const
+        {
+            return static_cast<const RouterID&>(pubkey());
+        }
+
+        RouterID& router_id()
+        {
+            return static_cast<RouterID&>(pubkey());
+        }
+
         std::string name() const
         {
             return _pubkey.to_string();
@@ -133,9 +149,24 @@ namespace llarp
         // Will throw invalid_argument with bad input
         static std::optional<RelayAddress> from_relay_addr(std::string arg);
 
-        const PubKey& pubkey()
+        const PubKey& pubkey() const
         {
             return _pubkey;
+        }
+
+        PubKey& pubkey()
+        {
+            return _pubkey;
+        }
+
+        const RouterID& router_id() const
+        {
+            return static_cast<const RouterID&>(pubkey());
+        }
+
+        RouterID& router_id()
+        {
+            return static_cast<RouterID&>(pubkey());
         }
 
         std::string to_string() const

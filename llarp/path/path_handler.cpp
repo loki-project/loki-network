@@ -62,15 +62,10 @@ namespace llarp::path
 
     void PathHandler::add_path(std::shared_ptr<Path> p)
     {
-        return add_path(p->pivot_router_id(), p);
-    }
-
-    void PathHandler::add_path(const RouterID& remote, std::shared_ptr<Path> path)
-    {
         Lock_t l(paths_mutex);
 
-        _paths.insert_or_assign(remote, path);
-        associate_hop_ids(path);
+        _paths.insert_or_assign(p->pivot_router_id(), p);
+        associate_hop_ids(p);
     }
 
     std::optional<std::shared_ptr<Path>> PathHandler::get_random_path()
@@ -214,9 +209,9 @@ namespace llarp::path
             if (itr->second->is_expired(now))
             {
                 // TODO: this
-                HopID txid = itr->second->TXID();
+                HopID txid = itr->second->upstream_txid();
                 // router->outboundMessageHandler().RemovePath(std::move(txid));
-                HopID rxid = itr->second->RXID();
+                HopID rxid = itr->second->upstream_rxid();
                 // router->outboundMessageHandler().RemovePath(std::move(rxid));
                 itr = _paths.erase(itr);
             }
@@ -613,16 +608,18 @@ namespace llarp::path
             frames.append(std::move(str));
         }
 
-        _router.path_context().AddOwnPath(get_self(), path);
+        // TODO: move this to success function to avoid repetition
+        add_path(path);
+        _router.path_context()->add_path(path);
+
         _build_stats.attempts++;
 
         return std::move(frames).str();
     }
 
-    bool PathHandler::build3(
-        std::shared_ptr<Path>& path, std::string payload, std::function<void(oxen::quic::message)> handler)
+    bool PathHandler::build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler)
     {
-        return _router.send_control_message(path->upstream(), "path_build", std::move(payload), std::move(handler));
+        return _router.send_control_message(std::move(upstream), "path_build", std::move(payload), std::move(handler));
     }
 
     void PathHandler::build(std::vector<RemoteRC> hops)
@@ -630,13 +627,13 @@ namespace llarp::path
         if (auto new_path = build1(hops); new_path != nullptr)
         {
             auto payload = build2(new_path);
-            auto terminus = new_path->terminus();
+            auto terminus = new_path->terminal();
 
-            if (not build3(new_path, std::move(payload), [this, new_path, terminus](oxen::quic::message m) {
+            if (not build3(new_path->upstream(), std::move(payload), [this, new_path, terminus](oxen::quic::message m) {
                     if (m)
                     {
-                        path_build_succeeded(terminus, new_path);
-                        return;
+                        log::debug(logcat, "Path build returned successfully! Storing locally");
+                        return path_build_succeeded(new_path);
                     }
 
                     try
@@ -693,9 +690,9 @@ namespace llarp::path
         path_build_backoff();
     }
 
-    void PathHandler::path_build_succeeded(const RouterID& remote, std::shared_ptr<Path> p)
+    void PathHandler::path_build_succeeded(std::shared_ptr<Path> p)
     {
-        add_path(remote, p);
+        add_path(p);
         build_interval_limit = PATH_BUILD_RATE;
         _router.router_profiling().path_success(p.get());
         _build_stats.success += 1;

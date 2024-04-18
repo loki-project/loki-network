@@ -297,8 +297,8 @@ namespace llarp::rpc
         Version,
         Status,
         GetStatus,
-        QuicConnect,
-        QuicListener,
+        QuicConnect,   // debug
+        QuicListener,  // debug
         LookupSnode,
         MapExit,
         ListExits,

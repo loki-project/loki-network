@@ -124,7 +124,7 @@ namespace llarp
 
             void path_build_failed(const RouterID& remote, std::shared_ptr<Path> p, bool timeout = false);
 
-            virtual void path_build_succeeded(const RouterID& remote, std::shared_ptr<Path> p);
+            virtual void path_build_succeeded(std::shared_ptr<Path> p);
 
           public:
             Router& _router;
@@ -177,8 +177,6 @@ namespace llarp
             void expire_paths(std::chrono::milliseconds now);
 
             void add_path(std::shared_ptr<Path> path);
-
-            void add_path(const RouterID& remote, std::shared_ptr<Path> path);
 
             std::optional<std::shared_ptr<Path>> get_random_path();
 
@@ -251,8 +249,7 @@ namespace llarp
 
             std::string build2(std::shared_ptr<Path>& path);
 
-            bool build3(
-                std::shared_ptr<Path>& path, std::string payload, std::function<void(oxen::quic::message)> handler);
+            bool build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler);
 
             void build(std::vector<RemoteRC> hops);
 

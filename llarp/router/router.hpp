@@ -40,9 +40,10 @@ namespace llarp
     namespace link
     {
         struct Connection;
-    }
+    }  // namespace link
 
     struct LinkManager;
+    class QUICTunnel;
     class NodeDB;
 
     /// number of routers to publish to
@@ -100,7 +101,7 @@ namespace llarp
         std::atomic<bool> _is_stopping{false};
         std::atomic<bool> _is_running{false};
 
-        int _outbound_udp_socket{-1};
+        int _outbound_udp_socket{-1};  // TODO: wtf?
 
         bool _is_service_node{false};
 
@@ -118,19 +119,27 @@ namespace llarp
 
         // TESTNET: underway
         std::shared_ptr<handlers::RemoteHandler> _remote_handler;
+
         std::shared_ptr<handlers::LocalEndpoint> _local_endpoint;
+
+        std::shared_ptr<LinkManager> _link_manager;
+
+        std::shared_ptr<QUICTunnel> _quic_tun;
 
         // Only created in full client and relay instances (not embedded clients)
         std::unique_ptr<handlers::TunEndpoint> _tun;
 
         std::shared_ptr<EventLoop> _loop;
+
         std::shared_ptr<vpn::Platform> _vpn;
-        path::PathContext paths;
+
+        std::shared_ptr<path::PathContext> _path_context;
+        std::shared_ptr<Contacts> _contacts;
+        std::shared_ptr<NodeDB> _node_db;
+
         SecretKey _identity;
         RouterID _id_pubkey;
         SecretKey _encryption;
-        std::shared_ptr<Contacts> _contacts;
-        std::shared_ptr<NodeDB> _node_db;
         const oxenmq::TaggedThreadID _disk_thread;
 
         std::chrono::milliseconds _started_at;
@@ -155,7 +164,6 @@ namespace llarp
         Profiling _router_profiling;
         fs::path _profile_file;
 
-        std::unique_ptr<LinkManager> _link_manager;
         int client_router_connections;
 
         // should we be sending padded messages every interval?
@@ -234,6 +242,16 @@ namespace llarp
             return _local_endpoint;
         }
 
+        const std::shared_ptr<LinkManager>& link_manager() const
+        {
+            return _link_manager;
+        }
+
+        const std::shared_ptr<QUICTunnel>& quic_tunnel() const
+        {
+            return _quic_tun;
+        }
+
         const Contacts& contacts() const
         {
             return *_contacts;
@@ -266,26 +284,10 @@ namespace llarp
             return _rpc_client;
         }
 
-        LinkManager& link_manager()
-        {
-            return *_link_manager;
-        }
-
-        const LinkManager& link_manager() const
-        {
-            return *_link_manager;
-        }
-
         int outbound_udp_socket() const
         {
             return _outbound_udp_socket;
         }
-
-        // TODO: double check this getter as a concept...
-        // exit::Handler* exit_context()
-        // {
-        //     return _exit_handler.get();
-        // }
 
         const std::shared_ptr<KeyManager>& key_manager() const
         {
@@ -322,9 +324,14 @@ namespace llarp
             return _node_db;
         }
 
-        path::PathContext& path_context()
+        std::shared_ptr<path::PathContext>& path_context()
         {
-            return paths;
+            return _path_context;
+        }
+
+        const std::shared_ptr<path::PathContext>& path_context() const
+        {
+            return _path_context;
         }
 
         const LocalRC& rc() const

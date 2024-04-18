@@ -11,49 +11,14 @@
 #include <memory>
 #include <unordered_map>
 
-namespace llarp
-{
-    struct Router;
-    struct RouterID;
-
-    namespace path
-    {
-        struct TransitHop;
-        struct TransitHopInfo;
-
-        struct TransitHopID
-        {
-            RouterID rid;
-            HopID path_id;
-
-            bool operator==(const TransitHopID& other) const
-            {
-                return rid == other.rid && path_id == other.path_id;
-            }
-        };
-    }  // namespace path
-}  // namespace llarp
-
-namespace std
-{
-    template <>
-    struct hash<llarp::path::TransitHopID>
-    {
-        size_t operator()(const llarp::path::TransitHopID& obj) const noexcept
-        {
-            return std::hash<llarp::HopID>{}(obj.path_id);
-        }
-    };
-}  // namespace std
-
 namespace llarp::path
 {
     struct PathContext
     {
-        explicit PathContext(Router* router);
+        explicit PathContext(RouterID local_rid);
 
         /// called from router tick function
-        void ExpirePaths(std::chrono::milliseconds now);
+        void expire_paths(std::chrono::milliseconds now);
 
         void allow_transit();
 
@@ -61,46 +26,32 @@ namespace llarp::path
 
         bool is_transit_allowed() const;
 
-        bool has_transit_hop(const TransitHopInfo& info);
+        bool has_transit_hop(const std::shared_ptr<TransitHop>& hop);
 
         void put_transit_hop(std::shared_ptr<TransitHop> hop);
 
         std::shared_ptr<Path> get_path(const HopID& path_id);
 
-        bool TransitHopPreviousIsRouter(const HopID& path, const RouterID& r);
+        std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
-        std::shared_ptr<TransitHop> GetPathForTransfer(const HopID& topath);
+        std::shared_ptr<TransitHop> get_transit_hop(const HopID&);
 
-        std::shared_ptr<TransitHop> GetTransitHop(const RouterID&, const HopID&);
+        std::shared_ptr<TransitHop> get_transit_hop(const RouterID&, const HopID&);
 
-        std::shared_ptr<PathHandler> GetLocalPathSet(const HopID& id);
+        std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
         /// get a set of all paths that we own who's endpoint is r
-        std::vector<std::shared_ptr<Path>> FindOwnedPathsWithEndpoint(const RouterID& r);
+        std::vector<std::shared_ptr<Path>> get_local_paths_to_remote(const RouterID& r);
 
-        bool HopIsUs(const RouterID& k) const;
-
-        void AddOwnPath(std::shared_ptr<PathHandler> set, std::shared_ptr<Path> p);
-
-        const std::shared_ptr<EventLoop>& loop();
-
-        const SecretKey& EncryptionSecretKey();
-
-        const uint8_t* OurRouterID() const;
-
-        /// current number of transit paths we have
-        uint64_t CurrentTransitPaths();
-
-        Router* router() const
-        {
-            return _router;
-        }
+        void add_path(std::shared_ptr<Path> p);
 
       private:
-        Router* _router;
+        const RouterID _local_rid;
 
-        std::unordered_map<TransitHopID, std::shared_ptr<TransitHop>> transit_hops;
-        std::unordered_map<HopID, std::shared_ptr<Path>> own_paths;
-        bool m_AllowTransit;
+        std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
+
+        std::unordered_map<HopID, std::shared_ptr<Path>> _local_paths;
+
+        bool _allow_transit{false};
     };
 }  // namespace llarp::path

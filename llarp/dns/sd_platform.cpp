@@ -8,8 +8,6 @@ extern "C"
 
 #include <llarp/linux/dbus.hpp>
 
-using namespace std::literals;
-
 namespace llarp::dns::sd
 {
     void Platform::set_resolver(unsigned int if_ndx, oxen::quic::Address dns, bool global)

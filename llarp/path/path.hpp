@@ -30,7 +30,6 @@ namespace llarp
     namespace path
     {
         struct TransitHop;
-        struct TransitHopInfo;
         struct PathHopConfig;
 
         /// A path we made
@@ -140,17 +139,19 @@ namespace llarp
 
             bool IsReady() const;
 
-            // Is this deprecated?
-            // nope not deprecated :^DDDD
-            HopID TXID() const;
-
             const RouterID& pivot_router_id() const;
-
-            HopID RXID() const;
 
             RouterID upstream() const;
 
-            RouterID terminus() const;
+            HopID upstream_rxid() const;
+
+            HopID upstream_txid() const;
+
+            RouterID terminal() const;
+
+            HopID terminal_rxid() const;
+
+            HopID terminal_txid() const;
 
             std::string name() const;
 

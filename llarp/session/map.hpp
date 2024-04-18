@@ -37,7 +37,7 @@ namespace llarp
             return b1 & b2;
         }
 
-        std::optional<net_addr_t> get_remote_from_tag(const service::SessionTag& tag)
+        std::optional<net_addr_t> get_remote_from_tag(const service::SessionTag& tag) const
         {
             std::optional<net_addr_t> ret = std::nullopt;
 
@@ -47,7 +47,7 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session_from_remote(const net_addr_t& remote)
+        std::shared_ptr<session_t> get_session_from_remote(const net_addr_t& remote) const
         {
             std::shared_ptr<session_t> ret = nullptr;
 
@@ -57,7 +57,7 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session_from_tag(const service::SessionTag& tag)
+        std::shared_ptr<session_t> get_session_from_tag(const service::SessionTag& tag) const
         {
             std::shared_ptr<session_t> ret = nullptr;
 

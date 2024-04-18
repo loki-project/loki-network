@@ -2,8 +2,6 @@
 
 namespace llarp
 {
-    using namespace std::literals;
-
     namespace
     {
         template <typename Res, typename Clock>

@@ -237,9 +237,9 @@ namespace llarp
         is_stopping = false;
     }
 
-    std::unique_ptr<LinkManager> LinkManager::make(Router& r)
+    std::shared_ptr<LinkManager> LinkManager::make(Router& r)
     {
-        std::unique_ptr<LinkManager> p{new LinkManager(r)};
+        std::shared_ptr<LinkManager> p{new LinkManager(r)};
         return p;
     }
 
@@ -1316,7 +1316,7 @@ namespace llarp
 
     void LinkManager::handle_path_build(oxen::quic::message m, const RouterID& from)
     {
-        if (!_router.path_context().is_transit_allowed())
+        if (!_router.path_context()->is_transit_allowed())
         {
             log::warning(logcat, "got path build request when not permitting transit");
             m.respond(PathBuildMessage::NO_TRANSIT, true);
@@ -1343,13 +1343,13 @@ namespace llarp
             auto hop = path::TransitHop::deserialize_hop(hop_info, from, _router, other_pubkey, nonce);
 
             hop->started = _router.now();
-            _router.persist_connection_until(hop->info.downstream, hop->ExpireTime() + 10s);
+            set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
 
             // we are terminal hop and everything is okay
-            if (hop->info.upstream == _router.pubkey())
+            if (hop->upstream() == _router.pubkey())
             {
                 hop->terminal_hop = true;
-                _router.path_context().put_transit_hop(hop);
+                _router.path_context()->put_transit_hop(hop);
                 m.respond(messages::OK_RESPONSE, false);
                 return;
             }
@@ -1374,7 +1374,7 @@ namespace llarp
             payload_list.push_back(std::move(end_frame));
 
             send_control_message(
-                hop->info.upstream,
+                hop->upstream(),
                 "path_build",
                 oxenc::bt_serialize(payload_list),
                 [hop, this, prev_message = std::move(m)](oxen::quic::message m) {
@@ -1382,10 +1382,8 @@ namespace llarp
                     {
                         log::info(
                             logcat,
-                            "Upstream returned successful path build response; giving hop info to "
-                            "Router, "
-                            "then relaying response");
-                        _router.path_context().put_transit_hop(hop);
+                            "Upstream returned successful path build response; locally storing Hop and relaying");
+                        _router.path_context()->put_transit_hop(hop);
                     }
                     if (m.timed_out)
                         log::info(logcat, "Upstream timed out on path build; relaying timeout");
@@ -1486,9 +1484,9 @@ namespace llarp
         }
 
         RouterID target{pubkey.data()};
-        auto transit_hop = _router.path_context().GetTransitHop(target, HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(target, HopID{to_usv(tx_id).data()});
 
-        const auto rx_id = transit_hop->info.rxID;
+        const auto rx_id = transit_hop->rxID();
 
         // TODO:
         auto success = (crypto::verify(pubkey, to_usv(dict_data), sig)
@@ -1527,7 +1525,7 @@ namespace llarp
             throw;
         }
 
-        auto path_ptr = _router.path_context().get_path(HopID{to_usv(tx_id).data()});
+        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
 
         if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
             path_ptr->enable_exit_traffic();
@@ -1555,7 +1553,7 @@ namespace llarp
             return;
         }
 
-        auto transit_hop = _router.path_context().GetTransitHop(_router.pubkey(), HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(_router.pubkey(), HopID{to_usv(tx_id).data()});
 
         // TODO:
         // if (auto exit_ep =
@@ -1604,7 +1602,7 @@ namespace llarp
             return;
         }
 
-        auto path_ptr = _router.path_context().get_path(HopID{to_usv(tx_id).data()});
+        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
 
         if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
         {
@@ -1640,9 +1638,9 @@ namespace llarp
             return;
         }
 
-        auto transit_hop = _router.path_context().GetTransitHop(_router.pubkey(), HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(_router.pubkey(), HopID{to_usv(tx_id).data()});
 
-        const auto rx_id = transit_hop->info.rxID;
+        const auto rx_id = transit_hop->rxID();
 
         // TODO:
         // if (auto exit_ep = router().exit_context().find_endpoint_for_path(rx_id))
@@ -1688,7 +1686,7 @@ namespace llarp
             return;
         }
 
-        auto path_ptr = _router.path_context().get_path(HopID{to_usv(tx_id).data()});
+        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
         // TODO:
         // if (path_ptr->SupportsAnyRoles(path::ePathRoleExit | path::ePathRoleSVC)
         //     and crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
@@ -1712,7 +1710,7 @@ namespace llarp
 
         auto symmnonce = SymmNonce{nonce.data()};
         auto hop_id = HopID{hop_id_str.data()};
-        auto hop = _router.path_context().GetTransitHop(from, hop_id);
+        auto hop = _router.path_context()->get_transit_hop(from, hop_id);
 
         // TODO: use "path_control" for both directions?  If not, drop message on
         // floor if we don't have the path_id in question; if we decide to make this
@@ -1732,8 +1730,10 @@ namespace llarp
             return;
         }
 
-        auto& next_id = hop_id == hop->info.rxID ? hop->info.txID : hop->info.rxID;
-        auto& next_router = hop_id == hop->info.rxID ? hop->info.upstream : hop->info.downstream;
+        auto hop_is_rx = hop->rxID() == hop_id;
+
+        const auto& next_id = hop_is_rx ? hop->txID() : hop->rxID();
+        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
 
         std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
 
@@ -1798,7 +1798,7 @@ namespace llarp
                 return;  // transit hop gone, drop response
 
             auto n = SymmNonce::make_random();
-            m.respond(Onion::serialize(n, hop->info.rxID, response), false);
+            m.respond(Onion::serialize(n, hop->rxID(), response), false);
         };
 
         std::invoke(itr->second, this, std::move(body), std::move(respond));
@@ -1815,8 +1815,8 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            auto decrypted = InitiateSession::deserialize_decrypt(btdc, _router.local_rid());
-            return _router.local_endpoint()->handle_initiation_session(std::move(decrypted));
+            auto decrypted = InitiateSession::decrypt(btdc, _router.local_rid());
+            return _router.local_endpoint()->handle_initiate_session(std::move(decrypted));
         }
         catch (const std::exception& e)
         {

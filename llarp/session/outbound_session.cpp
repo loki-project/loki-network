@@ -13,16 +13,15 @@ namespace llarp::session
     static auto logcat = log::Cat("session.base");
 
     OutboundSession::OutboundSession(
-        RouterID _remote,
+        NetworkAddress remote,
         handlers::RemoteHandler& parent,
         std::shared_ptr<path::Path> path,
         service::SessionTag _t,
         std::shared_ptr<auth::SessionAuthPolicy> a)
         : PathHandler{parent._router, NUM_SESSION_PATHS},
-          _remote_router{std::move(_remote)},
+          BaseSession{std::move(path)},
+          _remote{std::move(remote)},
           _auth{std::move(a)},
-          _current_path{std::move(path)},
-          _current_hop_id{_current_path->intro.hop_id},
           _tag{std::move(_t)},
           _last_use{_router.now()},
           _parent{parent},
@@ -36,6 +35,8 @@ namespace llarp::session
         // These can both be false but CANNOT both be true
         if (_is_exit_service & _is_snode_service)
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
+
+        add_path(_current_path);
     }
 
     OutboundSession::~OutboundSession() = default;
@@ -68,7 +69,7 @@ namespace llarp::session
         obj["lastExitUse"] = to_json(_last_use);
         auto pub = _auth->session_key().to_pubkey();
         obj["exitIdentity"] = pub.to_string();
-        obj["endpoint"] = _remote_router.to_string();
+        obj["endpoint"] = _remote.to_string();
         return obj;
     }
 
@@ -82,15 +83,15 @@ namespace llarp::session
         return dlt >= path::ALIVE_TIMEOUT;
     }
 
-    void OutboundSession::path_build_succeeded(const RouterID& remote, std::shared_ptr<path::Path> p)
+    void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
     {
-        path::PathHandler::path_build_succeeded(remote, p);
+        path::PathHandler::path_build_succeeded(p);
 
-        // TODO: add callback here
-        if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->TXID().to_string()))
-            log::info(logcat, "Asking {} for exit", _remote_router);
-        else
-            log::warning(logcat, "Failed to send exit request");
+        // TODO: why the fuck did we used to do this here...?
+        // if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->upstream_txid().to_string()))
+        //     log::info(logcat, "Asking {} for exit", _remote);
+        // else
+        //     log::warning(logcat, "Failed to send exit request");
     }
 
     void OutboundSession::reset_path_state()
@@ -156,7 +157,7 @@ namespace llarp::session
 
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
-        if (p->close_exit(_auth->session_key(), p->TXID().to_string()))
+        if (p->close_exit(_auth->session_key(), p->upstream_txid().to_string()))
             log::info(logcat, "Sent path close on path {}", p->to_string());
         else
             log::warning(logcat, "Failed to send path close on path {}", p->to_string());

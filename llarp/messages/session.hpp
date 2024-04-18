@@ -14,6 +14,7 @@ namespace llarp
         - 'x' : encrypted payload
             - 'i' : RouterID of initiator
             - 's' : SessionTag for current session
+            - 't' : Terminal hop TXID of newly constructed path
             - 'u' : Authentication field
                 - bt-encoded dict, values TBD
     */
@@ -25,6 +26,7 @@ namespace llarp
             const RouterID& local,
             const RouterID& remote,
             service::SessionTag& tag,
+            HopID terminal_txid,
             std::optional<std::string_view> auth_token)
         {
             try
@@ -36,6 +38,7 @@ namespace llarp
 
                     btdp.append("i", local.to_view());
                     btdp.append("s", tag.to_view());
+                    btdp.append("t", terminal_txid.to_view());
                     // DISCUSS: this auth field
                     if (auth_token)
                         btdp.append("u", *auth_token);
@@ -66,27 +69,51 @@ namespace llarp
             }
         };
 
-        inline static ustring deserialize_decrypt(oxenc::bt_dict_consumer& btdc, const RouterID& local)
+        inline static ustring decrypt(oxenc::bt_dict_consumer& btdc, const RouterID& local)
         {
+            SymmNonce nonce;
+            RouterID shared_pubkey;
+            ustring payload;
+
             try
             {
-                SymmNonce nonce;
-                RouterID shared_pubkey;
-                ustring payload;
-
                 nonce = SymmNonce::make(btdc.require<std::string>("n"));
                 shared_pubkey = RouterID{btdc.require<std::string>("s")};
                 payload = btdc.require<ustring>("x");
 
                 crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, payload);
-
-                return payload;
             }
             catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                log::warning(logcat, "Exception caught decrypting session initiation message:{}", e.what());
                 throw;
             }
+
+            return payload;
+        }
+
+        inline static std::tuple<RouterID, service::SessionTag, HopID, std::optional<std::string>> deserialize(
+            oxenc::bt_dict_consumer& btdc)
+        {
+            RouterID initiator;
+            service::SessionTag tag;
+            HopID terminal_txid;
+            std::optional<std::string> maybe_auth = std::nullopt;
+
+            try
+            {
+                initiator.from_string(btdc.require<std::string_view>("i"));
+                tag.from_string(btdc.require<std::string_view>("s"));
+                terminal_txid.from_string(btdc.require<std::string_view>("t"));
+                maybe_auth = btdc.maybe<std::string>("u");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing session initiation payload:{}", e.what());
+                throw;
+            }
+
+            return {std::move(initiator), std::move(tag), std::move(terminal_txid), std::move(maybe_auth)};
         }
 
     }  // namespace InitiateSession

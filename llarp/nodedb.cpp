@@ -373,7 +373,7 @@ namespace llarp
 
         _router.last_rc_fetch = now;
 
-        _router.link_manager().fetch_rcs(
+        _router.link_manager()->fetch_rcs(
             src,
             FetchRCMessage::serialize(_router.last_rc_fetch, needed),
             [this, source = src, initial](oxen::quic::message m) mutable {
@@ -444,7 +444,7 @@ namespace llarp
         for (const auto& target : rid_sources)
         {
             log::critical(logcat, "Sending FetchRIDs request to {} via {}", target, src);
-            _router.link_manager().fetch_router_ids(
+            _router.link_manager()->fetch_router_ids(
                 src,
                 FetchRIDMessage::serialize(target),
                 [this, source = src, target, initial](oxen::quic::message m) mutable {
@@ -656,7 +656,7 @@ namespace llarp
 
         auto num_needed = is_snode ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
 
-        _router.link_manager().fetch_bootstrap_rcs(
+        _router.link_manager()->fetch_bootstrap_rcs(
             rc,
             BootstrapFetchMessage::serialize(
                 is_snode ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),

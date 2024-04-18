@@ -128,7 +128,7 @@ namespace llarp::handlers
         }
     };
 
-    TunEndpoint::TunEndpoint(Router& r) : _router{r}, _packet_router{}
+    TunEndpoint::TunEndpoint(Router& r) : _router{r}
     {
         auto& keyfile = _router.config()->network.keyfile;
 
@@ -148,8 +148,6 @@ namespace llarp::handlers
 
         _packet_router =
             std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_user_packet(std::move(pkt)); });
-
-        // r->loop()->add_ticker([this] { Pump(Now()); });
     }
 
     void TunEndpoint::setup_dns()
@@ -159,7 +157,7 @@ namespace llarp::handlers
         auto& dns_config = _router.config()->dns;
         const auto& info = get_vpn_interface()->interface_info();
 
-        if (dns_config.raw)
+        if (dns_config.l3_intercept)
         {
             auto dns = std::make_shared<TunDNS>(this, dns_config);
             _dns = dns;
@@ -167,19 +165,13 @@ namespace llarp::handlers
             _packet_router->add_udp_handler(uint16_t{53}, [this, dns](UDPPacket pkt) {
                 auto dns_pkt_src = dns->pkt_source;
 
-                // TODO: pkts dont have reply callbacks now
-                // if (const auto& reply = pkt.reply)
-                //     dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
+                auto& pkt_path = pkt.path;
 
-                // auto& pkt_path = pkt.path;
+                if (dns->maybe_handle_packet(
+                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
+                    return;
 
-                // if (dns->maybe_handle_packet(
-                //         std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
-                //     return;
-                // TOFIX:
-                (void)this;
-                (void)pkt;
-                // handle_user_packet(IPPacket::from_udp(pkt));
+                handle_user_packet(IPPacket::from_udp(pkt));
             });
         }
         else
@@ -188,7 +180,7 @@ namespace llarp::handlers
         _dns->add_resolver(weak_from_this());
         _dns->start();
 
-        if (dns_config.raw)
+        if (dns_config.l3_intercept)
         {
             if (auto vpn = _router.vpn_platform())
             {
@@ -283,30 +275,47 @@ namespace llarp::handlers
     {
         auto& net_conf = _router.config()->network;
 
-        if (net_conf.auth_type == auth::AuthType::FILE)
+        /** DISCUSS: Can the auth objects be further simplified?
+            - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
+                request to execute its aynchronous logic and queue the authentication job
+
+            Static Token Auth:
+            - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
+                operator
+            - The session initiator will automatically include any static tokens that are either (A) loaded into the
+                config mapping or (B) passed to the lokinet-vpn cli utility
+                - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+
+            RPC Auth:
+            - Why can't the functionality of this be entirely subsumed by the RPCClient?
+                - If the config specifies the auth_type as RPC plus
+
+        */
+        switch (net_conf.auth_type)
         {
-            // _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(router(),
-            // conf.auth_files, conf.auth_file_type);
-        }
-        else if (net_conf.auth_type != auth::AuthType::NONE)
-        {
-            std::string url, method;
-            if (net_conf.auth_url.has_value() and net_conf.auth_method.has_value())
-            {
-                url = *net_conf.auth_url;
-                method = *net_conf.auth_method;
-            }
-            // TODO:
-            // auto auth = auth::make_auth_policy<auth::RPCAuthPolicy>(
-            //     router(),
-            //     url,
-            //     method,
-            //     conf.auth_whitelist,
-            //     conf.auth_static_tokens,
-            //     router().lmq(),
-            //     shared_from_this());
-            // auth->Start();
-            // _auth_policy = std::move(auth);
+            case auth::AuthType::WHITELIST:
+            case auth::AuthType::OMQ:
+                // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
+                _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
+                    router(),
+                    *net_conf.auth_endpoint,
+                    *net_conf.auth_method,
+                    net_conf.auth_whitelist,
+                    net_conf.auth_static_tokens,
+                    router().lmq(),
+                    shared_from_this());
+
+                std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
+                break;
+
+            case auth::AuthType::FILE:
+                _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
+                    router(), net_conf.auth_files, net_conf.auth_file_type);
+                break;
+
+            case auth::AuthType::NONE:
+            default:
+                break;
         }
 
         _traffic_policy = net_conf.traffic_policy;

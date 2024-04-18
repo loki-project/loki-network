@@ -5,8 +5,6 @@
 #include <string_view>
 #include <unordered_set>
 
-using namespace std::literals;
-
 namespace llarp::rpc
 {
 

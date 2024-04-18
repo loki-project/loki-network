@@ -18,7 +18,7 @@ namespace llarp
             nodes. Specifically, it is extended by service::Handler and exit::Handler, which
             respectively manage sessions to remote hidden services and exit nodes.
         */
-        struct RemoteHandler final : public EndpointBase,
+        struct RemoteHandler final : public EndpointBase<session::OutboundSession>,
                                      public path::PathHandler,
                                      public std::enable_shared_from_this<RemoteHandler>
         {
@@ -84,27 +84,15 @@ namespace llarp
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
 
-            template <NetworkAddrType net_addr_t>
-            bool initiate_remote_service_session(net_addr_t& remote)
+            // TODO: add callback field to initiate functions to loop in QUICTun endpoint creation
+            bool initiate_remote_service_session(const NetworkAddress& remote)
             {
-                RouterID rid{remote.pubkey().data()};
-
-                if constexpr (std::is_same_v<decltype(remote), NetworkAddress>)
-                {
-                    return initiate_session(rid, true, false);
-                }
-                if constexpr (std::is_same_v<decltype(remote), RelayAddress>)
-                {
-                    return initiate_session(rid, false, true);
-                }
-
-                return false;
+                return initiate_session(remote, false);
             }
 
-            bool initiate_remote_exit_session(NetworkAddress& remote)
+            bool initiate_remote_exit_session(const NetworkAddress& remote)
             {
-                RouterID rid{remote.pubkey().data()};
-                return initiate_session(rid, true, false);
+                return initiate_session(remote, true);
             }
 
             // RemoteHandler does not build paths to the remote addresses it maintains sessions to; each OutboundSession
@@ -137,11 +125,11 @@ namespace llarp
             void unmap_range_by_name(const std::string& name);
 
           private:
-            bool initiate_session(RouterID remote, bool is_exit = false, bool is_snode = false);
+            bool initiate_session(NetworkAddress remote, bool is_exit = false);
 
-            void make_session_path(service::IntroductionSet intros, RouterID remote, bool is_exit, bool is_snode);
+            void make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit);
 
-            void make_session(RouterID remote, std::shared_ptr<path::Path> path, bool is_exit, bool is_snode);
+            void make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit);
         };
     }  // namespace handlers
 }  // namespace llarp

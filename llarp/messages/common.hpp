@@ -12,8 +12,6 @@
 
 namespace llarp
 {
-    using namespace std::literals;
-
     namespace messages
     {
         static auto logcat = log::Cat("messages");

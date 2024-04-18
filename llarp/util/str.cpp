@@ -32,8 +32,6 @@ namespace llarp
         return str;
     }
 
-    using namespace std::literals;
-
     std::vector<std::string_view> split(std::string_view str, const std::string_view delim, bool trim)
     {
         std::vector<std::string_view> results;

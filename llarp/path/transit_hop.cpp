@@ -9,23 +9,17 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("transit-hop");
 
-    TransitHopInfo::TransitHopInfo(RouterID down) : downstream{std::move(down)}
-    {}
-
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
         oxenc::bt_dict_consumer& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce)
     {
         std::shared_ptr<TransitHop> hop;
 
-        uint64_t lifetime;
-        std::string rx_id, tx_id, upstream;
-
         try
         {
-            lifetime = btdc.require<uint64_t>("l");
-            rx_id = btdc.require<std::string>("r");
-            tx_id = btdc.require<std::string>("t");
-            upstream = btdc.require<std::string>("u");
+            hop->lifetime = btdc.require<uint64_t>("l") * 1ms;
+            hop->rxID().from_string(btdc.require<std::string_view>("r"));
+            hop->txID().from_string(btdc.require<std::string_view>("t"));
+            hop->upstream().from_string(btdc.require<std::string_view>("u"));
         }
         catch (const std::exception& e)
         {
@@ -33,16 +27,15 @@ namespace llarp::path
             throw std::runtime_error{messages::ERROR_RESPONSE};
         }
 
-        hop->info.txID.from_string(tx_id);
-        hop->info.rxID.from_string(rx_id);
-
-        if (hop->info.rxID.is_zero() || hop->info.txID.is_zero())
+        if (hop->rxID().is_zero() || hop->txID().is_zero())
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
-        hop->info.downstream = src;
-        hop->info.upstream.from_snode_address(upstream);
+        if (hop->lifetime >= path::DEFAULT_LIFETIME)
+            throw std::runtime_error{PathBuildMessage::BAD_LIFETIME};
 
-        if (r.path_context().has_transit_hop(hop->info))
+        hop->downstream() = src;
+
+        if (r.path_context()->has_transit_hop(hop))
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
         if (!crypto::dh_server(hop->shared.data(), symmkey.data(), r.pubkey().data(), symmnonce.data()))
@@ -53,30 +46,23 @@ namespace llarp::path
         crypto::shorthash(xor_hash, hop->shared.data(), hop->shared.size());
         hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
 
-        if (hop->lifetime = 1ms * lifetime; hop->lifetime >= path::DEFAULT_LIFETIME)
-            throw std::runtime_error{PathBuildMessage::BAD_LIFETIME};
-
         return hop;
-    }
-
-    std::string TransitHopInfo::to_string() const
-    {
-        return fmt::format("[TransitHopInfo tx={} rx={} upstream={} downstream={}]", txID, rxID, upstream, downstream);
     }
 
     bool TransitHop::is_expired(std::chrono::milliseconds now) const
     {
-        return destroy || (now >= ExpireTime());
+        return destroy || (now >= expiry_time());
     }
 
-    std::chrono::milliseconds TransitHop::ExpireTime() const
+    std::chrono::milliseconds TransitHop::expiry_time() const
     {
         return started + lifetime;
     }
 
     std::string TransitHop::to_string() const
     {
-        return fmt::format("[TransitHop {} started={} lifetime={}", info, started.count(), lifetime.count());
+        return "[TransitHop: tx={} rx={} upstream={} downstream={} started={} lifetime={}"_format(
+            _txid, _rxid, _upstream, _downstream, started.count(), lifetime.count());
     }
 
     void TransitHop::Stop()

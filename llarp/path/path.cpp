@@ -123,7 +123,7 @@ namespace llarp::path
                 const_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
         }
 
-        return Onion::serialize(nonce, TXID(), payload);
+        return Onion::serialize(nonce, upstream_txid(), payload);
     }
 
     std::string Path::make_outer_payload(ustring_view payload)
@@ -201,12 +201,17 @@ namespace llarp::path
         return intro.pivot_router;
     }
 
-    HopID Path::TXID() const
+    RouterID Path::upstream() const
+    {
+        return hops[0].rc.router_id();
+    }
+
+    HopID Path::upstream_txid() const
     {
         return hops[0].txID;
     }
 
-    HopID Path::RXID() const
+    HopID Path::upstream_rxid() const
     {
         return hops[0].rxID;
     }
@@ -218,19 +223,25 @@ namespace llarp::path
         return intro.latency > 0s && _established;
     }
 
-    RouterID Path::upstream() const
-    {
-        return hops[0].rc.router_id();
-    }
-
-    RouterID Path::terminus() const
+    RouterID Path::terminal() const
     {
         return hops.back().rc.router_id();
     }
 
+    HopID Path::terminal_txid() const
+    {
+        return hops.back().txID;
+    }
+
+    HopID Path::terminal_rxid() const
+    {
+        return hops.back().rxID;
+    }
+
     std::string Path::to_string() const
     {
-        return "RID:{} -- TX:{}/RX:{}"_format(_router.local_rid(), TXID().to_view(), RXID().to_view());
+        return "RID:{} -- TX:{}/RX:{}"_format(
+            _router.local_rid(), upstream_txid().to_view(), upstream_rxid().to_view());
     }
 
     std::string Path::HopsString() const
@@ -425,7 +436,7 @@ namespace llarp::path
 
     std::string Path::name() const
     {
-        return fmt::format("TX={} RX={}", TXID().to_string(), RXID().to_string());
+        return fmt::format("TX={} RX={}", upstream_txid().to_string(), upstream_rxid().to_string());
     }
 
     /* TODO: replace this with sending an onion-ed data message

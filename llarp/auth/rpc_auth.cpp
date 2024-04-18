@@ -14,20 +14,21 @@ namespace llarp::auth
         std::unordered_set<std::string> whitelist_tokens,
         std::shared_ptr<oxenmq::OxenMQ> lmq)
         : AuthPolicy{r},
-          _url{std::move(url)},
+          _endpoint{std::move(url)},
           _method{std::move(method)},
           _whitelist{std::move(whitelist_addrs)},
           _static_tokens{std::move(whitelist_tokens)},
           _omq{std::move(lmq)}
-    {}
+    {
+        if (_endpoint.empty() or _method.empty())
+            throw std::invalid_argument{
+                "RPC AuthPolicy must be initialized with an endpoint to query and a method to invoke!"};
+    }
 
     void RPCAuthPolicy::start()
     {
-        if (_url.empty() or _method.empty())
-            return;
-
         _omq->connect_remote(
-            oxenmq::address{_url},
+            _endpoint,
             [self = shared_from_this()](oxenmq::ConnectionID c) {
                 self->_omq_conn = std::move(c);
                 log::info(logcat, "OMQ connected to endpoint auth server");

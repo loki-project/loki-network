@@ -28,7 +28,6 @@ namespace llarp
 
         std::optional<service::EncryptedIntroSet> get_encrypted_introset(const dht::Key_t& key) const;
 
-        // TODO: rename every ExtractStatus function to be uniformly snake cased
         nlohmann::json ExtractStatus() const;
 
         void put_intro(service::EncryptedIntroSet enc);

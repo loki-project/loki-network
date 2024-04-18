@@ -3,7 +3,6 @@
 #include <llarp/constants/path.hpp>
 #include <llarp/path/path_types.hpp>
 #include <llarp/router_id.hpp>
-// #include <llarp/router/router.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/queue.hpp>
 
@@ -13,57 +12,60 @@ namespace llarp
 
     namespace path
     {
-        struct TransitHopInfo
-        {
-            TransitHopInfo() = default;
-            TransitHopInfo(RouterID down);
-
-            HopID txID, rxID;
-            RouterID upstream;
-            RouterID downstream;
-
-            std::string to_string() const;
-
-            bool operator==(const TransitHopInfo& rhs) const
-            {
-                return std::tie(txID, rxID, upstream, downstream)
-                    == std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
-            }
-
-            bool operator!=(const TransitHopInfo& rhs) const
-            {
-                return not(*this == rhs);
-            }
-
-            bool operator<(const TransitHopInfo& rhs) const
-            {
-                return std::tie(txID, rxID, upstream, downstream)
-                    < std::tie(rhs.txID, rhs.rxID, rhs.upstream, rhs.downstream);
-            }
-        };
-
         struct TransitHop : std::enable_shared_from_this<TransitHop>
         {
+          private:
+            HopID _txid, _rxid;
+            RouterID _upstream;
+            RouterID _downstream;
+
+          public:
             TransitHop() = default;
+
+            TransitHop(Router& r, const RouterID& src, ustring symmkey, ustring symmnonce);
 
             // This static factory function is used in path-build logic. The exceptions thrown are the exact response
             // bodies passed to message::respond(...) function
             static std::shared_ptr<TransitHop> deserialize_hop(
                 oxenc::bt_dict_consumer& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce);
 
-            TransitHopInfo info;
             SharedSecret shared;
             SymmNonce nonceXOR;
             std::chrono::milliseconds started = 0s;
             // 10 minutes default
             std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
             uint8_t version;
-            std::chrono::milliseconds last_activity = 0s;
+            std::chrono::milliseconds _last_activity = 0s;
             bool terminal_hop{false};
 
-            HopID RXID() const
+            RouterID& upstream()
             {
-                return info.rxID;
+                return _upstream;
+            }
+
+            const RouterID& upstream() const
+            {
+                return _upstream;
+            }
+
+            RouterID& downstream()
+            {
+                return _downstream;
+            }
+
+            const RouterID& downstream() const
+            {
+                return _downstream;
+            }
+
+            HopID rxID() const
+            {
+                return _rxid;
+            }
+
+            HopID txID() const
+            {
+                return _txid;
             }
 
             void Stop();
@@ -72,19 +74,26 @@ namespace llarp
 
             bool operator<(const TransitHop& other) const
             {
-                return info < other.info;
+                return std::tie(_txid, _rxid, _upstream, _downstream)
+                    < std::tie(other._txid, other._rxid, other._upstream, other._downstream);
             }
 
-            bool IsEndpoint(const RouterID& us) const
+            bool operator==(const TransitHop& other) const
             {
-                return info.upstream == us;
+                return std::tie(_txid, _rxid, _upstream, _downstream)
+                    == std::tie(other._txid, other._rxid, other._upstream, other._downstream);
             }
 
-            std::chrono::milliseconds ExpireTime() const;
-
-            std::chrono::milliseconds LastRemoteActivityAt() const
+            bool operator!=(const TransitHop& other) const
             {
-                return last_activity;
+                return !(*this == other);
+            }
+
+            std::chrono::milliseconds expiry_time() const;
+
+            std::chrono::milliseconds last_activity() const
+            {
+                return _last_activity;
             }
 
             std::string to_string() const;
@@ -93,7 +102,7 @@ namespace llarp
 
             bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt) const
             {
-                return now >= ExpireTime() - dlt;
+                return now >= expiry_time() - dlt;
             }
 
             void QueueDestroySelf(Router* r);
@@ -106,14 +115,14 @@ namespace llarp
 
 namespace std
 {
-    template <>
-    struct hash<llarp::path::TransitHopInfo>
-    {
-        std::size_t operator()(const llarp::path::TransitHopInfo& a) const
-        {
-            hash<llarp::RouterID> RHash{};
-            hash<llarp::HopID> PHash{};
-            return RHash(a.upstream) ^ RHash(a.downstream) ^ PHash(a.txID) ^ PHash(a.rxID);
-        }
-    };
+    // template <>
+    // struct hash<llarp::path::TransitHopInfo>
+    // {
+    //     std::size_t operator()(const llarp::path::TransitHopInfo& a) const
+    //     {
+    //         hash<llarp::RouterID> RHash{};
+    //         hash<llarp::HopID> PHash{};
+    //         return RHash(a.upstream) ^ RHash(a.downstream) ^ PHash(a.txID) ^ PHash(a.rxID);
+    //     }
+    // };
 }  // namespace std

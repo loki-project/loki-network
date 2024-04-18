@@ -18,15 +18,13 @@ lokinet_add_library(lokinet-cryptography
 # Functional objects use by lokinet-core and other libraries
 # needed by vpn/ router/ rpc/ handlers/ net/ link/
 lokinet_add_library(lokinet-core-utils
-  endpoint_base.cpp
+  # endpoint_base.cpp
 
   auth/file_auth.cpp
   auth/rpc_auth.cpp
   auth/session_auth.cpp
   
-  handlers/common.cpp
   handlers/endpoint.cpp
-  handlers/embedded.cpp
   handlers/remote.cpp
   handlers/tun.cpp
   
@@ -160,7 +158,7 @@ lokinet_add_library(lokinet-dns
   dns/question.cpp  # message
   dns/rr.cpp
   dns/serialize.cpp
-  dns/server.cpp    # handlers/exit+tun and service/endpoint
+  dns/server.cpp
   dns/srv_data.cpp  
 )
 

@@ -19,9 +19,6 @@
 #include <set>
 #include <unordered_map>
 
-namespace
-{}  // namespace
-
 namespace llarp
 {
     struct LinkManager;
@@ -122,7 +119,7 @@ namespace llarp
     struct LinkManager
     {
       public:
-        static std::unique_ptr<LinkManager> make(Router& r);
+        static std::shared_ptr<LinkManager> make(Router& r);
 
         bool send_control_message(
             const RouterID& remote,

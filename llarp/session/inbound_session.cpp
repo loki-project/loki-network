@@ -5,18 +5,12 @@
 namespace llarp::session
 {
     InboundSession::InboundSession(
-        Router& r,
-        std::shared_ptr<path::Path> _path,
-        NetworkAddress _r,
-        handlers::LocalEndpoint& p,
-        service::SessionTag _t,
-        bool is_exit)
-        : _router{r},
+        std::shared_ptr<path::Path> _path, NetworkAddress _r, handlers::LocalEndpoint& p, service::SessionTag _t)
+        : BaseSession{std::move(_path)},
           _parent{p},
           _tag{std::move(_t)},
           _remote{std::move(_r)},
-          _current_path{std::move(_path)},
-          _is_exit_service{is_exit}
+          _is_exit_node{_parent.is_exit_node()}
     {}
 
     void InboundSession::set_new_path(const std::shared_ptr<path::Path>& _new_path)

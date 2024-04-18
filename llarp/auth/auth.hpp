@@ -6,6 +6,7 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/router_id.hpp>
 #include <llarp/service/tag.hpp>
+#include <llarp/util/concept.hpp>
 #include <llarp/util/str.hpp>
 #include <llarp/util/thread/threading.hpp>
 
@@ -142,7 +143,7 @@ namespace llarp::auth
         void start();
 
       private:
-        const std::string _url;
+        const std::string _endpoint;
         const std::string _method;
         const std::unordered_set<NetworkAddress> _whitelist;
         const std::unordered_set<std::string> _static_tokens;
@@ -151,6 +152,15 @@ namespace llarp::auth
         std::optional<oxenmq::ConnectionID> _omq_conn;
         std::unordered_set<service::SessionTag> _pending_sessions;
     };
+
+    template <typename auth_t>
+    concept CONCEPT_COMPAT AuthPolicyType = std::is_base_of_v<AuthPolicy, auth_t>;
+
+    template <AuthPolicyType auth_t, typename... Opt>
+    inline static std::shared_ptr<auth_t> make_auth_policy(Router& r, Opt&&... opts)
+    {
+        return std::make_shared<auth_t>(r, std::forward<Opt>(opts)...);
+    }
 
     /// maybe get auth result from string
     inline std::optional<AuthCode> parse_auth_code(std::string data)
@@ -200,11 +210,4 @@ namespace llarp::auth
 #endif
         return itr->second;
     }
-
-    template <typename... Opt, typename Auth_t, std::enable_if_t<std::is_base_of_v<AuthPolicy, Auth_t>, int> = 0>
-    static std::shared_ptr<AuthPolicy> make_auth_policy(Router& r, Opt&&... opts)
-    {
-        return std::make_shared<Auth_t>(r, std::forward<Opt>(opts)...);
-    }
-
 }  // namespace llarp::auth

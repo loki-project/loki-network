@@ -1,13 +1,11 @@
 #pragma once
 
-#include "common.hpp"
-
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
 #include <llarp/net/ip.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/types.hpp>
+#include <llarp/service/identity.hpp>
 #include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
@@ -166,6 +164,8 @@ namespace llarp::handlers
 
         /// dns subsystem for this endpoint
         std::shared_ptr<dns::Server> _dns;
+
+        std::shared_ptr<auth::AuthPolicy> _auth_policy;
 
         /// our local address and ip
         oxen::quic::Address _local_addr;

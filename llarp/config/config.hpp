@@ -121,13 +121,17 @@ namespace llarp
         std::unordered_map<NetworkAddress, auth::AuthInfo> exit_auths;
         std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
 
-        // RPC and File auth values
+        /*   Auth specific config   */
         auth::AuthType auth_type = auth::AuthType::NONE;
         auth::AuthFileType auth_file_type = auth::AuthFileType::HASHES;
-        std::optional<std::string> auth_url;
+
+        std::optional<std::string> auth_endpoint;
         std::optional<std::string> auth_method;
+
         std::unordered_set<NetworkAddress> auth_whitelist;
+
         std::unordered_set<std::string> auth_static_tokens;
+
         std::set<fs::path> auth_files;
 
         std::vector<llarp::dns::SRVData> srv_records;
@@ -174,7 +178,7 @@ namespace llarp
 
     struct DnsConfig
     {
-        bool raw;
+        bool l3_intercept;
 
         std::vector<fs::path> hostfiles;
 

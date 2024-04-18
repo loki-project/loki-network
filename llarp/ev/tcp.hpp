@@ -25,6 +25,8 @@ extern "C"
 
 namespace llarp
 {
+    class QUICTunnel;
+
     struct TCPSocket
     {
         TCPSocket() = delete;
@@ -43,14 +45,13 @@ namespace llarp
         evutil_socket_t fd;
         oxen::quic::Address src;
 
-        std::weak_ptr<oxen::quic::Stream> stream;
+        std::shared_ptr<oxen::quic::Stream> stream;
     };
 
     using tcpsock_hook = std::function<std::shared_ptr<TCPSocket>()>;
 
     class TCPHandle
     {
-      public:
         using socket_t =
 #ifndef _WIN32
             int
@@ -58,28 +59,29 @@ namespace llarp
             SOCKET
 #endif
             ;
+
+        std::shared_ptr<EventLoop> _ev;
+        std::shared_ptr<::evconnlistener> _tcp_listener;
+        oxen::quic::Address _bound;
+
+        socket_t _sock;
+        tcpsock_hook _socket_maker;
+
+        std::unordered_map<evutil_socket_t, std::shared_ptr<TCPSocket>> routing;
+
+      public:
         TCPHandle() = delete;
 
         explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, tcpsock_hook cb);
 
         ~TCPHandle();
 
-      private:
-        std::shared_ptr<EventLoop> _ev;
-        std::shared_ptr<::evconnlistener> _tcp_listener;
-
-        socket_t _sock;
-        oxen::quic::Address _bound;
-        tcpsock_hook _socket_maker;
-
-        std::unordered_map<evutil_socket_t, std::shared_ptr<TCPSocket>> routing;
-
-        void _init_internals(const oxen::quic::Address& bind);
-
-      public:
-        oxen::quic::Address bind()
+        oxen::quic::Address bind() const
         {
             return _bound;
         }
+
+      private:
+        void _init_internals(const oxen::quic::Address& bind);
     };
 }  //  namespace llarp

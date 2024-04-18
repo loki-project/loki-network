@@ -203,14 +203,15 @@ namespace llarp::handlers
         }
     }
 
-    void RemoteHandler::make_session(RouterID remote, std::shared_ptr<path::Path> path, bool is_exit, bool is_snode)
+    void RemoteHandler::make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit)
     {
-        auto auth = std::make_shared<auth::SessionAuthPolicy>(_router, is_snode, is_exit);
+        auto auth = std::make_shared<auth::SessionAuthPolicy>(_router, not remote.is_client(), is_exit);
         auto tag = service::SessionTag::make_random();
 
         path->send_path_control_message(
             "session_init",
-            InitiateSession::serialize_encrypt(_router.local_rid(), remote, tag, auth->fetch_auth_token()),
+            InitiateSession::serialize_encrypt(
+                _router.local_rid(), remote.router_id(), tag, path->terminal_txid(), auth->fetch_auth_token()),
             [this, remote, tag, path, auth](std::string response) {
                 // TODO: this will change after defining ::handle_session_init() function
                 if (response == messages::OK_RESPONSE)
@@ -227,7 +228,7 @@ namespace llarp::handlers
             });
     }
 
-    void RemoteHandler::make_session_path(service::IntroductionSet intros, RouterID remote, bool is_exit, bool is_snode)
+    void RemoteHandler::make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit)
     {
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
@@ -261,11 +262,11 @@ namespace llarp::handlers
         auto payload = build2(path);
 
         if (not build3(
-                path, std::move(payload), [this, path, intros, remote, is_exit, is_snode](oxen::quic::message m) {
+                path->upstream(), std::move(payload), [this, path, intros, remote, is_exit](oxen::quic::message m) {
                     if (m)
                     {
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
-                        return make_session(std::move(remote), std::move(path), is_exit, is_snode);
+                        return make_session(std::move(remote), std::move(path), is_exit);
                     }
 
                     try
@@ -290,23 +291,23 @@ namespace llarp::handlers
                     }
 
                     // recurse with introduction set minus the recently attempted pivot
-                    make_session_path(std::move(intros), std::move(remote), is_exit, is_snode);
+                    make_session_path(std::move(intros), std::move(remote), is_exit);
                 }))
         {
             log::critical(logcat, "Error sending path_build control message for session initiation!");
         }
     }
 
-    bool RemoteHandler::initiate_session(RouterID remote, bool is_exit, bool is_snode)
+    bool RemoteHandler::initiate_session(NetworkAddress remote, bool is_exit)
     {
-        if (is_exit and is_snode)
+        if (is_exit and not remote.is_client())
             throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
 
         auto counter = std::make_shared<size_t>(NUM_ONS_LOOKUP_PATHS);
 
-        _router.loop()->call([this, remote, is_exit, is_snode, counter]() {
+        _router.loop()->call([this, remote, is_exit, counter]() {
             lookup_intro(
-                remote, false, 0, [this, remote, is_exit, is_snode, counter](std::optional<service::IntroSet> intro) {
+                remote.router_id(), false, 0, [this, remote, is_exit, counter](std::optional<service::IntroSet> intro) {
                     // already have a successful return
                     if (*counter == 0)
                         return;
@@ -315,7 +316,7 @@ namespace llarp::handlers
                     {
                         *counter = 0;
                         log::info(logcat, "Session initiation returned successful 'lookup_intro'...");
-                        make_session_path(std::move(intro->intros), remote, is_exit, is_snode);
+                        make_session_path(std::move(intro->intros), remote, is_exit);
                     }
                     else if (--*counter == 0)
                     {

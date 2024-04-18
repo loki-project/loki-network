@@ -12,8 +12,6 @@
 #include <string_view>
 #include <system_error>
 
-using namespace std::literals;
-
 namespace llarp
 {
     namespace PREFIX

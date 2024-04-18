@@ -10,6 +10,7 @@
 
 namespace llarp
 {
+    using namespace std::literals;
     using namespace oxen::log::literals;
 
     // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined

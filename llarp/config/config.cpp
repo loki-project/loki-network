@@ -291,7 +291,7 @@ namespace llarp
             "network",
             "auth-lmq",
             ClientOnly,
-            assignment_acceptor(auth_url),
+            assignment_acceptor(auth_endpoint),
             Comment{
                 "lmq endpoint to talk to for authenticating new sessions",
                 "ipc:///var/lib/lokinet/auth.socket",
@@ -912,7 +912,7 @@ namespace llarp
                 platform::is_windows or platform::is_android or (platform::is_macos and not platform::is_apple_sysex)},
             Comment{"Intercept all dns traffic (udp/53) going into our lokinet network interface "
                     "instead of binding a local udp socket"},
-            assignment_acceptor(raw));
+            assignment_acceptor(l3_intercept));
 
         conf.define_option<std::string>(
             "dns",
