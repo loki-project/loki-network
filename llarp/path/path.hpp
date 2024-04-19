@@ -32,6 +32,8 @@ namespace llarp
         struct TransitHop;
         struct PathHopConfig;
 
+        // TODO: replace vector of PathHopConfig with vector of PathHop
+
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
         {
@@ -47,7 +49,8 @@ namespace llarp
                 Router& rtr,
                 const std::vector<RemoteRC>& routers,
                 std::weak_ptr<PathHandler> parent,
-                bool is_session = false);
+                bool is_session = false,
+                bool is_client = false);
 
             std::shared_ptr<Path> get_self()
             {
@@ -119,10 +122,10 @@ namespace llarp
                 uint64_t order = 0,
                 std::function<void(std::string)> func = nullptr);
 
-            bool close_exit(SecretKey sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
+            bool close_exit(const SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
 
             bool obtain_exit(
-                SecretKey sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func = nullptr);
+                const SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func = nullptr);
 
             /// sends a control request along a path
             ///
@@ -137,27 +140,36 @@ namespace llarp
 
             bool send_path_data_message(std::string body);
 
-            bool IsReady() const;
+            bool is_ready() const;
 
-            const RouterID& pivot_router_id() const;
+            RouterID upstream();
+            const RouterID& upstream() const;
 
-            RouterID upstream() const;
+            HopID upstream_rxid();
+            const HopID& upstream_rxid() const;
 
-            HopID upstream_rxid() const;
+            HopID upstream_txid();
+            const HopID& upstream_txid() const;
 
-            HopID upstream_txid() const;
+            RouterID pivot_rid();
+            const RouterID& pivot_rid() const;
 
-            RouterID terminal() const;
+            HopID pivot_rxid();
+            const HopID& pivot_rxid() const;
 
-            HopID terminal_rxid() const;
-
-            HopID terminal_txid() const;
+            HopID pivot_txid();
+            const HopID& pivot_txid() const;
 
             std::string name() const;
 
             bool is_session_path() const
             {
                 return _is_session_path;
+            }
+
+            bool is_client_path() const
+            {
+                return _is_client;
             }
 
             bool operator<(const Path& other) const;
@@ -181,6 +193,8 @@ namespace llarp
             Router& _router;
 
             bool _is_session_path{false};
+            bool _is_client{false};
+
             std::chrono::milliseconds last_recv_msg = 0s;
             std::chrono::milliseconds last_latency_test = 0s;
             uint64_t last_latency_test_id = 0;

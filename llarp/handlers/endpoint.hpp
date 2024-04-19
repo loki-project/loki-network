@@ -31,6 +31,8 @@ namespace llarp::handlers
 
         std::chrono::milliseconds _last_introset_regen_attempt{0s};
 
+        std::unordered_set<std::string> _static_auth_tokens;
+
         // Ranges reachable via our endpoint -- Exit mode only!
         std::set<IPRange> _routed_ranges;
 
@@ -63,7 +65,12 @@ namespace llarp::handlers
         void lookup_intro(
             const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
 
-        void handle_initiate_session(ustring decrypted_payload);
+        // We keep this as an optional so LinkManager can pass the returned object from the call to ::deserialize. It
+        // must be called from LinkManager so a failed authentication can be relayed by the stream pointer in the
+        // original message
+        bool validate_token(std::optional<std::string> maybe_auth);
+
+        void prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid);
 
         const service::IntroSet& intro_set() const
         {

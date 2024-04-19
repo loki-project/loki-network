@@ -13,8 +13,8 @@ namespace llarp
         - 's' : shared pubkey used to derive symmetric key
         - 'x' : encrypted payload
             - 'i' : RouterID of initiator
+            - 'p' : HopID at the pivot node of the newly constructed path
             - 's' : SessionTag for current session
-            - 't' : Terminal hop TXID of newly constructed path
             - 'u' : Authentication field
                 - bt-encoded dict, values TBD
     */
@@ -22,11 +22,15 @@ namespace llarp
     {
         static auto logcat = llarp::log::Cat("session-init");
 
+        inline constexpr auto auth_denied = "AUTH_DENIED"sv;
+
+        inline const auto AUTH_DENIED = messages::serialize_response({{messages::STATUS_KEY, auth_denied}});
+
         inline static std::string serialize_encrypt(
             const RouterID& local,
             const RouterID& remote,
             service::SessionTag& tag,
-            HopID terminal_txid,
+            HopID pivot_txid,
             std::optional<std::string_view> auth_token)
         {
             try
@@ -37,8 +41,8 @@ namespace llarp
                     oxenc::bt_dict_producer btdp;
 
                     btdp.append("i", local.to_view());
+                    btdp.append("p", pivot_txid.to_view());
                     btdp.append("s", tag.to_view());
-                    btdp.append("t", terminal_txid.to_view());
                     // DISCUSS: this auth field
                     if (auth_token)
                         btdp.append("u", *auth_token);
@@ -92,19 +96,19 @@ namespace llarp
             return payload;
         }
 
-        inline static std::tuple<RouterID, service::SessionTag, HopID, std::optional<std::string>> deserialize(
+        inline static std::tuple<RouterID, HopID, service::SessionTag, std::optional<std::string>> deserialize(
             oxenc::bt_dict_consumer& btdc)
         {
             RouterID initiator;
             service::SessionTag tag;
-            HopID terminal_txid;
+            HopID pivot_txid;
             std::optional<std::string> maybe_auth = std::nullopt;
 
             try
             {
                 initiator.from_string(btdc.require<std::string_view>("i"));
+                pivot_txid.from_string(btdc.require<std::string_view>("p"));
                 tag.from_string(btdc.require<std::string_view>("s"));
-                terminal_txid.from_string(btdc.require<std::string_view>("t"));
                 maybe_auth = btdc.maybe<std::string>("u");
             }
             catch (const std::exception& e)
@@ -113,7 +117,43 @@ namespace llarp
                 throw;
             }
 
-            return {std::move(initiator), std::move(tag), std::move(terminal_txid), std::move(maybe_auth)};
+            return {std::move(initiator), std::move(pivot_txid), std::move(tag), std::move(maybe_auth)};
+        }
+
+        inline static std::tuple<RouterID, HopID, service::SessionTag, std::optional<std::string>> decrypt_deserialize(
+            oxenc::bt_dict_consumer& btdc, const RouterID& local)
+        {
+            SymmNonce nonce;
+            RouterID shared_pubkey;
+            ustring payload;
+
+            try
+            {
+                nonce = SymmNonce::make(btdc.require<std::string>("n"));
+                shared_pubkey = RouterID{btdc.require<std::string>("s")};
+                payload = btdc.require<ustring>("x");
+
+                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, payload);
+
+                {
+                    RouterID initiator;
+                    service::SessionTag tag;
+                    HopID pivot_txid;
+                    std::optional<std::string> maybe_auth = std::nullopt;
+
+                    initiator.from_string(btdc.require<std::string_view>("i"));
+                    pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                    tag.from_string(btdc.require<std::string_view>("s"));
+                    maybe_auth = btdc.maybe<std::string>("u");
+
+                    return {std::move(initiator), std::move(pivot_txid), std::move(tag), std::move(maybe_auth)};
+                }
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught decrypting session initiation message:{}", e.what());
+                throw;
+            }
         }
 
     }  // namespace InitiateSession

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <llarp/address/map.hpp>
-#include <llarp/auth/auth.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/service/intro_set.hpp>
@@ -28,6 +27,8 @@ namespace llarp
             address_map<oxen::quic::Address, NetworkAddress> _address_map;
             address_map<IPRange, NetworkAddress> _range_map;
 
+            std::unordered_map<NetworkAddress, std::string> _auth_tokens;
+
             IPRange _local_range;
             oxen::quic::Address _local_addr;
 
@@ -37,6 +38,8 @@ namespace llarp
             std::string _if_name;
 
             bool _use_v6;
+
+            std::optional<std::string_view> fetch_auth_token(const NetworkAddress& remote) const;
 
           public:
             RemoteHandler(Router& r);
@@ -81,6 +84,7 @@ namespace llarp
                 uint64_t order,
                 std::function<void(std::optional<service::IntroSet>)> func);
 
+            // TODO: resolve any ons addresses mapped to auth tokens
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
 

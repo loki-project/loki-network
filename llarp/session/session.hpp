@@ -56,7 +56,7 @@ namespace llarp
 
           public:
             BaseSession(std::shared_ptr<path::Path> _p)
-                : _current_path{std::move(_p)}, _current_hop_id{_current_path->intro.hop_id}
+                : _current_path{std::move(_p)}, _current_hop_id{_current_path->intro.pivot_hop_id}
             {}
         };
 
@@ -70,21 +70,18 @@ namespace llarp
                 handlers::RemoteHandler& parent,
                 std::shared_ptr<path::Path> path,
                 service::SessionTag _t,
-                std::shared_ptr<auth::SessionAuthPolicy> a);
+                bool is_exit);
 
             ~OutboundSession() override;
 
           private:
             NetworkAddress _remote;
-            std::shared_ptr<auth::SessionAuthPolicy> _auth;
+            SecretKey _session_key;  // DISCUSS: is this useful?
 
             std::string prefix() const
             {
                 return _prefix;
             }
-
-            // std::shared_ptr<path::Path> _current_path;
-            // HopID _current_hop_id;
 
             service::SessionTag _tag;
 
@@ -118,6 +115,8 @@ namespace llarp
             void blacklist_snode(const RouterID& snode) override;
 
             void build_more(size_t n = 0) override;
+
+            std::shared_ptr<path::Path> build1(std::vector<RemoteRC>& hops) override;
 
             nlohmann::json ExtractStatus() const;
 
@@ -174,8 +173,8 @@ namespace llarp
         struct InboundSession final : public BaseSession
         {
             InboundSession(
-                std::shared_ptr<path::Path> _path,
                 NetworkAddress _remote,
+                std::shared_ptr<path::Path> _path,
                 handlers::LocalEndpoint& parent,
                 service::SessionTag _t);
 

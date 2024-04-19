@@ -58,6 +58,8 @@ namespace llarp::handlers
 
         if (_is_exit_node)
         {
+            assert(not _is_snode_service);
+
             if (not net_config._routed_ranges.empty())
             {
                 _routed_ranges.merge(net_config._routed_ranges);
@@ -70,6 +72,9 @@ namespace llarp::handlers
 
         if (not net_config.srv_records.empty())
             _local_introset.SRVs = std::move(net_config.srv_records);
+
+        if (not net_config.auth_static_tokens.empty())
+            _static_auth_tokens.merge(net_config.auth_static_tokens);
 
         _if_name = *net_config._if_name;
         _local_range = *net_config._local_ip_range;
@@ -155,33 +160,31 @@ namespace llarp::handlers
             log::warning(logcat, "{} failed to encrypt and sign introset!", name());
     }
 
-    void LocalEndpoint::handle_initiate_session(ustring decrypted_payload)
+    bool LocalEndpoint::validate_token(std::optional<std::string> maybe_auth)
     {
-        RouterID initiator;
-        service::SessionTag tag;
-        HopID terminal_txid;
-        std::optional<std::string> maybe_auth;
+        return _static_auth_tokens.contains(*maybe_auth);
+    }
 
-        try
+    void LocalEndpoint::prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid)
+    {
+        if (auto path_ptr = _router.path_context()->get_path(pivot_txid))
         {
-            oxenc::bt_dict_consumer btdc{decrypted_payload};
-            std::tie(initiator, tag, terminal_txid, maybe_auth) = InitiateSession::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "{} failed to deserialize decrypted session initiation payload!", name());
-            return;
-        }
+            auto netaddr = NetworkAddress::from_pubkey(initiator, path_ptr->is_client_path());
+            auto inbound =
+                std::make_shared<session::InboundSession>(netaddr, std::move(path_ptr), *this, std::move(tag));
 
-        auto hop = _router.path_context()->get_transit_hop(_router.pubkey(), terminal_txid);
-
-        if (hop == nullptr)
+            _sessions.insert_or_assign(std::move(netaddr), std::move(inbound));
+            log::info(logcat, "LocalEndpoint successfully created and mapped InboundSession object!");
+        }
+        else
         {
             log::warning(
-                logcat, "Could not find TransitHop for inbound session (tag:{}) from remote (rid:{})", tag, initiator);
-            return;
+                logcat,
+                "Could not find Path (pivot txid:{}) for inbound session (tag:{}) from remote (rid:{})",
+                pivot_txid,
+                tag,
+                initiator);
         }
-        // we got the TransitHop of the recently built path for this session
     }
 
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
@@ -193,7 +196,7 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(logcat, "{} publishing introset to pivot {}", name(), path->pivot_router_id());
+                log::info(logcat, "{} publishing introset to pivot {}", name(), path->pivot_rid());
 
                 ret += path->publish_intro(introset, true);
             }

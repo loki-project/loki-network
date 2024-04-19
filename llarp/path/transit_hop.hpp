@@ -58,12 +58,22 @@ namespace llarp
                 return _downstream;
             }
 
-            HopID rxID() const
+            HopID rxid()
             {
                 return _rxid;
             }
 
-            HopID txID() const
+            const HopID& rxid() const
+            {
+                return _rxid;
+            }
+
+            HopID txid()
+            {
+                return _txid;
+            }
+
+            const HopID& txid() const
             {
                 return _txid;
             }

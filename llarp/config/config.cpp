@@ -526,15 +526,15 @@ namespace llarp
                 }
 
                 const auto addr = arg.substr(0, pos);
-                auto auth = auth::AuthInfo{arg.substr(pos + 1)};
+                auto auth = arg.substr(pos + 1);
 
                 if (service::is_valid_ons(addr))
                 {
-                    ons_exit_auths.emplace(addr, auth);
+                    ons_exit_auths.emplace(std::move(addr), std::move(auth));
                 }
                 else if (auto exit = NetworkAddress::from_network_addr(addr); exit->is_client())
                 {
-                    exit_auths.emplace(*exit, auth);
+                    exit_auths.emplace(std::move(*exit), std::move(auth));
                 }
                 else
                     throw std::invalid_argument("[network]:exit-auth invalid exit address");

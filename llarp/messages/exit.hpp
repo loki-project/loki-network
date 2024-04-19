@@ -6,6 +6,8 @@ namespace llarp
 {
     /*
         TODO:
+          - ADD PUBKEY FIELD OR AT LEAST SEE WHY LINKMANAGER::HANDLE_OBTAIN_EXIT() LOOKS FOR ONE
+
           - change these parameters to ustringviews and ustrings where needed after bumping oxenc
           - change std::string sig(64, '\0') --> std::array<unsigned char, 64> sig
     */
@@ -32,7 +34,7 @@ namespace llarp
             return std::move(btlp).str();
         }
 
-        inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
+        inline std::string sign_and_serialize_response(SecretKey sk, HopID& txid)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -42,7 +44,7 @@ namespace llarp
             {
                 oxenc::bt_dict_producer btdp;
 
-                btdp.append("T", tx_id);
+                btdp.append("T", txid.to_view());
                 btdp.append("Y", ustring_view{nonce.data(), nonce.size()});
 
                 if (crypto::sign(reinterpret_cast<uint8_t*>(sig.data()), sk, to_usv(btdp.view())))
@@ -105,7 +107,7 @@ namespace llarp
     {
         inline auto UPDATE_FAILED = "CLOSE EXIT FAILED"sv;
 
-        inline std::string sign_and_serialize(SecretKey sk, std::string tx_id)
+        inline std::string sign_and_serialize(const SecretKey& sk, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;

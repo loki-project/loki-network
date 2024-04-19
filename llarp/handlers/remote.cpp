@@ -34,20 +34,55 @@ namespace llarp::handlers
     {
         auto& ons_ranges = _router.config()->network._ons_ranges;
 
-        for (auto itr = ons_ranges.begin(); itr != ons_ranges.end();)
+        if (auto n_ons_ranges = ons_ranges.size(); n_ons_ranges > 0)
         {
-            resolve_ons(
-                std::move(itr->first),
-                [this, ip_range = std::move(itr->second)](std::optional<NetworkAddress> maybe_addr) {
-                    if (maybe_addr)
-                    {
-                        log::debug(logcat, "Successfully resolved ONS lookup for {}", *maybe_addr);
-                        map_remote_to_local_range(std::move(*maybe_addr), std::move(ip_range));
-                    }
-                    // we don't need to print a fail message, as it is logged prior to invoking with std::nullopt
-                });
+            log::debug(logcat, "RemoteHandler resolving {} ONS addresses mapped to IP ranges", n_ons_ranges);
 
-            itr = ons_ranges.erase(itr);
+            for (auto itr = ons_ranges.begin(); itr != ons_ranges.end();)
+            {
+                resolve_ons(
+                    std::move(itr->first),
+                    [this, ip_range = std::move(itr->second)](std::optional<NetworkAddress> maybe_addr) {
+                        if (maybe_addr)
+                        {
+                            log::debug(
+                                logcat,
+                                "Successfully resolved ONS lookup for {} mapped to IPRange:{}",
+                                *maybe_addr,
+                                ip_range);
+                            map_remote_to_local_range(std::move(*maybe_addr), std::move(ip_range));
+                        }
+                        // we don't need to print a fail message, as it is logged prior to invoking with std::nullopt
+                    });
+
+                itr = ons_ranges.erase(itr);
+            }
+        }
+
+        auto& ons_auths = _router.config()->network.ons_exit_auths;
+
+        if (auto n_ons_auths = ons_auths.size(); n_ons_auths > 0)
+        {
+            log::debug(logcat, "RemoteHandler resolving {} ONS addresses mapped to auth tokens", n_ons_auths);
+
+            for (auto itr = ons_auths.begin(); itr != ons_auths.end();)
+            {
+                resolve_ons(
+                    std::move(itr->first),
+                    [this, auth_token = std::move(itr->second)](std::optional<NetworkAddress> maybe_addr) {
+                        if (maybe_addr)
+                        {
+                            log::debug(
+                                logcat,
+                                "Successfully resolved ONS lookup for {} mapped to static auth token",
+                                *maybe_addr);
+                            _auth_tokens.emplace(std::move(*maybe_addr), std::move(auth_token));
+                        }
+                        // we don't need to print a fail message, as it is logged prior to invoking with std::nullopt
+                    });
+
+                itr = ons_auths.erase(itr);
+            }
         }
     }
 
@@ -91,8 +126,7 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(
-                    logcat, "{} querying pivot:{} for name lookup (target: {})", name(), path->pivot_router_id(), ons);
+                log::info(logcat, "{} querying pivot:{} for name lookup (target: {})", name(), path->pivot_rid(), ons);
 
                 path->resolve_ons(ons, response_handler);
             }
@@ -144,11 +178,7 @@ namespace llarp::handlers
             for (const auto& [rid, path] : _paths)
             {
                 log::info(
-                    logcat,
-                    "{} querying pivot:{} for introset lookup (target: {})",
-                    name(),
-                    path->pivot_router_id(),
-                    remote);
+                    logcat, "{} querying pivot:{} for introset lookup (target: {})", name(), path->pivot_rid(), remote);
 
                 path->find_intro(remote_key, is_relayed, order, response_handler);
             }
@@ -201,29 +231,43 @@ namespace llarp::handlers
         {
             map_remote_to_local_range(addr, range);
         }
+
+        if (not net_config.exit_auths.empty())
+        {
+            _auth_tokens.merge(net_config.exit_auths);
+        }
+    }
+
+    std::optional<std::string_view> RemoteHandler::fetch_auth_token(const NetworkAddress& remote) const
+    {
+        std::optional<std::string_view> ret = std::nullopt;
+
+        if (auto itr = _auth_tokens.find(remote); itr != _auth_tokens.end())
+            ret = itr->second;
+
+        return ret;
     }
 
     void RemoteHandler::make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit)
     {
-        auto auth = std::make_shared<auth::SessionAuthPolicy>(_router, not remote.is_client(), is_exit);
         auto tag = service::SessionTag::make_random();
 
         path->send_path_control_message(
             "session_init",
             InitiateSession::serialize_encrypt(
-                _router.local_rid(), remote.router_id(), tag, path->terminal_txid(), auth->fetch_auth_token()),
-            [this, remote, tag, path, auth](std::string response) {
-                // TODO: this will change after defining ::handle_session_init() function
+                _router.local_rid(), remote.router_id(), tag, path->pivot_txid(), fetch_auth_token(remote)),
+            [this, remote, tag, path, is_exit](std::string response) {
                 if (response == messages::OK_RESPONSE)
                 {
-                    auto outbound =
-                        session::OutboundSession{remote, *this, std::move(path), std::move(tag), std::move(auth)};
+                    auto outbound = std::make_shared<session::OutboundSession>(
+                        remote, *this, std::move(path), std::move(tag), is_exit);
 
-                    // emplace outbound in session map
-
-                    // yadda yadda
-
-                    // yay session is made
+                    _sessions.insert_or_assign(std::move(remote), std::move(outbound));
+                    log::info(logcat, "RemoteHandler successfully created and mapped OutboundSession object!");
+                }
+                else
+                {
+                    log::warning(logcat, "Path request 'session_init' (remote:{}) failed: {}", remote, response);
                 }
             });
     }
@@ -242,6 +286,14 @@ namespace llarp::handlers
         auto intro = intros.extract(intros.begin()).value();
         auto pivot = intro.pivot_router;
 
+        // DISCUSS: we don't share paths, but if every successful path-build is logged in PathContext, we are
+        // effectively sharing across all path-building objects...?
+        if (auto path_ptr = _router.path_context()->get_path(intro.pivot_hop_id))
+        {
+            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hop_id);
+            return make_session(std::move(remote), std::move(path_ptr), is_exit);
+        }
+
         log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
 
         auto maybe_hops = aligned_hops_to_remote(pivot);
@@ -255,7 +307,7 @@ namespace llarp::handlers
         auto& hops = *maybe_hops;
         assert(pivot == hops.back().router_id());
 
-        auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true);
+        auto path = std::make_shared<path::Path>(_router, std::move(hops), get_weak(), true, remote.is_client());
 
         log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
 
@@ -265,6 +317,8 @@ namespace llarp::handlers
                 path->upstream(), std::move(payload), [this, path, intros, remote, is_exit](oxen::quic::message m) {
                     if (m)
                     {
+                        // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will
+                        // take care of both path storage and logging in PathContext
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
                         return make_session(std::move(remote), std::move(path), is_exit);
                     }

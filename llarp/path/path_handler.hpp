@@ -2,6 +2,7 @@
 
 #include "path_types.hpp"
 
+#include <llarp/address/address.hpp>
 #include <llarp/router_id.hpp>
 #include <llarp/service/intro.hpp>
 #include <llarp/util/decaying_hashset.hpp>
@@ -107,9 +108,8 @@ namespace llarp
             size_t num_paths_desired;
             BuildStats _build_stats;
 
-            using Mtx_t = util::NullMutex;
             using Lock_t = util::NullLock;
-            mutable Mtx_t paths_mutex;
+            mutable util::NullMutex paths_mutex;
 
             // TODO: make into templated map object
             std::unordered_map<HopID, RouterID> _path_lookup;
@@ -226,26 +226,29 @@ namespace llarp
 
             bool build_path_to_random();
 
-            bool build_path_aligned_to_remote(const RouterID& remote);
+            bool build_path_aligned_to_remote(const NetworkAddress& remote);
 
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
                 const RouterID& pivot, const std::set<RouterID>& exclude = {});
 
             // The build logic is segmented into functions designed to be called sequentially.
-            //  - build1() : This can be re-implemented by inheriting classes that want to pass off possession of the
-            //      newly created Path object, rather than emplacing it within its internal path mapping. This is useful
-            //      in cases like session initiation, where RemoteHandler wants to hand off the newly created path to
-            //      the OutboundSession object. Regardless, the implementation needs to return the created shared_ptr to
-            //      be passed by reference to build2(...) and build3(...).
+            //  - pre_build() : This handles all checking of the vector of hops, verifying with buildlimiter, ensuring
+            //      there is no ongoing path-build, etc
+            //  - build1() : This can be re-implemented by inheriting classes that want to pass different parameters to
+            //      the created path. This is useful ßin cases like Outbound Sessions, Paths are constructed with the
+            //      respective is_client and is_exit booleans set. Regardless, the implementation needs to return the
+            //      created shared_ptr to be passed by reference to build2(...) and build3(...).
             //  - build2() : This contains the bulk of the code that is identical across all instances of path building.
             //      It returns the payload holding the encoded frames for each hop.
             //  - build3() : Inheriting classes can pass their own response handler functions as the second parameter,
             //      allowing for differing lambda captures. This function returns the success/failure of the call to
             //      path::send_control_message(...), allowing for the calling object to decide whether to log path-build
             //      failures for that respective remote or not.
-            //  - build() : This function calls build{1,2,3} in the correct order and is used for the usual times that
-            //      PathBuilder initiates a path build
-            std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);
+            //  - build() : This function calls pre_build() + build{1,2,3}() in the correct order and is used for the
+            //      usual times that PathBuilder initiates a path build
+            bool pre_build(std::vector<RemoteRC>& hops);
+
+            virtual std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);
 
             std::string build2(std::shared_ptr<Path>& path);
 

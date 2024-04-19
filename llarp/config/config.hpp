@@ -118,8 +118,8 @@ namespace llarp
         std::set<RouterID> snode_blacklist;
 
         // Used by RemoteHandler to provide auth tokens for remote exits
-        std::unordered_map<NetworkAddress, auth::AuthInfo> exit_auths;
-        std::unordered_map<std::string, auth::AuthInfo> ons_exit_auths;
+        std::unordered_map<NetworkAddress, std::string> exit_auths;
+        std::unordered_map<std::string, std::string> ons_exit_auths;
 
         /*   Auth specific config   */
         auth::AuthType auth_type = auth::AuthType::NONE;
@@ -130,6 +130,7 @@ namespace llarp
 
         std::unordered_set<NetworkAddress> auth_whitelist;
 
+        // TODO: move to LocalEndpoint
         std::unordered_set<std::string> auth_static_tokens;
 
         std::set<fs::path> auth_files;

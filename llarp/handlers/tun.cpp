@@ -297,13 +297,7 @@ namespace llarp::handlers
             case auth::AuthType::OMQ:
                 // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
                 _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
-                    router(),
-                    *net_conf.auth_endpoint,
-                    *net_conf.auth_method,
-                    net_conf.auth_whitelist,
-                    net_conf.auth_static_tokens,
-                    router().lmq(),
-                    shared_from_this());
+                    router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
 
                 std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
                 break;

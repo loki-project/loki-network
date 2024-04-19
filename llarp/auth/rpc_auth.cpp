@@ -6,18 +6,12 @@ namespace llarp::auth
 {
     static auto logcat = log::Cat("rpc.auth");
 
-    RPCAuthPolicy::RPCAuthPolicy(
-        Router& r,
-        std::string url,
-        std::string method,
-        std::unordered_set<NetworkAddress> whitelist_addrs,
-        std::unordered_set<std::string> whitelist_tokens,
-        std::shared_ptr<oxenmq::OxenMQ> lmq)
+    RPCAuthPolicy::RPCAuthPolicy(Router& r, std::string url, std::string method, std::shared_ptr<oxenmq::OxenMQ> lmq)
         : AuthPolicy{r},
           _endpoint{std::move(url)},
           _method{std::move(method)},
-          _whitelist{std::move(whitelist_addrs)},
-          _static_tokens{std::move(whitelist_tokens)},
+          //   _whitelist{std::move(whitelist_addrs)},
+          //   _static_tokens{std::move(whitelist_tokens)},
           _omq{std::move(lmq)}
     {
         if (_endpoint.empty() or _method.empty())

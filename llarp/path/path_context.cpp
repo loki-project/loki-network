@@ -21,7 +21,10 @@ namespace llarp::path
 
     std::vector<std::shared_ptr<Path>> PathContext::get_local_paths_to_remote(const RouterID& r)
     {
+        Lock_t l{paths_mutex};
+
         std::vector<std::shared_ptr<Path>> found;
+
         for (const auto& [pathid, path] : _local_paths)
         {
             // each path is stored in this map twice, once for each pathid at the first hop
@@ -34,7 +37,7 @@ namespace llarp::path
             if (path->upstream_txid() == pathid)
                 continue;
 
-            if (path->pivot_router_id() == r && path->IsReady())
+            if (path->pivot_rid() == r && path->is_ready())
                 found.push_back(path);
         }
         return found;
@@ -42,39 +45,54 @@ namespace llarp::path
 
     void PathContext::add_path(std::shared_ptr<Path> path)
     {
-        _local_paths[path->upstream_txid()] = path;
-        _local_paths[path->upstream_rxid()] = path;
+        Lock_t l{paths_mutex};
+
+        _local_paths.emplace(path->upstream_rxid(), path);
+        _local_paths.emplace(path->upstream_txid(), path);
     }
 
     bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop)
     {
-        return _transit_hops.count(hop->rxID()) or _transit_hops.count(hop->txID());
+        Lock_t l{paths_mutex};
+
+        return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid());
     }
 
     void PathContext::put_transit_hop(std::shared_ptr<TransitHop> hop)
     {
-        _transit_hops.emplace(hop->rxID(), hop);
-        _transit_hops.emplace(hop->txID(), hop);
+        Lock_t l{paths_mutex};
+
+        _transit_hops.emplace(hop->rxid(), hop);
+        _transit_hops.emplace(hop->txid(), hop);
     }
 
     std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id)
     {
+        Lock_t l{paths_mutex};
+
         if (auto itr = _transit_hops.find(path_id); itr != _transit_hops.end())
             return itr->second;
 
         return nullptr;
     }
 
-    std::shared_ptr<TransitHop> PathContext::get_transit_hop(const RouterID&, const HopID&)
+    std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop)
     {
-        // if (auto itr = transit_hops.find({rid, path_id}); itr != transit_hops.end())
-        //     return itr->second;
+        Lock_t l{paths_mutex};
+
+        if (auto itr = _local_paths.find(hop->rxid()); itr != _local_paths.end())
+            return itr->second;
+
+        if (auto itr = _local_paths.find(hop->txid()); itr != _local_paths.end())
+            return itr->second;
 
         return nullptr;
     }
 
     std::shared_ptr<Path> PathContext::get_path(const HopID& path_id)
     {
+        Lock_t l{paths_mutex};
+
         if (auto itr = _local_paths.find(path_id); itr != _local_paths.end())
             return itr->second;
 
@@ -83,6 +101,8 @@ namespace llarp::path
 
     std::shared_ptr<PathHandler> PathContext::get_path_handler(const HopID& id)
     {
+        Lock_t l{paths_mutex};
+
         if (auto itr = _local_paths.find(id); itr != _local_paths.end())
         {
             if (auto parent = itr->second->handler.lock())
@@ -93,6 +113,8 @@ namespace llarp::path
 
     std::shared_ptr<TransitHop> PathContext::get_path_for_transfer(const HopID& id)
     {
+        Lock_t l{paths_mutex};
+
         if (auto itr = _transit_hops.find(id); itr != _transit_hops.end())
             return itr->second;
 
@@ -101,6 +123,8 @@ namespace llarp::path
 
     void PathContext::expire_paths(std::chrono::milliseconds now)
     {
+        Lock_t l{paths_mutex};
+
         for (auto itr = _transit_hops.begin(); itr != _transit_hops.end();)
         {
             if (itr->second->is_expired(now))

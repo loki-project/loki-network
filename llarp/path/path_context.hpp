@@ -32,11 +32,11 @@ namespace llarp::path
 
         std::shared_ptr<Path> get_path(const HopID& path_id);
 
+        std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop);
+
         std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
         std::shared_ptr<TransitHop> get_transit_hop(const HopID&);
-
-        std::shared_ptr<TransitHop> get_transit_hop(const RouterID&, const HopID&);
 
         std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
@@ -47,6 +47,9 @@ namespace llarp::path
 
       private:
         const RouterID _local_rid;
+
+        using Lock_t = util::NullLock;
+        mutable util::NullMutex paths_mutex;
 
         std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
 

@@ -17,8 +17,8 @@ namespace llarp::path
         try
         {
             hop->lifetime = btdc.require<uint64_t>("l") * 1ms;
-            hop->rxID().from_string(btdc.require<std::string_view>("r"));
-            hop->txID().from_string(btdc.require<std::string_view>("t"));
+            hop->rxid().from_string(btdc.require<std::string_view>("r"));
+            hop->txid().from_string(btdc.require<std::string_view>("t"));
             hop->upstream().from_string(btdc.require<std::string_view>("u"));
         }
         catch (const std::exception& e)
@@ -27,7 +27,7 @@ namespace llarp::path
             throw std::runtime_error{messages::ERROR_RESPONSE};
         }
 
-        if (hop->rxID().is_zero() || hop->txID().is_zero())
+        if (hop->rxid().is_zero() || hop->txid().is_zero())
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
         if (hop->lifetime >= path::DEFAULT_LIFETIME)

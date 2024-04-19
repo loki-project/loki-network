@@ -51,11 +51,11 @@ namespace llarp
     {
         static auto logcat = llarp::log::Cat("path-build");
 
-        inline auto bad_frames = "BAD_FRAMES"sv;
-        inline auto bad_crypto = "BAD_CRYPTO"sv;
-        inline auto no_transit = "NOT ALLOWING TRANSIT"sv;
-        inline auto bad_pathid = "BAD PATH ID"sv;
-        inline auto bad_lifetime = "BAD PATH LIFETIME (TOO LONG)"sv;
+        inline constexpr auto bad_frames = "BAD_FRAMES"sv;
+        inline constexpr auto bad_crypto = "BAD_CRYPTO"sv;
+        inline constexpr auto no_transit = "NOT ALLOWING TRANSIT"sv;
+        inline constexpr auto bad_pathid = "BAD PATH ID"sv;
+        inline constexpr auto bad_lifetime = "BAD PATH LIFETIME (TOO LONG)"sv;
 
         inline const auto NO_TRANSIT = messages::serialize_response({{messages::STATUS_KEY, no_transit}});
         inline const auto BAD_LIFETIME = messages::serialize_response({{messages::STATUS_KEY, bad_lifetime}});

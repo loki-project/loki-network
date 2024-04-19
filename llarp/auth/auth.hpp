@@ -32,6 +32,7 @@ namespace llarp::auth
       public:
         AuthPolicy(Router& r) : _router{r}
         {}
+
         virtual ~AuthPolicy() = default;
 
         virtual std::weak_ptr<AuthPolicy> get_weak() = 0;
@@ -52,13 +53,14 @@ namespace llarp::auth
     struct SessionAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<SessionAuthPolicy>
     {
       private:
-        SecretKey _session_key;
-        NetworkAddress _remote;
         const bool _is_snode_service{false};
         const bool _is_exit_service{false};
 
+        SecretKey _session_key;
+        NetworkAddress _remote;
+
       public:
-        SessionAuthPolicy(Router& r, RouterID& remote, bool _snode_service, bool _is_exit = false);
+        SessionAuthPolicy(Router& r, RouterID& remote, bool is_snode, bool is_exit = false);
 
         bool load_identity_from_file(const char* fname);
 
@@ -120,13 +122,7 @@ namespace llarp::auth
 
     struct RPCAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<RPCAuthPolicy>
     {
-        explicit RPCAuthPolicy(
-            Router& r,
-            std::string url,
-            std::string method,
-            std::unordered_set<NetworkAddress> addr_whitelist,
-            std::unordered_set<std::string> token_whitelist,
-            std::shared_ptr<oxenmq::OxenMQ> lmq);
+        explicit RPCAuthPolicy(Router& r, std::string url, std::string method, std::shared_ptr<oxenmq::OxenMQ> lmq);
 
         ~RPCAuthPolicy() override = default;
 
@@ -145,8 +141,8 @@ namespace llarp::auth
       private:
         const std::string _endpoint;
         const std::string _method;
-        const std::unordered_set<NetworkAddress> _whitelist;
-        const std::unordered_set<std::string> _static_tokens;
+        // const std::unordered_set<NetworkAddress> _whitelist;
+        // const std::unordered_set<std::string> _static_tokens;
 
         std::shared_ptr<oxenmq::OxenMQ> _omq;
         std::optional<oxenmq::ConnectionID> _omq_conn;

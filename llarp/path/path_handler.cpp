@@ -64,8 +64,10 @@ namespace llarp::path
     {
         Lock_t l(paths_mutex);
 
-        _paths.insert_or_assign(p->pivot_router_id(), p);
+        _paths.insert_or_assign(p->pivot_rid(), p);
         associate_hop_ids(p);
+
+        _router.path_context()->add_path(p);
     }
 
     std::optional<std::shared_ptr<Path>> PathHandler::get_random_path()
@@ -170,7 +172,7 @@ namespace llarp::path
 
         for (const auto& item : _paths)
         {
-            if (item.second->IsReady() && !item.second->is_expired(futureTime))
+            if (item.second->is_ready() && !item.second->is_expired(futureTime))
                 ++num;
         }
         return num;
@@ -256,7 +258,7 @@ namespace llarp::path
 
         for (const auto& p : _paths)
         {
-            if (p.second->IsReady() and filter(p.second->intro))
+            if (p.second->is_ready() and filter(p.second->intro))
             {
                 intros.insert(p.second->intro);
             }
@@ -275,7 +277,7 @@ namespace llarp::path
 
         for (auto& item : _paths)
         {
-            endpoints.emplace(item.second->pivot_router_id());
+            endpoints.emplace(item.second->pivot_rid());
         }
 
         path_cache.clear();
@@ -489,9 +491,9 @@ namespace llarp::path
         return false;
     }
 
-    bool PathHandler::build_path_aligned_to_remote(const RouterID& remote)
+    bool PathHandler::build_path_aligned_to_remote(const NetworkAddress& remote)
     {
-        if (auto maybe_hops = aligned_hops_to_remote(remote))
+        if (auto maybe_hops = aligned_hops_to_remote(remote.router_id()))
         {
             log::debug(logcat, "{} building path to {}", name(), remote);
             build(*maybe_hops);
@@ -502,12 +504,12 @@ namespace llarp::path
         return false;
     }
 
-    std::shared_ptr<Path> PathHandler::build1(std::vector<RemoteRC>& hops)
+    bool PathHandler::pre_build(std::vector<RemoteRC>& hops)
     {
         if (is_stopped())
         {
             log::info(logcat, "Path builder is stopped, aborting path build...");
-            return nullptr;
+            return false;
         }
 
         _last_build = llarp::time_now_ms();
@@ -517,7 +519,7 @@ namespace llarp::path
         if (not _router.pathbuild_limiter().Attempt(edge))
         {
             log::warning(logcat, "{} building too quickly to edge router {}", name(), edge);
-            return nullptr;
+            return false;
         }
 
         {
@@ -526,10 +528,15 @@ namespace llarp::path
             if (auto [it, b] = _paths.try_emplace(terminus, nullptr); not b)
             {
                 log::error(logcat, "Pending build to {} already underway... aborting...", terminus);
-                return nullptr;
+                return false;
             }
         }
 
+        return true;
+    }
+
+    std::shared_ptr<Path> PathHandler::build1(std::vector<RemoteRC>& hops)
+    {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak());
 
         log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
@@ -609,8 +616,8 @@ namespace llarp::path
         }
 
         // TODO: move this to success function to avoid repetition
-        add_path(path);
-        _router.path_context()->add_path(path);
+        // add_path(path);
+        // _router.path_context()->add_path(path);
 
         _build_stats.attempts++;
 
@@ -624,12 +631,14 @@ namespace llarp::path
 
     void PathHandler::build(std::vector<RemoteRC> hops)
     {
-        if (auto new_path = build1(hops); new_path != nullptr)
+        if (pre_build(hops); auto new_path = build1(hops))
         {
-            auto payload = build2(new_path);
-            auto terminus = new_path->terminal();
+            assert(new_path);
 
-            if (not build3(new_path->upstream(), std::move(payload), [this, new_path, terminus](oxen::quic::message m) {
+            auto payload = build2(new_path);
+            auto pivot = new_path->pivot_rid();
+
+            if (not build3(new_path->upstream(), std::move(payload), [this, new_path, pivot](oxen::quic::message m) {
                     if (m)
                     {
                         log::debug(logcat, "Path build returned successfully! Storing locally");
@@ -642,15 +651,15 @@ namespace llarp::path
                         if (m.timed_out)
                         {
                             log::warning(logcat, "Path build request timed out!");
-                            path_build_failed(terminus, new_path, true);
                         }
                         else
                         {
                             oxenc::bt_dict_consumer d{m.body()};
                             auto status = d.require<std::string_view>(messages::STATUS_KEY);
                             log::warning(logcat, "Path build returned failure status: {}", status);
-                            path_build_failed(terminus, new_path);
                         }
+
+                        path_build_failed(pivot, new_path, m.timed_out);
                     }
                     catch (const std::exception& e)
                     {
@@ -659,7 +668,7 @@ namespace llarp::path
                 }))
             {
                 log::warning(logcat, "Error sending path_build control message");
-                path_build_failed(terminus, new_path);
+                path_build_failed(pivot, new_path);
             }
         }
     }
@@ -716,7 +725,7 @@ namespace llarp::path
     {
         for (const auto& h : p->hops)
         {
-            auto rid = p->pivot_router_id();
+            auto rid = p->pivot_rid();
             _path_lookup.emplace(h.rxID, rid);
             _path_lookup.emplace(h.txID, rid);
         }

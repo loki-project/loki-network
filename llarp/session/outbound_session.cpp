@@ -17,26 +17,30 @@ namespace llarp::session
         handlers::RemoteHandler& parent,
         std::shared_ptr<path::Path> path,
         service::SessionTag _t,
-        std::shared_ptr<auth::SessionAuthPolicy> a)
+        bool is_exit)
         : PathHandler{parent._router, NUM_SESSION_PATHS},
           BaseSession{std::move(path)},
           _remote{std::move(remote)},
-          _auth{std::move(a)},
           _tag{std::move(_t)},
           _last_use{_router.now()},
           _parent{parent},
-          _is_exit_service{_auth->is_exit_service()},
-          _is_snode_service{_auth->is_snode_service()},
+          _is_exit_service{is_exit},
+          _is_snode_service{not _remote.is_client()},
           _prefix{
               _is_exit_service        ? PREFIX::EXIT
                   : _is_snode_service ? PREFIX::SNODE
                                       : PREFIX::LOKI}
     {
         // These can both be false but CANNOT both be true
-        if (_is_exit_service & _is_snode_service)
+        if (_is_exit_service and _is_snode_service)
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
+
+        if (_is_snode_service)
+            _session_key = _router.identity();
+        else
+            crypto::identity_keygen(_session_key);
     }
 
     OutboundSession::~OutboundSession() = default;
@@ -67,8 +71,8 @@ namespace llarp::session
     {
         auto obj = path::PathHandler::ExtractStatus();
         obj["lastExitUse"] = to_json(_last_use);
-        auto pub = _auth->session_key().to_pubkey();
-        obj["exitIdentity"] = pub.to_string();
+        // auto pub = _auth->session_key().to_pubkey();
+        // obj["exitIdentity"] = pub.to_string();
         obj["endpoint"] = _remote.to_string();
         return obj;
     }
@@ -142,11 +146,12 @@ namespace llarp::session
     void OutboundSession::build_more(size_t n)
     {
         size_t count{0};
-        log::debug(logcat, "OutboundSession building {} paths to random remotes (needed: {})", n, NUM_ONS_LOOKUP_PATHS);
+        log::debug(
+            logcat, "OutboundSession building {} paths (needed: {}) to remote:{}", n, NUM_SESSION_PATHS, _remote);
 
         for (size_t i = 0; i < n; ++i)
         {
-            count += build_path_to_random();
+            count += build_path_aligned_to_remote(_remote);
         }
 
         if (count == n)
@@ -155,9 +160,18 @@ namespace llarp::session
             log::warning(logcat, "OutboundSession only initiated {} path-builds (needed: {})", count, n);
     }
 
+    std::shared_ptr<path::Path> OutboundSession::build1(std::vector<RemoteRC>& hops)
+    {
+        auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true, _remote.is_client());
+
+        log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
+
+        return path;
+    }
+
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
-        if (p->close_exit(_auth->session_key(), p->upstream_txid().to_string()))
+        if (p->close_exit(_session_key, p->upstream_txid().to_string()))
             log::info(logcat, "Sent path close on path {}", p->to_string());
         else
             log::warning(logcat, "Failed to send path close on path {}", p->to_string());

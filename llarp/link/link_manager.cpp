@@ -1462,19 +1462,26 @@ namespace llarp
     void LinkManager::handle_obtain_exit(oxen::quic::message m)
     {
         [[maybe_unused]] uint64_t flag;
-        ustring_view pubkey, sig;
-        std::string_view tx_id, dict_data;
+        ustring_view sig;
+        std::string_view dict_data;
+
+        HopID txid;
+        RouterID target;
 
         try
         {
             oxenc::bt_list_consumer btlc{m.body()};
             dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
+
+            {
+                oxenc::bt_dict_consumer btdc{dict_data};
+
+                flag = btdc.require<uint64_t>("E");
+                target.from_string(btdc.require<std::string_view>("I"));
+                txid.from_string(btdc.require<std::string_view>("T"));
+            }
 
             sig = to_usv(btlc.consume_string_view());
-            flag = btdc.require<uint64_t>("E");
-            pubkey = btdc.require<ustring_view>("I");
-            tx_id = btdc.require<std::string_view>("T");
         }
         catch (const std::exception& e)
         {
@@ -1483,16 +1490,15 @@ namespace llarp
             throw;
         }
 
-        RouterID target{pubkey.data()};
-        auto transit_hop = _router.path_context()->get_transit_hop(target, HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(txid);
 
-        const auto rx_id = transit_hop->rxID();
+        const auto rx_id = transit_hop->rxid();
 
         // TODO:
-        auto success = (crypto::verify(pubkey, to_usv(dict_data), sig)
+        auto success = (crypto::verify(to_usv(target.to_view()), to_usv(dict_data), sig)
                         /* and _router.exit_context()->obtain_new_exit(PubKey{pubkey.data()}, rx_id, flag != 0) */);
 
-        m.respond(ObtainExitMessage::sign_and_serialize_response(_router.identity(), tx_id), not success);
+        m.respond(ObtainExitMessage::sign_and_serialize_response(_router.identity(), txid), not success);
     }
 
     void LinkManager::handle_obtain_exit_response(oxen::quic::message m)
@@ -1507,17 +1513,22 @@ namespace llarp
             // TODO: what to do here
         }
 
-        std::string_view tx_id, dict_data;
+        std::string_view dict_data;
         ustring_view sig;
+
+        HopID txid;
 
         try
         {
             oxenc::bt_list_consumer btlc{m.body()};
             dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
+
+            {
+                oxenc::bt_dict_consumer btdc{dict_data};
+                txid.from_string(btdc.require<std::string_view>("T"));
+            }
 
             sig = to_usv(btlc.consume_string_view());
-            tx_id = btdc.require<std::string_view>("T");
         }
         catch (const std::exception& e)
         {
@@ -1525,16 +1536,23 @@ namespace llarp
             throw;
         }
 
-        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
-
-        if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
-            path_ptr->enable_exit_traffic();
+        if (auto path_ptr = _router.path_context()->get_path(txid))
+        {
+            if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
+                path_ptr->enable_exit_traffic();
+        }
+        else
+        {
+            log::critical(logcat, "Could not find path (txid:{}) for ObtainExitMessage!", txid.to_view());
+        }
     }
 
     void LinkManager::handle_update_exit(oxen::quic::message m)
     {
-        std::string_view path_id, tx_id, dict_data;
+        std::string_view path_id, dict_data;
         ustring_view sig;
+
+        HopID txid;
 
         try
         {
@@ -1544,7 +1562,7 @@ namespace llarp
 
             sig = to_usv(btlc.consume_string_view());
             path_id = btdc.require<std::string_view>("P");
-            tx_id = btdc.require<std::string_view>("T");
+            txid.from_string(btdc.require<std::string_view>("T"));
         }
         catch (const std::exception& e)
         {
@@ -1553,7 +1571,7 @@ namespace llarp
             return;
         }
 
-        auto transit_hop = _router.path_context()->get_transit_hop(_router.pubkey(), HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(txid);
 
         // TODO:
         // if (auto exit_ep =
@@ -1583,18 +1601,22 @@ namespace llarp
             // TODO: what to do here
         }
 
-        std::string tx_id;
         std::string_view dict_data;
         ustring_view sig;
+
+        HopID txid;
 
         try
         {
             oxenc::bt_list_consumer btlc{m.body()};
             dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
+
+            {
+                oxenc::bt_dict_consumer btdc{dict_data};
+                txid.from_string(btdc.require<std::string_view>("T"));
+            }
 
             sig = to_usv(btlc.consume_string_view());
-            tx_id = btdc.require<std::string_view>("T");
         }
         catch (const std::exception& e)
         {
@@ -1602,34 +1624,44 @@ namespace llarp
             return;
         }
 
-        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
-
-        if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
+        if (auto path_ptr = _router.path_context()->get_path(txid))
         {
-            if (path_ptr->update_exit(std::stoul(tx_id)))
+            if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
             {
-                // TODO: talk to tom and Jason about how this stupid shit was a no-op originally
-                // see Path::HandleUpdateExitVerifyMessage
+                // if (path_ptr->update_exit(std::stoul(tx_id)))
+                // {
+                //     // TODO: talk to tom and Jason about how this stupid shit was a no-op originally
+                //     // see Path::HandleUpdateExitVerifyMessage
+                // }
+                // else
+                // {
+                // }
             }
-            else
-            {
-            }
+        }
+        else
+        {
+            log::critical(logcat, "Could not find path (txid:{}) for UpdateExitMessage!", txid.to_view());
         }
     }
 
     void LinkManager::handle_close_exit(oxen::quic::message m)
     {
-        std::string_view tx_id, dict_data;
+        std::string_view dict_data;
         ustring_view sig;
+
+        HopID txid;
 
         try
         {
             oxenc::bt_list_consumer btlc{m.body()};
             dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
+
+            {
+                oxenc::bt_dict_consumer btdc{dict_data};
+                txid.from_string(btdc.require<std::string_view>("T"));
+            }
 
             sig = to_usv(btlc.consume_string_view());
-            tx_id = btdc.require<std::string_view>("T");
         }
         catch (const std::exception& e)
         {
@@ -1638,9 +1670,9 @@ namespace llarp
             return;
         }
 
-        auto transit_hop = _router.path_context()->get_transit_hop(_router.pubkey(), HopID{to_usv(tx_id).data()});
+        auto transit_hop = _router.path_context()->get_transit_hop(txid);
 
-        const auto rx_id = transit_hop->rxID();
+        const auto rx_id = transit_hop->rxid();
 
         // TODO:
         // if (auto exit_ep = router().exit_context().find_endpoint_for_path(rx_id))
@@ -1667,18 +1699,23 @@ namespace llarp
             // TODO: what to do here
         }
 
-        std::string_view nonce, tx_id, dict_data;
+        std::string_view nonce, dict_data;
         ustring_view sig;
+
+        HopID txid;
 
         try
         {
             oxenc::bt_list_consumer btlc{m.body()};
             dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
+
+            {
+                oxenc::bt_dict_consumer btdc{dict_data};
+                txid.from_string(btdc.require<std::string_view>("T"));
+                nonce = btdc.require<std::string_view>("Y");
+            }
 
             sig = to_usv(btlc.consume_string_view());
-            tx_id = btdc.require<std::string_view>("T");
-            nonce = btdc.require<std::string_view>("Y");
         }
         catch (const std::exception& e)
         {
@@ -1686,14 +1723,21 @@ namespace llarp
             return;
         }
 
-        auto path_ptr = _router.path_context()->get_path(HopID{to_usv(tx_id).data()});
+        if (auto path_ptr = _router.path_context()->get_path(txid))
+        {
+            //
+        }
+        else
+        {
+            log::critical(logcat, "Could not find path (txid:{}) for CloseExitMessage!", txid.to_view());
+        }
         // TODO:
         // if (path_ptr->SupportsAnyRoles(path::ePathRoleExit | path::ePathRoleSVC)
         //     and crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
         //   path_ptr->mark_exit_closed();
     }
 
-    void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& from)
+    void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& /* from */)
     {
         ustring nonce, hop_id_str, payload;
 
@@ -1709,8 +1753,8 @@ namespace llarp
         }
 
         auto symmnonce = SymmNonce{nonce.data()};
-        auto hop_id = HopID{hop_id_str.data()};
-        auto hop = _router.path_context()->get_transit_hop(from, hop_id);
+        HopID hopid{hop_id_str.data()};
+        auto hop = _router.path_context()->get_transit_hop(hopid);
 
         // TODO: use "path_control" for both directions?  If not, drop message on
         // floor if we don't have the path_id in question; if we decide to make this
@@ -1730,9 +1774,9 @@ namespace llarp
             return;
         }
 
-        auto hop_is_rx = hop->rxID() == hop_id;
+        auto hop_is_rx = hop->rxid() == hopid;
 
-        const auto& next_id = hop_is_rx ? hop->txID() : hop->rxID();
+        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
         const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
 
         std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
@@ -1741,7 +1785,7 @@ namespace llarp
             next_router,
             "path_control"s,
             std::move(new_payload),
-            [hop_weak = hop->weak_from_this(), hop_id, prev_message = std::move(m)](
+            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
                 oxen::quic::message response) mutable {
                 auto hop = hop_weak.lock();
 
@@ -1798,7 +1842,7 @@ namespace llarp
                 return;  // transit hop gone, drop response
 
             auto n = SymmNonce::make_random();
-            m.respond(Onion::serialize(n, hop->rxID(), response), false);
+            m.respond(Onion::serialize(n, hop->rxid(), response), false);
         };
 
         std::invoke(itr->second, this, std::move(body), std::move(respond));
@@ -1812,16 +1856,31 @@ namespace llarp
             return;
         }
 
+        RouterID initiator;
+        service::SessionTag tag;
+        HopID pivot_txid;
+        std::optional<std::string> maybe_auth;
+
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            auto decrypted = InitiateSession::decrypt(btdc, _router.local_rid());
-            return _router.local_endpoint()->handle_initiate_session(std::move(decrypted));
+
+            std::tie(initiator, pivot_txid, tag, maybe_auth) =
+                InitiateSession::decrypt_deserialize(btdc, _router.local_rid());
+
+            if (maybe_auth.has_value() and not _router.local_endpoint()->validate_token(maybe_auth))
+            {
+                log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
+                return m.respond(InitiateSession::AUTH_DENIED, true);
+            }
+
+            return _router.local_endpoint()->prefigure_session(
+                std::move(initiator), std::move(tag), std::move(pivot_txid));
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            return;
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
     }
 

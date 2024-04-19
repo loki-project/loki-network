@@ -12,14 +12,20 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("path");
 
-    Path::Path(Router& rtr, const std::vector<RemoteRC>& h, std::weak_ptr<PathHandler> pathset, bool is_session)
-        : handler{std::move(pathset)}, _router{rtr}, _is_session_path{is_session}
+    Path::Path(
+        Router& rtr,
+        const std::vector<RemoteRC>& _hops,
+        std::weak_ptr<PathHandler> _handler,
+        bool is_session,
+        bool is_client)
+        : handler{std::move(_handler)}, _router{rtr}, _is_session_path{is_session}, _is_client{is_client}
     {
-        hops.resize(h.size());
-        size_t hsz = h.size();
+        hops.resize(_hops.size());
+        size_t hsz = _hops.size();
+
         for (size_t idx = 0; idx < hsz; ++idx)
         {
-            hops[idx].rc = h[idx];
+            hops[idx].rc = _hops[idx];
             do
             {
                 hops[idx].txID.Randomize();
@@ -38,7 +44,7 @@ namespace llarp::path
 
         // initialize parts of the introduction
         intro.pivot_router = hops[hsz - 1].rc.router_id();
-        intro.hop_id = hops[hsz - 1].txID;
+        intro.pivot_hop_id = hops[hsz - 1].txID;
     }
 
     bool Path::operator<(const Path& other) const
@@ -68,13 +74,13 @@ namespace llarp::path
         return not(*this == other);
     }
 
-    bool Path::obtain_exit(SecretKey sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::obtain_exit(const SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
     {
         return send_path_control_message(
             "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
     }
 
-    bool Path::close_exit(SecretKey sk, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::close_exit(const SecretKey& sk, std::string tx_id, std::function<void(std::string)> func)
     {
         return send_path_control_message(
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
@@ -104,7 +110,7 @@ namespace llarp::path
 
     void Path::enable_exit_traffic()
     {
-        log::info(logcat, "{} {} granted exit", name(), pivot_router_id().to_string());
+        log::info(logcat, "{} {} granted exit", name(), pivot_rid());
         // _role |= ePathRoleExit;
     }
 
@@ -196,44 +202,70 @@ namespace llarp::path
             });
     }
 
-    const RouterID& Path::pivot_router_id() const
+    bool Path::is_ready() const
     {
-        return intro.pivot_router;
+        if (is_expired(llarp::time_now_ms()))
+            return false;
+
+        return intro.latency > 0s && _established;
     }
 
-    RouterID Path::upstream() const
+    RouterID Path::upstream()
     {
         return hops[0].rc.router_id();
     }
 
-    HopID Path::upstream_txid() const
+    const RouterID& Path::upstream() const
+    {
+        return hops[0].rc.router_id();
+    }
+
+    HopID Path::upstream_txid()
     {
         return hops[0].txID;
     }
 
-    HopID Path::upstream_rxid() const
+    const HopID& Path::upstream_txid() const
+    {
+        return hops[0].txID;
+    }
+
+    HopID Path::upstream_rxid()
     {
         return hops[0].rxID;
     }
 
-    bool Path::IsReady() const
+    const HopID& Path::upstream_rxid() const
     {
-        if (is_expired(llarp::time_now_ms()))
-            return false;
-        return intro.latency > 0s && _established;
+        return hops[0].rxID;
     }
 
-    RouterID Path::terminal() const
+    RouterID Path::pivot_rid()
     {
         return hops.back().rc.router_id();
     }
 
-    HopID Path::terminal_txid() const
+    const RouterID& Path::pivot_rid() const
+    {
+        return hops.back().rc.router_id();
+    }
+
+    HopID Path::pivot_txid()
     {
         return hops.back().txID;
     }
 
-    HopID Path::terminal_rxid() const
+    const HopID& Path::pivot_txid() const
+    {
+        return hops.back().txID;
+    }
+
+    HopID Path::pivot_rxid()
+    {
+        return hops.back().rxID;
+    }
+
+    const HopID& Path::pivot_rxid() const
     {
         return hops.back().rxID;
     }
@@ -280,7 +312,7 @@ namespace llarp::path
             {"expired", is_expired(now)},
             {"expiresSoon", ExpiresSoon(now)},
             {"expiresAt", to_json(ExpireTime())},
-            {"ready", IsReady()},
+            {"ready", is_ready()},
             // {"txRateCurrent", m_LastTXRate},
             // {"rxRateCurrent", m_LastRXRate},
             // {"hasExit", SupportsAnyRoles(ePathRoleExit)}

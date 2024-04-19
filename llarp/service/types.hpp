@@ -1,7 +1,5 @@
 #pragma once
 
-#include "session.hpp"
-
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/queue.hpp>
 
@@ -15,6 +13,8 @@
    need to be redefined with the correct parameters and called from service::Handler, as
    service::Endpoint is for local hidden service management
 */
+
+using namespace std::literals;
 
 namespace llarp
 {
