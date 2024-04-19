@@ -291,26 +291,26 @@ namespace llarp::handlers
                 - If the config specifies the auth_type as RPC plus
 
         */
-        switch (net_conf.auth_type)
-        {
-            case auth::AuthType::WHITELIST:
-            case auth::AuthType::OMQ:
-                // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
-                _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
-                    router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
+        // switch (net_conf.auth_type)
+        // {
+        //     case auth::AuthType::WHITELIST:
+        //     case auth::AuthType::OMQ:
+        //         // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
+        //         _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
+        //             router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
 
-                std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
-                break;
+        //         std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
+        //         break;
 
-            case auth::AuthType::FILE:
-                _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
-                    router(), net_conf.auth_files, net_conf.auth_file_type);
-                break;
+        //     case auth::AuthType::FILE:
+        //         _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
+        //             router(), net_conf.auth_files, net_conf.auth_file_type);
+        //         break;
 
-            case auth::AuthType::NONE:
-            default:
-                break;
-        }
+        //     case auth::AuthType::NONE:
+        //     default:
+        //         break;
+        // }
 
         _traffic_policy = net_conf.traffic_policy;
         _base_ipv6_range = net_conf._base_ipv6_range;

@@ -257,17 +257,29 @@ namespace llarp::handlers
             InitiateSession::serialize_encrypt(
                 _router.local_rid(), remote.router_id(), tag, path->pivot_txid(), fetch_auth_token(remote)),
             [this, remote, tag, path, is_exit](std::string response) {
-                if (response == messages::OK_RESPONSE)
+                try
                 {
-                    auto outbound = std::make_shared<session::OutboundSession>(
-                        remote, *this, std::move(path), std::move(tag), is_exit);
+                    oxenc::bt_dict_consumer btdc{response};
 
-                    _sessions.insert_or_assign(std::move(remote), std::move(outbound));
-                    log::info(logcat, "RemoteHandler successfully created and mapped OutboundSession object!");
-                }
-                else
-                {
+                    if (auto maybe_port = btdc.maybe<uint16_t>("PORT"))
+                    {
+                        auto outbound = std::make_shared<session::OutboundSession>(
+                            remote, *this, std::move(path), std::move(tag), is_exit);
+
+                        auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
+                        log::info(
+                            logcat,
+                            "RemoteHandler successfully created and mapped OutboundSession object! Starting TCP "
+                            "tunnel...");
+
+                        session->connect_to(_router, *maybe_port);
+                    }
+
                     log::warning(logcat, "Path request 'session_init' (remote:{}) failed: {}", remote, response);
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(logcat, "Path request 'session_init' (remote:{}) failed: {}", remote, e.what());
                 }
             });
     }

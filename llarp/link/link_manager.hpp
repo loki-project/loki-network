@@ -35,8 +35,6 @@ namespace llarp
 
     using static_secret = oxen::quic::opt::static_secret;
 
-    using KeyedAddress = oxen::quic::RemoteAddress;
-
     inline const keep_alive ROUTER_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 

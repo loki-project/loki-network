@@ -49,8 +49,7 @@ lokinet_add_library(lokinet-core
   
   service/types.cpp
 
-  session/outbound_session.cpp
-  session/inbound_session.cpp
+  session/session.cpp
 )
 
 lokinet_add_library(lokinet-rpc
@@ -65,7 +64,7 @@ lokinet_add_library(lokinet-wire
   link/connection.cpp
   link/contacts.cpp
   link/link_manager.cpp
-  # link/tunnel.cpp
+  link/tunnel.cpp
 )
 
 # config, crypto, timeplace, nodedb, bootstrap.cpp, net, router

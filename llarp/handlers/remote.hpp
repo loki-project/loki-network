@@ -4,7 +4,7 @@
 #include <llarp/config/config.hpp>
 #include <llarp/endpoint_base.hpp>
 #include <llarp/service/intro_set.hpp>
-#include <llarp/session/session.hpp>
+// #include <llarp/session/session.hpp>
 
 namespace llarp
 {

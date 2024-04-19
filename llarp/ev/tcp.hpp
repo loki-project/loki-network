@@ -27,28 +27,27 @@ namespace llarp
 {
     class QUICTunnel;
 
-    struct TCPSocket
+    struct TCPConnection
     {
-        TCPSocket() = delete;
+        TCPConnection() = delete;
 
-        TCPSocket(struct bufferevent* _bev, evutil_socket_t _fd, const oxen::quic::Address& _src);
+        TCPConnection(struct bufferevent* _bev, evutil_socket_t _fd, std::shared_ptr<oxen::quic::Stream> _s);
 
         /// Non-copyable and non-moveable
-        TCPSocket(const TCPSocket& s) = delete;
-        TCPSocket& operator=(const TCPSocket& s) = delete;
-        TCPSocket(TCPSocket&& s) = delete;
-        TCPSocket& operator=(TCPSocket&& s) = delete;
+        TCPConnection(const TCPConnection& s) = delete;
+        TCPConnection& operator=(const TCPConnection& s) = delete;
+        TCPConnection(TCPConnection&& s) = delete;
+        TCPConnection& operator=(TCPConnection&& s) = delete;
 
-        ~TCPSocket();
+        ~TCPConnection();
 
         struct bufferevent* bev;
         evutil_socket_t fd;
-        oxen::quic::Address src;
 
         std::shared_ptr<oxen::quic::Stream> stream;
     };
 
-    using tcpsock_hook = std::function<std::shared_ptr<TCPSocket>()>;
+    using tcpsock_hook = std::function<TCPConnection*(struct bufferevent*, evutil_socket_t)>;
 
     class TCPHandle
     {
@@ -62,19 +61,25 @@ namespace llarp
 
         std::shared_ptr<EventLoop> _ev;
         std::shared_ptr<::evconnlistener> _tcp_listener;
-        oxen::quic::Address _bound;
+        oxen::quic::Address _bound{};
 
         socket_t _sock;
-        tcpsock_hook _socket_maker;
 
-        std::unordered_map<evutil_socket_t, std::shared_ptr<TCPSocket>> routing;
+        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, tcpsock_hook cb);
 
       public:
         TCPHandle() = delete;
 
-        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, tcpsock_hook cb);
+        tcpsock_hook _socket_maker;
+
+        static std::shared_ptr<TCPHandle> make(const std::shared_ptr<EventLoop>& ev, tcpsock_hook cb);
 
         ~TCPHandle();
+
+        uint16_t port() const
+        {
+            return _bound.port();
+        }
 
         oxen::quic::Address bind() const
         {
@@ -82,6 +87,6 @@ namespace llarp
         }
 
       private:
-        void _init_internals(const oxen::quic::Address& bind);
+        void _init_internals();
     };
 }  //  namespace llarp

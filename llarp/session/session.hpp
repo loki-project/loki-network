@@ -2,9 +2,10 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/address/ip_packet.hpp>
-#include <llarp/auth/auth.hpp>
 #include <llarp/constants/path.hpp>
+#include <llarp/ev/tcp.hpp>
 #include <llarp/path/path.hpp>
+#include <llarp/service/tag.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -13,7 +14,7 @@
 
 namespace llarp
 {
-    struct Router;
+    // struct Router;
 
     namespace link
     {
@@ -54,10 +55,25 @@ namespace llarp
             std::shared_ptr<oxen::quic::Endpoint> _ep;
             std::shared_ptr<oxen::quic::connection_interface> _ci;
 
+            std::unordered_map<uint16_t, std::shared_ptr<TCPHandle>> _listeners;
+
+            std::unordered_set<std::shared_ptr<TCPConnection>> _tcp_conns;
+
+            void _init_tcp(Router& r);
+
+            void _listen(const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds);
+
           public:
-            BaseSession(std::shared_ptr<path::Path> _p)
-                : _current_path{std::move(_p)}, _current_hop_id{_current_path->intro.pivot_hop_id}
-            {}
+            BaseSession(std::shared_ptr<path::Path> _p);
+
+            uint16_t startup_tcp(Router& r);
+
+            /** TODO:
+                - add methods to start TCPHandle on a local port
+                    - this might be good to do in InboundSession...?
+            */
+
+            void connect_to(Router& r, uint16_t port);
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,

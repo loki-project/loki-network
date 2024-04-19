@@ -1874,8 +1874,12 @@ namespace llarp
                 return m.respond(InitiateSession::AUTH_DENIED, true);
             }
 
-            return _router.local_endpoint()->prefigure_session(
-                std::move(initiator), std::move(tag), std::move(pivot_txid));
+            if (auto maybe_port = _router.local_endpoint()->prefigure_session(
+                    std::move(initiator), std::move(tag), std::move(pivot_txid)))
+            {
+                // success
+                return m.respond(serialize_response({{"PORT", *maybe_port}}));
+            }
         }
         catch (const std::exception& e)
         {

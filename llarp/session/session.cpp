@@ -10,7 +10,57 @@
 
 namespace llarp::session
 {
-    static auto logcat = log::Cat("session.base");
+    static auto logcat = log::Cat("session");
+
+    BaseSession::BaseSession(std::shared_ptr<path::Path> _p)
+        : _current_path{std::move(_p)}, _current_hop_id{_current_path->intro.pivot_hop_id}
+    {}
+
+    void BaseSession::_init_tcp(Router& r)
+    {
+        _ep = r.quic_tunnel()->startup_endpoint(_current_path);
+    }
+
+    void BaseSession::_listen(const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds)
+    {
+        _ep->listen(
+            creds,
+            [this](oxen::quic::Stream&, bstring_view data) {
+                _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, bstring{data}});
+            },
+            [this](oxen::quic::connection_interface& ci) {
+                if (not _ci)
+                    _ci = ci.shared_from_this();  // InboundSession will need to set its _ci pointer
+                else
+                    log::warning(logcat, "Tunneled QUIC endpoint can only have one connection per remote!");
+            });
+    }
+
+    uint16_t BaseSession::startup_tcp(Router& r)
+    {
+        _init_tcp(r);
+        _listen(r.quic_tunnel()->creds());
+
+        auto _handle = TCPHandle::make(r.loop(), [this](struct bufferevent* _bev, evutil_socket_t _fd) mutable {
+            auto [it, _] = _tcp_conns.insert(std::make_shared<TCPConnection>(_bev, _fd, _ci->get_stream(0)));
+            return it->get();
+        });
+
+        auto [it, _] = _listeners.emplace(_handle->port(), std::move(_handle));
+
+        return it->first;
+    }
+
+    void BaseSession::connect_to(Router& r, uint16_t port)
+    {
+        _init_tcp(r);
+
+        KeyedAddress remote{TUNNEL_PUBKEY, LOCALHOST, port};
+
+        _ci = _ep->connect(remote, [this](oxen::quic::Stream&, bstring_view data) {
+            _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, bstring{data}});
+        });
+    }
 
     OutboundSession::OutboundSession(
         NetworkAddress remote,
@@ -192,4 +242,26 @@ namespace llarp::session
         return now > _last_use && now - _last_use > path::DEFAULT_LIFETIME;
     }
 
+    InboundSession::InboundSession(
+        NetworkAddress _r, std::shared_ptr<path::Path> _path, handlers::LocalEndpoint& p, service::SessionTag _t)
+        : BaseSession{std::move(_path)},
+          _parent{p},
+          _tag{std::move(_t)},
+          _remote{std::move(_r)},
+          _is_exit_node{_parent.is_exit_node()}
+    {
+        if (not _current_path->is_client_path() and _remote.is_client())
+            throw std::runtime_error{
+                "NetworkAddress and Path do not agree on InboundSession remote's identity (client vs server)!"};
+    }
+
+    void InboundSession::set_new_path(const std::shared_ptr<path::Path>& _new_path)
+    {
+        _current_path.reset(_new_path.get());
+    }
+
+    void InboundSession::set_new_tag(const service::SessionTag& tag)
+    {
+        _tag = tag;
+    }
 }  // namespace llarp::session

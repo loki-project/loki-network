@@ -165,26 +165,32 @@ namespace llarp::handlers
         return _static_auth_tokens.contains(*maybe_auth);
     }
 
-    void LocalEndpoint::prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid)
+    std::optional<uint16_t> LocalEndpoint::prefigure_session(
+        RouterID initiator, service::SessionTag tag, HopID pivot_txid)
     {
         if (auto path_ptr = _router.path_context()->get_path(pivot_txid))
         {
             auto netaddr = NetworkAddress::from_pubkey(initiator, path_ptr->is_client_path());
+
             auto inbound =
                 std::make_shared<session::InboundSession>(netaddr, std::move(path_ptr), *this, std::move(tag));
 
-            _sessions.insert_or_assign(std::move(netaddr), std::move(inbound));
-            log::info(logcat, "LocalEndpoint successfully created and mapped InboundSession object!");
+            auto [session, _] = _sessions.insert_or_assign(std::move(netaddr), std::move(inbound));
+
+            log::info(
+                logcat, "LocalEndpoint successfully created and mapped InboundSession object! Starting TCP tunnel...");
+
+            return session->startup_tcp(_router);
         }
-        else
-        {
-            log::warning(
-                logcat,
-                "Could not find Path (pivot txid:{}) for inbound session (tag:{}) from remote (rid:{})",
-                pivot_txid,
-                tag,
-                initiator);
-        }
+
+        log::warning(
+            logcat,
+            "Could not find Path (pivot txid:{}) for inbound session (tag:{}) from remote (rid:{})",
+            pivot_txid,
+            tag,
+            initiator);
+
+        return std::nullopt;
     }
 
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)

@@ -18,6 +18,8 @@ namespace llarp
     using ipv6_net = oxen::quic::ipv6_net;
     using ip_net = std::variant<ipv4_net, ipv6_net>;
 
+    using KeyedAddress = oxen::quic::RemoteAddress;
+
     inline constexpr uint32_t ipv6_flowlabel_mask = 0b0000'0000'0000'1111'1111'1111'1111'1111;
 
     inline constexpr size_t ICMP_HEADER_SIZE{8};

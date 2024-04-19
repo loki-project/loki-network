@@ -165,7 +165,7 @@ namespace llarp::handlers
         /// dns subsystem for this endpoint
         std::shared_ptr<dns::Server> _dns;
 
-        std::shared_ptr<auth::AuthPolicy> _auth_policy;
+        // std::shared_ptr<auth::AuthPolicy> _auth_policy;
 
         /// our local address and ip
         oxen::quic::Address _local_addr;

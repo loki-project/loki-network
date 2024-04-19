@@ -35,14 +35,15 @@ namespace llarp
 
         log::trace(logcat, "TCP socket received {}B: {}", nwrite, buffer_printer{buf});
 
-        auto *handle = reinterpret_cast<TCPHandle *>(user_arg);
-        assert(handle);
+        auto *conn = reinterpret_cast<TCPConnection *>(user_arg);
+        assert(conn);
+
+        conn->stream->send(ustring{(buf.data()), nwrite});
     };
 
     static void tcp_event_cb(struct bufferevent *bev, short what, void *user_arg)
     {
-        // This void pointer is the TCPSocket object. This opens the door for closing the TCP setup in case of any
-        // failures
+        (void)bev;
         (void)user_arg;
 
         if (what & BEV_EVENT_CONNECTED)
@@ -56,7 +57,8 @@ namespace llarp
         if (what & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
         {
             log::debug(logcat, "TCP listener freeing bufferevent...");
-            bufferevent_free(bev);
+
+            // DISCUSS: should we close the connection here?
         }
     };
 
@@ -69,13 +71,14 @@ namespace llarp
         auto *b = evconnlistener_get_base(listener);
         auto *bevent = bufferevent_socket_new(b, fd, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
 
-        // TODO: make TCPSocket here!
-
-        bufferevent_setcb(bevent, tcp_read_cb, nullptr, tcp_event_cb, user_arg);
-        bufferevent_enable(bevent, EV_READ | EV_WRITE);
-
         auto *handle = reinterpret_cast<TCPHandle *>(user_arg);
         assert(handle);
+
+        // make TCPSocket here!
+        auto *conn = handle->_socket_maker(bevent, fd);
+
+        bufferevent_setcb(bevent, tcp_read_cb, nullptr, tcp_event_cb, conn);
+        bufferevent_enable(bevent, EV_READ | EV_WRITE);
     };
 
     static void tcp_err_cb(struct evconnlistener * /* e */, void *user_arg)
@@ -89,17 +92,23 @@ namespace llarp
         // DISCUSS: close everything here?
     };
 
-    TCPSocket::TCPSocket(struct bufferevent *_bev, evutil_socket_t _fd, const oxen::quic::Address &_src)
-        : bev{_bev}, fd{_fd}, src{_src}
+    TCPConnection::TCPConnection(struct bufferevent *_bev, evutil_socket_t _fd, std::shared_ptr<oxen::quic::Stream> _s)
+        : bev{_bev}, fd{_fd}, stream{std::move(_s)}
     {}
 
-    TCPSocket::~TCPSocket()
+    TCPConnection::~TCPConnection()
     {
         bufferevent_free(bev);
         log::debug(logcat, "TCPSocket shut down!");
     }
 
-    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, const oxen::quic::Address &bind, tcpsock_hook cb)
+    std::shared_ptr<TCPHandle> TCPHandle::make(const std::shared_ptr<EventLoop> &ev, tcpsock_hook cb)
+    {
+        std::shared_ptr<TCPHandle> h{new TCPHandle(ev, std::move(cb))};
+        return h;
+    }
+
+    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, tcpsock_hook cb)
         : _ev{ev_loop}, _socket_maker{std::move(cb)}
     {
         assert(_ev);
@@ -107,15 +116,14 @@ namespace llarp
         if (!_socket_maker)
             throw std::logic_error{"TCPSocket construction requires a non-empty receive callback"};
 
-        _init_internals(bind);
+        _init_internals();
     }
 
-    void TCPHandle::_init_internals(const oxen::quic::Address &bind)
+    void TCPHandle::_init_internals()
     {
         sockaddr_in _tcp{};
         _tcp.sin_family = AF_INET;
-        _tcp.sin_addr.s_addr = INADDR_ANY;
-        _tcp.sin_port = htons(bind.port());
+        _tcp.sin_addr.s_addr = INADDR_LOOPBACK;  // 127.0.0.1
 
         _tcp_listener = _ev->shared_ptr<struct evconnlistener>(
             evconnlistener_new_bind(

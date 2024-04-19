@@ -70,7 +70,7 @@ namespace llarp::handlers
         // original message
         bool validate_token(std::optional<std::string> maybe_auth);
 
-        void prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid);
+        std::optional<uint16_t> prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid);
 
         const service::IntroSet& intro_set() const
         {

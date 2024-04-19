@@ -25,16 +25,17 @@ namespace llarp
             to `local` already exists in the container, `sesh` is assigned to the mapped type. If the key
             does NOT exist, `sesh` is inserted as the value corresponding to the key `local`.
 
-            The returned `bool` is true if the insertion took place and `false` if assignment occurred.
+            The returned `bool` is true if the insertion took place and `false` if assignment occurred. The
+            iterator is the shared_ptr that was inserted or assigned
         */
-        bool insert_or_assign(net_addr_t remote, std::shared_ptr<session_t> sesh)
+        std::pair<std::shared_ptr<session_t>, bool> insert_or_assign(net_addr_t remote, std::shared_ptr<session_t> sesh)
         {
             auto tag = sesh->tag();
 
             auto [_1, b1] = _session_lookup.insert_or_assign(tag, remote);
             auto [_2, b2] = _sessions.insert_or_assign(remote, std::move(sesh));
 
-            return b1 & b2;
+            return {_2->second, b1 & b2};
         }
 
         std::optional<net_addr_t> get_remote_from_tag(const service::SessionTag& tag) const
