@@ -948,8 +948,6 @@ namespace llarp
 
         _node_db->Tick(now);
 
-        _path_context->expire_paths(now);
-
         // update tick timestamp
         _last_tick = llarp::time_now_ms();
     }

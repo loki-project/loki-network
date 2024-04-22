@@ -7,7 +7,7 @@
 
 namespace llarp::handlers
 {
-    static auto logcat = log::Cat("remote_handler");
+    static auto logcat = log::Cat("RemoteHandler");
 
     RemoteHandler::RemoteHandler(Router& r) : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}
     {}
@@ -94,7 +94,7 @@ namespace llarp::handlers
             return func(std::nullopt);
         }
 
-        log::debug(logcat, "{} looking up ONS name {}", name(), ons);
+        log::debug(logcat, "Looking up ONS name {}", ons);
 
         auto response_handler = [ons_name = ons, hook = std::move(func)](std::string response) {
             if (auto record = service::EncryptedONSRecord::construct(response);
@@ -126,7 +126,7 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(logcat, "{} querying pivot:{} for name lookup (target: {})", name(), path->pivot_rid(), ons);
+                log::info(logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid(), ons);
 
                 path->resolve_ons(ons, response_handler);
             }
@@ -138,18 +138,18 @@ namespace llarp::handlers
     {
         if (auto maybe_intro = _router.contacts().get_decrypted_introset(remote))
         {
-            log::debug(logcat, "{} found decrypted introset locally for remote:{}", name(), remote);
+            log::debug(logcat, "Decrypted introset for remote (rid:{}) found locally~", remote);
             return func(std::move(maybe_intro));
         }
 
-        log::debug(logcat, "{} looking up introset for remote:{}", name(), remote);
+        log::debug(logcat, "Looking up introset for remote (rid:{})", remote);
         auto remote_key = dht::Key_t::derive_from_rid(remote);
 
         auto response_handler = [this, remote, hook = std::move(func)](std::string response) {
             if (auto encrypted = service::EncryptedIntroSet::construct(response);
                 auto intro = encrypted->decrypt(remote))
             {
-                log::debug(logcat, "Storing introset for remote:{}", remote);
+                log::debug(logcat, "Storing introset for remote (rid:{})", remote);
                 _router.contacts().put_intro(std::move(*encrypted));
                 return hook(std::move(intro));
             }
@@ -178,7 +178,7 @@ namespace llarp::handlers
             for (const auto& [rid, path] : _paths)
             {
                 log::info(
-                    logcat, "{} querying pivot:{} for introset lookup (target: {})", name(), path->pivot_rid(), remote);
+                    logcat, "Querying pivot (rid:{}) for introset lookup target (rid:{})", path->pivot_rid(), remote);
 
                 path->find_intro(remote_key, is_relayed, order, response_handler);
             }
@@ -257,29 +257,19 @@ namespace llarp::handlers
             InitiateSession::serialize_encrypt(
                 _router.local_rid(), remote.router_id(), tag, path->pivot_txid(), fetch_auth_token(remote)),
             [this, remote, tag, path, is_exit](std::string response) {
-                try
+                if (response == messages::OK_RESPONSE)
                 {
-                    oxenc::bt_dict_consumer btdc{response};
+                    auto outbound = std::make_shared<session::OutboundSession>(
+                        remote, *this, std::move(path), std::move(tag), is_exit);
 
-                    if (auto maybe_port = btdc.maybe<uint16_t>("PORT"))
-                    {
-                        auto outbound = std::make_shared<session::OutboundSession>(
-                            remote, *this, std::move(path), std::move(tag), is_exit);
+                    auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 
-                        auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
-                        log::info(
-                            logcat,
-                            "RemoteHandler successfully created and mapped OutboundSession object! Starting TCP "
-                            "tunnel...");
+                    log::info(
+                        logcat,
+                        "RemoteHandler successfully created and mapped OutboundSession object! Starting TCP "
+                        "tunnel...");
 
-                        session->connect_to(_router, *maybe_port);
-                    }
-
-                    log::warning(logcat, "Path request 'session_init' (remote:{}) failed: {}", remote, response);
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Path request 'session_init' (remote:{}) failed: {}", remote, e.what());
+                    session->tcp_backend_listen();
                 }
             });
     }
@@ -300,7 +290,7 @@ namespace llarp::handlers
 
         // DISCUSS: we don't share paths, but if every successful path-build is logged in PathContext, we are
         // effectively sharing across all path-building objects...?
-        if (auto path_ptr = _router.path_context()->get_path(intro.pivot_hop_id))
+        if (auto path_ptr = _router.path_context()->get_path_by_pivot(intro.pivot_hop_id))
         {
             log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hop_id);
             return make_session(std::move(remote), std::move(path_ptr), is_exit);
@@ -321,12 +311,12 @@ namespace llarp::handlers
 
         auto path = std::make_shared<path::Path>(_router, std::move(hops), get_weak(), true, remote.is_client());
 
-        log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
 
         auto payload = build2(path);
 
         if (not build3(
-                path->upstream(), std::move(payload), [this, path, intros, remote, is_exit](oxen::quic::message m) {
+                path->upstream_rid(), std::move(payload), [this, path, intros, remote, is_exit](oxen::quic::message m) {
                     if (m)
                     {
                         // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will

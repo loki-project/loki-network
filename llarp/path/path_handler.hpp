@@ -146,7 +146,7 @@ namespace llarp
             virtual std::weak_ptr<PathHandler> get_weak() = 0;
 
             /// get the "name" of this path set
-            virtual std::string name() const = 0;
+            // virtual std::string name() const = 0;
 
             const Router& router() const
             {

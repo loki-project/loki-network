@@ -57,11 +57,6 @@ namespace llarp
 
             void configure();
 
-            std::string name() const override
-            {
-                return _name;
-            }
-
             bool supports_ipv6() const
             {
                 return _use_v6;
@@ -84,11 +79,10 @@ namespace llarp
                 uint64_t order,
                 std::function<void(std::optional<service::IntroSet>)> func);
 
-            // TODO: resolve any ons addresses mapped to auth tokens
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
 
-            // TODO: add callback field to initiate functions to loop in QUICTun endpoint creation
+            // TODO: add callback to return local TCPHandle bind address for requesting app
             bool initiate_remote_service_session(const NetworkAddress& remote)
             {
                 return initiate_session(remote, false);

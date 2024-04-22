@@ -256,10 +256,13 @@ namespace llarp
         */
         auto e = quic->endpoint(
             _router.listen_addr(),
+            oxen::quic::opt::enable_datagrams{oxen::quic::Splitting::ACTIVE},
             make_static_secret(_router.identity()),
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
-            [this](oxen::quic::dgram_interface& di, bstring dgram) { recv_data_message(di, dgram); },
+            [this](oxen::quic::dgram_interface& di, bstring dgram) {
+                recv_data_message(di.get_conn_interface(), std::move(dgram));
+            },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND);
 
@@ -434,8 +437,6 @@ namespace llarp
             log::critical(logcat, "Outbound connection to {}", rid);
             on_outbound_conn(ci);
         }
-        // _router.loop()->call([this, &conn_interface = ci, is_snode = _is_service_node]() {
-        // });
     }
 
     void LinkManager::on_conn_closed(oxen::quic::connection_interface& ci, uint64_t ec)
@@ -659,9 +660,16 @@ namespace llarp
             log::warning(logcat, "NodeDB query for {} random RCs for connection returned none", num_conns);
     }
 
-    void LinkManager::recv_data_message(oxen::quic::dgram_interface&, bstring)
+    void LinkManager::recv_data_message(std::shared_ptr<oxen::quic::connection_interface> ci, bstring data)
     {
-        // TODO: this
+        RouterID upstream{ci->remote_key()};
+
+        if (auto path = _router.path_context()->get_path_by_upstream(upstream))
+        {
+            path->recv_path_data_message(std::move(data));
+        }
+        else
+            log::warning(logcat, "Unable to find path to receive path data message (upstream:{})", upstream);
     }
 
     void LinkManager::gossip_rc(const RouterID& last_sender, const RemoteRC& rc)
@@ -1536,7 +1544,7 @@ namespace llarp
             throw;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path(txid))
+        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
         {
             if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
                 path_ptr->enable_exit_traffic();
@@ -1624,7 +1632,7 @@ namespace llarp
             return;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path(txid))
+        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
         {
             if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
             {
@@ -1723,7 +1731,7 @@ namespace llarp
             return;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path(txid))
+        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
         {
             //
         }
@@ -1856,10 +1864,10 @@ namespace llarp
             return;
         }
 
-        RouterID initiator;
+        NetworkAddress initiator;
         service::SessionTag tag;
         HopID pivot_txid;
-        std::optional<std::string> maybe_auth;
+        std::optional<std::string> maybe_auth = std::nullopt;
 
         try
         {
@@ -1868,24 +1876,33 @@ namespace llarp
             std::tie(initiator, pivot_txid, tag, maybe_auth) =
                 InitiateSession::decrypt_deserialize(btdc, _router.local_rid());
 
-            if (maybe_auth.has_value() and not _router.local_endpoint()->validate_token(maybe_auth))
+            if (not _router.local_endpoint()->validate(initiator, maybe_auth))
             {
                 log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
                 return m.respond(InitiateSession::AUTH_DENIED, true);
             }
 
-            if (auto maybe_port = _router.local_endpoint()->prefigure_session(
-                    std::move(initiator), std::move(tag), std::move(pivot_txid)))
+            auto path_ptr = _router.path_context()->get_path_by_pivot(pivot_txid);
+
+            if (not path_ptr)
             {
-                // success
-                return m.respond(serialize_response({{"PORT", *maybe_port}}));
+                log::warning(logcat, "Failed to find local path corresponding to session over pivot: {}", pivot_txid);
+                return m.respond(messages::ERROR_RESPONSE, true);
             }
+
+            if (_router.local_endpoint()->prefigure_session(std::move(initiator), std::move(tag), std::move(path_ptr)))
+            {
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Failed to configure InboundSession!");
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            return m.respond(messages::ERROR_RESPONSE, true);
         }
+
+        m.respond(messages::ERROR_RESPONSE, true);
     }
 
     void LinkManager::handle_convo_intro(oxen::quic::message m)

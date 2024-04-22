@@ -130,7 +130,6 @@ namespace llarp
 
         std::unordered_set<NetworkAddress> auth_whitelist;
 
-        // TODO: move to LocalEndpoint
         std::unordered_set<std::string> auth_static_tokens;
 
         std::set<fs::path> auth_files;
@@ -158,7 +157,7 @@ namespace llarp
 
         // Remote exit or hidden service addresses mapped to fixed local IP addresses
         // TODO:
-        //  - pass to TunEndpoint, load directly into TunEndpoint mapping
+        //  - (DONE) pass to TunEndpoint, load directly into TunEndpoint mapping
         //      - when a session is created, check here when assigning IP's
         std::unordered_map<NetworkAddress, oxen::quic::Address> _reserved_local_addrs;
 

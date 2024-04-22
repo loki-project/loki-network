@@ -120,8 +120,8 @@ namespace llarp
             return {std::move(initiator), std::move(pivot_txid), std::move(tag), std::move(maybe_auth)};
         }
 
-        inline static std::tuple<RouterID, HopID, service::SessionTag, std::optional<std::string>> decrypt_deserialize(
-            oxenc::bt_dict_consumer& btdc, const RouterID& local)
+        inline static std::tuple<NetworkAddress, HopID, service::SessionTag, std::optional<std::string>>
+        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const RouterID& local)
         {
             SymmNonce nonce;
             RouterID shared_pubkey;
@@ -136,12 +136,13 @@ namespace llarp
                 crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, payload);
 
                 {
-                    RouterID initiator;
+                    RouterID remote;
                     service::SessionTag tag;
                     HopID pivot_txid;
                     std::optional<std::string> maybe_auth = std::nullopt;
 
-                    initiator.from_string(btdc.require<std::string_view>("i"));
+                    remote.from_string(btdc.require<std::string_view>("i"));
+                    auto initiator = NetworkAddress::from_pubkey(remote, true);
                     pivot_txid.from_string(btdc.require<std::string_view>("p"));
                     tag.from_string(btdc.require<std::string_view>("s"));
                     maybe_auth = btdc.maybe<std::string>("u");

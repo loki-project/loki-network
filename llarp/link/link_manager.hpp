@@ -159,7 +159,7 @@ namespace llarp
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
         link::Endpoint ep;
 
-        void recv_data_message(oxen::quic::dgram_interface& dgi, bstring dgram);
+        void recv_data_message(std::shared_ptr<oxen::quic::connection_interface> ci, bstring dgram);
 
         std::shared_ptr<oxen::quic::BTRequestStream> make_control(
             oxen::quic::connection_interface& ci, const RouterID& rid);

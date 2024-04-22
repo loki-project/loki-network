@@ -32,7 +32,9 @@ namespace llarp
         struct TransitHop;
         struct PathHopConfig;
 
-        // TODO: replace vector of PathHopConfig with vector of PathHop
+        using recv_session_dgram_cb = std::function<void(bstring data)>;
+
+        // TODO: replace vector of PathHopConfig with vector of TransitHops
 
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
@@ -64,11 +66,6 @@ namespace llarp
 
             nlohmann::json ExtractStatus() const;
 
-            void MarkActive(std::chrono::milliseconds now)
-            {
-                last_recv_msg = std::max(now, last_recv_msg);
-            }
-
             std::string to_string() const;
 
             std::string HopsString() const;
@@ -78,11 +75,25 @@ namespace llarp
                 return last_recv_msg;
             }
 
-            // TODO: make this into multiple functions and fuck PathStatus forever
             void set_established()
             {
                 _established = true;
             }
+
+            void recv_path_data_message(bstring data);
+
+            void link_session(recv_session_dgram_cb cb);
+
+            void unlink_session();
+
+            bool is_primary() const
+            {
+                return _is_primary;
+            }
+
+            bool set_primary();
+
+            bool unset_primary();
 
             std::chrono::milliseconds ExpireTime() const
             {
@@ -142,8 +153,8 @@ namespace llarp
 
             bool is_ready() const;
 
-            RouterID upstream();
-            const RouterID& upstream() const;
+            RouterID upstream_rid();
+            const RouterID& upstream_rid() const;
 
             HopID upstream_rxid();
             const HopID& upstream_rxid() const;
@@ -189,11 +200,14 @@ namespace llarp
             bool InformExitResult(std::chrono::milliseconds b);
 
             std::atomic<bool> _established{false};
+            std::atomic<bool> _is_primary{false};
 
             Router& _router;
 
             bool _is_session_path{false};
             bool _is_client{false};
+
+            recv_session_dgram_cb _recv_dgram;
 
             std::chrono::milliseconds last_recv_msg = 0s;
             std::chrono::milliseconds last_latency_test = 0s;

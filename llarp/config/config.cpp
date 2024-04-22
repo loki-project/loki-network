@@ -275,10 +275,10 @@ namespace llarp
 
         conf.define_option<std::string>(
             "network",
-            "auth",
+            "auth-type",
             ClientOnly,
             Comment{
-                "Set the endpoint authentication mechanism.",
+                "Set the endpoint authentication type.",
                 "none/whitelist/lmq/file",
             },
             [this](std::string arg) {
@@ -289,22 +289,22 @@ namespace llarp
 
         conf.define_option<std::string>(
             "network",
-            "auth-lmq",
+            "omq-auth-endpoint",
             ClientOnly,
             assignment_acceptor(auth_endpoint),
             Comment{
-                "lmq endpoint to talk to for authenticating new sessions",
+                "OMQ endpoint to talk to for authenticating new sessions",
                 "ipc:///var/lib/lokinet/auth.socket",
                 "tcp://127.0.0.1:5555",
             });
 
         conf.define_option<std::string>(
             "network",
-            "auth-lmq-method",
+            "omq-auth-method",
             ClientOnly,
             Default{"llarp.auth"},
             Comment{
-                "lmq function to call for authenticating new sessions",
+                "OMQ function to call for authenticating new sessions",
                 "llarp.auth",
             },
             [this](std::string arg) {

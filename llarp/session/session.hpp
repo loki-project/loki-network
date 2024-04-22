@@ -49,31 +49,33 @@ namespace llarp
         struct BaseSession
         {
           protected:
+            Router& _r;
+
             std::shared_ptr<path::Path> _current_path;
             HopID _current_hop_id;
 
             std::shared_ptr<oxen::quic::Endpoint> _ep;
             std::shared_ptr<oxen::quic::connection_interface> _ci;
 
-            std::unordered_map<uint16_t, std::shared_ptr<TCPHandle>> _listeners;
+            std::unordered_map<uint16_t, std::shared_ptr<TCPHandle>> _handles;
 
             std::unordered_set<std::shared_ptr<TCPConnection>> _tcp_conns;
 
-            void _init_tcp(Router& r);
+            void _init_ep();
 
-            void _listen(const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds);
+            const std::shared_ptr<path::Path>& current_path() const
+            {
+                return _current_path;
+            }
 
           public:
-            BaseSession(std::shared_ptr<path::Path> _p);
+            BaseSession(Router& r, std::shared_ptr<path::Path> _p);
 
-            uint16_t startup_tcp(Router& r);
+            void set_new_current_path(std::shared_ptr<path::Path> _new_path);
 
-            /** TODO:
-                - add methods to start TCPHandle on a local port
-                    - this might be good to do in InboundSession...?
-            */
+            void tcp_backend_connect();
 
-            void connect_to(Router& r, uint16_t port);
+            void tcp_backend_listen(uint16_t port = 0);
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -170,11 +172,6 @@ namespace llarp
 
             bool send_path_data_message(std::string body);
 
-            std::string name() const override
-            {
-                return prefix().append(_remote.to_string());
-            }
-
             service::SessionTag tag()
             {
                 return _tag;
@@ -197,13 +194,6 @@ namespace llarp
             ~InboundSession() = default;
 
             std::string name() const;
-
-            const std::shared_ptr<path::Path>& current_path() const
-            {
-                return _current_path;
-            }
-
-            void set_new_path(const std::shared_ptr<path::Path>& _new_path);
 
             void set_new_tag(const service::SessionTag& tag);
 

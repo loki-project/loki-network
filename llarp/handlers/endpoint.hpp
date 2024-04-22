@@ -32,6 +32,10 @@ namespace llarp::handlers
         std::chrono::milliseconds _last_introset_regen_attempt{0s};
 
         std::unordered_set<std::string> _static_auth_tokens;
+        std::unordered_set<NetworkAddress> _auth_whitelist;
+
+        bool use_tokens{false};
+        bool use_whitelist{false};
 
         // Ranges reachable via our endpoint -- Exit mode only!
         std::set<IPRange> _routed_ranges;
@@ -65,12 +69,11 @@ namespace llarp::handlers
         void lookup_intro(
             const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
 
-        // We keep this as an optional so LinkManager can pass the returned object from the call to ::deserialize. It
-        // must be called from LinkManager so a failed authentication can be relayed by the stream pointer in the
-        // original message
-        bool validate_token(std::optional<std::string> maybe_auth);
+        // LocalEndpoint can use either a whitelist or a static auth token list to  validate incomininbg requests to
+        // initiate a session
+        bool validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth = std::nullopt);
 
-        std::optional<uint16_t> prefigure_session(RouterID initiator, service::SessionTag tag, HopID pivot_txid);
+        bool prefigure_session(NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path);
 
         const service::IntroSet& intro_set() const
         {
@@ -85,11 +88,6 @@ namespace llarp::handlers
         std::weak_ptr<path::PathHandler> get_weak() override
         {
             return weak_from_this();
-        }
-
-        std::string name() const override
-        {
-            return _name;
         }
 
         oxen::quic::Address local_address() const override

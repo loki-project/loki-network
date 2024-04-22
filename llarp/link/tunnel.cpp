@@ -18,16 +18,6 @@ namespace llarp
         return q;
     }
 
-    std::shared_ptr<oxen::quic::Endpoint> QUICTunnel::startup_endpoint(const std::shared_ptr<path::Path>& path)
-    {
-        auto e = _q->endpoint(
-            oxen::quic::Address{}, oxen::quic::opt::manual_routing{[&](const oxen::quic::Path&, bstring_view data) {
-                path->send_path_data_message(std::string{reinterpret_cast<const char*>(data.data()), data.size()});
-            }});
-
-        return e;
-    }
-
     uint16_t QUICTunnel::listen()
     {
         return {};

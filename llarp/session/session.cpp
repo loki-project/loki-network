@@ -12,54 +12,97 @@ namespace llarp::session
 {
     static auto logcat = log::Cat("session");
 
-    BaseSession::BaseSession(std::shared_ptr<path::Path> _p)
-        : _current_path{std::move(_p)}, _current_hop_id{_current_path->intro.pivot_hop_id}
-    {}
-
-    void BaseSession::_init_tcp(Router& r)
+    BaseSession::BaseSession(Router& r, std::shared_ptr<path::Path> _p) : _r{r}
     {
-        _ep = r.quic_tunnel()->startup_endpoint(_current_path);
+        set_new_current_path(std::move(_p));
     }
 
-    void BaseSession::_listen(const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds)
+    void BaseSession::set_new_current_path(std::shared_ptr<path::Path> _new_path)
     {
+        if (_current_path)
+        {
+            _current_path->unset_primary();
+            _current_path.reset(_new_path.get());
+        }
+        else
+            _current_path = std::move(_new_path);
+
+        _current_hop_id = _current_path->intro.pivot_hop_id;
+
+        _current_path->link_session([this](bstring data) {
+            _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, std::move(data)});
+        });
+
+        // This is set by calling ::link_session()
+        assert(_current_path->is_primary());
+    }
+
+    void BaseSession::_init_ep()
+    {
+        _ep = _r.quic_tunnel()->net()->endpoint(
+            oxen::quic::Address{}, oxen::quic::opt::manual_routing{[this](const oxen::quic::Path&, bstring_view data) {
+                _current_path->send_path_data_message(
+                    std::string{reinterpret_cast<const char*>(data.data()), data.size()});
+            }});
+    }
+
+    void BaseSession::tcp_backend_connect()
+    {
+        _init_ep();
+
+        // TODO: change the libquic address to the lokinet-primary-ip:port (or just the ip)
+        auto _handle = TCPHandle::make_client(_r.loop(), oxen::quic::Address{});
+
+        auto [it, _] = _handles.emplace(_handle->port(), std::move(_handle));
+
         _ep->listen(
-            creds,
-            [this](oxen::quic::Stream&, bstring_view data) {
-                _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, bstring{data}});
-            },
+            _r.quic_tunnel()->creds(),
             [this](oxen::quic::connection_interface& ci) {
                 if (not _ci)
-                    _ci = ci.shared_from_this();  // InboundSession will need to set its _ci pointer
+                    _ci = ci.shared_from_this();
                 else
                     log::warning(logcat, "Tunneled QUIC endpoint can only have one connection per remote!");
+            },
+            [&, this](oxen::quic::Stream& s) {
+                // On stream creation, the call to ::connect(...) will:
+                //  - create a bufferevent
+                //  - set the recv_data_cb in the Stream to write to that bufferevent
+                //  - make a TCP connection over the bufferevent to lokinet-primary-ip:port
+                auto tcp_conn = it->second->connect(s.shared_from_this());
+                _tcp_conns.insert(std::move(tcp_conn));
             });
     }
 
-    uint16_t BaseSession::startup_tcp(Router& r)
+    void BaseSession::tcp_backend_listen(uint16_t port)
     {
-        _init_tcp(r);
-        _listen(r.quic_tunnel()->creds());
+        _init_ep();
 
-        auto _handle = TCPHandle::make(r.loop(), [this](struct bufferevent* _bev, evutil_socket_t _fd) mutable {
-            auto [it, _] = _tcp_conns.insert(std::make_shared<TCPConnection>(_bev, _fd, _ci->get_stream(0)));
-            return it->get();
-        });
+        auto _handle = TCPHandle::make_server(
+            _r.loop(),
+            [this](struct bufferevent* _bev, evutil_socket_t _fd) mutable {
+                auto s = _ci->open_stream<oxen::quic::Stream>([_bev](oxen::quic::Stream& s, bstring_view data) {
+                    auto rv = bufferevent_write(_bev, data.data(), data.size());
 
-        auto [it, _] = _listeners.emplace(_handle->port(), std::move(_handle));
+                    log::info(
+                        logcat,
+                        "Stream (id:{}) {} {}B to TCP buffer",
+                        s.stream_id(),
+                        rv < 0 ? "failed to write" : "successfully wrote",
+                        data.size());
+                });
 
-        return it->first;
-    }
+                auto tcp_conn = std::make_shared<TCPConnection>(_bev, _fd, std::move(s));
 
-    void BaseSession::connect_to(Router& r, uint16_t port)
-    {
-        _init_tcp(r);
+                auto [itr, b] = _tcp_conns.insert(std::move(tcp_conn));
 
-        KeyedAddress remote{TUNNEL_PUBKEY, LOCALHOST, port};
+                return itr->get();
+            },
+            port);
 
-        _ci = _ep->connect(remote, [this](oxen::quic::Stream&, bstring_view data) {
-            _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, bstring{data}});
-        });
+        _handles.emplace(_handle->port(), std::move(_handle));
+
+        // connect OutboundSession tunneled ep to InboundSession's tunneled ep
+        _ci = _ep->connect(KeyedAddress{TUNNEL_PUBKEY}, _r.quic_tunnel()->creds());
     }
 
     OutboundSession::OutboundSession(
@@ -69,7 +112,7 @@ namespace llarp::session
         service::SessionTag _t,
         bool is_exit)
         : PathHandler{parent._router, NUM_SESSION_PATHS},
-          BaseSession{std::move(path)},
+          BaseSession{_router, std::move(path)},
           _remote{std::move(remote)},
           _tag{std::move(_t)},
           _last_use{_router.now()},
@@ -98,18 +141,12 @@ namespace llarp::session
     bool OutboundSession::send_path_control_message(
         std::string method, std::string body, std::function<void(std::string)> func)
     {
-        if (auto p = current_path())
-            return p->send_path_control_message(std::move(method), std::move(body), std::move(func));
-
-        return false;
+        return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
     }
 
     bool OutboundSession::send_path_data_message(std::string body)
     {
-        if (auto p = current_path())
-            return p->send_path_data_message(std::move(body));
-
-        return false;
+        return _current_path->send_path_data_message(std::move(body));
     }
 
     void OutboundSession::path_died(std::shared_ptr<path::Path> p)
@@ -214,7 +251,7 @@ namespace llarp::session
     {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true, _remote.is_client());
 
-        log::info(logcat, "{} building path -> {} : {}", name(), path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
 
         return path;
     }
@@ -244,7 +281,7 @@ namespace llarp::session
 
     InboundSession::InboundSession(
         NetworkAddress _r, std::shared_ptr<path::Path> _path, handlers::LocalEndpoint& p, service::SessionTag _t)
-        : BaseSession{std::move(_path)},
+        : BaseSession{p._router, std::move(_path)},
           _parent{p},
           _tag{std::move(_t)},
           _remote{std::move(_r)},
@@ -253,11 +290,6 @@ namespace llarp::session
         if (not _current_path->is_client_path() and _remote.is_client())
             throw std::runtime_error{
                 "NetworkAddress and Path do not agree on InboundSession remote's identity (client vs server)!"};
-    }
-
-    void InboundSession::set_new_path(const std::shared_ptr<path::Path>& _new_path)
-    {
-        _current_path.reset(_new_path.get());
     }
 
     void InboundSession::set_new_tag(const service::SessionTag& tag)

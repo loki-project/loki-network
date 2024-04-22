@@ -32,8 +32,10 @@ namespace llarp
         std::shared_ptr<oxen::quic::GNUTLSCreds> _tls_creds;
 
       public:
-        // Invoked in session initiation to produce Endpoint that lives in {Inbound,Outbound}Session objects
-        std::shared_ptr<oxen::quic::Endpoint> startup_endpoint(const std::shared_ptr<path::Path>& p);
+        const std::unique_ptr<oxen::quic::Network>& net()
+        {
+            return _q;
+        }
 
         const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds()
         {

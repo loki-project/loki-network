@@ -29,9 +29,9 @@ namespace llarp
 
     struct TCPConnection
     {
-        TCPConnection() = delete;
-
         TCPConnection(struct bufferevent* _bev, evutil_socket_t _fd, std::shared_ptr<oxen::quic::Stream> _s);
+
+        TCPConnection() = delete;
 
         /// Non-copyable and non-moveable
         TCPConnection(const TCPConnection& s) = delete;
@@ -45,9 +45,11 @@ namespace llarp
         evutil_socket_t fd;
 
         std::shared_ptr<oxen::quic::Stream> stream;
+
+        void close(uint64_t ec = 0);
     };
 
-    using tcpsock_hook = std::function<TCPConnection*(struct bufferevent*, evutil_socket_t)>;
+    using tcpconn_hook = std::function<TCPConnection*(struct bufferevent*, evutil_socket_t)>;
 
     class TCPHandle
     {
@@ -61,32 +63,51 @@ namespace llarp
 
         std::shared_ptr<EventLoop> _ev;
         std::shared_ptr<::evconnlistener> _tcp_listener;
-        oxen::quic::Address _bound{};
+
+        // The OutboundSession will set up an evconnlistener and set the listening socket address inside ::_bound
+        std::optional<oxen::quic::Address> _bound = std::nullopt;
+
+        // The InboundSession will set this address to the lokinet-primary-ip to connect to
+        std::optional<oxen::quic::Address> _connect = std::nullopt;
 
         socket_t _sock;
 
-        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, tcpsock_hook cb);
+        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, tcpconn_hook cb, uint16_t p);
+
+        explicit TCPHandle(const std::shared_ptr<EventLoop>& ev, oxen::quic::Address connect);
 
       public:
         TCPHandle() = delete;
 
-        tcpsock_hook _socket_maker;
+        tcpconn_hook _conn_maker;
 
-        static std::shared_ptr<TCPHandle> make(const std::shared_ptr<EventLoop>& ev, tcpsock_hook cb);
+        // The OutboundSession object will hold a server listening on some localhost:port, returning that port to the
+        // application for it to make a TCP connection
+        static std::shared_ptr<TCPHandle> make_server(
+            const std::shared_ptr<EventLoop>& ev, tcpconn_hook cb, uint16_t port = 0);
+
+        // The InboundSession object will hold a client that connects to some application configured
+        // lokinet-primary-ip:port every time the OutboundSession opens a new stream over the tunneled connection
+        static std::shared_ptr<TCPHandle> make_client(
+            const std::shared_ptr<EventLoop>& ev, oxen::quic::Address connect);
 
         ~TCPHandle();
 
         uint16_t port() const
         {
-            return _bound.port();
+            return _bound.has_value() ? _bound->port() : 0;
         }
 
-        oxen::quic::Address bind() const
+        std::optional<oxen::quic::Address> bind() const
         {
             return _bound;
         }
 
+        std::shared_ptr<TCPConnection> connect(std::shared_ptr<oxen::quic::Stream> s, uint16_t port = 0);
+
       private:
-        void _init_internals();
+        void _init_client();
+
+        void _init_server(uint16_t port);
     };
 }  //  namespace llarp

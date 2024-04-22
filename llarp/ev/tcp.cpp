@@ -46,19 +46,23 @@ namespace llarp
         (void)bev;
         (void)user_arg;
 
+        // this is where the InboundSession confirms it established a TCP connection to the backend app
         if (what & BEV_EVENT_CONNECTED)
         {
             log::info(logcat, "TCP connect operation finished!");
         }
         if (what & BEV_EVENT_ERROR)
         {
-            log::critical(logcat, "TCP listener encountered error from bufferevent");
+            log::critical(logcat, "TCP Connection encountered error from bufferevent");
         }
         if (what & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
         {
-            log::debug(logcat, "TCP listener freeing bufferevent...");
+            log::debug(logcat, "TCP Connection closing tunneled QUIC stream");
 
-            // DISCUSS: should we close the connection here?
+            auto *conn = reinterpret_cast<TCPConnection *>(user_arg);
+            assert(conn);
+
+            // conn->stream->close();
         }
     };
 
@@ -74,8 +78,8 @@ namespace llarp
         auto *handle = reinterpret_cast<TCPHandle *>(user_arg);
         assert(handle);
 
-        // make TCPSocket here!
-        auto *conn = handle->_socket_maker(bevent, fd);
+        // make TCPConnection here!
+        auto *conn = handle->_conn_maker(bevent, fd);
 
         bufferevent_setcb(bevent, tcp_read_cb, nullptr, tcp_event_cb, conn);
         bufferevent_enable(bevent, EV_READ | EV_WRITE);
@@ -102,28 +106,84 @@ namespace llarp
         log::debug(logcat, "TCPSocket shut down!");
     }
 
-    std::shared_ptr<TCPHandle> TCPHandle::make(const std::shared_ptr<EventLoop> &ev, tcpsock_hook cb)
+    void TCPConnection::close(uint64_t ec)
     {
-        std::shared_ptr<TCPHandle> h{new TCPHandle(ev, std::move(cb))};
+        log::info(logcat, "TCP connection closing with application error code: {}", ec);
+    }
+
+    std::shared_ptr<TCPHandle> TCPHandle::make_server(
+        const std::shared_ptr<EventLoop> &ev, tcpconn_hook cb, uint16_t port)
+    {
+        std::shared_ptr<TCPHandle> h{new TCPHandle(ev, std::move(cb), port)};
         return h;
     }
 
-    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, tcpsock_hook cb)
-        : _ev{ev_loop}, _socket_maker{std::move(cb)}
+    std::shared_ptr<TCPHandle> TCPHandle::make_client(const std::shared_ptr<EventLoop> &ev, oxen::quic::Address connect)
+    {
+        std::shared_ptr<TCPHandle> h{new TCPHandle{ev, std::move(connect)}};
+        return h;
+    }
+
+    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, oxen::quic::Address connect)
+        : _ev{ev_loop}, _connect{std::move(connect)}
+    {
+        assert(_ev);
+    }
+
+    TCPHandle::TCPHandle(const std::shared_ptr<EventLoop> &ev_loop, tcpconn_hook cb, uint16_t p)
+        : _ev{ev_loop}, _conn_maker{std::move(cb)}
     {
         assert(_ev);
 
-        if (!_socket_maker)
+        if (!_conn_maker)
             throw std::logic_error{"TCPSocket construction requires a non-empty receive callback"};
 
-        _init_internals();
+        _init_server(p);
     }
 
-    void TCPHandle::_init_internals()
+    std::shared_ptr<TCPConnection> TCPHandle::connect(std::shared_ptr<oxen::quic::Stream> s, uint16_t port)
+    {
+        sockaddr_in _addr = _connect->in4();
+        _addr.sin_port = htonl(port);
+
+        struct bufferevent *_bev =
+            bufferevent_socket_new(_ev->loop().get(), -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
+
+        s->set_stream_data_cb([&](oxen::quic::Stream &, bstring_view data) {
+            auto rv = bufferevent_write(_bev, data.data(), data.size());
+            log::info(
+                logcat,
+                "Stream (id:{}) {} {}B to TCP buffer",
+                s->stream_id(),
+                rv < 0 ? "failed to write" : "successfully wrote",
+                data.size());
+        });
+
+        auto tcp_conn = std::make_shared<TCPConnection>(_bev, -1, std::move(s));
+
+        bufferevent_setcb(_bev, tcp_read_cb, nullptr, tcp_event_cb, tcp_conn.get());
+
+        if (bufferevent_socket_connect(_bev, (struct sockaddr *)&_addr, sizeof(_addr)) < 0)
+        {
+            log::warning(logcat, "Failed to make bufferevent-based TCP connection!");
+            return nullptr;
+        }
+
+        // only set after a call to bufferevent_socket_connect
+        tcp_conn->fd = bufferevent_getfd(_bev);
+
+        return tcp_conn;
+    }
+
+    void TCPHandle::_init_client()
+    {}
+
+    void TCPHandle::_init_server(uint16_t port)
     {
         sockaddr_in _tcp{};
         _tcp.sin_family = AF_INET;
-        _tcp.sin_addr.s_addr = INADDR_LOOPBACK;  // 127.0.0.1
+        _tcp.sin_addr.s_addr = INADDR_ANY;
+        _tcp.sin_port = htonl(port);
 
         _tcp_listener = _ev->shared_ptr<struct evconnlistener>(
             evconnlistener_new_bind(
@@ -143,7 +203,7 @@ namespace llarp
         }
 
         _sock = evconnlistener_get_fd(_tcp_listener.get());
-        check_rv(getsockname(_sock, _bound, _bound.socklen_ptr()));
+        check_rv(getsockname(_sock, *_bound, _bound->socklen_ptr()));
         evconnlistener_set_error_cb(_tcp_listener.get(), tcp_err_cb);
     }
 

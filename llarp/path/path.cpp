@@ -47,6 +47,21 @@ namespace llarp::path
         intro.pivot_hop_id = hops[hsz - 1].txID;
     }
 
+    void Path::link_session(recv_session_dgram_cb cb)
+    {
+        _recv_dgram = std::move(cb);
+        set_primary();
+        _is_session_path = true;
+    }
+
+    void Path::recv_path_data_message(bstring data)
+    {
+        if (_recv_dgram)
+            _recv_dgram(std::move(data));
+        else
+            throw std::runtime_error{"Path does not have hook to receive datagrams!"};
+    }
+
     bool Path::operator<(const Path& other) const
     {
         auto& first_hop = hops[0];
@@ -144,7 +159,7 @@ namespace llarp::path
         auto payload = PathData::serialize(std::move(body));
         auto outer_payload = make_outer_payload(to_usv(payload));
 
-        return _router.send_data_message(upstream(), std::move(outer_payload));
+        return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
     bool Path::send_path_control_message(std::string method, std::string body, std::function<void(std::string)> func)
@@ -153,7 +168,7 @@ namespace llarp::path
         auto outer_payload = make_outer_payload(to_usv(payload));
 
         return _router.send_control_message(
-            upstream(),
+            upstream_rid(),
             "path_control",
             std::move(outer_payload),
             [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) {
@@ -202,6 +217,30 @@ namespace llarp::path
             });
     }
 
+    bool Path::set_primary()
+    {
+        if (not _is_primary)
+        {
+            _is_primary = true;
+            return true;
+        }
+
+        log::warning(logcat, "Path is already primary for an ongoing session!");
+        return false;
+    }
+
+    bool Path::unset_primary()
+    {
+        if (_is_primary)
+        {
+            _is_primary = false;
+            return true;
+        }
+
+        log::warning(logcat, "Path is not a primary for an ongoing session!");
+        return false;
+    }
+
     bool Path::is_ready() const
     {
         if (is_expired(llarp::time_now_ms()))
@@ -210,12 +249,12 @@ namespace llarp::path
         return intro.latency > 0s && _established;
     }
 
-    RouterID Path::upstream()
+    RouterID Path::upstream_rid()
     {
         return hops[0].rc.router_id();
     }
 
-    const RouterID& Path::upstream() const
+    const RouterID& Path::upstream_rid() const
     {
         return hops[0].rc.router_id();
     }

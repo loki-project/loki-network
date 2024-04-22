@@ -5,7 +5,7 @@
 
 namespace llarp::handlers
 {
-    static auto logcat = log::Cat("local_endpoint");
+    static auto logcat = log::Cat("LocalEndpoint");
 
     LocalEndpoint::LocalEndpoint(Router& r)
         : path::PathHandler{r, path::DEFAULT_PATHS_HELD, path::DEFAULT_LEN}, _is_exit_node{_router.is_exit_node()}
@@ -73,8 +73,11 @@ namespace llarp::handlers
         if (not net_config.srv_records.empty())
             _local_introset.SRVs = std::move(net_config.srv_records);
 
-        if (not net_config.auth_static_tokens.empty())
+        if (use_tokens = not net_config.auth_static_tokens.empty(); use_tokens)
             _static_auth_tokens.merge(net_config.auth_static_tokens);
+
+        if (use_whitelist = not net_config.auth_whitelist.empty(); use_whitelist)
+            _auth_whitelist.merge(net_config.auth_whitelist);
 
         _if_name = *net_config._if_name;
         _local_range = *net_config._local_ip_range;
@@ -114,7 +117,7 @@ namespace llarp::handlers
         }
         else
         {
-            log::warning(logcat, "{} failed to get enough valid path introductions to publish introset!", name());
+            log::warning(logcat, "Failed to get enough valid path introductions to publish introset!");
             return build_more(1);
         }
 
@@ -151,46 +154,43 @@ namespace llarp::handlers
         {
             if (publish_introset(*maybe_encrypted))
             {
-                log::debug(logcat, "{} republished encrypted introset", name());
+                log::debug(logcat, "Successfully republished encrypted introset");
             }
             else
-                log::warning(logcat, "{} failed to republish encrypted introset!", name());
+                log::warning(logcat, "Failed to republish encrypted introset!");
         }
         else
-            log::warning(logcat, "{} failed to encrypt and sign introset!", name());
+            log::warning(logcat, "Failed to encrypt and sign introset!");
     }
 
-    bool LocalEndpoint::validate_token(std::optional<std::string> maybe_auth)
+    bool LocalEndpoint::validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth)
     {
-        return _static_auth_tokens.contains(*maybe_auth);
+        bool ret{true};
+
+        if (use_tokens)
+            ret &= _static_auth_tokens.contains(*maybe_auth);
+
+        if (use_whitelist)
+            ret &= _auth_whitelist.contains(remote);
+
+        return ret;
     }
 
-    std::optional<uint16_t> LocalEndpoint::prefigure_session(
-        RouterID initiator, service::SessionTag tag, HopID pivot_txid)
+    bool LocalEndpoint::prefigure_session(
+        NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path)
     {
-        if (auto path_ptr = _router.path_context()->get_path(pivot_txid))
-        {
-            auto netaddr = NetworkAddress::from_pubkey(initiator, path_ptr->is_client_path());
+        assert(path->is_client_path());
 
-            auto inbound =
-                std::make_shared<session::InboundSession>(netaddr, std::move(path_ptr), *this, std::move(tag));
+        auto inbound = std::make_shared<session::InboundSession>(initiator, std::move(path), *this, std::move(tag));
 
-            auto [session, _] = _sessions.insert_or_assign(std::move(netaddr), std::move(inbound));
+        auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
 
-            log::info(
-                logcat, "LocalEndpoint successfully created and mapped InboundSession object! Starting TCP tunnel...");
+        log::info(
+            logcat, "LocalEndpoint successfully created and mapped InboundSession object! Starting TCP tunnel...");
 
-            return session->startup_tcp(_router);
-        }
+        session->tcp_backend_connect();
 
-        log::warning(
-            logcat,
-            "Could not find Path (pivot txid:{}) for inbound session (tag:{}) from remote (rid:{})",
-            pivot_txid,
-            tag,
-            initiator);
-
-        return std::nullopt;
+        return true;
     }
 
     bool LocalEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
@@ -202,7 +202,7 @@ namespace llarp::handlers
 
             for (const auto& [rid, path] : _paths)
             {
-                log::info(logcat, "{} publishing introset to pivot {}", name(), path->pivot_rid());
+                log::debug(logcat, "Publishing introset to pivot {}", path->pivot_rid());
 
                 ret += path->publish_intro(introset, true);
             }
