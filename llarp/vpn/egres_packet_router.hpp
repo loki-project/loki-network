@@ -2,7 +2,6 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/address/ip_packet.hpp>
-#include <llarp/endpoint_base.hpp>
 #include <llarp/net/net_int.hpp>
 
 #include <functional>

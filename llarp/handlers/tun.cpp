@@ -888,6 +888,17 @@ namespace llarp::handlers
         // return llarp::service::Endpoint::Stop();
     }
 
+    void TunEndpoint::handle_outbound_packet(bstring data)
+    {
+        (void)data;
+    }
+
+    bool TunEndpoint::handle_inbound_packet(IPPacket pkt)
+    {
+        (void)pkt;
+        return true;
+    }
+
     // std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
     //     huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
     // {
@@ -1075,111 +1086,111 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::handle_inbound_packet(
-        const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t seqno)
-    {
-        log::trace(logcat, "Inbound packet on session:{}", tag);
+    // bool TunEndpoint::handle_inbound_packet(
+    //     const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t seqno)
+    // {
+    //     log::trace(logcat, "Inbound packet on session:{}", tag);
 
-        // if (t == service::ProtocolType::QUIC)
-        // {
-        //   auto* quic = GetQUICTunnel();
-        //   if (!quic)
-        //   {
-        //     Log Warn("incoming quic packet but this endpoint is not quic capable; dropping");
-        //     return false;
-        //   }
-        //   if (buf.sz < 4)
-        //   {
-        //     Log Warn("invalid incoming quic packet, dropping");
-        //     return false;
-        //   }
-        //   log::info(logcat, "tag active T={}", tag);
+    //     // if (t == service::ProtocolType::QUIC)
+    //     // {
+    //     //   auto* quic = GetQUICTunnel();
+    //     //   if (!quic)
+    //     //   {
+    //     //     Log Warn("incoming quic packet but this endpoint is not quic capable; dropping");
+    //     //     return false;
+    //     //   }
+    //     //   if (buf.sz < 4)
+    //     //   {
+    //     //     Log Warn("invalid incoming quic packet, dropping");
+    //     //     return false;
+    //     //   }
+    //     //   log::info(logcat, "tag active T={}", tag);
 
-        //   // TODO:
-        //   // quic->receive_packet(tag, buf);
-        //   return true;
-        // }
+    //     //   // TODO:
+    //     //   // quic->receive_packet(tag, buf);
+    //     //   return true;
+    //     // }
 
-        if (t != service::ProtocolType::TrafficV4 && t != service::ProtocolType::TrafficV6
-            && t != service::ProtocolType::Exit)
-            return false;
-        // std::variant<service::Address, RouterID> addr;
-        // if (auto maybe = GetEndpointWithConvoTag(tag))
-        // {
-        //   addr = *maybe;
-        // }
-        // else
-        //   return false;
-        huint128_t src, dst;
+    //     if (t != service::ProtocolType::TrafficV4 && t != service::ProtocolType::TrafficV6
+    //         && t != service::ProtocolType::Exit)
+    //         return false;
+    //     // std::variant<service::Address, RouterID> addr;
+    //     // if (auto maybe = GetEndpointWithConvoTag(tag))
+    //     // {
+    //     //   addr = *maybe;
+    //     // }
+    //     // else
+    //     //   return false;
+    //     huint128_t src, dst;
 
-        IPPacket pkt;
-        if (not pkt.load(buf.base))
-            return false;
+    //     IPPacket pkt;
+    //     if (not pkt.load(buf.base))
+    //         return false;
 
-        // if (_state->is_exit_enabled)
-        // {
-        //   // exit side from exit
+    //     // if (_state->is_exit_enabled)
+    //     // {
+    //     //   // exit side from exit
 
-        //   // check packet against exit policy and if as needed
-        //   if (not ShouldAllowTraffic(pkt))
-        //     return false;
+    //     //   // check packet against exit policy and if as needed
+    //     //   if (not ShouldAllowTraffic(pkt))
+    //     //     return false;
 
-        //   src = ObtainIPForAddr(addr);
-        //   if (t == service::ProtocolType::Exit)
-        //   {
-        //     if (pkt.IsV4())
-        //       dst = pkt.dst4to6();
-        //     else if (pkt.IsV6())
-        //     {
-        //       dst = pkt.dstv6();
-        //       src = net::ExpandV4Lan(net::TruncateV6(src));
-        //     }
-        //   }
-        //   else
-        //   {
-        //     // non exit traffic on exit
-        //     dst = m_OurIP;
-        //   }
-        // }
-        // else if (t == service::ProtocolType::Exit)
-        // {
-        //   // client side exit traffic from exit
-        //   if (pkt.IsV4())
-        //   {
-        //     dst = m_OurIP;
-        //     src = pkt.src4to6();
-        //   }
-        //   else if (pkt.IsV6())
-        //   {
-        //     dst = m_OurIPv6;
-        //     src = pkt.srcv6();
-        //   }
-        //   // find what exit we think this should be for
-        //   service::Address fromAddr{};
-        //   if (const auto* ptr = std::get_if<service::Address>(&addr))
-        //   {
-        //     fromAddr = *ptr;
-        //   }
-        //   else  // don't allow snode
-        //     return false;
-        //   // make sure the mapping matches
-        //   if (auto itr = m_ExitIPToExitAddress.find(src); itr != m_ExitIPToExitAddress.end())
-        //   {
-        //     if (itr->second != fromAddr)
-        //       return false;
-        //   }
-        //   else
-        //     return false;
-        // }
-        // else
-        // {
-        //   // snapp traffic
-        //   src = ObtainIPForAddr(addr);
-        //   dst = m_OurIP;
-        // }
-        handle_write_ip_packet(buf, src, dst, seqno);
-        return true;
-    }
+    //     //   src = ObtainIPForAddr(addr);
+    //     //   if (t == service::ProtocolType::Exit)
+    //     //   {
+    //     //     if (pkt.IsV4())
+    //     //       dst = pkt.dst4to6();
+    //     //     else if (pkt.IsV6())
+    //     //     {
+    //     //       dst = pkt.dstv6();
+    //     //       src = net::ExpandV4Lan(net::TruncateV6(src));
+    //     //     }
+    //     //   }
+    //     //   else
+    //     //   {
+    //     //     // non exit traffic on exit
+    //     //     dst = m_OurIP;
+    //     //   }
+    //     // }
+    //     // else if (t == service::ProtocolType::Exit)
+    //     // {
+    //     //   // client side exit traffic from exit
+    //     //   if (pkt.IsV4())
+    //     //   {
+    //     //     dst = m_OurIP;
+    //     //     src = pkt.src4to6();
+    //     //   }
+    //     //   else if (pkt.IsV6())
+    //     //   {
+    //     //     dst = m_OurIPv6;
+    //     //     src = pkt.srcv6();
+    //     //   }
+    //     //   // find what exit we think this should be for
+    //     //   service::Address fromAddr{};
+    //     //   if (const auto* ptr = std::get_if<service::Address>(&addr))
+    //     //   {
+    //     //     fromAddr = *ptr;
+    //     //   }
+    //     //   else  // don't allow snode
+    //     //     return false;
+    //     //   // make sure the mapping matches
+    //     //   if (auto itr = m_ExitIPToExitAddress.find(src); itr != m_ExitIPToExitAddress.end())
+    //     //   {
+    //     //     if (itr->second != fromAddr)
+    //     //       return false;
+    //     //   }
+    //     //   else
+    //     //     return false;
+    //     // }
+    //     // else
+    //     // {
+    //     //   // snapp traffic
+    //     //   src = ObtainIPForAddr(addr);
+    //     //   dst = m_OurIP;
+    //     // }
+    //     handle_write_ip_packet(buf, src, dst, seqno);
+    //     return true;
+    // }
 
     bool TunEndpoint::handle_write_ip_packet(const llarp_buffer_t& b, huint128_t src, huint128_t dst, uint64_t seqno)
     {

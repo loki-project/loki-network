@@ -23,15 +23,8 @@ namespace llarp
 
     namespace handlers
     {
-        struct LocalEndpoint;
-        struct RemoteHandler;
+        class SessionEndpoint;
     }  // namespace handlers
-
-    /** TODO:
-        - add tunneled QUIC objects:
-            - manually routed QUIC endpoint
-            - QUIC connection
-    */
 
     /** Snode vs Client Session
         - client to client: shared secret (symmetric key) is negotiated
@@ -50,6 +43,13 @@ namespace llarp
         {
           protected:
             Router& _r;
+            handlers::SessionEndpoint& _parent;
+
+            service::SessionTag _tag;
+            NetworkAddress _remote;
+
+            bool _use_tun;
+            bool _is_outbound;
 
             std::shared_ptr<path::Path> _current_path;
             HopID _current_hop_id;
@@ -69,7 +69,26 @@ namespace llarp
             }
 
           public:
-            BaseSession(Router& r, std::shared_ptr<path::Path> _p);
+            BaseSession(
+                Router& r,
+                std::shared_ptr<path::Path> _p,
+                handlers::SessionEndpoint& parent,
+                NetworkAddress remote,
+                service::SessionTag _t,
+                bool use_tun,
+                bool is_outbound);
+
+            constexpr bool is_outbound() const
+            {
+                return _is_outbound;
+            }
+
+            bool send_path_control_message(
+                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
+
+            bool send_path_data_message(std::string data);
+
+            void recv_path_data_message(bstring data);
 
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
 
@@ -85,7 +104,7 @@ namespace llarp
           public:
             OutboundSession(
                 NetworkAddress _remote,
-                handlers::RemoteHandler& parent,
+                handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
                 service::SessionTag _t,
                 bool is_exit);
@@ -93,23 +112,12 @@ namespace llarp
             ~OutboundSession() override;
 
           private:
-            NetworkAddress _remote;
             SecretKey _session_key;  // DISCUSS: is this useful?
-
-            std::string prefix() const
-            {
-                return _prefix;
-            }
-
-            service::SessionTag _tag;
 
             std::chrono::milliseconds _last_use;
 
-            const handlers::RemoteHandler& _parent;
-
             const bool _is_exit_service{false};
             const bool _is_snode_service{false};
-            const std::string _prefix{};
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override
@@ -167,11 +175,6 @@ namespace llarp
 
             bool is_expired(std::chrono::milliseconds now) const;
 
-            bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
-
-            bool send_path_data_message(std::string body);
-
             service::SessionTag tag()
             {
                 return _tag;
@@ -188,28 +191,20 @@ namespace llarp
             InboundSession(
                 NetworkAddress _remote,
                 std::shared_ptr<path::Path> _path,
-                handlers::LocalEndpoint& parent,
-                service::SessionTag _t);
+                handlers::SessionEndpoint& parent,
+                service::SessionTag _t,
+                bool use_tun);
 
             ~InboundSession() = default;
-
-            std::string name() const;
 
             void set_new_tag(const service::SessionTag& tag);
 
           private:
-            handlers::LocalEndpoint& _parent;
-
-            service::SessionTag _tag;
-            NetworkAddress _remote;
-
             const bool _is_exit_node{false};  // TODO: remember why I added this here...
-            const std::string _prefix{};
         };
 
         template <typename session_t>
         concept CONCEPT_COMPAT SessionType = std::is_base_of_v<BaseSession, session_t>;
-        // std::is_same_v<OutboundSession, session_t> || std::is_same_v<InboundSession, session_t>;
 
     }  // namespace session
 }  // namespace llarp

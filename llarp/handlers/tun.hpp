@@ -81,12 +81,17 @@ namespace llarp::handlers
         //   return _dns;
         // };
 
-        bool handle_inbound_packet(
-            const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno);
+        // INPROGRESS: new API
+        // Handles a packet going out of the network through the TUN device
+        void handle_outbound_packet(bstring data);
+        // Handle a packet coming into the network through the TUN device
+        bool handle_inbound_packet(IPPacket pkt);
 
+        // TONUKE: this old bullshit
+        // bool handle_inbound_packet(
+        //     const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno);
         /// handle inbound traffic
         bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
-
         /// we got a packet from the user
         void handle_user_packet(llarp::IPPacket pkt);
 

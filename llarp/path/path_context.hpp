@@ -29,21 +29,17 @@ namespace llarp::path
 
         std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop);
 
-        std::shared_ptr<Path> get_path_by_pivot(const HopID& path_id);
+        std::shared_ptr<Path> get_path(const HopID& hop_id);
 
-        std::shared_ptr<Path> get_path_by_pivot(const RouterID& upstream);
+        // std::shared_ptr<Path> get_path_by_pivot(const HopID& path_id);
 
-        std::shared_ptr<Path> get_path_by_upstream(const HopID& pivot);
-
-        std::shared_ptr<Path> get_path_by_upstream(const RouterID& pivot);
+        // std::shared_ptr<Path> get_path_by_upstream(const HopID& pivot);
 
         std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
         std::shared_ptr<TransitHop> get_transit_hop(const HopID&);
 
-        std::shared_ptr<PathHandler> get_path_handler_by_upstream(const HopID& id);
-
-        std::shared_ptr<PathHandler> get_path_handler_by_pivot(const HopID& id);
+        std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
         /// get a set of all paths that we own who's endpoint is r
         std::vector<std::shared_ptr<Path>> get_local_paths_to_remote(const RouterID& r);
@@ -62,14 +58,12 @@ namespace llarp::path
 
         std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
 
-        // lookup upstream RouterID by upstream {rx,tx}ID
-        std::unordered_map<HopID, RouterID> _path_upstream_lookup;
+        /** TODO:
+            - paths are not 1:1 with upstream RID
+            - paths are 1:1 with txid's
+        */
 
-        // maps paths to the RouterID of the upstream (first hop)
-        std::unordered_map<RouterID, std::shared_ptr<Path>> _path_upstream_map;
-
-        // map paths to the {rx,tx}id of the pivot
-        std::unordered_map<HopID, std::shared_ptr<Path>> _path_pivot_map;
+        std::unordered_map<HopID, std::shared_ptr<Path>> _path_map;
 
         bool _allow_transit{false};
     };

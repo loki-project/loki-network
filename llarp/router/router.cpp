@@ -566,11 +566,8 @@ namespace llarp
 
         // TODO: decide between factory functions and constructors
 
-        _local_endpoint = std::make_shared<handlers::LocalEndpoint>(*this);
-        _local_endpoint->configure();
-
-        _remote_handler = std::make_shared<handlers::RemoteHandler>(*this);
-        _remote_handler->configure();
+        _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
+        _session_endpoint->configure();
 
         _link_manager = LinkManager::make(*this);
 
@@ -649,21 +646,6 @@ namespace llarp
     bool Router::can_test_routers() const
     {
         return appears_funded() and not _testing_disabled;
-    }
-
-    bool Router::SessionToRouterAllowed(const RouterID& router) const
-    {
-        return node_db()->is_connection_allowed(router);
-    }
-
-    bool Router::PathToRouterAllowed(const RouterID& router) const
-    {
-        if (appears_decommed())
-        {
-            // we are decom'd don't allow any paths outbound at all
-            return false;
-        }
-        return node_db()->is_path_allowed(router);
     }
 
     size_t Router::num_router_connections() const
@@ -1011,7 +993,7 @@ namespace llarp
         _route_poker->start();
 
         // Resolve needed ONS values now that we have the necessary things prefigured
-        _remote_handler->resolve_ons_mappings();
+        _session_endpoint->resolve_ons_mappings();
 
         _is_running = true;
 
@@ -1038,7 +1020,7 @@ namespace llarp
                 }
                 for (const auto& [router, fails] : tests)
                 {
-                    if (not SessionToRouterAllowed(router))
+                    if (not _node_db->is_connection_allowed(router))
                     {
                         log::debug(
                             logcat,

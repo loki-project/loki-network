@@ -260,9 +260,7 @@ namespace llarp
             make_static_secret(_router.identity()),
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
-            [this](oxen::quic::dgram_interface& di, bstring dgram) {
-                recv_data_message(di.get_conn_interface(), std::move(dgram));
-            },
+            [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND);
 
@@ -482,7 +480,7 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing message to {}", remote);
+        log::critical(logcat, "Queueing control message to {}", remote);
 
         _router.loop()->call(
             [this, remote, endpoint = std::move(endpoint), body = std::move(body), f = std::move(func)]() {
@@ -497,11 +495,13 @@ namespace llarp
         if (is_stopping)
             return false;
 
-        if (auto conn = ep.get_service_conn(remote); conn)
+        if (auto conn = ep.get_conn(remote); conn)
         {
             conn->conn->send_datagram(std::move(body));
             return true;
         }
+
+        log::critical(logcat, "Queueing data message to {}", remote);
 
         _router.loop()->call(
             [this, body = std::move(body), remote]() { connect_and_send(remote, std::nullopt, std::move(body)); });
@@ -660,16 +660,67 @@ namespace llarp
             log::warning(logcat, "NodeDB query for {} random RCs for connection returned none", num_conns);
     }
 
-    void LinkManager::recv_data_message(std::shared_ptr<oxen::quic::connection_interface> ci, bstring data)
+    void LinkManager::handle_path_data_message(bstring message)
     {
-        RouterID upstream{ci->remote_key()};
+        ustring nonce, hop_id_str, payload;
 
-        if (auto path = _router.path_context()->get_path_by_upstream(upstream))
+        try
         {
-            path->recv_path_data_message(std::move(data));
+            oxenc::bt_dict_consumer btdc{message};
+            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return;
+        }
+
+        auto symmnonce = SymmNonce{nonce.data()};
+        HopID hopid{hop_id_str.data()};
+        auto hop = _router.path_context()->get_transit_hop(hopid);
+
+        if (not hop)
+            return;
+
+        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
+
+        // if terminal hop, pass to the correct path expecting to receive this message
+        if (hop->terminal_hop)
+        {
+            NetworkAddress sender;
+            bstring data;
+
+            try
+            {
+                oxenc::bt_dict_consumer btdc{payload};
+                std::tie(sender, data) = PathData::deserialize(btdc);
+
+                if (auto session = _router.session_endpoint()->get_session(sender))
+                {
+                    session->recv_path_data_message(std::move(data));
+                }
+                else
+                {
+                    log::warning(logcat, "Could not find session (remote:{}) to relay path data message!", sender);
+                }
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception: {}", e.what());
+            }
         }
         else
-            log::warning(logcat, "Unable to find path to receive path data message (upstream:{})", upstream);
+        {
+            // if not terminal hop, relay datagram onwards
+            auto hop_is_rx = hop->rxid() == hopid;
+
+            const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
+            const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
+
+            std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
+
+            send_data_message(next_router, std::move(new_payload));
+        }
     }
 
     void LinkManager::gossip_rc(const RouterID& last_sender, const RemoteRC& rc)
@@ -1544,7 +1595,7 @@ namespace llarp
             throw;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
+        if (auto path_ptr = _router.path_context()->get_path(txid))
         {
             if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
                 path_ptr->enable_exit_traffic();
@@ -1632,7 +1683,7 @@ namespace llarp
             return;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
+        if (auto path_ptr = _router.path_context()->get_path(txid))
         {
             if (crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
             {
@@ -1731,7 +1782,7 @@ namespace llarp
             return;
         }
 
-        if (auto path_ptr = _router.path_context()->get_path_by_pivot(txid))
+        if (auto path_ptr = _router.path_context()->get_path(txid))
         {
             //
         }
@@ -1822,12 +1873,12 @@ namespace llarp
     void LinkManager::handle_inner_request(
         oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
     {
-        std::string body, method;
+        std::string endpoint, body;
 
         try
         {
             oxenc::bt_dict_consumer btdc{payload};
-            std::tie(body, method) = PathControl::deserialize(btdc);
+            std::tie(endpoint, body) = PathControl::deserialize(btdc);
         }
         catch (const std::exception& e)
         {
@@ -1836,11 +1887,11 @@ namespace llarp
         }
 
         // If a handler exists for "method", call it; else drop request on the floor.
-        auto itr = path_requests.find(method);
+        auto itr = path_requests.find(endpoint);
 
         if (itr == path_requests.end())
         {
-            log::info(logcat, "Received path control request \"{}\", which has no handler.", method);
+            log::info(logcat, "Received path control request \"{}\", which has no handler.", endpoint);
             return;
         }
 
@@ -1867,22 +1918,23 @@ namespace llarp
         NetworkAddress initiator;
         service::SessionTag tag;
         HopID pivot_txid;
+        bool use_tun;
         std::optional<std::string> maybe_auth = std::nullopt;
 
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            std::tie(initiator, pivot_txid, tag, maybe_auth) =
+            std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
                 InitiateSession::decrypt_deserialize(btdc, _router.local_rid());
 
-            if (not _router.local_endpoint()->validate(initiator, maybe_auth))
+            if (not _router.session_endpoint()->validate(initiator, maybe_auth))
             {
                 log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
                 return m.respond(InitiateSession::AUTH_DENIED, true);
             }
 
-            auto path_ptr = _router.path_context()->get_path_by_pivot(pivot_txid);
+            auto path_ptr = _router.path_context()->get_path(pivot_txid);
 
             if (not path_ptr)
             {
@@ -1890,7 +1942,8 @@ namespace llarp
                 return m.respond(messages::ERROR_RESPONSE, true);
             }
 
-            if (_router.local_endpoint()->prefigure_session(std::move(initiator), std::move(tag), std::move(path_ptr)))
+            if (_router.session_endpoint()->prefigure_session(
+                    std::move(initiator), std::move(tag), std::move(path_ptr), use_tun))
             {
                 return m.respond(messages::OK_RESPONSE);
             }

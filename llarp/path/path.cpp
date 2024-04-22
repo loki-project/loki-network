@@ -50,8 +50,20 @@ namespace llarp::path
     void Path::link_session(recv_session_dgram_cb cb)
     {
         _recv_dgram = std::move(cb);
-        set_primary();
         _is_session_path = true;
+    }
+
+    bool Path::unlink_session()
+    {
+        if (_is_linked)
+        {
+            _is_linked = false;
+            _recv_dgram = nullptr;
+            return true;
+        }
+
+        log::warning(logcat, "Path is not currently linked to an ongoing session!");
+        return false;
     }
 
     void Path::recv_path_data_message(bstring data)
@@ -154,18 +166,18 @@ namespace llarp::path
         return make_outer_payload(payload, nonce);
     }
 
-    bool Path::send_path_data_message(std::string body)
+    bool Path::send_path_data_message(std::string data)
     {
-        auto payload = PathData::serialize(std::move(body));
+        auto payload = PathData::serialize(std::move(data), _router.local_rid());
         auto outer_payload = make_outer_payload(to_usv(payload));
 
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
-    bool Path::send_path_control_message(std::string method, std::string body, std::function<void(std::string)> func)
+    bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
     {
-        auto payload = PathControl::serialize(std::move(method), std::move(body));
-        auto outer_payload = make_outer_payload(to_usv(payload));
+        auto inner_payload = PathControl::serialize(std::move(endpoint), std::move(body));
+        auto outer_payload = make_outer_payload(to_usv(inner_payload));
 
         return _router.send_control_message(
             upstream_rid(),
@@ -215,30 +227,6 @@ namespace llarp::path
                 //       callback.
                 response_cb(std::string{reinterpret_cast<const char*>(payload.data()), payload.size()});
             });
-    }
-
-    bool Path::set_primary()
-    {
-        if (not _is_primary)
-        {
-            _is_primary = true;
-            return true;
-        }
-
-        log::warning(logcat, "Path is already primary for an ongoing session!");
-        return false;
-    }
-
-    bool Path::unset_primary()
-    {
-        if (_is_primary)
-        {
-            _is_primary = false;
-            return true;
-        }
-
-        log::warning(logcat, "Path is not a primary for an ongoing session!");
-        return false;
     }
 
     bool Path::is_ready() const

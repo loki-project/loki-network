@@ -8,8 +8,7 @@
 #include <llarp/constants/link_layer.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/ev/loop.hpp>
-#include <llarp/handlers/endpoint.hpp>
-#include <llarp/handlers/remote.hpp>
+#include <llarp/handlers/session.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/path/path_context.hpp>
 #include <llarp/profiling.hpp>
@@ -118,9 +117,7 @@ namespace llarp
         oxen::quic::Address _listen_address;
 
         // TESTNET: underway
-        std::shared_ptr<handlers::RemoteHandler> _remote_handler;
-
-        std::shared_ptr<handlers::LocalEndpoint> _local_endpoint;
+        std::shared_ptr<handlers::SessionEndpoint> _session_endpoint;
 
         std::shared_ptr<LinkManager> _link_manager;
 
@@ -232,14 +229,14 @@ namespace llarp
 
         void for_each_connection(std::function<void(link::Connection&)> func);
 
-        const std::shared_ptr<handlers::RemoteHandler>& remote_handler() const
+        const std::unique_ptr<handlers::TunEndpoint>& tun_endpoint() const
         {
-            return _remote_handler;
+            return _tun;
         }
 
-        const std::shared_ptr<handlers::LocalEndpoint>& local_endpoint() const
+        const std::shared_ptr<handlers::SessionEndpoint>& session_endpoint() const
         {
-            return _local_endpoint;
+            return _session_endpoint;
         }
 
         const std::shared_ptr<LinkManager>& link_manager() const
@@ -433,10 +430,6 @@ namespace llarp
         bool ensure_identity();
 
         bool ensure_encryption_key();
-
-        bool SessionToRouterAllowed(const RouterID& router) const;
-
-        bool PathToRouterAllowed(const RouterID& router) const;
 
         const RouterID& pubkey() const
         {

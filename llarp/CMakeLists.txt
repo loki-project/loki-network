@@ -24,8 +24,7 @@ lokinet_add_library(lokinet-core-utils
   auth/rpc_auth.cpp
   auth/session_auth.cpp
   
-  handlers/endpoint.cpp
-  handlers/remote.cpp
+  handlers/session.cpp
   handlers/tun.cpp
   
   service/identity.cpp

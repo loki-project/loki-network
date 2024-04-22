@@ -12,6 +12,7 @@
     - The commented functions are utilities for managing sessions to remote hidden services. They
    need to be redefined with the correct parameters and called from service::Handler, as
    service::Endpoint is for local hidden service management
+   - ^^ Is this still true...?
 */
 
 using namespace std::literals;
@@ -56,33 +57,33 @@ namespace llarp
                                                : "(unknown-protocol-type)"sv;
         }
 
-        namespace util
-        {
-            static void ExpireSNodeSessions(/* std::chrono::milliseconds now, SNodeConnectionMap& sessions */);
+        // namespace util
+        // {
+        //     static void ExpireSNodeSessions(/* std::chrono::milliseconds now, SNodeConnectionMap& sessions */);
 
-            static void DeregisterDeadSessions(/* std::chrono::milliseconds now, ConnectionMap& sessions */);
+        //     static void DeregisterDeadSessions(/* std::chrono::milliseconds now, ConnectionMap& sessions */);
 
-            static void TickRemoteSessions(
-          /* std::chrono::milliseconds now,
-          ConnectionMap& remoteSessions,
-          ConnectionMap& deadSessions,
-          std::unordered_map<SessionTag, Session>& sessions */);
+        //     static void TickRemoteSessions(
+        //   /* std::chrono::milliseconds now,
+        //   ConnectionMap& remoteSessions,
+        //   ConnectionMap& deadSessions,
+        //   std::unordered_map<SessionTag, Session>& sessions */);
 
-            static void ExpireConvoSessions(
-                /* std::chrono::milliseconds now, std::unordered_map<SessionTag, Session>& sessions */);
+        //     static void ExpireConvoSessions(
+        //         /* std::chrono::milliseconds now, std::unordered_map<SessionTag, Session>& sessions */);
 
-            static void StopRemoteSessions(/* ConnectionMap& remoteSessions */);
+        //     static void StopRemoteSessions(/* ConnectionMap& remoteSessions */);
 
-            static void StopSnodeSessions(/* SNodeConnectionMap& sessions */);
+        //     static void StopSnodeSessions(/* SNodeConnectionMap& sessions */);
 
-            static bool HasPathToService(
-                /* const Address& addr, const ConnectionMap& remoteSessions */);
+        //     static bool HasPathToService(
+        //         /* const Address& addr, const ConnectionMap& remoteSessions */);
 
-            static bool GetConvoTagsForService(
-          /* const std::unordered_map<SessionTag, Session>& sessions,
-          const Address& addr,
-          std::set<SessionTag>& tags */);
-        }  // namespace util
+        //     static bool GetConvoTagsForService(
+        //   /* const std::unordered_map<SessionTag, Session>& sessions,
+        //   const Address& addr,
+        //   std::set<SessionTag>& tags */);
+        // }  // namespace util
 
         //     template <typename Endpoint_t>
         // static std::

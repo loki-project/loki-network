@@ -2,17 +2,45 @@
 
 #include "common.hpp"
 
+#include <llarp/address/address.hpp>
+
 namespace llarp
 {
     namespace PathData
     {
-        // this might be totally superfluous, but if we want to add more to the data messages,
-        // there is a bespoke place to do exactly that
-        inline static std::string serialize(std::string body)
+        static auto logcat = llarp::log::Cat("path-data");
+
+        /** Fields for transmitting Path Data:
+            - 'b' : request/command body
+            - 's' : RouterID of sender
+            NOTE: more fields may be added later as needed, hence the namespacing
+        */
+        inline static std::string serialize(std::string body, const RouterID& local)
         {
             oxenc::bt_dict_producer btdp;
-            btdp.append("BODY", body);
+            btdp.append("b", body);
+            btdp.append("s", local.to_view());
             return std::move(btdp).str();
+        }
+
+        inline static std::tuple<NetworkAddress, bstring> deserialize(oxenc::bt_dict_consumer& btdc)
+        {
+            RouterID remote;
+            bstring body;
+
+            try
+            {
+                body = btdc.require<bstring>("b");
+                remote.from_string(btdc.require<std::string_view>("s"));
+                auto sender = NetworkAddress::from_pubkey(remote, true);
+
+                return {std::move(sender), std::move(body)};
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing path data:{}", e.what());
+                throw;
+            }
         }
     }  // namespace PathData
 
@@ -20,30 +48,34 @@ namespace llarp
     {
         static auto logcat = llarp::log::Cat("path-control");
 
-        inline static std::string serialize(std::string method, std::string body)
+        /** Fields for transmitting Path Control:
+            - 'e' : request endpoint being invoked
+            - 'r' : request body
+        */
+        inline static std::string serialize(std::string endpoint, std::string body)
         {
             oxenc::bt_dict_producer btdp;
-            btdp.append("BODY", body);
-            btdp.append("METHOD", method);
+            btdp.append("e", endpoint);
+            btdp.append("r", body);
             return std::move(btdp).str();
         }
 
         inline static std::tuple<std::string, std::string> deserialize(oxenc::bt_dict_consumer& btdc)
         {
-            std::string body, method;
+            std::string endpoint, body;
 
             try
             {
-                body = btdc.require<std::string>("BODY");
-                method = btdc.require<std::string>("METHOD");
+                endpoint = btdc.require<std::string>("e");
+                body = btdc.require<std::string>("r");
             }
             catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught deserializing onion data:{}", e.what());
+                log::warning(logcat, "Exception caught deserializing path control:{}", e.what());
                 throw;
             }
 
-            return {std::move(body), std::move(method)};
+            return {std::move(endpoint), std::move(body)};
         }
     }  // namespace PathControl
 

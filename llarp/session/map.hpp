@@ -38,7 +38,7 @@ namespace llarp
             return {_2->second, b1 & b2};
         }
 
-        std::optional<net_addr_t> get_remote_from_tag(const service::SessionTag& tag) const
+        std::optional<net_addr_t> get_remote(const service::SessionTag& tag) const
         {
             std::optional<net_addr_t> ret = std::nullopt;
 
@@ -48,7 +48,7 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session_from_remote(const net_addr_t& remote) const
+        std::shared_ptr<session_t> get_session(const net_addr_t& remote) const
         {
             std::shared_ptr<session_t> ret = nullptr;
 
@@ -58,12 +58,12 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session_from_tag(const service::SessionTag& tag) const
+        std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
         {
             std::shared_ptr<session_t> ret = nullptr;
 
-            if (auto itr = get_remote_from_tag(tag); itr != std::nullopt)
-                ret = get_session_from_remote(itr->second);
+            if (auto itr = get_remote(tag); itr != std::nullopt)
+                ret = get_session(itr->second);
 
             return ret;
         }
@@ -109,12 +109,12 @@ namespace llarp
 
         std::shared_ptr<session_t> operator[](const service::SessionTag& tag)
         {
-            return get_session_from_tag(tag);
+            return get_session(tag);
         }
 
         std::shared_ptr<session_t> operator[](const net_addr_t& local)
         {
-            return get_session_from_remote(local);
+            return get_session(local);
         }
     };
 }  //  namespace llarp

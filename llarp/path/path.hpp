@@ -84,16 +84,12 @@ namespace llarp
 
             void link_session(recv_session_dgram_cb cb);
 
-            void unlink_session();
+            bool unlink_session();
 
-            bool is_primary() const
+            bool is_linked() const
             {
-                return _is_primary;
+                return _is_linked;
             }
-
-            bool set_primary();
-
-            bool unset_primary();
 
             std::chrono::milliseconds ExpireTime() const
             {
@@ -200,7 +196,7 @@ namespace llarp
             bool InformExitResult(std::chrono::milliseconds b);
 
             std::atomic<bool> _established{false};
-            std::atomic<bool> _is_primary{false};
+            std::atomic<bool> _is_linked{false};
 
             Router& _router;
 

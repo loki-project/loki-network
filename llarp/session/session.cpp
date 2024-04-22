@@ -1,6 +1,8 @@
 #include "session.hpp"
 
 #include <llarp/crypto/crypto.hpp>
+#include <llarp/handlers/session.hpp>
+#include <llarp/link/tunnel.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
@@ -12,29 +14,58 @@ namespace llarp::session
 {
     static auto logcat = log::Cat("session");
 
-    BaseSession::BaseSession(Router& r, std::shared_ptr<path::Path> _p) : _r{r}
+    BaseSession::BaseSession(
+        Router& r,
+        std::shared_ptr<path::Path> _p,
+        handlers::SessionEndpoint& parent,
+        NetworkAddress remote,
+        service::SessionTag _t,
+        bool use_tun,
+        bool is_outbound)
+        : _r{r},
+          _parent{parent},
+          _tag{std::move(_t)},
+          _remote{std::move(remote)},
+          _use_tun{use_tun},
+          _is_outbound{is_outbound}
     {
         set_new_current_path(std::move(_p));
+    }
+
+    bool BaseSession::send_path_control_message(
+        std::string method, std::string body, std::function<void(std::string)> func)
+    {
+        return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
+    }
+
+    bool BaseSession::send_path_data_message(std::string data)
+    {
+        return _current_path->send_path_data_message(std::move(data));
+    }
+
+    void BaseSession::recv_path_data_message(bstring body)
+    {
+        _current_path->recv_path_data_message(std::move(body));
     }
 
     void BaseSession::set_new_current_path(std::shared_ptr<path::Path> _new_path)
     {
         if (_current_path)
-        {
-            _current_path->unset_primary();
-            _current_path.reset(_new_path.get());
-        }
-        else
-            _current_path = std::move(_new_path);
+            _current_path->unlink_session();
+
+        _current_path = std::move(_new_path);
 
         _current_hop_id = _current_path->intro.pivot_hop_id;
 
-        _current_path->link_session([this](bstring data) {
-            _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, std::move(data)});
-        });
+        if (_use_tun)
+            _current_path->link_session(
+                [this](bstring data) { _r.tun_endpoint()->handle_outbound_packet(std::move(data)); });
+        else
+            _current_path->link_session([this](bstring data) {
+                _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, std::move(data)});
+            });
 
-        // This is set by calling ::link_session()
-        assert(_current_path->is_primary());
+        assert(_current_path->is_linked());
     }
 
     void BaseSession::_init_ep()
@@ -53,8 +84,6 @@ namespace llarp::session
         // TODO: change the libquic address to the lokinet-primary-ip:port (or just the ip)
         auto _handle = TCPHandle::make_client(_r.loop(), oxen::quic::Address{});
 
-        auto [it, _] = _handles.emplace(_handle->port(), std::move(_handle));
-
         _ep->listen(
             _r.quic_tunnel()->creds(),
             [this](oxen::quic::connection_interface& ci) {
@@ -63,14 +92,16 @@ namespace llarp::session
                 else
                     log::warning(logcat, "Tunneled QUIC endpoint can only have one connection per remote!");
             },
-            [&, this](oxen::quic::Stream& s) {
+            [this, h = _handle](oxen::quic::Stream& s) {
                 // On stream creation, the call to ::connect(...) will:
                 //  - create a bufferevent
                 //  - set the recv_data_cb in the Stream to write to that bufferevent
                 //  - make a TCP connection over the bufferevent to lokinet-primary-ip:port
-                auto tcp_conn = it->second->connect(s.shared_from_this());
+                auto tcp_conn = h->connect(s.shared_from_this());
                 _tcp_conns.insert(std::move(tcp_conn));
             });
+
+        _handles.emplace(_handle->port(), std::move(_handle));
     }
 
     void BaseSession::tcp_backend_listen(uint16_t port)
@@ -107,22 +138,15 @@ namespace llarp::session
 
     OutboundSession::OutboundSession(
         NetworkAddress remote,
-        handlers::RemoteHandler& parent,
+        handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
         service::SessionTag _t,
         bool is_exit)
-        : PathHandler{parent._router, NUM_SESSION_PATHS},
-          BaseSession{_router, std::move(path)},
-          _remote{std::move(remote)},
-          _tag{std::move(_t)},
+        : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
+          BaseSession{_router, std::move(path), parent, std::move(remote), std::move(_t), _router.using_tun_if(), true},
           _last_use{_router.now()},
-          _parent{parent},
           _is_exit_service{is_exit},
-          _is_snode_service{not _remote.is_client()},
-          _prefix{
-              _is_exit_service        ? PREFIX::EXIT
-                  : _is_snode_service ? PREFIX::SNODE
-                                      : PREFIX::LOKI}
+          _is_snode_service{not _remote.is_client()}
     {
         // These can both be false but CANNOT both be true
         if (_is_exit_service and _is_snode_service)
@@ -137,17 +161,6 @@ namespace llarp::session
     }
 
     OutboundSession::~OutboundSession() = default;
-
-    bool OutboundSession::send_path_control_message(
-        std::string method, std::string body, std::function<void(std::string)> func)
-    {
-        return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
-    }
-
-    bool OutboundSession::send_path_data_message(std::string body)
-    {
-        return _current_path->send_path_data_message(std::move(body));
-    }
 
     void OutboundSession::path_died(std::shared_ptr<path::Path> p)
     {
@@ -234,7 +247,11 @@ namespace llarp::session
     {
         size_t count{0};
         log::debug(
-            logcat, "OutboundSession building {} paths (needed: {}) to remote:{}", n, NUM_SESSION_PATHS, _remote);
+            logcat,
+            "OutboundSession building {} paths (needed: {}) to remote:{}",
+            n,
+            path::DEFAULT_PATHS_HELD,
+            _remote);
 
         for (size_t i = 0; i < n; ++i)
         {
@@ -280,11 +297,12 @@ namespace llarp::session
     }
 
     InboundSession::InboundSession(
-        NetworkAddress _r, std::shared_ptr<path::Path> _path, handlers::LocalEndpoint& p, service::SessionTag _t)
-        : BaseSession{p._router, std::move(_path)},
-          _parent{p},
-          _tag{std::move(_t)},
-          _remote{std::move(_r)},
+        NetworkAddress remote,
+        std::shared_ptr<path::Path> _path,
+        handlers::SessionEndpoint& parent,
+        service::SessionTag _t,
+        bool use_tun)
+        : BaseSession{parent._router, std::move(_path), parent, std::move(remote), std::move(_t), use_tun, false},
           _is_exit_node{_parent.is_exit_node()}
     {
         if (not _current_path->is_client_path() and _remote.is_client())

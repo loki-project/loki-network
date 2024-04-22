@@ -1,4 +1,4 @@
-#include "remote.hpp"
+#include "session.hpp"
 
 #include <llarp/link/contacts.hpp>
 #include <llarp/messages/path.hpp>
@@ -7,17 +7,75 @@
 
 namespace llarp::handlers
 {
-    static auto logcat = log::Cat("RemoteHandler");
+    static auto logcat = log::Cat("SessionHandler");
 
-    RemoteHandler::RemoteHandler(Router& r) : path::PathHandler{r, NUM_ONS_LOOKUP_PATHS, path::DEFAULT_LEN}
+    SessionEndpoint::SessionEndpoint(Router& r)
+        : path::PathHandler{r, path::DEFAULT_PATHS_HELD, path::DEFAULT_LEN},
+          _is_exit_node{_router.is_exit_node()},
+          _is_snode_service{_router.is_service_node()}
     {}
 
-    RemoteHandler::~RemoteHandler() = default;
+    const std::shared_ptr<EventLoop>& SessionEndpoint::loop()
+    {
+        return _router.loop();
+    }
 
-    void RemoteHandler::build_more(size_t n)
+    void SessionEndpoint::configure()
+    {
+        auto net_config = _router.config()->network;
+
+        if (net_config.is_reachable)
+            should_publish_introset = true;
+
+        _is_exit_node = _router.is_exit_node();
+        _is_snode_service = _router.is_service_node();
+
+        if (_is_exit_node)
+        {
+            assert(not _is_snode_service);
+
+            if (not net_config._routed_ranges.empty())
+            {
+                _routed_ranges.merge(net_config._routed_ranges);
+                _local_introset._routed_ranges = _routed_ranges;
+            }
+
+            _exit_policy = net_config.traffic_policy;
+            _local_introset.exit_policy = _exit_policy;
+        }
+
+        if (not net_config.srv_records.empty())
+            _local_introset.SRVs = std::move(net_config.srv_records);
+
+        if (use_tokens = not net_config.auth_static_tokens.empty(); use_tokens)
+            _static_auth_tokens.merge(net_config.auth_static_tokens);
+
+        if (use_whitelist = not net_config.auth_whitelist.empty(); use_whitelist)
+            _auth_whitelist.merge(net_config.auth_whitelist);
+
+        _if_name = *net_config._if_name;
+        _local_range = *net_config._local_ip_range;
+        _local_addr = *net_config._local_addr;
+        _local_ip = *net_config._local_ip;
+
+        _is_v4 = _local_range.is_ipv4();
+
+        for (auto& [addr, range] : net_config._exit_ranges)
+        {
+            map_remote_to_local_range(addr, range);
+        }
+
+        if (not net_config.exit_auths.empty())
+        {
+            _auth_tokens.merge(net_config.exit_auths);
+        }
+    }
+
+    void SessionEndpoint::build_more(size_t n)
     {
         size_t count{0};
-        log::debug(logcat, "RemoteHandler building {} paths to random remotes (needed: {})", n, NUM_ONS_LOOKUP_PATHS);
+        log::debug(
+            logcat, "SessionEndpoint building {} paths to random remotes (needed: {})", n, path::DEFAULT_PATHS_HELD);
 
         for (size_t i = 0; i < n; ++i)
         {
@@ -25,18 +83,32 @@ namespace llarp::handlers
         }
 
         if (count == n)
-            log::debug(logcat, "RemoteHandler successfully initiated {} path-builds", n);
+            log::debug(logcat, "SessionEndpoint successfully initiated {} path-builds", n);
         else
-            log::warning(logcat, "RemoteHandler only initiated {} path-builds (needed: {})", count, n);
+            log::warning(logcat, "SessionEndpoint only initiated {} path-builds (needed: {})", count, n);
     }
 
-    void RemoteHandler::resolve_ons_mappings()
+    void SessionEndpoint::srv_records_changed()
+    {
+        // TODO: Investigate the usage or the term exit RE: service nodes acting as exits
+        // ^^ lol
+        _local_introset.SRVs.clear();
+
+        for (const auto& srv : srv_records())
+        {
+            _local_introset.SRVs.emplace_back(srv);
+        }
+
+        regen_and_publish_introset();
+    }
+
+    void SessionEndpoint::resolve_ons_mappings()
     {
         auto& ons_ranges = _router.config()->network._ons_ranges;
 
         if (auto n_ons_ranges = ons_ranges.size(); n_ons_ranges > 0)
         {
-            log::debug(logcat, "RemoteHandler resolving {} ONS addresses mapped to IP ranges", n_ons_ranges);
+            log::debug(logcat, "SessionEndpoint resolving {} ONS addresses mapped to IP ranges", n_ons_ranges);
 
             for (auto itr = ons_ranges.begin(); itr != ons_ranges.end();)
             {
@@ -63,7 +135,7 @@ namespace llarp::handlers
 
         if (auto n_ons_auths = ons_auths.size(); n_ons_auths > 0)
         {
-            log::debug(logcat, "RemoteHandler resolving {} ONS addresses mapped to auth tokens", n_ons_auths);
+            log::debug(logcat, "SessionEndpoint resolving {} ONS addresses mapped to auth tokens", n_ons_auths);
 
             for (auto itr = ons_auths.begin(); itr != ons_auths.end();)
             {
@@ -86,7 +158,7 @@ namespace llarp::handlers
         }
     }
 
-    void RemoteHandler::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
+    void SessionEndpoint::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
     {
         if (not service::is_valid_ons(ons))
         {
@@ -133,7 +205,7 @@ namespace llarp::handlers
         }
     }
 
-    void RemoteHandler::lookup_intro(
+    void SessionEndpoint::lookup_intro(
         RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSet>)> func)
     {
         if (auto maybe_intro = _router.contacts().get_decrypted_introset(remote))
@@ -185,60 +257,122 @@ namespace llarp::handlers
         }
     }
 
-    void RemoteHandler::lookup_remote_srv(
-        std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler)
+    /** Introset publishing:
+        - When a local service or exit node publishes an introset, it is also sent along the path currently used
+            for that session
+    */
+    // TODO: this
+    void SessionEndpoint::regen_and_publish_introset()
     {
-        (void)name;
-        (void)service;
-        (void)handler;
-    }
+        const auto now = llarp::time_now_ms();
+        _last_introset_regen_attempt = now;
 
-    const std::shared_ptr<EventLoop>& RemoteHandler::loop()
-    {
-        return _router.loop();
-    }
+        std::set<service::Introduction, service::IntroExpiryComparator> path_intros;
 
-    void RemoteHandler::Tick(std::chrono::milliseconds now)
-    {
-        (void)now;
-    }
-
-    void RemoteHandler::srv_records_changed()
-    {
-        // TODO: Investigate the usage or the term exit RE: service nodes acting as exits
-        // ^^ lol
-    }
-
-    void RemoteHandler::configure()
-    {
-        auto dns_config = _router.config()->dns;
-        auto net_config = _router.config()->network;
-
-        _local_range = *net_config._local_ip_range;
-
-        if (!_local_range.address().is_addressable())
-            throw std::runtime_error("IPRange has been pre-processed and is not free!");
-
-        _use_v6 = not _local_range.is_ipv4();
-        _local_addr = *net_config._local_addr;
-        _local_ip = *net_config._local_ip;
-        _if_name = *net_config._if_name;
-
-        if (_if_name.empty())
-            throw std::runtime_error("Interface name has been pre-processed and is not found!");
-
-        for (auto& [addr, range] : net_config._exit_ranges)
+        if (auto maybe_intros = get_path_intros_conditional([now](const service::Introduction& intro) -> bool {
+                return not intro.expires_soon(now, path::INTRO_STALE_THRESHOLD);
+            }))
         {
-            map_remote_to_local_range(addr, range);
+            path_intros.merge(*maybe_intros);
+        }
+        else
+        {
+            log::warning(logcat, "Failed to get enough valid path introductions to publish introset!");
+            return build_more(1);
         }
 
-        if (not net_config.exit_auths.empty())
+        auto& intro_protos = _local_introset.supported_protocols;
+        intro_protos.clear();
+
+        if (_router.using_tun_if())
         {
-            _auth_tokens.merge(net_config.exit_auths);
+            intro_protos.push_back(_is_v4 ? service::ProtocolType::TrafficV4 : service::ProtocolType::TrafficV6);
+
+            if (_is_exit_node)
+            {
+                intro_protos.push_back(service::ProtocolType::Exit);
+                _local_introset.exit_policy = _exit_policy;
+                _local_introset._routed_ranges = _routed_ranges;
+            }
         }
+
+        intro_protos.push_back(service::ProtocolType::TCP2QUIC);
+
+        auto& intros = _local_introset.intros;
+        intros.clear();
+
+        for (auto& intro : path_intros)
+        {
+            if (intros.size() < num_paths_desired)
+                intros.emplace(std::move(intro));
+        }
+
+        // We already check that path_intros is not empty, so we can assert here
+        assert(not intros.empty());
+
+        if (auto maybe_encrypted = _identity.encrypt_and_sign_introset(_local_introset, now))
+        {
+            if (publish_introset(*maybe_encrypted))
+            {
+                log::debug(logcat, "Successfully republished encrypted introset");
+            }
+            else
+                log::warning(logcat, "Failed to republish encrypted introset!");
+        }
+        else
+            log::warning(logcat, "Failed to encrypt and sign introset!");
     }
 
-    std::optional<std::string_view> RemoteHandler::fetch_auth_token(const NetworkAddress& remote) const
+    bool SessionEndpoint::validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth)
+    {
+        bool ret{true};
+
+        if (use_tokens)
+            ret &= _static_auth_tokens.contains(*maybe_auth);
+
+        if (use_whitelist)
+            ret &= _auth_whitelist.contains(remote);
+
+        return ret;
+    }
+
+    bool SessionEndpoint::prefigure_session(
+        NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun)
+    {
+        assert(path->is_client_path());
+
+        auto inbound =
+            std::make_shared<session::InboundSession>(initiator, std::move(path), *this, std::move(tag), use_tun);
+
+        auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
+
+        log::info(
+            logcat, "SessionEndpoint successfully created and mapped InboundSession object! Starting TCP tunnel...");
+
+        session->tcp_backend_connect();
+
+        return true;
+    }
+
+    bool SessionEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
+    {
+        bool ret{true};
+
+        {
+            Lock_t l{paths_mutex};
+
+            for (const auto& [rid, path] : _paths)
+            {
+                log::debug(logcat, "Publishing introset to pivot {}", path->pivot_rid());
+
+                ret += path->publish_intro(introset, true);
+            }
+        }
+
+        return ret;
+    }
+
+    std::optional<std::string_view> SessionEndpoint::fetch_auth_token(const NetworkAddress& remote) const
     {
         std::optional<std::string_view> ret = std::nullopt;
 
@@ -248,14 +382,19 @@ namespace llarp::handlers
         return ret;
     }
 
-    void RemoteHandler::make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit)
+    void SessionEndpoint::make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit)
     {
         auto tag = service::SessionTag::make_random();
 
         path->send_path_control_message(
             "session_init",
             InitiateSession::serialize_encrypt(
-                _router.local_rid(), remote.router_id(), tag, path->pivot_txid(), fetch_auth_token(remote)),
+                _router.local_rid(),
+                remote.router_id(),
+                tag,
+                path->pivot_txid(),
+                fetch_auth_token(remote),
+                _router.using_tun_if()),
             [this, remote, tag, path, is_exit](std::string response) {
                 if (response == messages::OK_RESPONSE)
                 {
@@ -266,7 +405,7 @@ namespace llarp::handlers
 
                     log::info(
                         logcat,
-                        "RemoteHandler successfully created and mapped OutboundSession object! Starting TCP "
+                        "SessionEndpoint successfully created and mapped OutboundSession object! Starting TCP "
                         "tunnel...");
 
                     session->tcp_backend_listen();
@@ -274,7 +413,7 @@ namespace llarp::handlers
             });
     }
 
-    void RemoteHandler::make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit)
+    void SessionEndpoint::make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit)
     {
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
@@ -290,7 +429,7 @@ namespace llarp::handlers
 
         // DISCUSS: we don't share paths, but if every successful path-build is logged in PathContext, we are
         // effectively sharing across all path-building objects...?
-        if (auto path_ptr = _router.path_context()->get_path_by_pivot(intro.pivot_hop_id))
+        if (auto path_ptr = _router.path_context()->get_path(intro.pivot_hop_id))
         {
             log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hop_id);
             return make_session(std::move(remote), std::move(path_ptr), is_exit);
@@ -354,12 +493,12 @@ namespace llarp::handlers
         }
     }
 
-    bool RemoteHandler::initiate_session(NetworkAddress remote, bool is_exit)
+    bool SessionEndpoint::initiate_session(NetworkAddress remote, bool is_exit)
     {
         if (is_exit and not remote.is_client())
             throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
 
-        auto counter = std::make_shared<size_t>(NUM_ONS_LOOKUP_PATHS);
+        auto counter = std::make_shared<size_t>(path::DEFAULT_PATHS_HELD);
 
         _router.loop()->call([this, remote, is_exit, counter]() {
             lookup_intro(
@@ -384,32 +523,32 @@ namespace llarp::handlers
         return true;
     }
 
-    void RemoteHandler::map_remote_to_local_addr(NetworkAddress remote, oxen::quic::Address local)
+    void SessionEndpoint::map_remote_to_local_addr(NetworkAddress remote, oxen::quic::Address local)
     {
         _address_map.insert_or_assign(std::move(local), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_addr_by_remote(const NetworkAddress& remote)
+    void SessionEndpoint::unmap_local_addr_by_remote(const NetworkAddress& remote)
     {
         _address_map.unmap(remote);
     }
 
-    void RemoteHandler::unmap_remote_by_name(const std::string& name)
+    void SessionEndpoint::unmap_remote_by_name(const std::string& name)
     {
         _address_map.unmap(name);
     }
 
-    void RemoteHandler::map_remote_to_local_range(NetworkAddress remote, IPRange range)
+    void SessionEndpoint::map_remote_to_local_range(NetworkAddress remote, IPRange range)
     {
         _range_map.insert_or_assign(std::move(range), std::move(remote));
     }
 
-    void RemoteHandler::unmap_local_range_by_remote(const NetworkAddress& remote)
+    void SessionEndpoint::unmap_local_range_by_remote(const NetworkAddress& remote)
     {
         _range_map.unmap(remote);
     }
 
-    void RemoteHandler::unmap_range_by_name(const std::string& name)
+    void SessionEndpoint::unmap_range_by_name(const std::string& name)
     {
         _range_map.unmap(name);
     }

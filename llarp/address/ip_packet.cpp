@@ -48,7 +48,7 @@ namespace llarp
 
     IPPacket IPPacket::from_udp(UDPPacket pkt)
     {
-        auto& data = pkt.data;
+        auto data = pkt.data();
         return IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()};
     }
 

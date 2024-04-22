@@ -46,12 +46,12 @@ namespace llarp
 
         std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
         {
-            return _sessions.get_session_from_tag(tag);
+            return _sessions.get_session(tag);
         }
 
         std::shared_ptr<session_t> get_session(const net_addr_t& remote) const
         {
-            return _sessions.get_session_from_remote(remote);
+            return _sessions.get_session(remote);
         }
 
         /// add an srv record to this endpoint's descriptor
