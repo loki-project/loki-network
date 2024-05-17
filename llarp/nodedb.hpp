@@ -5,7 +5,6 @@
 #include "router_contact.hpp"
 #include "router_id.hpp"
 #include "util/common.hpp"
-#include "util/fs.hpp"
 #include "util/thread/threading.hpp"
 
 #include <llarp/router/router.hpp>
@@ -74,30 +73,16 @@ namespace llarp
         int verifications = 0;
 
         Unconfirmed() = delete;
-        Unconfirmed(const ID_t& obj) : id{obj}
-        {}
-        Unconfirmed(ID_t&& obj) : id{std::move(obj)}
-        {}
+        Unconfirmed(const ID_t& obj) : id{obj} {}
+        Unconfirmed(ID_t&& obj) : id{std::move(obj)} {}
 
-        int strikes() const
-        {
-            return attempts;
-        }
+        int strikes() const { return attempts; }
 
-        operator bool() const
-        {
-            return verifications == CONFIRMATION_THRESHOLD;
-        }
+        operator bool() const { return verifications == CONFIRMATION_THRESHOLD; }
 
-        bool operator==(const Unconfirmed& other) const
-        {
-            return id == other.id;
-        }
+        bool operator==(const Unconfirmed& other) const { return id == other.id; }
 
-        bool operator<(const Unconfirmed& other) const
-        {
-            return id < other.id;
-        }
+        bool operator<(const Unconfirmed& other) const { return id < other.id; }
     };
 
     class NodeDB
@@ -193,37 +178,19 @@ namespace llarp
         // returns {num_rcs, num_rids, num_bootstraps}
         std::tuple<size_t, size_t, size_t> db_stats() const;
 
-        const std::set<RouterID>& get_known_rids() const
-        {
-            return known_rids;
-        }
+        const std::set<RouterID>& get_known_rids() const { return known_rids; }
 
-        const std::set<RemoteRC>& get_known_rcs() const
-        {
-            return known_rcs;
-        }
+        const std::set<RemoteRC>& get_known_rcs() const { return known_rcs; }
 
         std::optional<RemoteRC> get_rc_by_rid(const RouterID& rid);
 
-        bool is_initial_fetching() const
-        {
-            return _fetching_initial;
-        }
+        bool is_initial_fetching() const { return _fetching_initial; }
 
-        bool initial_fetch_completed() const
-        {
-            return _initial_completed;
-        }
+        bool initial_fetch_completed() const { return _initial_completed; }
 
-        bool needs_initial_fetch() const
-        {
-            return _needs_initial_fetch;
-        }
+        bool needs_initial_fetch() const { return _needs_initial_fetch; }
 
-        bool needs_rebootstrap() const
-        {
-            return _needs_rebootstrap;
-        }
+        bool needs_rebootstrap() const { return _needs_rebootstrap; }
 
         void ingest_bootstrap_seed();
 
@@ -279,68 +246,35 @@ namespace llarp
         // server:
         //   we only build new paths through registered, not decommissioned relays
         //   (i.e. whitelist)
-        bool is_path_allowed(const RouterID& remote) const
-        {
-            return known_rids.count(remote);
-        }
+        bool is_path_allowed(const RouterID& remote) const { return known_rids.count(remote); }
 
         // if pinned edges were specified, the remote must be in that set, else any remote
         // is allowed as first hop.
         bool is_first_hop_allowed(const RouterID& remote) const;
 
-        std::set<RouterID>& pinned_edges()
-        {
-            return _pinned_edges;
-        }
+        std::set<RouterID>& pinned_edges() { return _pinned_edges; }
 
         void store_bootstraps();
 
-        size_t num_bootstraps() const
-        {
-            return _bootstraps.size();
-        }
+        size_t num_bootstraps() const { return _bootstraps.size(); }
 
-        bool has_bootstraps() const
-        {
-            return _bootstraps.empty();
-        }
+        bool has_bootstraps() const { return _bootstraps.empty(); }
 
-        const BootstrapList& bootstrap_list() const
-        {
-            return _bootstraps;
-        }
+        const BootstrapList& bootstrap_list() const { return _bootstraps; }
 
-        BootstrapList& bootstrap_list()
-        {
-            return _bootstraps;
-        }
+        BootstrapList& bootstrap_list() { return _bootstraps; }
 
         void set_bootstrap_routers(BootstrapList& from_router);
 
-        const std::set<RouterID>& whitelist() const
-        {
-            return _router_whitelist;
-        }
+        const std::set<RouterID>& whitelist() const { return _router_whitelist; }
 
-        const std::set<RouterID>& greylist() const
-        {
-            return _router_greylist;
-        }
+        const std::set<RouterID>& greylist() const { return _router_greylist; }
 
-        std::set<RouterID>& registered_routers()
-        {
-            return _registered_routers;
-        }
+        std::set<RouterID>& registered_routers() { return _registered_routers; }
 
-        const std::set<RouterID>& registered_routers() const
-        {
-            return _registered_routers;
-        }
+        const std::set<RouterID>& registered_routers() const { return _registered_routers; }
 
-        const std::set<RemoteRC>& get_rcs() const
-        {
-            return known_rcs;
-        }
+        const std::set<RemoteRC>& get_rcs() const { return known_rcs; }
 
         // const std::unordered_map<RouterID, RemoteRC>&
         // get_rcs() const
@@ -348,10 +282,7 @@ namespace llarp
         //   return known_rcs;
         // }
 
-        const std::unordered_map<RouterID, rc_time>& get_last_rc_update_times() const
-        {
-            return last_rc_update_times;
-        }
+        const std::unordered_map<RouterID, rc_time>& get_last_rc_update_times() const { return last_rc_update_times; }
 
         /// load all known_rcs from disk syncrhonously
         void load_from_disk();

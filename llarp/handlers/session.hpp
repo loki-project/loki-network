@@ -26,6 +26,10 @@ namespace llarp
             session_map<NetworkAddress, session::BaseSession> _sessions;
 
             address_map<oxen::quic::Address, NetworkAddress> _address_map;
+
+            // Remote client exit addresses mapped to local IP ranges
+            //  - Directly pre-loaded from config
+            //
             address_map<IPRange, NetworkAddress> _range_map;
 
             service::Identity _identity;
@@ -46,8 +50,8 @@ namespace llarp
 
             IPRange _local_range;
             oxen::quic::Address _local_addr;
-            ip _local_ip;
-            ip _next_ip;
+            ip_v _local_ip;
+            ip_v _next_ip;
             std::string _if_name;
 
             bool _is_v4;
@@ -55,7 +59,7 @@ namespace llarp
             std::optional<std::string_view> fetch_auth_token(const NetworkAddress& remote) const;
 
             // Ranges reachable via our endpoint -- Exit mode only!
-            std::set<IPRange> _routed_ranges;
+            std::set<IPRange> _routed_ranges;  // formerly from LocalEndpoint
 
             // policies about traffic that we are willing to carry -- Exit mode only!
             std::optional<net::TrafficPolicy> _exit_policy = std::nullopt;
@@ -69,43 +73,22 @@ namespace llarp
 
             const std::shared_ptr<EventLoop>& loop();
 
-            std::shared_ptr<path::PathHandler> get_self() override
-            {
-                return shared_from_this();
-            }
+            std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
-            std::weak_ptr<path::PathHandler> get_weak() override
-            {
-                return weak_from_this();
-            }
+            std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            bool is_exit_node() const
-            {
-                return _is_exit_node;
-            }
+            bool is_exit_node() const { return _is_exit_node; }
 
-            bool is_snode_service() const
-            {
-                return _is_snode_service;
-            }
+            bool is_snode_service() const { return _is_snode_service; }
 
-            oxen::quic::Address local_address() const
-            {
-                return _local_addr;
-            }
+            oxen::quic::Address local_address() const { return _local_addr; }
 
-            const service::IntroSet& intro_set() const
-            {
-                return _local_introset;
-            }
+            const service::IntroSet& intro_set() const { return _local_introset; }
 
-            /// get copy of all srv records
-            std::set<dns::SRVData> srv_records() const
-            {
-                return {_srv_records.begin(), _srv_records.end()};
-            }
+            // get copy of all srv records
+            std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
-            template <session::SessionType session_t>
+            template <session::SessionType session_t = session::BaseSession>
             std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(tag));
@@ -146,14 +129,14 @@ namespace llarp
             void resolve_ons_mappings();
 
             // TODO: add callback to return local TCPHandle bind address for requesting app
-            bool initiate_remote_service_session(const NetworkAddress& remote)
+            bool initiate_remote_service_session(const NetworkAddress& remote, on_session_init_hook cb)
             {
-                return initiate_session(remote, false);
+                return initiate_session(remote, std::move(cb), false);
             }
 
-            bool initiate_remote_exit_session(const NetworkAddress& remote)
+            bool initiate_remote_exit_session(const NetworkAddress& remote, on_session_init_hook cb)
             {
-                return initiate_session(remote, true);
+                return initiate_session(remote, std::move(cb), true);
             }
 
             void Tick(std::chrono::milliseconds now) override;
@@ -173,11 +156,13 @@ namespace llarp
             void unmap_range_by_name(const std::string& name);
 
           private:
-            bool initiate_session(NetworkAddress remote, bool is_exit = false);
+            bool initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
-            void make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit);
+            void make_session_path(
+                service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
-            void make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit);
+            void make_session(
+                NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);
         };
 
     }  // namespace handlers

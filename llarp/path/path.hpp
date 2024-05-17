@@ -54,15 +54,9 @@ namespace llarp
                 bool is_session = false,
                 bool is_client = false);
 
-            std::shared_ptr<Path> get_self()
-            {
-                return shared_from_this();
-            }
+            std::shared_ptr<Path> get_self() { return shared_from_this(); }
 
-            std::weak_ptr<Path> get_weak()
-            {
-                return weak_from_this();
-            }
+            std::weak_ptr<Path> get_weak() { return weak_from_this(); }
 
             nlohmann::json ExtractStatus() const;
 
@@ -70,15 +64,9 @@ namespace llarp
 
             std::string HopsString() const;
 
-            std::chrono::milliseconds LastRemoteActivityAt() const
-            {
-                return last_recv_msg;
-            }
+            std::chrono::milliseconds LastRemoteActivityAt() const { return last_recv_msg; }
 
-            void set_established()
-            {
-                _established = true;
-            }
+            void set_established() { _established = true; }
 
             void recv_path_data_message(bstring data);
 
@@ -86,15 +74,9 @@ namespace llarp
 
             bool unlink_session();
 
-            bool is_linked() const
-            {
-                return _is_linked;
-            }
+            bool is_linked() const { return _is_linked; }
 
-            std::chrono::milliseconds ExpireTime() const
-            {
-                return buildStarted + hops[0].lifetime;
-            }
+            std::chrono::milliseconds ExpireTime() const { return buildStarted + hops[0].lifetime; }
 
             bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const
             {
@@ -169,15 +151,9 @@ namespace llarp
 
             std::string name() const;
 
-            bool is_session_path() const
-            {
-                return _is_session_path;
-            }
+            bool is_session_path() const { return _is_session_path; }
 
-            bool is_client_path() const
-            {
-                return _is_client;
-            }
+            bool is_client_path() const { return _is_client; }
 
             bool operator<(const Path& other) const;
 

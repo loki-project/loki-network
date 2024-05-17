@@ -10,8 +10,7 @@ namespace llarp::util
     template <typename Key_t, typename Value_t, typename Hash_t = std::hash<Key_t>>
     struct DecayingHashTable
     {
-        DecayingHashTable(std::chrono::milliseconds cacheInterval = 1h) : m_CacheInterval(cacheInterval)
-        {}
+        DecayingHashTable(std::chrono::milliseconds cacheInterval = 1h) : m_CacheInterval(cacheInterval) {}
 
         void Decay(std::chrono::milliseconds now)
         {
@@ -19,10 +18,7 @@ namespace llarp::util
         }
 
         /// return if we have this value by key
-        bool Has(const Key_t& k) const
-        {
-            return m_Values.find(k) != m_Values.end();
-        }
+        bool Has(const Key_t& k) const { return m_Values.find(k) != m_Values.end(); }
 
         /// return true if inserted
         /// return false if not inserted
@@ -43,10 +39,7 @@ namespace llarp::util
         }
 
         /// explicit remove an item from the cache by key
-        void Remove(const Key_t& key)
-        {
-            m_Values.erase(key);
-        }
+        void Remove(const Key_t& key) { m_Values.erase(key); }
 
       private:
         template <typename Predicate_t>

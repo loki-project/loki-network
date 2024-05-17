@@ -49,10 +49,7 @@ namespace llarp
         /// save new .ini config file to path
         void save_new() const;
 
-        void set_filename(const fs::path& f)
-        {
-            _filename = f;
-        }
+        void set_filename(const fs::path& f) { _filename = f; }
 
       private:
         bool parse_all();

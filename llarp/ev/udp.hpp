@@ -35,10 +35,7 @@ namespace llarp
 
         io_result send(const oxen::quic::Address& dest, std::vector<uint8_t> data);
 
-        oxen::quic::Address bind()
-        {
-            return _local;
-        }
+        oxen::quic::Address bind() { return _local; }
 
         void close();
     };

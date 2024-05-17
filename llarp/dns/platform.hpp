@@ -38,8 +38,7 @@ namespace llarp::dns
     {
       public:
         ~Null_Platform() override = default;
-        void set_resolver(unsigned int, oxen::quic::Address, bool) override
-        {}
+        void set_resolver(unsigned int, oxen::quic::Address, bool) override {}
     };
 
     /// a collection of dns platforms that are tried in order when setting dns

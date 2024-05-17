@@ -9,19 +9,12 @@ namespace llarp::util
     template <typename Val_t, typename Hash_t = std::hash<Val_t>>
     struct DecayingHashSet
     {
-        DecayingHashSet(std::chrono::milliseconds cacheInterval = 1s) : m_CacheInterval(cacheInterval)
-        {}
+        DecayingHashSet(std::chrono::milliseconds cacheInterval = 1s) : m_CacheInterval(cacheInterval) {}
 
-        size_t Size() const
-        {
-            return m_Values.size();
-        }
+        size_t Size() const { return m_Values.size(); }
 
         /// determine if we have v contained in our decaying hashset
-        bool Contains(const Val_t& v) const
-        {
-            return m_Values.count(v) != 0;
-        }
+        bool Contains(const Val_t& v) const { return m_Values.count(v) != 0; }
 
         /// return true if inserted
         /// return false if not inserted
@@ -33,10 +26,7 @@ namespace llarp::util
         }
 
         /// upsert will insert or update a value with time as now
-        void Upsert(const Val_t& v)
-        {
-            m_Values[v] = llarp::time_now_ms();
-        }
+        void Upsert(const Val_t& v) { m_Values[v] = llarp::time_now_ms(); }
 
         /// decay hashset entries
         void Decay(std::chrono::milliseconds now = 0s)
@@ -46,25 +36,13 @@ namespace llarp::util
             EraseIf([&](const auto& item) { return (m_CacheInterval + item.second) <= now; });
         }
 
-        std::chrono::milliseconds DecayInterval() const
-        {
-            return m_CacheInterval;
-        }
+        std::chrono::milliseconds DecayInterval() const { return m_CacheInterval; }
 
-        bool Empty() const
-        {
-            return m_Values.empty();
-        }
+        bool Empty() const { return m_Values.empty(); }
 
-        void DecayInterval(std::chrono::milliseconds interval)
-        {
-            m_CacheInterval = interval;
-        }
+        void DecayInterval(std::chrono::milliseconds interval) { m_CacheInterval = interval; }
 
-        void Remove(const Val_t& val)
-        {
-            m_Values.erase(val);
-        }
+        void Remove(const Val_t& val) { m_Values.erase(val); }
 
       private:
         template <typename Predicate_t>

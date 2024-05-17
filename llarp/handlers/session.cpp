@@ -382,7 +382,8 @@ namespace llarp::handlers
         return ret;
     }
 
-    void SessionEndpoint::make_session(NetworkAddress remote, std::shared_ptr<path::Path> path, bool is_exit)
+    void SessionEndpoint::make_session(
+        NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit)
     {
         auto tag = service::SessionTag::make_random();
 
@@ -395,7 +396,7 @@ namespace llarp::handlers
                 path->pivot_txid(),
                 fetch_auth_token(remote),
                 _router.using_tun_if()),
-            [this, remote, tag, path, is_exit](std::string response) {
+            [this, remote, tag, path, hook = std::move(cb), is_exit](std::string response) {
                 if (response == messages::OK_RESPONSE)
                 {
                     auto outbound = std::make_shared<session::OutboundSession>(
@@ -408,12 +409,13 @@ namespace llarp::handlers
                         "SessionEndpoint successfully created and mapped OutboundSession object! Starting TCP "
                         "tunnel...");
 
-                    session->tcp_backend_listen();
+                    session->tcp_backend_listen(std::move(hook));
                 }
             });
     }
 
-    void SessionEndpoint::make_session_path(service::IntroductionSet intros, NetworkAddress remote, bool is_exit)
+    void SessionEndpoint::make_session_path(
+        service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
     {
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
@@ -432,7 +434,7 @@ namespace llarp::handlers
         if (auto path_ptr = _router.path_context()->get_path(intro.pivot_hop_id))
         {
             log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hop_id);
-            return make_session(std::move(remote), std::move(path_ptr), is_exit);
+            return make_session(std::move(remote), std::move(path_ptr), std::move(cb), is_exit);
         }
 
         log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
@@ -455,13 +457,15 @@ namespace llarp::handlers
         auto payload = build2(path);
 
         if (not build3(
-                path->upstream_rid(), std::move(payload), [this, path, intros, remote, is_exit](oxen::quic::message m) {
+                path->upstream_rid(),
+                std::move(payload),
+                [this, path, intros, remote, hook = std::move(cb), is_exit](oxen::quic::message m) {
                     if (m)
                     {
                         // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will
                         // take care of both path storage and logging in PathContext
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
-                        return make_session(std::move(remote), std::move(path), is_exit);
+                        return make_session(std::move(remote), std::move(path), std::move(hook), is_exit);
                     }
 
                     try
@@ -486,23 +490,26 @@ namespace llarp::handlers
                     }
 
                     // recurse with introduction set minus the recently attempted pivot
-                    make_session_path(std::move(intros), std::move(remote), is_exit);
+                    make_session_path(std::move(intros), std::move(remote), std::move(hook), is_exit);
                 }))
         {
             log::critical(logcat, "Error sending path_build control message for session initiation!");
         }
     }
 
-    bool SessionEndpoint::initiate_session(NetworkAddress remote, bool is_exit)
+    bool SessionEndpoint::initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit)
     {
         if (is_exit and not remote.is_client())
             throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
 
         auto counter = std::make_shared<size_t>(path::DEFAULT_PATHS_HELD);
 
-        _router.loop()->call([this, remote, is_exit, counter]() {
+        _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() {
             lookup_intro(
-                remote.router_id(), false, 0, [this, remote, is_exit, counter](std::optional<service::IntroSet> intro) {
+                remote.router_id(),
+                false,
+                0,
+                [this, remote, hook = std::move(handler), is_exit, counter](std::optional<service::IntroSet> intro) {
                     // already have a successful return
                     if (*counter == 0)
                         return;
@@ -511,7 +518,7 @@ namespace llarp::handlers
                     {
                         *counter = 0;
                         log::info(logcat, "Session initiation returned successful 'lookup_intro'...");
-                        make_session_path(std::move(intro->intros), remote, is_exit);
+                        make_session_path(std::move(intro->intros), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)
                     {

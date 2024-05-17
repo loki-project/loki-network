@@ -38,45 +38,21 @@ namespace llarp
             std::chrono::milliseconds _last_activity = 0s;
             bool terminal_hop{false};
 
-            RouterID& upstream()
-            {
-                return _upstream;
-            }
+            RouterID& upstream() { return _upstream; }
 
-            const RouterID& upstream() const
-            {
-                return _upstream;
-            }
+            const RouterID& upstream() const { return _upstream; }
 
-            RouterID& downstream()
-            {
-                return _downstream;
-            }
+            RouterID& downstream() { return _downstream; }
 
-            const RouterID& downstream() const
-            {
-                return _downstream;
-            }
+            const RouterID& downstream() const { return _downstream; }
 
-            HopID rxid()
-            {
-                return _rxid;
-            }
+            HopID rxid() { return _rxid; }
 
-            const HopID& rxid() const
-            {
-                return _rxid;
-            }
+            const HopID& rxid() const { return _rxid; }
 
-            HopID txid()
-            {
-                return _txid;
-            }
+            HopID txid() { return _txid; }
 
-            const HopID& txid() const
-            {
-                return _txid;
-            }
+            const HopID& txid() const { return _txid; }
 
             void Stop();
 
@@ -94,17 +70,11 @@ namespace llarp
                     == std::tie(other._txid, other._rxid, other._upstream, other._downstream);
             }
 
-            bool operator!=(const TransitHop& other) const
-            {
-                return !(*this == other);
-            }
+            bool operator!=(const TransitHop& other) const { return !(*this == other); }
 
             std::chrono::milliseconds expiry_time() const;
 
-            std::chrono::milliseconds last_activity() const
-            {
-                return _last_activity;
-            }
+            std::chrono::milliseconds last_activity() const { return _last_activity; }
 
             std::string to_string() const;
 

@@ -82,10 +82,7 @@ namespace llarp::win32
                 return pkt;
             }
 
-            ~PacketWrapper()
-            {
-                release_read(session, data);
-            }
+            ~PacketWrapper() { release_read(session, data); }
         };
 
         /// autovivify a wintun adapter handle
@@ -162,10 +159,7 @@ namespace llarp::win32
             }
 
             /// put adapter down and close it
-            void Down() const
-            {
-                close_adapter(_handle);
-            }
+            void Down() const { close_adapter(_handle); }
 
             /// auto vivify a wintun session handle and read handle off of our adapter
             [[nodiscard]] std::pair<WINTUN_SESSION_HANDLE, HANDLE> session() const
@@ -194,8 +188,7 @@ namespace llarp::win32
             static_assert(std::atomic<bool>::is_always_lock_free);
 
           public:
-            WintunSession() : _impl{nullptr}, _handle{nullptr}
-            {}
+            WintunSession() : _impl{nullptr}, _handle{nullptr} {}
 
             void Start(const std::shared_ptr<WintunAdapter>& adapter)
             {
@@ -214,10 +207,7 @@ namespace llarp::win32
                 end_session(_impl);
             }
 
-            void WaitFor(std::chrono::milliseconds dur)
-            {
-                WaitForSingleObject(_handle, dur.count());
-            }
+            void WaitFor(std::chrono::milliseconds dur) { WaitForSingleObject(_handle, dur.count()); }
 
             /// read a unique pointer holding a packet read from wintun, returns the packet if we
             /// read one and a bool, set to true if our adapter is now closed
@@ -350,15 +340,9 @@ namespace llarp::win32
                 return _send_queue.tryPushBack(std::move(pkt)) == thread::QueueReturn::Success;
             }
 
-            int PollFD() const override
-            {
-                return -1;
-            }
+            int PollFD() const override { return -1; }
 
-            void MaybeWakeUpperLayers() const override
-            {
-                _router->TriggerPump();
-            }
+            void MaybeWakeUpperLayers() const override { _router->TriggerPump(); }
         };
     }  // namespace
 

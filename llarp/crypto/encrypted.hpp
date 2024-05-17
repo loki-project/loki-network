@@ -21,15 +21,9 @@ namespace llarp
             UpdateBuffer();
         }
 
-        Encrypted(const Encrypted& other) : Encrypted(other.data(), other.size())
-        {
-            UpdateBuffer();
-        }
+        Encrypted(const Encrypted& other) : Encrypted(other.data(), other.size()) { UpdateBuffer(); }
 
-        Encrypted()
-        {
-            Clear();
-        }
+        Encrypted() { Clear(); }
 
         void Clear()
         {
@@ -52,28 +46,18 @@ namespace llarp
             UpdateBuffer();
         }
 
-        Encrypted(size_t sz) : Encrypted(nullptr, sz)
-        {}
+        Encrypted(size_t sz) : Encrypted(nullptr, sz) {}
 
-        bool BEncode(llarp_buffer_t* buf) const
-        {
-            return bencode_write_bytestring(buf, data(), _sz);
-        }
+        bool BEncode(llarp_buffer_t* buf) const { return bencode_write_bytestring(buf, data(), _sz); }
 
         bool operator==(const Encrypted& other) const
         {
             return _sz == other._sz && memcmp(data(), other.data(), _sz) == 0;
         }
 
-        bool operator!=(const Encrypted& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const Encrypted& other) const { return !(*this == other); }
 
-        Encrypted& operator=(const Encrypted& other)
-        {
-            return Encrypted::operator=(llarp_buffer_t(other));
-        }
+        Encrypted& operator=(const Encrypted& other) { return Encrypted::operator=(llarp_buffer_t(other)); }
 
         Encrypted& operator=(const llarp_buffer_t& buf)
         {
@@ -86,10 +70,7 @@ namespace llarp
             return *this;
         }
 
-        void Fill(uint8_t fill)
-        {
-            std::fill(_buf.begin(), _buf.begin() + _sz, fill);
-        }
+        void Fill(uint8_t fill) { std::fill(_buf.begin(), _buf.begin() + _sz, fill); }
 
         void Randomize()
         {
@@ -111,40 +92,19 @@ namespace llarp
             return true;
         }
 
-        std::string to_string()
-        {
-            return {reinterpret_cast<const char*>(data()), size()};
-        }
+        std::string to_string() { return {reinterpret_cast<const char*>(data()), size()}; }
 
-        ustring to_ustring()
-        {
-            return {data(), size()};
-        }
+        ustring to_ustring() { return {data(), size()}; }
 
-        llarp_buffer_t* Buffer()
-        {
-            return &m_Buffer;
-        }
+        llarp_buffer_t* Buffer() { return &m_Buffer; }
 
-        size_t size()
-        {
-            return _sz;
-        }
+        size_t size() { return _sz; }
 
-        size_t size() const
-        {
-            return _sz;
-        }
+        size_t size() const { return _sz; }
 
-        uint8_t* data()
-        {
-            return _buf.data();
-        }
+        uint8_t* data() { return _buf.data(); }
 
-        const uint8_t* data() const
-        {
-            return _buf.data();
-        }
+        const uint8_t* data() const { return _buf.data(); }
 
       protected:
         void UpdateBuffer()

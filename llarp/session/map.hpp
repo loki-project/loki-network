@@ -3,6 +3,7 @@
 #include "session.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/util/thread/threading.hpp>
 
 namespace llarp
 {
@@ -20,6 +21,9 @@ namespace llarp
         std::unordered_map<service::SessionTag, net_addr_t> _session_lookup;
         std::unordered_map<net_addr_t, std::shared_ptr<session_t>> _sessions;
 
+        using Lock_t = util::NullLock;
+        mutable util::NullMutex session_mutex;
+
       public:
         /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent
             to `local` already exists in the container, `sesh` is assigned to the mapped type. If the key
@@ -30,6 +34,8 @@ namespace llarp
         */
         std::pair<std::shared_ptr<session_t>, bool> insert_or_assign(net_addr_t remote, std::shared_ptr<session_t> sesh)
         {
+            Lock_t l{session_mutex};
+
             auto tag = sesh->tag();
 
             auto [_1, b1] = _session_lookup.insert_or_assign(tag, remote);
@@ -40,6 +46,8 @@ namespace llarp
 
         std::optional<net_addr_t> get_remote(const service::SessionTag& tag) const
         {
+            Lock_t l{session_mutex};
+
             std::optional<net_addr_t> ret = std::nullopt;
 
             if (auto itr = _session_lookup.find(tag); itr != _session_lookup.end())
@@ -50,6 +58,8 @@ namespace llarp
 
         std::shared_ptr<session_t> get_session(const net_addr_t& remote) const
         {
+            Lock_t l{session_mutex};
+
             std::shared_ptr<session_t> ret = nullptr;
 
             if (auto itr = _sessions.find(remote); itr != _sessions.end())
@@ -60,6 +70,8 @@ namespace llarp
 
         std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
         {
+            Lock_t l{session_mutex};
+
             std::shared_ptr<session_t> ret = nullptr;
 
             if (auto itr = get_remote(tag); itr != std::nullopt)
@@ -70,6 +82,8 @@ namespace llarp
 
         void unmap(const service::SessionTag& tag)
         {
+            Lock_t l{session_mutex};
+
             if (auto it_a = _session_lookup.find(tag); it_a != _session_lookup.end())
             {
                 if (auto it_b = _sessions.find(it_a->second); it_b != _sessions.end())
@@ -82,6 +96,8 @@ namespace llarp
 
         void unmap(const net_addr_t& local)
         {
+            Lock_t l{session_mutex};
+
             if (auto it_a = _sessions.find(local); it_a != _sessions.end())
             {
                 auto tag = it_a->second->tag();
@@ -96,6 +112,8 @@ namespace llarp
 
         bool have_session(const service::SessionTag& tag) const
         {
+            Lock_t l{session_mutex};
+
             if (auto itr = _session_lookup.find(tag); itr != _session_lookup.end())
                 return have_session(itr->second);
 
@@ -104,17 +122,13 @@ namespace llarp
 
         bool have_session(const net_addr_t& local) const
         {
+            Lock_t l{session_mutex};
+
             return _sessions.count(local);
         }
 
-        std::shared_ptr<session_t> operator[](const service::SessionTag& tag)
-        {
-            return get_session(tag);
-        }
+        std::shared_ptr<session_t> operator[](const service::SessionTag& tag) { return get_session(tag); }
 
-        std::shared_ptr<session_t> operator[](const net_addr_t& local)
-        {
-            return get_session(local);
-        }
+        std::shared_ptr<session_t> operator[](const net_addr_t& local) { return get_session(local); }
     };
 }  //  namespace llarp

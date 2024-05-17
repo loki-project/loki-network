@@ -28,10 +28,7 @@ namespace llarp::vpn
                 ::close(m_fd);
         }
 
-        int PollFD() const override
-        {
-            return m_fd;
-        }
+        int PollFD() const override { return m_fd; }
 
         net::IPPacket ReadNextPacket() override
         {
@@ -77,17 +74,13 @@ namespace llarp::vpn
         AndroidRouteManager _route_manager{};
 
       public:
-        AndroidPlatform(llarp::Context* ctx) : fd{ctx->androidFD}
-        {}
+        AndroidPlatform(llarp::Context* ctx) : fd{ctx->androidFD} {}
 
         std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router*) override
         {
             return std::make_shared<AndroidInterface>(std::move(info), fd);
         }
-        AbstractRouteManager& RouteManager() override
-        {
-            return _route_manager;
-        }
+        AbstractRouteManager& RouteManager() override { return _route_manager; }
     };
 
 }  // namespace llarp::vpn

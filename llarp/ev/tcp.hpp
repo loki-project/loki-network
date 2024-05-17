@@ -13,16 +13,6 @@ extern "C"
 #include <event2/listener.h>
 }
 
-/** TODO:
-    - set up session_map in EndpointBase
-      - OutboundSession will create the path
-    - separate Socket and Handle from QUIC-like "ownership" model
-    - TCPHandle has a socket creation callback instead of a data callback
-      - Fire socket creation cb on accepting connection
-      - Socket creation cb could be given a created socket to set the callbacks on
-    - QUIC stream held by TCPSocket needs to have a receive data callback that writes to the TCP connection
-*/
-
 namespace llarp
 {
     class QUICTunnel;
@@ -93,15 +83,9 @@ namespace llarp
 
         ~TCPHandle();
 
-        uint16_t port() const
-        {
-            return _bound.has_value() ? _bound->port() : 0;
-        }
+        uint16_t port() const { return _bound.has_value() ? _bound->port() : 0; }
 
-        std::optional<oxen::quic::Address> bind() const
-        {
-            return _bound;
-        }
+        std::optional<oxen::quic::Address> bind() const { return _bound; }
 
         std::shared_ptr<TCPConnection> connect(std::shared_ptr<oxen::quic::Stream> s, uint16_t port = 0);
 

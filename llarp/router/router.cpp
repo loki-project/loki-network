@@ -373,7 +373,7 @@ namespace llarp
         std::string _if_name;
         IPRange _local_range;
         oxen::quic::Address _local_addr;
-        ip _local_ip;
+        ip_v _local_ip;
 
         auto& conf = _config->network;
 

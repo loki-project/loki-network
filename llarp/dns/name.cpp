@@ -1,6 +1,5 @@
 #include "name.hpp"
 
-#include <llarp/net/net_bits.hpp>
 #include <llarp/util/str.hpp>
 
 #include <oxenc/hex.h>
@@ -61,7 +60,7 @@ namespace llarp::dns
         return true;
     }
 
-    std::optional<ip> DecodePTR(std::string_view name)
+    std::optional<ip_v> DecodePTR(std::string_view name)
     {
         bool isV6 = false;
         auto pos = name.find(".in-addr.arpa");

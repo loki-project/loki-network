@@ -15,8 +15,7 @@ namespace llarp
             unsigned pending;
 
           public:
-            Barrier(unsigned threads) : pending{threads}
-            {}
+            Barrier(unsigned threads) : pending{threads} {}
 
             /// Returns true if *this* Block call is the one that releases all of
             /// them; returns false (i.e. after unblocking) if some other thread

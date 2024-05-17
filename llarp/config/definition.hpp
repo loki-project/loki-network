@@ -1,6 +1,5 @@
 #pragma once
 
-#include <llarp/util/fs.hpp>
 #include <llarp/util/str.hpp>
 
 #include <fmt/core.h>
@@ -68,16 +67,14 @@ namespace llarp
         struct Default
         {
             T val;
-            constexpr explicit Default(T val) : val{std::move(val)}
-            {}
+            constexpr explicit Default(T val) : val{std::move(val)} {}
         };
 
         /// Adds one or more comment lines to the option definition.
         struct Comment
         {
             std::vector<std::string> comments;
-            explicit Comment(std::initializer_list<std::string> comments) : comments{std::move(comments)}
-            {}
+            explicit Comment(std::initializer_list<std::string> comments) : comments{std::move(comments)} {}
         };
 
         /// A convenience function that returns an acceptor which assigns to a reference.
@@ -269,10 +266,7 @@ namespace llarp
         /// Returns the number of values found.
         ///
         /// @return number of values found
-        size_t get_number_found() const override
-        {
-            return parsed_values.size();
-        }
+        size_t get_number_found() const override { return parsed_values.size(); }
 
         std::vector<std::string> default_values_as_string() override
         {
@@ -409,8 +403,7 @@ namespace llarp
     /// through calls to addConfigValue()).
     struct ConfigDefinition
     {
-        explicit ConfigDefinition(bool relay) : relay{relay}
-        {}
+        explicit ConfigDefinition(bool relay) : relay{relay} {}
 
         /// Specify the parameters and type of a configuration option. The parameters are members of
         /// OptionDefinitionBase; the type is inferred from OptionDefinition's template parameter T.

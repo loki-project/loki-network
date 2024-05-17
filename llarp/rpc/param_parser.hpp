@@ -38,8 +38,7 @@ namespace llarp::rpc
     struct required
     {
         T& value;
-        required(T& ref) : value{ref}
-        {}
+        required(T& ref) : value{ref} {}
     };
     template <typename T>
     constexpr bool is_required_wrapper = false;
@@ -66,8 +65,7 @@ namespace llarp::rpc
     struct ignore_empty_string
     {
         T& value;
-        ignore_empty_string(T& ref) : value{ref}
-        {}
+        ignore_empty_string(T& ref) : value{ref} {}
 
         bool should_ignore(oxenc::bt_dict_consumer& d)
         {

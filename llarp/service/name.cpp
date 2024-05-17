@@ -79,12 +79,7 @@ namespace llarp::service
         if (auto maybe = crypto::maybe_decrypt_name(ciphertext, nonce, ons_name))
         {
             auto _name = "{}.loki"_format(maybe->to_view());
-
-            if (auto addr = NetworkAddress::from_client_addr(std::move(_name)))
-            {
-                if (addr->set_pubkey(ons_name))
-                    ret = addr;
-            }
+            ret = NetworkAddress::from_network_addr(std::move(_name));
         }
 
         return ret;

@@ -6,8 +6,7 @@
 
 namespace llarp::path
 {
-    PathContext::PathContext(RouterID local_rid) : _local_rid{std::move(local_rid)}
-    {}
+    PathContext::PathContext(RouterID local_rid) : _local_rid{std::move(local_rid)} {}
 
     void PathContext::allow_transit()
     {

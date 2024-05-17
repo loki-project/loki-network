@@ -25,25 +25,13 @@ namespace llarp::handlers
         TunEndpoint(Router& r);
         ~TunEndpoint() override;
 
-        vpn::NetworkInterface* get_vpn_interface()
-        {
-            return _net_if.get();
-        }
+        vpn::NetworkInterface* get_vpn_interface() { return _net_if.get(); }
 
-        std::string_view name() const
-        {
-            return TUN;
-        }
+        std::string_view name() const { return TUN; }
 
-        int rank() const override
-        {
-            return 0;
-        }
+        int rank() const override { return 0; }
 
-        std::string_view resolver_name() const override
-        {
-            return LOKI_RESOLVER;
-        }
+        std::string_view resolver_name() const override { return LOKI_RESOLVER; }
 
         bool maybe_hook_dns(
             std::shared_ptr<dns::PacketSource_Base> source,
@@ -99,20 +87,11 @@ namespace llarp::handlers
         oxen::quic::Address get_if_addr() const;
 
         /// we have an interface addr
-        bool has_if_addr() const
-        {
-            return true;
-        }
+        bool has_if_addr() const { return true; }
 
-        std::optional<net::TrafficPolicy> get_traffic_policy() const
-        {
-            return _traffic_policy;
-        }
+        std::optional<net::TrafficPolicy> get_traffic_policy() const { return _traffic_policy; }
 
-        std::chrono::milliseconds get_path_alignment_timeout() const
-        {
-            return _path_alignment_timeout;
-        }
+        std::chrono::milliseconds get_path_alignment_timeout() const { return _path_alignment_timeout; }
 
         /// ip packet against any exit policies we have
         /// returns false if this traffic is disallowed by any of those policies
@@ -121,15 +100,9 @@ namespace llarp::handlers
 
         bool has_mapped_address(const NetworkAddress& addr) const;
 
-        const Router& router() const
-        {
-            return _router;
-        }
+        const Router& router() const { return _router; }
 
-        Router& router()
-        {
-            return _router;
-        }
+        Router& router() { return _router; }
 
       protected:
         struct WritePacket
@@ -137,12 +110,12 @@ namespace llarp::handlers
             uint64_t seqno;
             IPPacket pkt;
 
-            bool operator>(const WritePacket& other) const
-            {
-                return seqno > other.seqno;
-            }
+            bool operator>(const WritePacket& other) const { return seqno > other.seqno; }
         };
 
+        // Stores assigned IP's for each session in/out of this lokinet instance
+        //  - Reserved local addresses is directly pre-loaded from config
+        //  - Persisting address map is directly pre-loaded from config
         address_map<oxen::quic::Address, NetworkAddress> local_ip_mapping;
 
       private:
@@ -172,9 +145,10 @@ namespace llarp::handlers
 
         // std::shared_ptr<auth::AuthPolicy> _auth_policy;
 
-        /// our local address and ip
+        /// our local ip range (config-mapped as `if-addr`), address, and ip
+        IPRange _local_range;
         oxen::quic::Address _local_addr;
-        ip _local_ip;
+        ip_v _local_ip;
 
         /// Our local Network Address holding our network pubkey
         NetworkAddress _local_netaddr;
@@ -183,13 +157,11 @@ namespace llarp::handlers
         oxen::quic::Address _local_ipv6;
 
         /// next ip address to allocate
-        ip _next_ip;
+        ip_v _next_ip;
 
         /// highest ip address to allocate
-        ip _max_ip;  // last IP address in the range (add to IPRange class)
+        ip_v _max_ip;  // last IP address in the range (add to IPRange class)
 
-        /// our ip range we are using
-        IPRange _local_range;
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?

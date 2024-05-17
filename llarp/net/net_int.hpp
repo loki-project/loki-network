@@ -31,35 +31,17 @@ namespace llarp
     {
         UInt_t h;
 
-        constexpr huint_t operator&(huint_t x) const
-        {
-            return huint_t{UInt_t{h & x.h}};
-        }
+        constexpr huint_t operator&(huint_t x) const { return huint_t{UInt_t{h & x.h}}; }
 
-        constexpr huint_t operator|(huint_t x) const
-        {
-            return huint_t{UInt_t{h | x.h}};
-        }
+        constexpr huint_t operator|(huint_t x) const { return huint_t{UInt_t{h | x.h}}; }
 
-        constexpr huint_t operator-(huint_t x) const
-        {
-            return huint_t{UInt_t{h - x.h}};
-        }
+        constexpr huint_t operator-(huint_t x) const { return huint_t{UInt_t{h - x.h}}; }
 
-        constexpr huint_t operator+(huint_t x) const
-        {
-            return huint_t{UInt_t{h + x.h}};
-        }
+        constexpr huint_t operator+(huint_t x) const { return huint_t{UInt_t{h + x.h}}; }
 
-        constexpr huint_t operator^(huint_t x) const
-        {
-            return huint_t{UInt_t{h ^ x.h}};
-        }
+        constexpr huint_t operator^(huint_t x) const { return huint_t{UInt_t{h ^ x.h}}; }
 
-        constexpr huint_t operator~() const
-        {
-            return huint_t{UInt_t{~h}};
-        }
+        constexpr huint_t operator~() const { return huint_t{UInt_t{~h}}; }
 
         constexpr huint_t operator<<(int n) const
         {
@@ -80,20 +62,11 @@ namespace llarp
             return *this;
         }
 
-        constexpr bool operator<(huint_t x) const
-        {
-            return h < x.h;
-        }
+        constexpr bool operator<(huint_t x) const { return h < x.h; }
 
-        constexpr bool operator!=(huint_t x) const
-        {
-            return h != x.h;
-        }
+        constexpr bool operator!=(huint_t x) const { return h != x.h; }
 
-        constexpr bool operator==(huint_t x) const
-        {
-            return h == x.h;
-        }
+        constexpr bool operator==(huint_t x) const { return h == x.h; }
 
         using V6Container = std::vector<uint8_t>;
         [[deprecated]] void ToV6(V6Container& c);
@@ -112,25 +85,13 @@ namespace llarp
     {
         UInt_t n = 0;
 
-        constexpr nuint_t operator&(nuint_t x) const
-        {
-            return nuint_t{UInt_t(n & x.n)};
-        }
+        constexpr nuint_t operator&(nuint_t x) const { return nuint_t{UInt_t(n & x.n)}; }
 
-        constexpr nuint_t operator|(nuint_t x) const
-        {
-            return nuint_t{UInt_t(n | x.n)};
-        }
+        constexpr nuint_t operator|(nuint_t x) const { return nuint_t{UInt_t(n | x.n)}; }
 
-        constexpr nuint_t operator^(nuint_t x) const
-        {
-            return nuint_t{UInt_t(n ^ x.n)};
-        }
+        constexpr nuint_t operator^(nuint_t x) const { return nuint_t{UInt_t(n ^ x.n)}; }
 
-        constexpr nuint_t operator~() const
-        {
-            return nuint_t{UInt_t(~n)};
-        }
+        constexpr nuint_t operator~() const { return nuint_t{UInt_t(~n)}; }
 
         inline nuint_t operator++()
         {
@@ -143,20 +104,11 @@ namespace llarp
             return *this;
         }
 
-        constexpr bool operator<(nuint_t x) const
-        {
-            return n < x.n;
-        }
+        constexpr bool operator<(nuint_t x) const { return n < x.n; }
 
-        constexpr bool operator!=(nuint_t x) const
-        {
-            return n != x.n;
-        }
+        constexpr bool operator!=(nuint_t x) const { return n != x.n; }
 
-        constexpr bool operator==(nuint_t x) const
-        {
-            return n == x.n;
-        }
+        constexpr bool operator==(nuint_t x) const { return n == x.n; }
 
         using V6Container = std::vector<uint8_t>;
         [[deprecated]] void ToV6(V6Container& c);
@@ -244,18 +196,12 @@ namespace std
     template <typename UInt_t>
     struct hash<llarp::nuint_t<UInt_t>>
     {
-        size_t operator()(const llarp::nuint_t<UInt_t>& x) const
-        {
-            return std::hash<UInt_t>{}(x.n);
-        }
+        size_t operator()(const llarp::nuint_t<UInt_t>& x) const { return std::hash<UInt_t>{}(x.n); }
     };
 
     template <typename UInt_t>
     struct hash<llarp::huint_t<UInt_t>>
     {
-        size_t operator()(const llarp::huint_t<UInt_t>& x) const
-        {
-            return std::hash<UInt_t>{}(x.h);
-        }
+        size_t operator()(const llarp::huint_t<UInt_t>& x) const { return std::hash<UInt_t>{}(x.h); }
     };
 }  // namespace std

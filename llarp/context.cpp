@@ -154,8 +154,7 @@ namespace llarp
 #endif
     }
 
-    void Context::reload()
-    {}
+    void Context::reload() {}
 
     void Context::sigINT()
     {

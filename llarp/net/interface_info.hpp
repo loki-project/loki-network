@@ -16,7 +16,7 @@ namespace llarp::net
       public:
         // TODO: is this needed?
         /// a gateway we can use if it exists
-        std::optional<ip_net> _gateway;
+        std::optional<ip_range_v> _gateway;
 
         /// human readable name of interface
         std::string name;

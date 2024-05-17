@@ -1,16 +1,14 @@
 #include "ip_range.hpp"
 
-#include "utils.hpp"
-
 namespace llarp
 {
     static auto logcat = log::Cat("iprange");
 
-    ip_net IPRange::init_ip()
+    ip_range_v IPRange::init_ip()
     {
         if (_is_ipv4)
-            return ipv4_net{ipv4{oxenc::big_to_host<uint32_t>(_addr.in4().sin_addr.s_addr)}, _mask};
-        return ipv6_net{ipv6{&_addr.in6().sin6_addr}, _mask};
+            return ipv4_range{ipv4{oxenc::big_to_host<uint32_t>(_addr.in4().sin_addr.s_addr)}, _mask};
+        return ipv6_range{ipv6{&_addr.in6().sin6_addr}, _mask};
     }
 
     std::optional<IPRange> IPRange::from_string(std::string arg)
@@ -23,7 +21,7 @@ namespace llarp
         {
             try
             {
-                auto [host, p] = parse_addr(arg.substr(0, pos), 0);
+                auto [host, p] = detail::parse_addr(arg.substr(0, pos), 0);
                 assert(p == 0);
                 _addr = oxen::quic::Address{host, p};
 
@@ -41,21 +39,21 @@ namespace llarp
         return range;
     }
 
-    std::optional<ipv4_net> IPRange::get_ipv4_net() const
+    std::optional<ipv4_range> IPRange::get_ipv4_net() const
     {
-        std::optional<ipv4_net> ret = std::nullopt;
+        std::optional<ipv4_range> ret = std::nullopt;
 
-        if (auto* maybe = std::get_if<ipv4_net>(&_ip))
+        if (auto* maybe = std::get_if<ipv4_range>(&_ip))
             ret = *maybe;
 
         return ret;
     }
 
-    std::optional<ipv6_net> IPRange::get_ipv6_net() const
+    std::optional<ipv6_range> IPRange::get_ipv6_net() const
     {
-        std::optional<ipv6_net> ret = std::nullopt;
+        std::optional<ipv6_range> ret = std::nullopt;
 
-        if (auto* maybe = std::get_if<ipv6_net>(&_ip))
+        if (auto* maybe = std::get_if<ipv6_range>(&_ip))
             ret = *maybe;
 
         return ret;
@@ -81,7 +79,7 @@ namespace llarp
         return ret;
     }
 
-    std::optional<ip> IPRange::get_ip()
+    std::optional<ip_v> IPRange::get_ip()
     {
         if (auto maybe_v4 = get_ipv4())
             return *maybe_v4;
@@ -119,7 +117,7 @@ namespace llarp
         return get_ipv6_net()->contains(other);
     }
 
-    bool IPRange::contains(const ip& other) const
+    bool IPRange::contains(const ip_v& other) const
     {
         if (auto maybe_v4 = std::get_if<ipv4>(&other))
             return contains(*maybe_v4);

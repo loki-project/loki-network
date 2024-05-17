@@ -13,10 +13,16 @@ namespace llarp
 {
     using ipv4 = oxen::quic::ipv4;
     using ipv6 = oxen::quic::ipv6;
-    using ip = std::variant<ipv4, ipv6>;
-    using ipv4_net = oxen::quic::ipv4_net;
-    using ipv6_net = oxen::quic::ipv6_net;
-    using ip_net = std::variant<ipv4_net, ipv6_net>;
+    using ip_v = std::variant<ipv4, ipv6>;
+    using ipv4_range = oxen::quic::ipv4_net;
+    using ipv6_range = oxen::quic::ipv6_net;
+    using ip_range_v = std::variant<ipv4_range, ipv6_range>;
+
+    template <typename ip_t>
+    concept IPType = std::is_same_v<ip_t, ipv4> || std::is_same_v<ip_t, ipv6>;
+
+    template <typename ip_range_t>
+    concept IPRangeType = std::is_same_v<ip_range_t, ipv4_range> || std::is_same_v<ip_range_t, ipv6_range>;
 
     using KeyedAddress = oxen::quic::RemoteAddress;
 
@@ -92,10 +98,7 @@ namespace llarp
         in6_addr dstaddr;
 
         /// Returns the flowlabel (stored in network order) in HOST ORDER
-        uint32_t set_flowlabel() const
-        {
-            return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask));
-        }
+        uint32_t set_flowlabel() const { return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
 
         /// Sets a flowlabel in network order. Takes in a label in HOST ORDER
         void set_flowlabel(uint32_t label)
@@ -115,10 +118,7 @@ namespace std
     template <>
     struct hash<llarp::ipv4>
     {
-        size_t operator()(const llarp::ipv4& obj) const
-        {
-            return hash<decltype(obj.addr)>{}(obj.addr);
-        }
+        size_t operator()(const llarp::ipv4& obj) const { return hash<decltype(obj.addr)>{}(obj.addr); }
     };
 
     template <>
@@ -133,9 +133,9 @@ namespace std
     };
 
     template <>
-    struct hash<llarp::ip>
+    struct hash<llarp::ip_v>
     {
-        size_t operator()(const llarp::ip& obj) const
+        size_t operator()(const llarp::ip_v& obj) const
         {
             if (auto maybe_v4 = std::get_if<llarp::ipv4>(&obj))
                 return hash<llarp::ipv4>{}(*maybe_v4);

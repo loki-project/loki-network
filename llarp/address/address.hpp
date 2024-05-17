@@ -7,7 +7,6 @@
 #include <llarp/service/name.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/concept.hpp>
-#include <llarp/util/fs.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -41,8 +40,7 @@ namespace llarp
         explicit NetworkAddress(std::string_view addr, std::string_view tld);
 
         // This private constructor expects NO '.snode' or '.loki' suffix
-        explicit NetworkAddress(RouterID rid, bool is_client) : _pubkey{std::move(rid)}, _is_client{is_client}
-        {}
+        explicit NetworkAddress(RouterID rid, bool is_client) : _pubkey{std::move(rid)}, _is_client{is_client} {}
 
       public:
         NetworkAddress() = default;
@@ -58,10 +56,7 @@ namespace llarp
         bool operator==(const NetworkAddress& other) const;
         bool operator!=(const NetworkAddress& other) const;
 
-        bool is_empty() const
-        {
-            return _pubkey.is_zero() and _tld.empty();
-        }
+        bool is_empty() const { return _pubkey.is_zero() and _tld.empty(); }
 
         // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
         // or '.snode'
@@ -70,45 +65,21 @@ namespace llarp
         // Assumes that the pubkey passed is NOT terminated in either a '.loki' or '.snode' suffix
         static NetworkAddress from_pubkey(const RouterID& rid, bool is_client);
 
-        bool is_client() const
-        {
-            return _is_client;
-        }
+        bool is_client() const { return _is_client; }
 
-        bool is_relay() const
-        {
-            return !is_client();
-        }
+        bool is_relay() const { return !is_client(); }
 
-        const PubKey& pubkey() const
-        {
-            return _pubkey;
-        }
+        const PubKey& pubkey() const { return _pubkey; }
 
-        PubKey& pubkey()
-        {
-            return _pubkey;
-        }
+        PubKey& pubkey() { return _pubkey; }
 
-        const RouterID& router_id() const
-        {
-            return static_cast<const RouterID&>(pubkey());
-        }
+        const RouterID& router_id() const { return static_cast<const RouterID&>(pubkey()); }
 
-        RouterID& router_id()
-        {
-            return static_cast<RouterID&>(pubkey());
-        }
+        RouterID& router_id() { return static_cast<RouterID&>(pubkey()); }
 
-        std::string name() const
-        {
-            return _pubkey.to_string();
-        }
+        std::string name() const { return _pubkey.to_string(); }
 
-        std::string to_string() const
-        {
-            return name().append(_tld);
-        }
+        std::string to_string() const { return name().append(_tld); }
     };
 
     /** RelayAddress:
@@ -131,13 +102,11 @@ namespace llarp
         RelayAddress() = default;
         ~RelayAddress() = default;
 
-        explicit RelayAddress(PubKey cpk) : _pubkey{std::move(cpk)}
-        {}
+        explicit RelayAddress(PubKey cpk) : _pubkey{std::move(cpk)} {}
 
         RelayAddress(const RelayAddress& other) = default;
 
-        RelayAddress(RelayAddress&& other) : _pubkey{std::move(other._pubkey)}
-        {}
+        RelayAddress(RelayAddress&& other) : _pubkey{std::move(other._pubkey)} {}
 
         RelayAddress& operator=(const RelayAddress& other) = default;
         RelayAddress& operator=(RelayAddress&& other) = default;
@@ -149,34 +118,19 @@ namespace llarp
         // Will throw invalid_argument with bad input
         static std::optional<RelayAddress> from_relay_addr(std::string arg);
 
-        const PubKey& pubkey() const
-        {
-            return _pubkey;
-        }
+        const PubKey& pubkey() const { return _pubkey; }
 
-        PubKey& pubkey()
-        {
-            return _pubkey;
-        }
+        PubKey& pubkey() { return _pubkey; }
 
-        const RouterID& router_id() const
-        {
-            return static_cast<const RouterID&>(pubkey());
-        }
+        const RouterID& router_id() const { return static_cast<const RouterID&>(pubkey()); }
 
-        RouterID& router_id()
-        {
-            return static_cast<RouterID&>(pubkey());
-        }
+        RouterID& router_id() { return static_cast<RouterID&>(pubkey()); }
 
-        std::string to_string() const
-        {
-            return _pubkey.to_string().append(TLD::SNODE);
-        }
+        std::string to_string() const { return _pubkey.to_string().append(TLD::SNODE); }
     };
 
     template <typename addr_t>
-    concept CONCEPT_COMPAT NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
+    concept NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
 
 }  // namespace llarp
 

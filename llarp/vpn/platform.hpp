@@ -21,8 +21,7 @@ namespace llarp::vpn
 {
     struct InterfaceAddress
     {
-        InterfaceAddress(IPRange r) : range{std::move(r)}, fam{range.is_ipv4() ? AF_INET : AF_INET6}
-        {}
+        InterfaceAddress(IPRange r) : range{std::move(r)}, fam{range.is_ipv4() ? AF_INET : AF_INET6} {}
 
         IPRange range;
         int fam;
@@ -39,10 +38,7 @@ namespace llarp::vpn
         unsigned int index;
         std::vector<InterfaceAddress> addrs;
 
-        inline IPRange operator[](size_t idx) const
-        {
-            return addrs[idx].range;
-        }
+        inline IPRange operator[](size_t idx) const { return addrs[idx].range; }
     };
 
     /// a vpn network interface
@@ -52,15 +48,11 @@ namespace llarp::vpn
         InterfaceInfo _info;
 
       public:
-        NetworkInterface(InterfaceInfo info) : _info{std::move(info)}
-        {}
+        NetworkInterface(InterfaceInfo info) : _info{std::move(info)} {}
         NetworkInterface(const NetworkInterface&) = delete;
         NetworkInterface(NetworkInterface&&) = delete;
 
-        const InterfaceInfo& interface_info() const
-        {
-            return _info;
-        }
+        const InterfaceInfo& interface_info() const { return _info; }
 
         /// idempotently wake up the upper layers as needed (platform dependant)
         virtual void MaybeWakeUpperLayers() const {};
@@ -76,10 +68,7 @@ namespace llarp::vpn
 
         virtual const llarp::net::Platform* net_ptr() const;
 
-        inline const llarp::net::Platform& Net() const
-        {
-            return *net_ptr();
-        }
+        inline const llarp::net::Platform& Net() const { return *net_ptr(); }
 
         virtual void add_route(oxen::quic::Address ip, oxen::quic::Address gateway) = 0;
 

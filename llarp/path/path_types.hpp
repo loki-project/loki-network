@@ -47,10 +47,7 @@ namespace llarp
                     == std::tie(other.txID, other.rxID, other.rc, other.upstream, other.lifetime);
             }
 
-            bool operator!=(const PathHopConfig& other) const
-            {
-                return not(*this == other);
-            }
+            bool operator!=(const PathHopConfig& other) const { return not(*this == other); }
         };
 
         // milliseconds waiting between builds on a path per router

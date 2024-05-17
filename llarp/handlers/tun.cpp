@@ -68,10 +68,7 @@ namespace llarp::handlers
 
         void stop() override{};
 
-        std::optional<oxen::quic::Address> bound_on() const override
-        {
-            return std::nullopt;
-        }
+        std::optional<oxen::quic::Address> bound_on() const override { return std::nullopt; }
 
         bool would_loop(const oxen::quic::Address& to, const oxen::quic::Address& from) const override
         {
@@ -885,7 +882,6 @@ namespace llarp::handlers
             _dns->stop();
 
         return true;
-        // return llarp::service::Endpoint::Stop();
     }
 
     void TunEndpoint::handle_outbound_packet(bstring data)

@@ -22,12 +22,10 @@ namespace llarp
 #endif
 
         // Initializes with 0s
-        constexpr uint128_t() : uint128_t{0, 0}
-        {}
+        constexpr uint128_t() : uint128_t{0, 0} {}
 
         // Initializes with least-significant value
-        constexpr uint128_t(uint64_t lower) : uint128_t{0, lower}
-        {}
+        constexpr uint128_t(uint64_t lower) : uint128_t{0, lower} {}
 
         // Initializes with upper and lower values
         constexpr uint128_t(uint64_t upper, uint64_t lower)
@@ -88,44 +86,20 @@ namespace llarp
         }
 
         // bitwise not
-        constexpr uint128_t operator~() const
-        {
-            return {~upper, ~lower};
-        }
+        constexpr uint128_t operator~() const { return {~upper, ~lower}; }
 
         // bool: true if any bit set
-        explicit constexpr operator bool() const
-        {
-            return static_cast<bool>(lower) || static_cast<bool>(upper);
-        }
+        explicit constexpr operator bool() const { return static_cast<bool>(lower) || static_cast<bool>(upper); }
 
         // Casting to basic unsigned int types: casts away upper bits
-        explicit constexpr operator uint8_t() const
-        {
-            return static_cast<uint8_t>(lower);
-        }
-        explicit constexpr operator uint16_t() const
-        {
-            return static_cast<uint16_t>(lower);
-        }
-        explicit constexpr operator uint32_t() const
-        {
-            return static_cast<uint32_t>(lower);
-        }
-        explicit constexpr operator uint64_t() const
-        {
-            return lower;
-        }
+        explicit constexpr operator uint8_t() const { return static_cast<uint8_t>(lower); }
+        explicit constexpr operator uint16_t() const { return static_cast<uint16_t>(lower); }
+        explicit constexpr operator uint32_t() const { return static_cast<uint32_t>(lower); }
+        explicit constexpr operator uint64_t() const { return lower; }
 
-        constexpr bool operator==(const uint128_t& b) const
-        {
-            return lower == b.lower && upper == b.upper;
-        }
+        constexpr bool operator==(const uint128_t& b) const { return lower == b.lower && upper == b.upper; }
 
-        constexpr bool operator!=(const uint128_t& b) const
-        {
-            return lower != b.lower || upper != b.upper;
-        }
+        constexpr bool operator!=(const uint128_t& b) const { return lower != b.lower || upper != b.upper; }
 
         constexpr bool operator<(const uint128_t& b) const
         {

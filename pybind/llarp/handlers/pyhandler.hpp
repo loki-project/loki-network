@@ -47,35 +47,20 @@ namespace llarp
                 return true;
             }
 
-            std::shared_ptr<path::PathSet> GetSelf() override
-            {
-                return shared_from_this();
-            }
+            std::shared_ptr<path::PathSet> GetSelf() override { return shared_from_this(); }
 
-            std::weak_ptr<path::PathSet> GetWeak() override
-            {
-                return weak_from_this();
-            }
+            std::weak_ptr<path::PathSet> GetWeak() override { return weak_from_this(); }
 
-            bool SupportsV6() const override
-            {
-                return false;
-            }
+            bool SupportsV6() const override { return false; }
 
-            llarp::huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID>) override
-            {
-                return {0};
-            }
+            llarp::huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID>) override { return {0}; }
 
             std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t) const override
             {
                 return std::nullopt;
             }
 
-            std::string GetIfName() const override
-            {
-                return "";
-            }
+            std::string GetIfName() const override { return ""; }
 
             using PacketHandler_t = std::function<void(service::Address, std::vector<byte_t>, service::ProtocolType)>;
 
@@ -90,10 +75,7 @@ namespace llarp
 
             void SendPacketToRemote(const llarp_buffer_t&, service::ProtocolType) override{};
 
-            std::string GetOurAddress() const
-            {
-                return m_Identity.pub.Addr().ToString();
-            }
+            std::string GetOurAddress() const { return m_Identity.pub.Addr().ToString(); }
         };
 
         using PythonEndpoint_ptr = std::shared_ptr<PythonEndpoint>;

@@ -43,8 +43,7 @@ namespace llarp
         return std::make_shared<EventLoop>(std::move(loop_ptr), loop_thread_id);
     }
 
-    EventLoop::EventLoop() : _loop{std::make_shared<oxen::quic::Loop>()}
-    {}
+    EventLoop::EventLoop() : _loop{std::make_shared<oxen::quic::Loop>()} {}
 
     EventLoop::EventLoop(loop_ptr loop_ptr, std::thread::id thread_id)
         : _loop{std::make_shared<oxen::quic::Loop>(std::move(loop_ptr), thread_id)}

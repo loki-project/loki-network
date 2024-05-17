@@ -30,10 +30,7 @@ namespace llarp::rpc
         DummyPacketSource(Callable&& f) : func{std::forward<Callable>(f)}
         {}
 
-        bool would_loop(const oxen::quic::Address&, const oxen::quic::Address&) const override
-        {
-            return false;
-        };
+        bool would_loop(const oxen::quic::Address&, const oxen::quic::Address&) const override { return false; };
 
         /// send packet with src and dst address containing buf on this packet source
         void send_to(const oxen::quic::Address&, const oxen::quic::Address&, IPPacket buf) const override
@@ -45,10 +42,7 @@ namespace llarp::rpc
         void stop() override{};
 
         /// returns the sockaddr we are bound on if applicable
-        std::optional<oxen::quic::Address> bound_on() const override
-        {
-            return std::nullopt;
-        }
+        std::optional<oxen::quic::Address> bound_on() const override { return std::nullopt; }
     };
 
     bool check_path(std::string path)

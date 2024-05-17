@@ -6,7 +6,6 @@
 #include <llarp.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/util/fs.hpp>
 #include <llarp/util/str.hpp>
 
 #include <arpa/inet.h>
@@ -19,6 +18,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <bit>
 #include <cstring>
 #include <exception>
 
@@ -83,7 +83,7 @@ namespace llarp::vpn
 
                     std::memcpy(&ifr6.addr, &in6.sin6_addr, sizeof(in6.sin6_addr));
 
-                    ifr6.prefixlen = llarp::bits::count_bits(range.mask());
+                    ifr6.prefixlen = std::popcount(range.mask());
                     ifr6.ifindex = _info.index;
                     try
                     {
@@ -100,15 +100,9 @@ namespace llarp::vpn
             control.ioctl(SIOCSIFFLAGS, &ifr);
         }
 
-        ~LinuxInterface() override
-        {
-            ::close(_fd);
-        }
+        ~LinuxInterface() override { ::close(_fd); }
 
-        int PollFD() const override
-        {
-            return _fd;
-        }
+        int PollFD() const override { return _fd; }
 
         IPPacket ReadNextPacket() override
         {
@@ -368,7 +362,7 @@ namespace llarp::vpn
             }
         }
 
-        void make_route(int cmd, int flags, oxen::quic::Address ip, llarp::ip gateway)
+        void make_route(int cmd, int flags, oxen::quic::Address ip, llarp::ip_v gateway)
         {
             _inet_addr g;
             if (auto maybe_v4 = std::get_if<ipv4>(&gateway))
@@ -394,10 +388,7 @@ namespace llarp::vpn
                 throw std::runtime_error{"failed to make netlink socket"};
         }
 
-        ~LinuxRouteManager() override
-        {
-            close(fd);
-        }
+        ~LinuxRouteManager() override { close(fd); }
 
         void add_route(oxen::quic::Address ip, oxen::quic::Address gateway) override
         {
@@ -476,10 +467,7 @@ namespace llarp::vpn
             return std::make_shared<LinuxInterface>(std::move(info));
         };
 
-        AbstractRouteManager& RouteManager() override
-        {
-            return _routeManager;
-        }
+        AbstractRouteManager& RouteManager() override { return _routeManager; }
     };
 
 }  // namespace llarp::vpn

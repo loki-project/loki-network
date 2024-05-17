@@ -7,18 +7,14 @@ namespace llarp::vpn
         EgresPacketHandlerFunc _handler;
         std::unordered_map<uint16_t, EgresPacketHandlerFunc> _ports;
 
-        explicit EgresUDPPacketHandler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
-        {}
+        explicit EgresUDPPacketHandler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)} {}
 
         void AddSubHandler(uint16_t localport, EgresPacketHandlerFunc handler) override
         {
             _ports.emplace(std::move(localport), std::move(handler));
         }
 
-        void RemoveSubHandler(uint16_t localport) override
-        {
-            _ports.erase(localport);
-        }
+        void RemoveSubHandler(uint16_t localport) override { _ports.erase(localport); }
 
         void HandleIPPacketFrom(NetworkAddress from, IPPacket pkt) override
         {
@@ -43,8 +39,7 @@ namespace llarp::vpn
     {
         EgresPacketHandlerFunc _handler;
 
-        explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
-        {}
+        explicit EgresGenericLayer4Handler(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)} {}
 
         void HandleIPPacketFrom(NetworkAddress from, IPPacket pkt) override
         {
@@ -55,8 +50,7 @@ namespace llarp::vpn
         }
     };
 
-    EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)}
-    {}
+    EgresPacketRouter::EgresPacketRouter(EgresPacketHandlerFunc baseHandler) : _handler{std::move(baseHandler)} {}
 
     void EgresPacketRouter::HandleIPPacketFrom(NetworkAddress from, IPPacket pkt)
     {

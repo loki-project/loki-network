@@ -28,10 +28,7 @@ namespace llarp::linux
     {
         struct sd_bus_deleter
         {
-            void operator()(sd_bus* ptr) const
-            {
-                sd_bus_unref(ptr);
-            }
+            void operator()(sd_bus* ptr) const { sd_bus_unref(ptr); }
         };
         std::unique_ptr<sd_bus, sd_bus_deleter> m_ptr;
         const std::string m_interface;

@@ -17,17 +17,13 @@ namespace llarp
 
         RouterID() = default;
 
-        RouterID(const uint8_t* buf) : PubKey(buf)
-        {}
+        RouterID(const uint8_t* buf) : PubKey(buf) {}
 
-        RouterID(const Data& data) : PubKey(data)
-        {}
+        RouterID(const Data& data) : PubKey(data) {}
 
-        RouterID(ustring_view data) : PubKey(data.data())
-        {}
+        RouterID(ustring_view data) : PubKey(data.data()) {}
 
-        RouterID(std::string_view data) : RouterID(to_usv(data))
-        {}
+        RouterID(std::string_view data) : RouterID(to_usv(data)) {}
 
         nlohmann::json ExtractStatus() const;
 

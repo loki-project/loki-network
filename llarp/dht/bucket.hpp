@@ -17,8 +17,7 @@ namespace llarp::dht
         using BucketStorage_t = std::map<Key_t, Val_t, XorMetric>;
         using Random_t = std::function<uint64_t()>;
 
-        Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r))
-        {}
+        Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r)) {}
 
         nlohmann::json ExtractStatus() const
         {
@@ -30,10 +29,7 @@ namespace llarp::dht
             return obj;
         }
 
-        size_t size() const
-        {
-            return nodes.size();
-        }
+        size_t size() const { return nodes.size(); }
 
         struct SetIntersector
         {
@@ -171,10 +167,7 @@ namespace llarp::dht
             }
         }
 
-        bool HasNode(const Key_t& key) const
-        {
-            return nodes.find(key) != nodes.end();
-        }
+        bool HasNode(const Key_t& key) const { return nodes.find(key) != nodes.end(); }
 
         // remove all nodes who's key matches a predicate
         template <typename Predicate>
@@ -199,10 +192,7 @@ namespace llarp::dht
             }
         }
 
-        void Clear()
-        {
-            nodes.clear();
-        }
+        void Clear() { nodes.clear(); }
 
         BucketStorage_t nodes;
         Random_t random;

@@ -23,10 +23,7 @@ namespace llarp::service
         VanityNonce vanity;
         uint64_t version = llarp::constants::proto_version;
 
-        void randomize_vanity()
-        {
-            vanity.Randomize();
-        }
+        void randomize_vanity() { vanity.Randomize(); }
 
         bool verify(uint8_t* buf, size_t size, const Signature& sig) const;
 
@@ -46,15 +43,9 @@ namespace llarp::service
                 && vanity == other.vanity;
         }
 
-        bool operator!=(const ServiceInfo& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const ServiceInfo& other) const { return !(*this == other); }
 
-        bool operator<(const ServiceInfo& other) const
-        {
-            return address() < other.address();
-        }
+        bool operator<(const ServiceInfo& other) const { return address() < other.address(); }
 
         std::string to_string() const;
 

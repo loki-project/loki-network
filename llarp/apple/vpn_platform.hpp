@@ -19,10 +19,7 @@ namespace llarp::apple
 
         std::shared_ptr<vpn::NetworkInterface> ObtainInterface(vpn::InterfaceInfo, Router*) override;
 
-        vpn::AbstractRouteManager& RouteManager() override
-        {
-            return _route_manager;
-        }
+        vpn::AbstractRouteManager& RouteManager() override { return _route_manager; }
 
       private:
         Context& _context;

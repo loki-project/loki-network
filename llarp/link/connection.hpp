@@ -14,10 +14,7 @@ namespace llarp::link
 
         bool remote_is_relay{true};
 
-        bool is_inbound() const
-        {
-            return conn->is_inbound();
-        }
+        bool is_inbound() const { return conn->is_inbound(); }
 
         Connection(
             std::shared_ptr<oxen::quic::connection_interface> c,

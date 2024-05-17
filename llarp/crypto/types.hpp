@@ -2,8 +2,8 @@
 
 #include "constants.hpp"
 
+#include <llarp/constants/files.hpp>
 #include <llarp/util/aligned.hpp>
-#include <llarp/util/fs.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -23,12 +23,10 @@ namespace llarp
     {
         SecretKey() = default;
 
-        explicit SecretKey(const uint8_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr)
-        {}
+        explicit SecretKey(const uint8_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr) {}
 
         // The full data
-        explicit SecretKey(const AlignedBuffer<SECKEYSIZE>& seed) : AlignedBuffer<SECKEYSIZE>(seed)
-        {}
+        explicit SecretKey(const AlignedBuffer<SECKEYSIZE>& seed) : AlignedBuffer<SECKEYSIZE>(seed) {}
 
         // Just the seed, we recalculate the pubkey
         explicit SecretKey(const AlignedBuffer<32>& seed)
@@ -40,10 +38,7 @@ namespace llarp
         /// recalculate public component
         bool recalculate();
 
-        std::string_view to_string() const
-        {
-            return "[secretkey]";
-        }
+        std::string_view to_string() const { return "[secretkey]"; }
 
         PubKey to_pubkey() const;
 
@@ -65,30 +60,19 @@ namespace llarp
     {
         PrivateKey() = default;
 
-        explicit PrivateKey(const uint8_t* ptr) : AlignedBuffer<64>(ptr)
-        {}
+        explicit PrivateKey(const uint8_t* ptr) : AlignedBuffer<64>(ptr) {}
 
-        explicit PrivateKey(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash)
-        {}
+        explicit PrivateKey(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash) {}
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        const uint8_t* signing_hash() const
-        {
-            return data() + 32;
-        }
+        const uint8_t* signing_hash() const { return data() + 32; }
 
         /// Returns a pointer to the beginning of the 32-byte hash which is used for
         /// pseudorandomness when signing with this private key.
-        uint8_t* signing_hash()
-        {
-            return data() + 32;
-        }
+        uint8_t* signing_hash() { return data() + 32; }
 
-        std::string_view to_string() const
-        {
-            return "[privatekey]";
-        }
+        std::string_view to_string() const { return "[privatekey]"; }
 
         /// Computes the public key
         bool to_pubkey(PubKey& pubkey) const;

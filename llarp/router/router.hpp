@@ -16,7 +16,6 @@
 #include <llarp/rpc/rpc_client.hpp>
 #include <llarp/rpc/rpc_server.hpp>
 #include <llarp/util/buffer.hpp>
-#include <llarp/util/fs.hpp>
 #include <llarp/util/mem.hpp>
 #include <llarp/util/service_manager.hpp>
 #include <llarp/util/str.hpp>
@@ -198,30 +197,15 @@ namespace llarp
       public:
         bool fully_meshed() const;
 
-        bool using_tun_if() const
-        {
-            return _should_init_tun;
-        }
+        bool using_tun_if() const { return _should_init_tun; }
 
-        bool testnet() const
-        {
-            return _testnet;
-        }
+        bool testnet() const { return _testnet; }
 
-        bool is_bootstrap_seed() const
-        {
-            return _bootstrap_seed;
-        }
+        bool is_bootstrap_seed() const { return _bootstrap_seed; }
 
-        int required_num_client_conns() const
-        {
-            return client_router_connections;
-        }
+        int required_num_client_conns() const { return client_router_connections; }
 
-        const RouterID& local_rid() const
-        {
-            return router_contact.router_id();
-        }
+        const RouterID& local_rid() const { return router_contact.router_id(); }
 
         bool needs_initial_fetch() const;
 
@@ -229,112 +213,49 @@ namespace llarp
 
         void for_each_connection(std::function<void(link::Connection&)> func);
 
-        const std::unique_ptr<handlers::TunEndpoint>& tun_endpoint() const
-        {
-            return _tun;
-        }
+        const std::unique_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
 
-        const std::shared_ptr<handlers::SessionEndpoint>& session_endpoint() const
-        {
-            return _session_endpoint;
-        }
+        const std::shared_ptr<handlers::SessionEndpoint>& session_endpoint() const { return _session_endpoint; }
 
-        const std::shared_ptr<LinkManager>& link_manager() const
-        {
-            return _link_manager;
-        }
+        const std::shared_ptr<LinkManager>& link_manager() const { return _link_manager; }
 
-        const std::shared_ptr<QUICTunnel>& quic_tunnel() const
-        {
-            return _quic_tun;
-        }
+        const std::shared_ptr<QUICTunnel>& quic_tunnel() const { return _quic_tun; }
 
-        const Contacts& contacts() const
-        {
-            return *_contacts;
-        }
+        const Contacts& contacts() const { return *_contacts; }
 
-        Contacts& contacts()
-        {
-            return *_contacts;
-        }
+        Contacts& contacts() { return *_contacts; }
 
-        std::shared_ptr<Config> config() const
-        {
-            return _config;
-        }
+        std::shared_ptr<Config> config() const { return _config; }
 
-        path::BuildLimiter& pathbuild_limiter()
-        {
-            return _pathbuild_limiter;
-        }
+        path::BuildLimiter& pathbuild_limiter() { return _pathbuild_limiter; }
 
         const llarp::net::Platform& net() const;
 
-        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const
-        {
-            return _lmq;
-        }
+        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _lmq; }
 
-        const std::shared_ptr<rpc::RPCClient>& rpc_client() const
-        {
-            return _rpc_client;
-        }
+        const std::shared_ptr<rpc::RPCClient>& rpc_client() const { return _rpc_client; }
 
-        int outbound_udp_socket() const
-        {
-            return _outbound_udp_socket;
-        }
+        int outbound_udp_socket() const { return _outbound_udp_socket; }
 
-        const std::shared_ptr<KeyManager>& key_manager() const
-        {
-            return _key_manager;
-        }
+        const std::shared_ptr<KeyManager>& key_manager() const { return _key_manager; }
 
-        const SecretKey& identity() const
-        {
-            return _identity;
-        }
+        const SecretKey& identity() const { return _identity; }
 
-        const SecretKey& encryption() const
-        {
-            return _encryption;
-        }
+        const SecretKey& encryption() const { return _encryption; }
 
-        Profiling& router_profiling()
-        {
-            return _router_profiling;
-        }
+        Profiling& router_profiling() { return _router_profiling; }
 
-        const std::shared_ptr<EventLoop>& loop() const
-        {
-            return _loop;
-        }
+        const std::shared_ptr<EventLoop>& loop() const { return _loop; }
 
-        vpn::Platform* vpn_platform() const
-        {
-            return _vpn.get();
-        }
+        vpn::Platform* vpn_platform() const { return _vpn.get(); }
 
-        const std::shared_ptr<NodeDB>& node_db() const
-        {
-            return _node_db;
-        }
+        const std::shared_ptr<NodeDB>& node_db() const { return _node_db; }
 
-        std::shared_ptr<path::PathContext>& path_context()
-        {
-            return _path_context;
-        }
+        std::shared_ptr<path::PathContext>& path_context() { return _path_context; }
 
-        const std::shared_ptr<path::PathContext>& path_context() const
-        {
-            return _path_context;
-        }
+        const std::shared_ptr<path::PathContext>& path_context() const { return _path_context; }
 
-        const LocalRC& rc() const
-        {
-            return router_contact;
-        }
+        const LocalRC& rc() const { return router_contact; }
 
         oxen::quic::Address listen_addr() const;
 
@@ -378,10 +299,7 @@ namespace llarp
 
         std::function<void(void)> _router_close_cb;
 
-        void set_router_close_cb(std::function<void(void)> hook)
-        {
-            _router_close_cb = hook;
-        }
+        void set_router_close_cb(std::function<void(void)> hook) { _router_close_cb = hook; }
 
         bool looks_alive() const
         {
@@ -389,10 +307,7 @@ namespace llarp
             return current <= _last_tick || (current - _last_tick) <= std::chrono::milliseconds{30000};
         }
 
-        const std::shared_ptr<RoutePoker>& route_poker() const
-        {
-            return _route_poker;
-        }
+        const std::shared_ptr<RoutePoker>& route_poker() const { return _route_poker; }
 
         std::string status_line();
 
@@ -431,10 +346,7 @@ namespace llarp
 
         bool ensure_encryption_key();
 
-        const RouterID& pubkey() const
-        {
-            return _id_pubkey;
-        }
+        const RouterID& pubkey() const { return _id_pubkey; }
 
         // const uint8_t* pubkey() const
         // {
@@ -462,10 +374,7 @@ namespace llarp
         /// call internal router ticker
         void Tick();
 
-        std::chrono::milliseconds now() const
-        {
-            return llarp::time_now_ms();
-        }
+        std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 
         void connect_to_random(int N);
 

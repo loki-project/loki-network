@@ -127,10 +127,7 @@ namespace llarp
 
         bool send_data_message(const RouterID& remote, std::string data);
 
-        Router& router() const
-        {
-            return _router;
-        }
+        Router& router() const { return _router; }
 
       private:
         explicit LinkManager(Router& r);
@@ -178,15 +175,9 @@ namespace llarp
             const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& rid, bool client_only = false);
 
       public:
-        const link::Endpoint& endpoint() const
-        {
-            return ep;
-        }
+        const link::Endpoint& endpoint() const { return ep; }
 
-        const oxen::quic::Address& local()
-        {
-            return addr;
-        }
+        const oxen::quic::Address& local() { return addr; }
 
         void gossip_rc(const RouterID& last_sender, const RemoteRC& rc);
 

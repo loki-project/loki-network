@@ -52,22 +52,15 @@ namespace llarp::rpc
             hex,
             base64
         } format;
-        explicit json_binary_proxy(nlohmann::json& elem, fmt format) : e{elem}, format{format}
-        {}
+        explicit json_binary_proxy(nlohmann::json& elem, fmt format) : e{elem}, format{format} {}
         json_binary_proxy() = delete;
 
         json_binary_proxy(const json_binary_proxy&) = default;
         json_binary_proxy(json_binary_proxy&&) = default;
 
         /// Dereferencing a proxy element accesses the underlying nlohmann::json
-        nlohmann::json& operator*()
-        {
-            return e;
-        }
-        nlohmann::json* operator->()
-        {
-            return &e;
-        }
+        nlohmann::json& operator*() { return e; }
+        nlohmann::json* operator->() { return &e; }
 
         /// Descends into the json object, returning a new binary value proxy around the child
         /// element.
@@ -78,14 +71,8 @@ namespace llarp::rpc
         }
 
         /// Returns a binary value proxy around the first/last element (requires an underlying list)
-        json_binary_proxy front()
-        {
-            return json_binary_proxy{e.front(), format};
-        }
-        json_binary_proxy back()
-        {
-            return json_binary_proxy{e.back(), format};
-        }
+        json_binary_proxy front() { return json_binary_proxy{e.front(), format}; }
+        json_binary_proxy back() { return json_binary_proxy{e.back(), format}; }
 
         /// Assigns binary data from a string_view/string/etc.
         nlohmann::json& operator=(std::string_view binary_data);

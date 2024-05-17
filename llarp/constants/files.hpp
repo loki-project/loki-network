@@ -1,14 +1,19 @@
 #pragma once
 #include "platform.hpp"
 
-#include <llarp/util/fs.hpp>
-
-#include <stdlib.h>
+#include <filesystem>
 
 #ifndef _WIN32
 #include <pwd.h>
 #include <unistd.h>
 #endif
+
+// namespace fs
+// {
+//     using namespace std::filesystem;
+// }
+
+namespace fs = std::filesystem;
 
 namespace llarp
 {

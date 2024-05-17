@@ -148,20 +148,11 @@ namespace llarp
             /// get the "name" of this path set
             // virtual std::string name() const = 0;
 
-            const Router& router() const
-            {
-                return _router;
-            }
+            const Router& router() const { return _router; }
 
-            Router& router()
-            {
-                return _router;
-            }
+            Router& router() { return _router; }
 
-            virtual void blacklist_snode(const RouterID& remote)
-            {
-                snode_blacklist.insert(remote);
-            }
+            virtual void blacklist_snode(const RouterID& remote) { snode_blacklist.insert(remote); }
 
             std::optional<std::shared_ptr<Path>> get_path(HopID id) const;
 
@@ -199,15 +190,9 @@ namespace llarp
             /// get the number of paths in this status
             size_t num_paths() const;
 
-            const BuildStats& build_stats() const
-            {
-                return _build_stats;
-            }
+            const BuildStats& build_stats() const { return _build_stats; }
 
-            BuildStats& build_stats()
-            {
-                return _build_stats;
-            }
+            BuildStats& build_stats() { return _build_stats; }
 
             virtual bool stop(bool send_close = false);
 

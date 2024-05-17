@@ -31,10 +31,7 @@ namespace llarp::rpc
       public:
         //  Returns true if response is bt-encoded, and false for json
         //  Note: do not set value
-        bool is_bt() const
-        {
-            return bt;
-        }
+        bool is_bt() const { return bt; }
 
         //  Callable method to indicate request is bt-encoded
         void set_bt()

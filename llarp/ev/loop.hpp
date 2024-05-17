@@ -49,15 +49,9 @@ namespace llarp
         std::shared_ptr<EventHandler> make_handler();
 
       public:
-        const loop_ptr& loop() const
-        {
-            return _loop->loop();
-        }
+        const loop_ptr& loop() const { return _loop->loop(); }
 
-        bool in_event_loop() const
-        {
-            return _loop->in_event_loop();
-        }
+        bool in_event_loop() const { return _loop->in_event_loop(); }
 
         bool add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler);
 
@@ -73,10 +67,7 @@ namespace llarp
             return _loop->call_get(std::forward<Callable>(f));
         }
 
-        void call_soon(std::function<void(void)> f)
-        {
-            _loop->call_soon(std::move(f));
-        }
+        void call_soon(std::function<void(void)> f) { _loop->call_soon(std::move(f)); }
 
         void call_later(loop_time delay, std::function<void()> hook);
 

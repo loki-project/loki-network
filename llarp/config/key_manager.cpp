@@ -10,8 +10,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("keymanager");
 
-    KeyManager::KeyManager() : is_initialized(false), backup_keys(false)
-    {}
+    KeyManager::KeyManager() : is_initialized(false), backup_keys(false) {}
 
     bool KeyManager::initialize(const llarp::Config& config, bool gen_if_absent, bool is_snode)
     {

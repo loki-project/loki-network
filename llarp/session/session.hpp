@@ -14,7 +14,7 @@
 
 namespace llarp
 {
-    // struct Router;
+    using on_session_init_hook = std::function<void(oxen::quic::Address)>;
 
     namespace link
     {
@@ -54,19 +54,19 @@ namespace llarp
             std::shared_ptr<path::Path> _current_path;
             HopID _current_hop_id;
 
+            // manually routed QUIC endpoint
             std::shared_ptr<oxen::quic::Endpoint> _ep;
+
             std::shared_ptr<oxen::quic::connection_interface> _ci;
 
+            // TCPHandle listeners mapped to the local port they are bound on
             std::unordered_map<uint16_t, std::shared_ptr<TCPHandle>> _handles;
 
             std::unordered_set<std::shared_ptr<TCPConnection>> _tcp_conns;
 
             void _init_ep();
 
-            const std::shared_ptr<path::Path>& current_path() const
-            {
-                return _current_path;
-            }
+            const std::shared_ptr<path::Path>& current_path() const { return _current_path; }
 
           public:
             BaseSession(
@@ -78,10 +78,7 @@ namespace llarp
                 bool use_tun,
                 bool is_outbound);
 
-            constexpr bool is_outbound() const
-            {
-                return _is_outbound;
-            }
+            constexpr bool is_outbound() const { return _is_outbound; }
 
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func = nullptr);
@@ -94,7 +91,7 @@ namespace llarp
 
             void tcp_backend_connect();
 
-            void tcp_backend_listen(uint16_t port = 0);
+            void tcp_backend_listen(on_session_init_hook cb, uint16_t port = 0);
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -120,15 +117,9 @@ namespace llarp
             const bool _is_snode_service{false};
 
           public:
-            std::shared_ptr<path::PathHandler> get_self() override
-            {
-                return shared_from_this();
-            }
+            std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
-            std::weak_ptr<path::PathHandler> get_weak() override
-            {
-                return weak_from_this();
-            }
+            std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
             std::shared_ptr<path::Path> current_path()
             {
@@ -160,10 +151,7 @@ namespace llarp
 
             bool is_ready() const;
 
-            const RouterID& remote_endpoint() const
-            {
-                return _remote.router_id();
-            }
+            const RouterID& remote_endpoint() const { return _remote.router_id(); }
 
             std::optional<HopID> current_hop_id() const
             {
@@ -175,15 +163,9 @@ namespace llarp
 
             bool is_expired(std::chrono::milliseconds now) const;
 
-            service::SessionTag tag()
-            {
-                return _tag;
-            }
+            service::SessionTag tag() { return _tag; }
 
-            const service::SessionTag& tag() const
-            {
-                return _tag;
-            }
+            const service::SessionTag& tag() const { return _tag; }
         };
 
         struct InboundSession final : public BaseSession
@@ -204,7 +186,7 @@ namespace llarp
         };
 
         template <typename session_t>
-        concept CONCEPT_COMPAT SessionType = std::is_base_of_v<BaseSession, session_t>;
+        concept SessionType = std::is_base_of_v<BaseSession, session_t>;
 
     }  // namespace session
 }  // namespace llarp

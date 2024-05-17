@@ -23,10 +23,7 @@ namespace llarp::service
 
         nlohmann::json ExtractStatus() const;
 
-        bool is_expired(std::chrono::milliseconds now) const
-        {
-            return now >= expiry;
-        }
+        bool is_expired(std::chrono::milliseconds now) const { return now >= expiry; }
 
         bool expires_soon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 30s) const
         {
@@ -57,10 +54,7 @@ namespace llarp::service
                 == std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version, other.latency);
         }
 
-        bool operator!=(const Introduction& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const Introduction& other) const { return !(*this == other); }
     };
 
     /// comparator for introduction timestamp in order of nearest to furthest expiry time

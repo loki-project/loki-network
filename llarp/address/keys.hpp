@@ -20,18 +20,12 @@ namespace llarp
 
         std::string to_string() const;
 
-        explicit PubKey(const uint8_t* data) : AlignedBuffer<PUBKEYSIZE>{data}
-        {}
-        explicit PubKey(const std::array<uint8_t, PUBKEYSIZE>& data) : AlignedBuffer<PUBKEYSIZE>{data}
-        {}
-        explicit PubKey(ustring_view data) : AlignedBuffer<PUBKEYSIZE>{data.data()}
-        {}
-        explicit PubKey(std::string_view data) : PubKey{to_usv(data)}
-        {}
-        PubKey(const PubKey& other) : PubKey{other.data()}
-        {}
-        PubKey(PubKey&& other) : PubKey{other.data()}
-        {}
+        explicit PubKey(const uint8_t* data) : AlignedBuffer<PUBKEYSIZE>{data} {}
+        explicit PubKey(const std::array<uint8_t, PUBKEYSIZE>& data) : AlignedBuffer<PUBKEYSIZE>{data} {}
+        explicit PubKey(ustring_view data) : AlignedBuffer<PUBKEYSIZE>{data.data()} {}
+        explicit PubKey(std::string_view data) : PubKey{to_usv(data)} {}
+        PubKey(const PubKey& other) : PubKey{other.data()} {}
+        PubKey(PubKey&& other) : PubKey{other.data()} {}
 
         PubKey& operator=(const PubKey& other);
 

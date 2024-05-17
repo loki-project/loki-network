@@ -50,21 +50,16 @@ namespace llarp::util
             }
         }
 #else
-        void lock() const
-        {}
+        void lock() const {}
 #endif
         // Does nothing; once locked the mutex belongs to that thread forever
-        void unlock() const
-        {}
+        void unlock() const {}
     };
 
     /// a lock that does nothing
     struct NullLock
     {
-        NullLock(NullMutex& mtx)
-        {
-            mtx.lock();
-        }
+        NullLock(NullMutex& mtx) { mtx.lock(); }
 
         ~NullLock()
         {
@@ -86,8 +81,7 @@ namespace llarp::util
         std::condition_variable m_cv;
 
       public:
-        Semaphore(size_t count) : m_count(count)
-        {}
+        Semaphore(size_t count) : m_count(count) {}
 
         void notify()
         {

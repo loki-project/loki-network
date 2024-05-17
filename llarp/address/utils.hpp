@@ -37,69 +37,115 @@ namespace llarp
 
     uint32_t udp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum);
 
-    inline static std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
+    namespace detail
     {
-        std::optional<std::string> ret = std::nullopt;
-
-        if (auto pos = arg.find_first_of('.'); pos != std::string_view::npos)
+        inline static std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
         {
-            auto _prefix = arg.substr(0, pos);
-            // check the pubkey prefix is the right length
-            if (_prefix.length() != PUBKEYSIZE)
-                return ret;
+            std::optional<std::string> ret = std::nullopt;
 
-            // verify the tld is allowed
-            auto _tld = arg.substr(pos);
+            if (auto pos = arg.find_first_of('.'); pos != std::string_view::npos)
+            {
+                auto _prefix = arg.substr(0, pos);
+                // check the pubkey prefix is the right length
+                if (_prefix.length() != PUBKEYSIZE)
+                    return ret;
 
-            if (_tld == tld and TLD::allowed.count(_tld))
-                ret = _prefix;
+                // verify the tld is allowed
+                auto _tld = arg.substr(pos);
+
+                if (_tld == tld and TLD::allowed.count(_tld))
+                    ret = _prefix;
+            }
+
+            return ret;
+        };
+
+        inline static std::pair<std::string, uint16_t> parse_addr(
+            std::string_view addr, std::optional<uint16_t> default_port)
+        {
+            std::pair<std::string, uint16_t> result;
+
+            if (auto p = addr.find_last_not_of("0123456789");
+                p != std::string_view::npos && p + 2 <= addr.size() && addr[p] == ':')
+            {
+                if (!parse_int(addr.substr(p + 1), result.second))
+                    throw std::invalid_argument{"Invalid address: could not parse port"};
+                addr.remove_suffix(addr.size() - p);
+            }
+            else if (default_port)
+            {
+                result.second = *default_port;
+            }
+            else
+            {
+                throw std::invalid_argument{"Invalid address: no port was specified and there is no default"};
+            }
+
+            bool had_sq_brackets = false;
+
+            if (!addr.empty() && addr.front() == '[' && addr.back() == ']')
+            {
+                addr.remove_prefix(1);
+                addr.remove_suffix(1);
+                had_sq_brackets = true;
+            }
+
+            if (auto p = addr.find_first_not_of("0123456789."); p != std::string_view::npos)
+            {
+                if (auto q = addr.find_first_not_of("0123456789abcdef:."); q != std::string_view::npos)
+                    throw std::invalid_argument{"Invalid address: does not look like IPv4 or IPv6!"};
+                if (!had_sq_brackets)
+                    throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
+            }
+
+            if (addr.empty())
+                addr = "::";
+
+            result.first = addr;
+            return result;
         }
 
-        return ret;
-    };
-
-    inline static std::pair<std::string, uint16_t> parse_addr(
-        std::string_view addr, std::optional<uint16_t> default_port)
-    {
-        std::pair<std::string, uint16_t> result;
-
-        if (auto p = addr.find_last_not_of("0123456789");
-            p != std::string_view::npos && p + 2 <= addr.size() && addr[p] == ':')
+        template <std::integral T>
+        inline constexpr T max_value()
         {
-            if (!parse_int(addr.substr(p + 1), result.second))
-                throw std::invalid_argument{"Invalid address: could not parse port"};
-            addr.remove_suffix(addr.size() - p);
-        }
-        else if (default_port)
-        {
-            result.second = *default_port;
-        }
-        else
-        {
-            throw std::invalid_argument{"Invalid address: no port was specified and there is no default"};
+            return std::numeric_limits<T>::max();
         }
 
-        bool had_sq_brackets = false;
+        inline constexpr size_t num_ipv4_private{272};
 
-        if (!addr.empty() && addr.front() == '[' && addr.back() == ']')
+        template <std::integral T>
+        constexpr std::array<ipv4_range, num_ipv4_private> generate_private_ipv4()
         {
-            addr.remove_prefix(1);
-            addr.remove_suffix(1);
-            had_sq_brackets = true;
+            std::array<ipv4_range, num_ipv4_private> ret{};
+
+            std::generate(ret.begin(), ret.begin() + 16, [n = 16]() mutable {
+                ipv4_range r = ipv4(172, n, 0, 0) / 16;
+                n += 1;
+                return r;
+            });
+
+            std::generate(ret.begin() + 16, ret.end(), [n = 0]() mutable {
+                ipv4_range r = ipv4(10, n, 0, 0) / 16;
+                n += 1;
+                return r;
+            });
+
+            return ret;
         }
 
-        if (auto p = addr.find_first_not_of("0123456789."); p != std::string_view::npos)
-        {
-            if (auto q = addr.find_first_not_of("0123456789abcdef:."); q != std::string_view::npos)
-                throw std::invalid_argument{"Invalid address: does not look like IPv4 or IPv6!"};
-            if (!had_sq_brackets)
-                throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
-        }
+    }  //  namespace detail
 
-        if (addr.empty())
-            addr = "::";
+    /*
+        16
+        256
 
-        result.first = addr;
-        return result;
-    }
+        528 total IPv4 addresses
+
+        for (int oct = 16; oct <= 31; ++oct)
+            if (auto range = IPRange::FromIPv4(172, oct, 0, 1, 16); good(range))
+                return range;
+        for (int oct = 0; oct <= 255; ++oct)
+            if (auto range = IPRange::FromIPv4(10, oct, 0, 1, 16); good(range))
+                return range;
+    */
 }  //  namespace llarp

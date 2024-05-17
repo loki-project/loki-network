@@ -7,8 +7,7 @@ namespace llarp::vpn
         ip_pkt_hook _base_handler;
         std::unordered_map<uint16_t, udp_pkt_hook> _port_mapped_handlers;
 
-        explicit UDPPacketHandler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)}
-        {}
+        explicit UDPPacketHandler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)} {}
 
         void add_sub_handler(uint16_t localport, udp_pkt_hook handler) override
         {
@@ -37,8 +36,7 @@ namespace llarp::vpn
     {
         ip_pkt_hook _base_handler;
 
-        explicit GenericLayer4Handler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)}
-        {}
+        explicit GenericLayer4Handler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)} {}
 
         void handle_ip_packet(UDPPacket) override
         {
@@ -47,8 +45,7 @@ namespace llarp::vpn
         }
     };
 
-    PacketRouter::PacketRouter(ip_pkt_hook baseHandler) : _handler{std::move(baseHandler)}
-    {}
+    PacketRouter::PacketRouter(ip_pkt_hook baseHandler) : _handler{std::move(baseHandler)} {}
 
     void PacketRouter::handle_ip_packet(IPPacket pkt)
     {

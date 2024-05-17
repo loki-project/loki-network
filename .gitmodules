@@ -1,9 +1,6 @@
 [submodule "external/nlohmann"]
 	path = external/nlohmann
 	url = https://github.com/nlohmann/json.git
-[submodule "external/ghc-filesystem"]
-	path = external/ghc-filesystem
-	url = https://github.com/gulrak/filesystem.git
 [submodule "test/Catch2"]
 	path = test/Catch2
 	url = https://github.com/catchorg/Catch2
@@ -17,9 +14,6 @@
 [submodule "external/oxen-mq"]
 	path = external/oxen-mq
 	url = https://github.com/oxen-io/oxen-mq
-[submodule "external/uvw"]
-	path = external/uvw
-	url = https://github.com/jagerman/uvw.git
 [submodule "external/cpr"]
 	path = external/cpr
 	url = https://github.com/whoshuu/cpr
@@ -32,9 +26,6 @@
 [submodule "external/oxen-libquic"]
 	path = external/oxen-libquic
 	url = https://github.com/oxen-io/oxen-libquic.git
-[submodule "external/span-lite"]
-	path = external/span-lite
-	url = https://github.com/martinmoene/span-lite.git
 [submodule "external/oxen-encoding"]
 	path = external/oxen-encoding
 	url = https://github.com/oxen-io/oxen-encoding.git

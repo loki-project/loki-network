@@ -14,7 +14,6 @@
 #include <llarp/net/net_int.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/router_contact.hpp>
-#include <llarp/util/fs.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
 
@@ -151,7 +150,7 @@ namespace llarp
         // If _local_ip_range is set, the following two optionals are also set
         std::optional<IPRange> _local_ip_range;
         std::optional<oxen::quic::Address> _local_addr;
-        std::optional<ip> _local_ip;
+        std::optional<ip_v> _local_ip;
 
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 

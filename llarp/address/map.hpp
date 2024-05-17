@@ -5,6 +5,7 @@
 #include "types.hpp"
 
 #include <llarp/util/formattable.hpp>
+#include <llarp/util/thread/threading.hpp>
 
 namespace llarp
 {
@@ -20,6 +21,9 @@ namespace llarp
         std::unordered_map<net_addr_t, local_addr_t> _remote_to_local;
         std::unordered_map<std::string, net_addr_t> _name_to_remote;
 
+        using Lock_t = util::NullLock;
+        mutable util::NullMutex addr_mutex;
+
       public:
         /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent
             to `local` or `remote` already exists, then they will be assigned to the corresponding value.
@@ -29,6 +33,8 @@ namespace llarp
         */
         bool insert_or_assign(local_addr_t local, net_addr_t remote)
         {
+            Lock_t l{addr_mutex};
+
             auto name = remote.name();
 
             auto [_1, b1] = _local_to_remote.insert_or_assign(local, remote);
@@ -40,6 +46,8 @@ namespace llarp
 
         std::optional<local_addr_t> get_local_from_remote(const net_addr_t& remote)
         {
+            Lock_t l{addr_mutex};
+
             std::optional<local_addr_t> ret = std::nullopt;
 
             if (auto itr = _remote_to_local.find(remote); itr != _remote_to_local.end())
@@ -50,6 +58,8 @@ namespace llarp
 
         std::optional<net_addr_t> get_remote_from_local(const local_addr_t& local)
         {
+            Lock_t l{addr_mutex};
+
             std::optional<net_addr_t> ret = std::nullopt;
 
             if (auto itr = _local_to_remote.find(local); itr != _local_to_remote.end())
@@ -60,6 +70,8 @@ namespace llarp
 
         std::optional<net_addr_t> get_remote_from_name(const std::string& name)
         {
+            Lock_t l{addr_mutex};
+
             std::optional<net_addr_t> ret = std::nullopt;
 
             if (auto itr = _name_to_remote.find(name); itr != _local_to_remote.end())
@@ -70,6 +82,8 @@ namespace llarp
 
         std::optional<local_addr_t> get_local_from_name(const std::string& name)
         {
+            Lock_t l{addr_mutex};
+
             std::optional<local_addr_t> ret = std::nullopt;
 
             if (auto itr = _name_to_remote.find(name); itr != _local_to_remote.end())
@@ -80,11 +94,15 @@ namespace llarp
 
         bool has_remote(const net_addr_t& remote) const
         {
+            Lock_t l{addr_mutex};
+
             return _remote_to_local.contains(remote);
         }
 
         void unmap(const net_addr_t& remote)
         {
+            Lock_t l{addr_mutex};
+
             auto name = remote.name();
 
             if (auto it_a = _remote_to_local.find(remote); it_a != _remote_to_local.end())
@@ -103,6 +121,8 @@ namespace llarp
 
         void unmap(const local_addr_t& local)
         {
+            Lock_t l{addr_mutex};
+
             if (auto it_a = _local_to_remote.find(local); it_a != _local_to_remote.end())
             {
                 if (auto it_b = _remote_to_local.find(it_a->second); it_b != _remote_to_local.end())
@@ -120,6 +140,8 @@ namespace llarp
         // All types satisfying the concept RemoteAddrType have a ::name() overload
         void unmap(const std::string& name)
         {
+            Lock_t l{addr_mutex};
+
             if (auto it_a = _name_to_remote.find(name); it_a != _name_to_remote.end())
             {
                 if (auto it_b = _remote_to_local.find(it_a->second); it_b != _remote_to_local.end())
@@ -134,14 +156,8 @@ namespace llarp
             }
         }
 
-        std::optional<local_addr_t> operator[](const net_addr_t& remote)
-        {
-            return get_local_from_remote(remote);
-        }
+        std::optional<local_addr_t> operator[](const net_addr_t& remote) { return get_local_from_remote(remote); }
 
-        std::optional<net_addr_t> operator[](const local_addr_t& local)
-        {
-            return get_remote_from_local(local);
-        }
+        std::optional<net_addr_t> operator[](const local_addr_t& local) { return get_remote_from_local(local); }
     };
 }  //  namespace llarp

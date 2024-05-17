@@ -15,8 +15,7 @@ namespace llarp
 
     struct RoutePoker : public std::enable_shared_from_this<RoutePoker>
     {
-        RoutePoker(Router& r) : router{r}
-        {}
+        RoutePoker(Router& r) : router{r} {}
 
         void add_route(oxen::quic::Address ip);
 

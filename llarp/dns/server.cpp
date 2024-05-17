@@ -58,10 +58,7 @@ namespace llarp::dns
                 throw std::runtime_error{"cannot find which address our dns socket is bound on"};
         }
 
-        std::optional<oxen::quic::Address> bound_on() const override
-        {
-            return _udp->bind();
-        }
+        std::optional<oxen::quic::Address> bound_on() const override { return _udp->bind(); }
 
         bool would_loop(const oxen::quic::Address& to, const oxen::quic::Address&) const override
         {
@@ -79,10 +76,7 @@ namespace llarp::dns
             _udp->send(to, std::move(data));
         }
 
-        void stop() override
-        {
-            _udp->close();
-        }
+        void stop() override { _udp->close(); }
     };
 
     namespace libunbound
@@ -132,16 +126,10 @@ namespace llarp::dns
 
             struct ub_result_deleter
             {
-                void operator()(ub_result* ptr)
-                {
-                    ::ub_resolve_free(ptr);
-                }
+                void operator()(ub_result* ptr) { ::ub_resolve_free(ptr); }
             };
 
-            const net::Platform* net_ptr() const
-            {
-                return llarp::net::Platform::Default_ptr();
-            }
+            const net::Platform* net_ptr() const { return llarp::net::Platform::Default_ptr(); }
 
             static void callback(void* data, int err, ub_result* _result)
             {
@@ -312,25 +300,13 @@ namespace llarp::dns
                 up(m_conf);
             }
 
-            ~Resolver() override
-            {
-                down();
-            }
+            ~Resolver() override { down(); }
 
-            std::string_view resolver_name() const override
-            {
-                return "unbound";
-            }
+            std::string_view resolver_name() const override { return "unbound"; }
 
-            std::optional<oxen::quic::Address> get_local_addr() const override
-            {
-                return _local_addr;
-            }
+            std::optional<oxen::quic::Address> get_local_addr() const override { return _local_addr; }
 
-            void remove_pending(const std::shared_ptr<Query>& query)
-            {
-                _pending.erase(query);
-            }
+            void remove_pending(const std::shared_ptr<Query>& query) { _pending.erase(query); }
 
             void up(const llarp::DnsConfig& conf)
             {
@@ -421,10 +397,7 @@ namespace llarp::dns
                 }
             }
 
-            int rank() const override
-            {
-                return 10;
-            }
+            int rank() const override { return 10; }
 
             void reset_resolver(std::optional<std::vector<oxen::quic::Address>> replace_upstream) override
             {

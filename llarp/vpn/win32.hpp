@@ -20,10 +20,7 @@ namespace llarp::win32
         llarp::Context* const _ctx;
         const int m_Metric{2};
 
-        const auto& Net() const
-        {
-            return _ctx->router->net();
-        }
+        const auto& Net() const { return _ctx->router->net(); }
 
         void make_route(std::string ip, std::string gw, std::string cmd);
 
@@ -35,8 +32,7 @@ namespace llarp::win32
         VPNPlatform(const VPNPlatform&) = delete;
         VPNPlatform(VPNPlatform&&) = delete;
 
-        VPNPlatform(llarp::Context* ctx) : Platform{}, _ctx{ctx}
-        {}
+        VPNPlatform(llarp::Context* ctx) : Platform{}, _ctx{ctx} {}
 
         ~VPNPlatform() override = default;
 
@@ -59,10 +55,7 @@ namespace llarp::win32
         std::shared_ptr<I_Packet_IO> create_packet_io(
             unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src) override;
 
-        AbstractRouteManager& RouteManager() override
-        {
-            return *this;
-        }
+        AbstractRouteManager& RouteManager() override { return *this; }
     };
 
 }  // namespace llarp::win32

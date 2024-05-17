@@ -59,8 +59,7 @@ namespace llarp::rpc
     {
         /// \param message - a message to send along with the error code (see general description
         /// above).
-        rpc_error(std::string message) : std::runtime_error{"RPC error: " + message}, message{std::move(message)}
-        {}
+        rpc_error(std::string message) : std::runtime_error{"RPC error: " + message}, message{std::move(message)} {}
 
         std::string message;
     };

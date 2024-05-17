@@ -146,16 +146,6 @@ namespace llarp
         sockaddr_in _addr = _connect->in4();
         _addr.sin_port = htonl(port);
 
-        /** TODO:
-            - assigned IP from Tun (check reserved_local_addr)
-                - if not embedded:
-                    - make socket
-                    - set sockopt non blocking
-                    - bind socket
-                - if embedded:
-                    - pass fd as -1, let bufferevent_socket_connect assign it
-        */
-
         struct bufferevent *_bev =
             bufferevent_socket_new(_ev->loop().get(), -1, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_THREADSAFE);
 
@@ -185,8 +175,7 @@ namespace llarp
         return tcp_conn;
     }
 
-    void TCPHandle::_init_client()
-    {}
+    void TCPHandle::_init_client() {}
 
     void TCPHandle::_init_server(uint16_t port)
     {

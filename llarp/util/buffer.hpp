@@ -63,15 +63,11 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     /// max size of buffer
     size_t sz{0};
 
-    uint8_t operator[](size_t x)
-    {
-        return *(this->base + x);
-    }
+    uint8_t operator[](size_t x) { return *(this->base + x); }
 
     llarp_buffer_t() = default;
 
-    llarp_buffer_t(uint8_t* b, uint8_t* c, size_t s) : base(b), cur(c), sz(s)
-    {}
+    llarp_buffer_t(uint8_t* b, uint8_t* c, size_t s) : base(b), cur(c), sz(s) {}
 
     llarp_buffer_t(const ManagedBuffer&) = delete;
     llarp_buffer_t(ManagedBuffer&&) = delete;
@@ -113,27 +109,12 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     explicit llarp_buffer_t(T&& t) : llarp_buffer_t{t.data(), t.size()}
     {}
 
-    std::string to_string() const
-    {
-        return {reinterpret_cast<const char*>(base), sz};
-    }
+    std::string to_string() const { return {reinterpret_cast<const char*>(base), sz}; }
 
-    uint8_t* begin()
-    {
-        return base;
-    }
-    const uint8_t* begin() const
-    {
-        return base;
-    }
-    uint8_t* end()
-    {
-        return base + sz;
-    }
-    const uint8_t* end() const
-    {
-        return base + sz;
-    }
+    uint8_t* begin() { return base; }
+    const uint8_t* begin() const { return base; }
+    uint8_t* end() { return base + sz; }
+    const uint8_t* end() const { return base + sz; }
 
     size_t size_left() const
     {
@@ -175,16 +156,10 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     std::vector<uint8_t> copy() const;
 
     /// get a read-only view over the entire region
-    llarp::ustring_view view_all() const
-    {
-        return {base, sz};
-    }
+    llarp::ustring_view view_all() const { return {base, sz}; }
 
     /// get a read-only view over the remaining/unused region
-    llarp::ustring_view view_remaining() const
-    {
-        return {cur, size_left()};
-    }
+    llarp::ustring_view view_remaining() const { return {cur, size_left()}; }
 
     /// Part of the curse.  Returns true if the remaining buffer space starts with the given string
     /// view.
@@ -234,16 +209,12 @@ struct ManagedBuffer
 
     ManagedBuffer() = delete;
 
-    explicit ManagedBuffer(const llarp_buffer_t& b) : underlying(b)
-    {}
+    explicit ManagedBuffer(const llarp_buffer_t& b) : underlying(b) {}
 
     ManagedBuffer(ManagedBuffer&&) = default;
     ManagedBuffer(const ManagedBuffer&) = default;
 
-    operator const llarp_buffer_t&() const
-    {
-        return underlying;
-    }
+    operator const llarp_buffer_t&() const { return underlying; }
 };
 
 namespace llarp
@@ -260,14 +231,10 @@ namespace llarp
         {}
 
         // Create a new, uninitialized owned buffer of the given size.
-        explicit OwnedBuffer(size_t sz) : OwnedBuffer{std::make_unique<uint8_t[]>(sz), sz}
-        {}
+        explicit OwnedBuffer(size_t sz) : OwnedBuffer{std::make_unique<uint8_t[]>(sz), sz} {}
 
         // copy content from existing memory
-        explicit OwnedBuffer(const uint8_t* ptr, size_t sz) : OwnedBuffer{sz}
-        {
-            std::copy_n(ptr, sz, buf.get());
-        }
+        explicit OwnedBuffer(const uint8_t* ptr, size_t sz) : OwnedBuffer{sz} { std::copy_n(ptr, sz, buf.get()); }
 
         OwnedBuffer(const OwnedBuffer&) = delete;
         OwnedBuffer& operator=(const OwnedBuffer&) = delete;
@@ -276,10 +243,7 @@ namespace llarp
 
         // Implicit conversion so that this OwnedBuffer can be passed to anything taking a
         // llarp_buffer_t
-        operator llarp_buffer_t()
-        {
-            return {buf.get(), sz};
-        }
+        operator llarp_buffer_t() { return {buf.get(), sz}; }
 
         // Creates an owned buffer by copying from a llarp_buffer_t.  (Can also be used to copy from
         // another OwnedBuffer via the implicit conversion operator above).

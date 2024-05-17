@@ -11,8 +11,7 @@ namespace llarp::dns
     Question::Question(Question&& other)
         : qname(std::move(other.qname)), qtype(std::move(other.qtype)), qclass(std::move(other.qclass))
     {}
-    Question::Question(const Question& other) : qname(other.qname), qtype(other.qtype), qclass(other.qclass)
-    {}
+    Question::Question(const Question& other) : qname(other.qname), qtype(other.qtype), qclass(other.qclass) {}
 
     Question::Question(std::string name, QType_t type) : qname{std::move(name)}, qtype{type}, qclass{qClassIN}
     {

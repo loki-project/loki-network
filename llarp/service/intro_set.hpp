@@ -48,10 +48,7 @@ namespace llarp::service
         Signature signature;
         uint64_t version = llarp::constants::proto_version;
 
-        bool OtherIsNewer(const IntroSet& other) const
-        {
-            return time_signed < other.time_signed;
-        }
+        bool OtherIsNewer(const IntroSet& other) const { return time_signed < other.time_signed; }
 
         std::string to_string() const;
 

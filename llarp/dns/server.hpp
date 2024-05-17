@@ -8,7 +8,6 @@
 #include <llarp/ev/loop.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/util/compare_ptr.hpp>
-#include <llarp/util/fs.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -28,20 +27,13 @@ namespace llarp::dns
         std::atomic_flag _done = ATOMIC_FLAG_INIT;
 
       public:
-        explicit QueryJob_Base(Message query) : _query{std::move(query)}
-        {}
+        explicit QueryJob_Base(Message query) : _query{std::move(query)} {}
 
         virtual ~QueryJob_Base() = default;
 
-        Message& underlying()
-        {
-            return _query;
-        }
+        Message& underlying() { return _query; }
 
-        const Message& underlying() const
-        {
-            return _query;
-        }
+        const Message& underlying() const { return _query; }
 
         /// cancel this operation and inform anyone who cares
         void cancel();
@@ -144,10 +136,7 @@ namespace llarp::dns
             : QueryJob_Base{query}, src{std::move(source)}, resolver{to_}, asker{from_}
         {}
 
-        void send_reply(std::vector<uint8_t> buf) override
-        {
-            src->send_to(asker, resolver, IPPacket{buf});
-        }
+        void send_reply(std::vector<uint8_t> buf) override { src->send_to(asker, resolver, IPPacket{buf}); }
     };
 
     /// handler of dns query hooking
@@ -163,34 +152,23 @@ namespace llarp::dns
         virtual ~Resolver_Base() = default;
 
         /// less than via rank
-        bool operator<(const Resolver_Base& other) const
-        {
-            return rank() < other.rank();
-        }
+        bool operator<(const Resolver_Base& other) const { return rank() < other.rank(); }
 
         /// greater than via rank
-        bool operator>(const Resolver_Base& other) const
-        {
-            return rank() > other.rank();
-        }
+        bool operator>(const Resolver_Base& other) const { return rank() > other.rank(); }
 
         /// get local socket address that queries are sent from
-        virtual std::optional<oxen::quic::Address> get_local_addr() const
-        {
-            return std::nullopt;
-        }
+        virtual std::optional<oxen::quic::Address> get_local_addr() const { return std::nullopt; }
 
         /// get printable name
         virtual std::string_view resolver_name() const = 0;
 
         /// reset the resolver state, optionally replace upstream info with new info.  The default
         /// base implementation does nothing.
-        virtual void reset_resolver(std::optional<std::vector<oxen::quic::Address>> = std::nullopt)
-        {}
+        virtual void reset_resolver(std::optional<std::vector<oxen::quic::Address>> = std::nullopt) {}
 
         /// cancel all pending requests and cease further operation.  Default operation is a no-op.
-        virtual void down()
-        {}
+        virtual void down() {}
 
         /// attempt to handle a dns message
         /// returns true if we consumed this query and it should not be processed again

@@ -28,10 +28,7 @@ namespace
     {
         using llarp::Context::Context;
 
-        std::shared_ptr<llarp::NodeDB> makeNodeDB() override
-        {
-            return std::make_shared<llarp::NodeDB>();
-        }
+        std::shared_ptr<llarp::NodeDB> makeNodeDB() override { return std::make_shared<llarp::NodeDB>(); }
     };
 
     struct UDPFlow
@@ -44,23 +41,14 @@ namespace
         lokinet_udp_flow_recv_func m_Recv;
 
         /// call timeout hook for this flow
-        void TimedOut(lokinet_udp_flow_timeout_func timeout)
-        {
-            timeout(&m_FlowInfo, m_FlowUserData);
-        }
+        void TimedOut(lokinet_udp_flow_timeout_func timeout) { timeout(&m_FlowInfo, m_FlowUserData); }
 
         /// mark this flow as active
         /// updates the expires at timestamp
-        void MarkActive()
-        {
-            m_ExpiresAt = Clock_t::now() + m_FlowTimeout;
-        }
+        void MarkActive() { m_ExpiresAt = Clock_t::now() + m_FlowTimeout; }
 
         /// returns true if we think this flow is expired
-        bool IsExpired() const
-        {
-            return Clock_t::now() >= m_ExpiresAt;
-        }
+        bool IsExpired() const { return Clock_t::now() >= m_ExpiresAt; }
 
         void HandlePacket(const llarp::net::IPPacket& pkt)
         {
@@ -278,10 +266,7 @@ struct lokinet_context
     }
 
     /// acquire mutex for accessing this context
-    [[nodiscard]] auto acquire()
-    {
-        return std::unique_lock{m_access};
-    }
+    [[nodiscard]] auto acquire() { return std::unique_lock{m_access}; }
 
     [[nodiscard]] auto endpoint(std::string name = "default") const
     {
@@ -291,15 +276,9 @@ struct lokinet_context
     std::unordered_map<int, bool> streams;
     std::unordered_map<int, std::shared_ptr<UDPHandler>> udp_sockets;
 
-    void inbound_stream(int id)
-    {
-        streams[id] = true;
-    }
+    void inbound_stream(int id) { streams[id] = true; }
 
-    void outbound_stream(int id)
-    {
-        streams[id] = false;
-    }
+    void outbound_stream(int id) { streams[id] = false; }
 };
 
 namespace

@@ -29,8 +29,7 @@ namespace llarp
         void _init_internals();
 
       public:
-        IPPacket() : IPPacket{size_t{0}}
-        {}
+        IPPacket() : IPPacket{size_t{0}} {}
         explicit IPPacket(size_t sz);
         explicit IPPacket(bstring_view data);
         explicit IPPacket(ustring_view data);
@@ -42,70 +41,31 @@ namespace llarp
 
         UDPPacket make_udp();
 
-        bool is_ipv4() const
-        {
-            return _is_v4;
-        }
+        bool is_ipv4() const { return _is_v4; }
 
-        const oxen::quic::Address& source() const
-        {
-            return _src_addr;
-        }
+        const oxen::quic::Address& source() const { return _src_addr; }
 
-        uint16_t source_port()
-        {
-            return source().port();
-        }
+        uint16_t source_port() { return source().port(); }
 
-        const oxen::quic::Address& destination() const
-        {
-            return _dst_addr;
-        }
+        const oxen::quic::Address& destination() const { return _dst_addr; }
 
-        uint16_t dest_port()
-        {
-            return destination().port();
-        }
+        uint16_t dest_port() { return destination().port(); }
 
-        ipv4 source_ipv4()
-        {
-            return _src_addr.to_ipv4();
-        }
+        ipv4 source_ipv4() { return _src_addr.to_ipv4(); }
 
-        ipv6 source_ipv6()
-        {
-            return _src_addr.to_ipv6();
-        }
+        ipv6 source_ipv6() { return _src_addr.to_ipv6(); }
 
-        ipv4 dest_ipv4()
-        {
-            return _dst_addr.to_ipv4();
-        }
+        ipv4 dest_ipv4() { return _dst_addr.to_ipv4(); }
 
-        ipv6 dest_ipv6()
-        {
-            return _dst_addr.to_ipv6();
-        }
+        ipv6 dest_ipv6() { return _dst_addr.to_ipv6(); }
 
-        ip_header* header()
-        {
-            return _header;
-        }
+        ip_header* header() { return _header; }
 
-        const ip_header* header() const
-        {
-            return reinterpret_cast<const ip_header*>(_header);
-        }
+        const ip_header* header() const { return reinterpret_cast<const ip_header*>(_header); }
 
-        ipv6_header* v6_header()
-        {
-            return _v6_header;
-        }
+        ipv6_header* v6_header() { return _v6_header; }
 
-        const ipv6_header* v6_header() const
-        {
-            return reinterpret_cast<const ipv6_header*>(_v6_header);
-        }
+        const ipv6_header* v6_header() const { return reinterpret_cast<const ipv6_header*>(_v6_header); }
 
         std::optional<std::pair<const char*, size_t>> l4_data() const;
 
@@ -115,25 +75,13 @@ namespace llarp
 
         std::optional<IPPacket> make_icmp_unreachable() const;
 
-        uint8_t* data()
-        {
-            return _buf.data();
-        }
+        uint8_t* data() { return _buf.data(); }
 
-        const uint8_t* data() const
-        {
-            return _buf.data();
-        }
+        const uint8_t* data() const { return _buf.data(); }
 
-        size_t size() const
-        {
-            return _buf.size();
-        }
+        size_t size() const { return _buf.size(); }
 
-        bool empty() const
-        {
-            return _buf.empty();
-        }
+        bool empty() const { return _buf.empty(); }
 
         bool load(ustring_view data);
 
@@ -152,20 +100,11 @@ namespace llarp
         // gives a copy of the underlying data
         std::vector<uint8_t> give();
 
-        std::string_view view() const
-        {
-            return {reinterpret_cast<const char*>(data()), size()};
-        }
+        std::string_view view() const { return {reinterpret_cast<const char*>(data()), size()}; }
 
-        bstring_view bview() const
-        {
-            return {reinterpret_cast<const std::byte*>(data()), size()};
-        }
+        bstring_view bview() const { return {reinterpret_cast<const std::byte*>(data()), size()}; }
 
-        ustring_view uview() const
-        {
-            return {data(), size()};
-        }
+        ustring_view uview() const { return {data(), size()}; }
 
         std::string to_string();
     };

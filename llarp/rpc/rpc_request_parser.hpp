@@ -14,8 +14,7 @@ namespace llarp::rpc
 {
     using rpc_input = std::variant<std::monostate, nlohmann::json, oxenc::bt_dict_consumer>;
 
-    inline void parse_request(NoArgs&, rpc_input)
-    {}
+    inline void parse_request(NoArgs&, rpc_input) {}
 
     void parse_request(QuicConnect& quicconnect, rpc_input input);
     void parse_request(QuicListener& quiclistener, rpc_input input);

@@ -15,7 +15,7 @@ namespace llarp
 
     // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
     template <typename T>
-    concept CONCEPT_COMPAT ToStringFormattable = oxen::quic::ToStringFormattable<T>;
+    concept ToStringFormattable = oxen::quic::ToStringFormattable<T>;
 
 #ifndef __cpp_lib_is_scoped_enum
     template <typename T, bool = std::is_enum_v<T>>
@@ -31,7 +31,7 @@ namespace llarp
 #endif
 
     template <typename T>
-    concept CONCEPT_COMPAT ScopedEnum_t =
+    concept ScopedEnum_t =
 #ifdef __cpp_lib_is_scoped_enum
         std::is_scoped_enum_v<T>;
 #else
@@ -47,7 +47,9 @@ namespace llarp
 
 #else
 
-#include <llarp/util/fs.hpp>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace fmt
 {

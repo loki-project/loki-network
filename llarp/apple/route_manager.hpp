@@ -16,11 +16,9 @@ namespace llarp::apple
 
         /// These are called for poking route holes, but we don't have to do that at all on macos
         /// because the appex isn't subject to its own rules.
-        void add_route(oxen::quic::Address /*ip*/, oxen::quic::Address /*gateway*/) override
-        {}
+        void add_route(oxen::quic::Address /*ip*/, oxen::quic::Address /*gateway*/) override {}
 
-        void delete_route(oxen::quic::Address /*ip*/, oxen::quic::Address /*gateway*/) override
-        {}
+        void delete_route(oxen::quic::Address /*ip*/, oxen::quic::Address /*gateway*/) override {}
 
         void add_default_route_via_interface(vpn::NetworkInterface& vpn) override;
 

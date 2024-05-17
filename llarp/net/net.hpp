@@ -6,7 +6,6 @@
 #include "uint128.hpp"
 
 #include <llarp/address/ip_range.hpp>
-#include <llarp/util/bits.hpp>
 #include <llarp/util/mem.hpp>
 
 #include <oxen/quic/address.hpp>
@@ -85,7 +84,7 @@ namespace llarp
 
             virtual std::string loopback_interface_name() const = 0;
 
-            virtual bool has_interface_address(ip ip) const = 0;
+            virtual bool has_interface_address(ip_v ip) const = 0;
 
             // Attempts to guess a good default public network address from the system's public IP
             // addresses; the returned Address (if set) will have its port set to the given value.
@@ -103,7 +102,7 @@ namespace llarp
                 return get_interface_addr(ifname, AF_INET6);
             }
 
-            virtual std::optional<int> get_interface_index(ip ip) const = 0;
+            virtual std::optional<int> get_interface_index(ip_v ip) const = 0;
 
             /// returns a vector holding all of our network interfaces
             virtual std::vector<InterfaceInfo> all_network_interfaces() const = 0;

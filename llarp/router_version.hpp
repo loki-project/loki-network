@@ -38,10 +38,7 @@ namespace llarp
             return std::tie(_proto, _version) < std::tie(other._proto, other._version);
         }
 
-        bool operator!=(const RouterVersion& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const RouterVersion& other) const { return !(*this == other); }
 
         bool operator==(const RouterVersion& other) const
         {

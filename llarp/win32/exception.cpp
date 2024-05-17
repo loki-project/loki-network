@@ -9,8 +9,7 @@
 namespace llarp::win32
 
 {
-    error::error(std::string msg) : error{GetLastError(), std::move(msg)}
-    {}
+    error::error(std::string msg) : error{GetLastError(), std::move(msg)} {}
     error::error(DWORD err, std::string msg)
         : std::runtime_error{fmt::format("{}: {} (code={})", msg, error_to_string(err), err)}
     {}

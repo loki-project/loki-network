@@ -25,11 +25,9 @@ namespace llarp
     IPPacket::IPPacket(bstring_view data) : IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()}
     {}
 
-    IPPacket::IPPacket(ustring_view data) : IPPacket{data.data(), data.size()}
-    {}
+    IPPacket::IPPacket(ustring_view data) : IPPacket{data.data(), data.size()} {}
 
-    IPPacket::IPPacket(std::vector<uint8_t> data) : IPPacket{data.data(), data.size()}
-    {}
+    IPPacket::IPPacket(std::vector<uint8_t> data) : IPPacket{data.data(), data.size()} {}
 
     IPPacket::IPPacket(const uint8_t* buf, size_t len)
     {

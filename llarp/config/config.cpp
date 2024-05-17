@@ -20,10 +20,7 @@ namespace llarp
     {
         struct ConfigGenParameters_impl : public ConfigGenParameters
         {
-            const llarp::net::Platform* net_ptr() const override
-            {
-                return llarp::net::Platform::Default_ptr();
-            }
+            const llarp::net::Platform* net_ptr() const override { return llarp::net::Platform::Default_ptr(); }
         };
     }  // namespace
 
@@ -1409,8 +1406,7 @@ namespace llarp
         return std::make_unique<ConfigGenParameters_impl>();
     }
 
-    Config::Config(std::optional<fs::path> datadir) : data_dir{datadir ? std::move(*datadir) : fs::current_path()}
-    {}
+    Config::Config(std::optional<fs::path> datadir) : data_dir{datadir ? std::move(*datadir) : fs::current_path()} {}
 
     constexpr auto GetOverridesDir = [](auto datadir) -> fs::path { return datadir / "conf.d"; };
 

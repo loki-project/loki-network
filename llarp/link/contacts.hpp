@@ -32,15 +32,9 @@ namespace llarp
 
         void put_intro(service::EncryptedIntroSet enc);
 
-        dht::Bucket<dht::ISNode>* services() const
-        {
-            return _introset_nodes.get();
-        }
+        dht::Bucket<dht::ISNode>* services() const { return _introset_nodes.get(); }
 
-        Router* router() const
-        {
-            return &_router;
-        }
+        Router* router() const { return &_router; }
     };
 
 }  // namespace llarp

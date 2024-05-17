@@ -121,8 +121,7 @@ namespace llarp
         return checkIsGood(path_fail, path_success, chances);
     }
 
-    Profiling::Profiling() : _profiling_disabled(false)
-    {}
+    Profiling::Profiling() : _profiling_disabled(false) {}
 
     void Profiling::disable()
     {

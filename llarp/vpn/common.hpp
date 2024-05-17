@@ -28,10 +28,7 @@ namespace llarp::vpn
                 throw std::invalid_argument{strerror(errno)};
         };
 
-        ~IOCTL()
-        {
-            ::close(_fd);
-        }
+        ~IOCTL() { ::close(_fd); }
 
         template <typename Command, typename... Args>
         void ioctl(Command cmd, Args&&... args)

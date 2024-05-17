@@ -34,16 +34,10 @@ namespace llarp::sys
         virtual ~I_SystemLayerManager() = default;
 
         /// disable all reporting to system layer
-        inline void disable()
-        {
-            m_disable = true;
-        }
+        inline void disable() { m_disable = true; }
 
         /// give our current lokinet context to the system layer manager
-        inline void give_context(llarp::Context* ctx)
-        {
-            m_Context = ctx;
-        }
+        inline void give_context(llarp::Context* ctx) { m_Context = ctx; }
 
         /// system told us to enter this state
         virtual void system_changed_our_state(ServiceState st) = 0;
@@ -95,8 +89,7 @@ namespace llarp::sys
     class NOP_SystemLayerHandler : public I_SystemLayerManager
     {
       protected:
-        void we_changed_our_state(ServiceState) override
-        {}
+        void we_changed_our_state(ServiceState) override {}
 
       public:
         void report_changed_state() override{};

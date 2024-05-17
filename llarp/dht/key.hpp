@@ -13,24 +13,17 @@ namespace llarp::dht
 {
     struct Key_t : public AlignedBuffer<32>
     {
-        explicit Key_t(const uint8_t* buf) : AlignedBuffer<SIZE>(buf)
-        {}
+        explicit Key_t(const uint8_t* buf) : AlignedBuffer<SIZE>(buf) {}
 
-        explicit Key_t(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data)
-        {}
+        explicit Key_t(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data) {}
 
-        explicit Key_t(const AlignedBuffer<SIZE>& data) : AlignedBuffer<SIZE>(data)
-        {}
+        explicit Key_t(const AlignedBuffer<SIZE>& data) : AlignedBuffer<SIZE>(data) {}
 
-        Key_t() : AlignedBuffer<SIZE>()
-        {}
+        Key_t() : AlignedBuffer<SIZE>() {}
 
         nlohmann::json ExtractStatus() const;
 
-        std::string to_string() const
-        {
-            return oxenc::to_base32z(begin(), end());
-        }
+        std::string to_string() const { return oxenc::to_base32z(begin(), end()); }
 
         static Key_t derive_from_rid(RouterID rid)
         {
@@ -46,24 +39,12 @@ namespace llarp::dht
             return dist;
         }
 
-        bool operator==(const Key_t& other) const
-        {
-            return as_array() == other.as_array();
-        }
+        bool operator==(const Key_t& other) const { return as_array() == other.as_array(); }
 
-        bool operator!=(const Key_t& other) const
-        {
-            return as_array() != other.as_array();
-        }
+        bool operator!=(const Key_t& other) const { return as_array() != other.as_array(); }
 
-        bool operator<(const Key_t& other) const
-        {
-            return as_array() < other.as_array();
-        }
+        bool operator<(const Key_t& other) const { return as_array() < other.as_array(); }
 
-        bool operator>(const Key_t& other) const
-        {
-            return as_array() > other.as_array();
-        }
+        bool operator>(const Key_t& other) const { return as_array() > other.as_array(); }
     };
 }  // namespace llarp::dht

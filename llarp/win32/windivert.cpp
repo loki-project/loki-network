@@ -170,10 +170,7 @@ namespace llarp::win32
                     throw win32::error{err, "cannot open windivert handle"};
             }
 
-            ~IO()
-            {
-                wd::close(m_Handle);
-            }
+            ~IO() { wd::close(m_Handle); }
 
             std::optional<Packet> recv_packet() const
             {
@@ -221,15 +218,9 @@ namespace llarp::win32
                     throw win32::error{"windivert send failed"};
             }
 
-            virtual int PollFD() const
-            {
-                return -1;
-            }
+            virtual int PollFD() const { return -1; }
 
-            bool WritePacket(net::IPPacket) override
-            {
-                return false;
-            }
+            bool WritePacket(net::IPPacket) override { return false; }
 
             net::IPPacket ReadNextPacket() override
             {

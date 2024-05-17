@@ -49,10 +49,7 @@ namespace llarp
             return _sessions.get_session(tag);
         }
 
-        std::shared_ptr<session_t> get_session(const net_addr_t& remote) const
-        {
-            return _sessions.get_session(remote);
-        }
+        std::shared_ptr<session_t> get_session(const net_addr_t& remote) const { return _sessions.get_session(remote); }
 
         /// add an srv record to this endpoint's descriptor
         virtual void put_srv_record(dns::SRVData srv)
@@ -64,10 +61,7 @@ namespace llarp
         }
 
         /// get dns server if we have on on this endpoint
-        virtual std::shared_ptr<dns::Server> DNS() const
-        {
-            return nullptr;
-        };
+        virtual std::shared_ptr<dns::Server> DNS() const { return nullptr; };
 
         /// called when srv data changes in some way
         virtual void srv_records_changed() = 0;
@@ -179,10 +173,7 @@ namespace llarp
         }
 
         /// get copy of all srv records
-        std::set<dns::SRVData> srv_records() const
-        {
-            return {_srv_records.begin(), _srv_records.end()};
-        }
+        std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
         /// Gets the local address for the given endpoint, service or exit node
         virtual oxen::quic::Address local_address() const = 0;

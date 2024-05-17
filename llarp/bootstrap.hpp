@@ -3,7 +3,6 @@
 #include "router_contact.hpp"
 
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/util/fs.hpp>
 
 #include <set>
 #include <unordered_map>
@@ -14,10 +13,7 @@ namespace llarp
     {
         std::set<RemoteRC>::iterator _curr = begin();
 
-        const RemoteRC& current()
-        {
-            return *_curr;
-        }
+        const RemoteRC& current() { return *_curr; }
 
         bool bt_decode(std::string_view buf);
 
@@ -56,10 +52,7 @@ namespace llarp
                 _curr = std::next(begin(), std::uniform_int_distribution<size_t>{0, size() - 1}(csrng));
         }
 
-        void clear_list()
-        {
-            clear();
-        }
+        void clear_list() { clear(); }
     };
 
     std::unordered_map<std::string, BootstrapList> load_bootstrap_fallbacks();

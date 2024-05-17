@@ -27,10 +27,7 @@ namespace llarp
             SecretKey obtain_identity_key();
 
             /// get what the current block height is according to oxend
-            uint64_t block_height() const
-            {
-                return _block_height;
-            }
+            uint64_t block_height() const { return _block_height; }
 
             void lookup_ons_hash(
                 std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler);

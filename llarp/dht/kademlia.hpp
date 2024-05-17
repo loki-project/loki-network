@@ -10,13 +10,9 @@ namespace llarp::dht
     {
         const Key_t us;
 
-        XorMetric(const Key_t& ourKey) : us(ourKey)
-        {}
+        XorMetric(const Key_t& ourKey) : us(ourKey) {}
 
-        bool operator()(const Key_t& left, const Key_t& right) const
-        {
-            return (us ^ left) < (us ^ right);
-        }
+        bool operator()(const Key_t& left, const Key_t& right) const { return (us ^ left) < (us ^ right); }
 
         bool operator()(const RouterContact& left, const RouterContact& right) const
         {

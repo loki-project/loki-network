@@ -78,10 +78,7 @@ namespace llarp::dns
                 == std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
         }
 
-        bool operator!=(const SRVData& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const SRVData& other) const { return !(*this == other); }
 
         std::string bt_encode() const;
 

@@ -3,7 +3,6 @@
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/link/tunnel.hpp>
-#include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/formattable.hpp>
@@ -71,7 +70,7 @@ namespace llarp::session
     void BaseSession::_init_ep()
     {
         _ep = _r.quic_tunnel()->net()->endpoint(
-            oxen::quic::Address{}, oxen::quic::opt::manual_routing{[this](const oxen::quic::Path&, bstring_view data) {
+            LOCALHOST_BLANK, oxen::quic::opt::manual_routing{[this](const oxen::quic::Path&, bstring_view data) {
                 _current_path->send_path_data_message(
                     std::string{reinterpret_cast<const char*>(data.data()), data.size()});
             }});
@@ -104,7 +103,7 @@ namespace llarp::session
         _handles.emplace(_handle->port(), std::move(_handle));
     }
 
-    void BaseSession::tcp_backend_listen(uint16_t port)
+    void BaseSession::tcp_backend_listen(on_session_init_hook cb, uint16_t port)
     {
         _init_ep();
 
@@ -130,10 +129,20 @@ namespace llarp::session
             },
             port);
 
+        auto bind = _handle->bind();
+
+        if (not bind.has_value())
+            throw std::runtime_error{"Failed to bind TCP listener!"};
+
         _handles.emplace(_handle->port(), std::move(_handle));
 
-        // connect OutboundSession tunneled ep to InboundSession's tunneled ep
-        _ci = _ep->connect(KeyedAddress{TUNNEL_PUBKEY}, _r.quic_tunnel()->creds());
+        _ci = _ep->connect(
+            KeyedAddress{TUNNEL_PUBKEY},
+            _r.quic_tunnel()->creds(),
+            [addr = *bind, hook = std::move(cb)](oxen::quic::connection_interface&) { hook(std::move(addr)); },
+            [](oxen::quic::connection_interface&, uint64_t) {
+                //
+            });
     }
 
     OutboundSession::OutboundSession(

@@ -61,31 +61,16 @@ namespace llarp
         /// How long before an RC becomes invalid (and thus deleted).
         static constexpr auto LIFETIME = 30 * 24h;
 
-        ustring_view view() const
-        {
-            return _payload;
-        }
+        ustring_view view() const { return _payload; }
 
         /// Getters for private attributes
-        const oxen::quic::Address& addr() const
-        {
-            return _addr;
-        }
+        const oxen::quic::Address& addr() const { return _addr; }
 
-        const std::optional<oxen::quic::Address>& addr6() const
-        {
-            return _addr6;
-        }
+        const std::optional<oxen::quic::Address>& addr6() const { return _addr6; }
 
-        const RouterID& router_id() const
-        {
-            return _router_id;
-        }
+        const RouterID& router_id() const { return _router_id; }
 
-        const rc_time& timestamp() const
-        {
-            return _timestamp;
-        }
+        const rc_time& timestamp() const { return _timestamp; }
 
       protected:
         // advertised addresses
@@ -114,10 +99,7 @@ namespace llarp
 
         nlohmann::json extract_status() const;
 
-        nlohmann::json to_json() const
-        {
-            return extract_status();
-        }
+        nlohmann::json to_json() const { return extract_status(); }
 
         virtual std::string to_string() const
         {
@@ -137,18 +119,11 @@ namespace llarp
                 and _timestamp == other._timestamp and _router_version == other._router_version;
         }
 
-        bool operator<(const RouterContact& other) const
-        {
-            return _router_id < other._router_id;
-        }
+        bool operator<(const RouterContact& other) const { return _router_id < other._router_id; }
 
-        bool operator!=(const RouterContact& other) const
-        {
-            return !(*this == other);
-        }
+        bool operator!=(const RouterContact& other) const { return !(*this == other); }
 
-        virtual void clear()
-        {}
+        virtual void clear() {}
 
         bool is_public_addressable() const;
 
@@ -164,10 +139,7 @@ namespace llarp
         /// get the age of this RC in ms
         std::chrono::milliseconds age(std::chrono::milliseconds now) const;
 
-        bool other_is_newer(const RouterContact& other) const
-        {
-            return _timestamp < other._timestamp;
-        }
+        bool other_is_newer(const RouterContact& other) const { return _timestamp < other._timestamp; }
 
         bool is_obsolete_bootstrap() const;
 
@@ -251,16 +223,10 @@ namespace llarp
             set_timestamp(rc_time{std::chrono::duration_cast<std::chrono::seconds>(ts)});
         }
 
-        void set_timestamp(rc_time ts)
-        {
-            _timestamp = ts;
-        }
+        void set_timestamp(rc_time ts) { _timestamp = ts; }
 
         /// Sets RC timestamp to current system clock time
-        void set_systime_timestamp()
-        {
-            set_timestamp(time_point_now());
-        }
+        void set_systime_timestamp() { set_timestamp(time_point_now()); }
     };
 
     /// Extension of RouterContact used in a "read-only" fashion. Parses the incoming RC to query
@@ -273,17 +239,11 @@ namespace llarp
         {
             _payload = {reinterpret_cast<const unsigned char*>(data.data()), data.size()};
         }
-        explicit RemoteRC(ustring_view data) : RemoteRC{oxenc::bt_dict_consumer{data}}
-        {
-            _payload = data;
-        }
+        explicit RemoteRC(ustring_view data) : RemoteRC{oxenc::bt_dict_consumer{data}} { _payload = data; }
         explicit RemoteRC(oxenc::bt_dict_consumer btdc);
         ~RemoteRC() = default;
 
-        std::string_view view() const
-        {
-            return {reinterpret_cast<const char*>(_payload.data()), _payload.size()};
-        }
+        std::string_view view() const { return {reinterpret_cast<const char*>(_payload.data()), _payload.size()}; }
 
         bool verify() const;
 

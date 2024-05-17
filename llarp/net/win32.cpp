@@ -127,10 +127,7 @@ namespace llarp::net
             return oxen::quic::Address{};
         }
 
-        std::optional<std::string> FindFreeTun() const override
-        {
-            return "lokitun0";
-        }
+        std::optional<std::string> FindFreeTun() const override { return "lokitun0"; }
 
         std::optional<oxen::quic::Address> get_best_public_address(bool, uint16_t) const override
         {
@@ -166,10 +163,7 @@ namespace llarp::net
             return "";
         }
 
-        bool has_interface_address(ip ip) const override
-        {
-            return get_interface_index(ip) != std::nullopt;
-        }
+        bool has_interface_address(ip ip) const override { return get_interface_index(ip) != std::nullopt; }
 
         std::vector<InterfaceInfo> all_network_interfaces() const override
         {

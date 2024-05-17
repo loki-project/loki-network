@@ -1,6 +1,6 @@
 #pragma once
-#include "fs.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <set>
 #include <string>
@@ -9,6 +9,8 @@
 #ifndef _MSC_VER
 #include <dirent.h>
 #endif
+
+namespace fs = std::filesystem;
 
 namespace llarp::util
 {

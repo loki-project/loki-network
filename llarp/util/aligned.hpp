@@ -42,20 +42,11 @@ namespace llarp
 
         virtual ~AlignedBuffer() = default;
 
-        AlignedBuffer()
-        {
-            zero();
-        }
+        AlignedBuffer() { zero(); }
 
-        AlignedBuffer(const uint8_t* data)
-        {
-            *this = data;
-        }
+        AlignedBuffer(const uint8_t* data) { *this = data; }
 
-        explicit AlignedBuffer(const std::array<uint8_t, SIZE>& buf)
-        {
-            _data = buf;
-        }
+        explicit AlignedBuffer(const std::array<uint8_t, SIZE>& buf) { _data = buf; }
 
         AlignedBuffer& operator=(const uint8_t* data)
         {
@@ -72,35 +63,17 @@ namespace llarp
             return ret;
         }
 
-        bool operator==(const AlignedBuffer& other) const
-        {
-            return _data == other._data;
-        }
+        bool operator==(const AlignedBuffer& other) const { return _data == other._data; }
 
-        bool operator!=(const AlignedBuffer& other) const
-        {
-            return _data != other._data;
-        }
+        bool operator!=(const AlignedBuffer& other) const { return _data != other._data; }
 
-        bool operator<(const AlignedBuffer& other) const
-        {
-            return _data < other._data;
-        }
+        bool operator<(const AlignedBuffer& other) const { return _data < other._data; }
 
-        bool operator>(const AlignedBuffer& other) const
-        {
-            return _data > other._data;
-        }
+        bool operator>(const AlignedBuffer& other) const { return _data > other._data; }
 
-        bool operator<=(const AlignedBuffer& other) const
-        {
-            return _data <= other._data;
-        }
+        bool operator<=(const AlignedBuffer& other) const { return _data <= other._data; }
 
-        bool operator>=(const AlignedBuffer& other) const
-        {
-            return _data >= other._data;
-        }
+        bool operator>=(const AlignedBuffer& other) const { return _data >= other._data; }
 
         AlignedBuffer operator^(const AlignedBuffer& other) const
         {
@@ -131,35 +104,17 @@ namespace llarp
             return _data[idx];
         }
 
-        static constexpr size_t size()
-        {
-            return sz;
-        }
+        static constexpr size_t size() { return sz; }
 
-        void Fill(uint8_t f)
-        {
-            _data.fill(f);
-        }
+        void Fill(uint8_t f) { _data.fill(f); }
 
-        std::array<uint8_t, SIZE>& as_array()
-        {
-            return _data;
-        }
+        std::array<uint8_t, SIZE>& as_array() { return _data; }
 
-        const std::array<uint8_t, SIZE>& as_array() const
-        {
-            return _data;
-        }
+        const std::array<uint8_t, SIZE>& as_array() const { return _data; }
 
-        uint8_t* data()
-        {
-            return _data.data();
-        }
+        uint8_t* data() { return _data.data(); }
 
-        const uint8_t* data() const
-        {
-            return _data.data();
-        }
+        const uint8_t* data() const { return _data.data(); }
 
         bool is_zero() const
         {
@@ -172,35 +127,17 @@ namespace llarp
             return true;
         }
 
-        void zero()
-        {
-            _data.fill(0);
-        }
+        void zero() { _data.fill(0); }
 
-        virtual void Randomize()
-        {
-            randombytes(data(), SIZE);
-        }
+        virtual void Randomize() { randombytes(data(), SIZE); }
 
-        typename std::array<uint8_t, SIZE>::iterator begin()
-        {
-            return _data.begin();
-        }
+        typename std::array<uint8_t, SIZE>::iterator begin() { return _data.begin(); }
 
-        typename std::array<uint8_t, SIZE>::iterator end()
-        {
-            return _data.end();
-        }
+        typename std::array<uint8_t, SIZE>::iterator end() { return _data.end(); }
 
-        typename std::array<uint8_t, SIZE>::const_iterator begin() const
-        {
-            return _data.cbegin();
-        }
+        typename std::array<uint8_t, SIZE>::const_iterator begin() const { return _data.cbegin(); }
 
-        typename std::array<uint8_t, SIZE>::const_iterator end() const
-        {
-            return _data.cend();
-        }
+        typename std::array<uint8_t, SIZE>::const_iterator end() const { return _data.cend(); }
 
         bool from_string(std::string_view b)
         {
@@ -214,10 +151,7 @@ namespace llarp
             return true;
         }
 
-        std::string bt_encode() const
-        {
-            return oxenc::bt_serialize(_data);
-        }
+        std::string bt_encode() const { return oxenc::bt_serialize(_data); }
 
         bool bt_decode(std::string buf)
         {
@@ -225,25 +159,13 @@ namespace llarp
             return true;
         }
 
-        std::string_view to_view() const
-        {
-            return {reinterpret_cast<const char*>(data()), sz};
-        }
+        std::string_view to_view() const { return {reinterpret_cast<const char*>(data()), sz}; }
 
-        std::string to_string() const
-        {
-            return ToHex();
-        }
+        std::string to_string() const { return ToHex(); }
 
-        std::string ToHex() const
-        {
-            return oxenc::to_hex(begin(), end());
-        }
+        std::string ToHex() const { return oxenc::to_hex(begin(), end()); }
 
-        std::string ShortHex() const
-        {
-            return oxenc::to_hex(begin(), begin() + 4);
-        }
+        std::string ShortHex() const { return oxenc::to_hex(begin(), begin() + 4); }
 
         bool FromHex(std::string_view str)
         {

@@ -50,10 +50,7 @@ namespace llarp
         bool gen_rc(llarp::RouterContact& rc) const;
 
         /// Return whether or not we need to backup keys as we load them
-        bool needs_backup() const
-        {
-            return backup_keys;
-        }
+        bool needs_backup() const { return backup_keys; }
 
         llarp::SecretKey identity_key;
         llarp::SecretKey encryption_key;

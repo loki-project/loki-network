@@ -6,11 +6,9 @@ namespace llarp
 {
     namespace simulate
     {
-        Simulation::Simulation() : m_CryptoManager(new sodium::CryptoLibSodium())
-        {}
+        Simulation::Simulation() : m_CryptoManager(new sodium::CryptoLibSodium()) {}
 
-        void Simulation::NodeUp(llarp::Context*)
-        {}
+        void Simulation::NodeUp(llarp::Context*) {}
 
         Node_ptr Simulation::AddNode(const std::string& name)
         {

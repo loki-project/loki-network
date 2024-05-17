@@ -30,8 +30,7 @@ namespace llarp::auth
         Router& _router;
 
       public:
-        AuthPolicy(Router& r) : _router{r}
-        {}
+        AuthPolicy(Router& r) : _router{r} {}
 
         virtual ~AuthPolicy() = default;
 
@@ -39,15 +38,9 @@ namespace llarp::auth
 
         virtual std::shared_ptr<AuthPolicy> get_self() = 0;
 
-        const Router& router() const
-        {
-            return _router;
-        }
+        const Router& router() const { return _router; }
 
-        Router& router()
-        {
-            return _router;
-        }
+        Router& router() { return _router; }
     };
 
     struct SessionAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<SessionAuthPolicy>
@@ -66,30 +59,15 @@ namespace llarp::auth
 
         std::optional<std::string_view> fetch_auth_token();
 
-        const SecretKey& session_key() const
-        {
-            return _session_key;
-        }
+        const SecretKey& session_key() const { return _session_key; }
 
-        bool is_snode_service() const
-        {
-            return _is_snode_service;
-        }
+        bool is_snode_service() const { return _is_snode_service; }
 
-        bool is_exit_service() const
-        {
-            return _is_exit_service;
-        }
+        bool is_exit_service() const { return _is_exit_service; }
 
-        std::weak_ptr<AuthPolicy> get_weak() override
-        {
-            return weak_from_this();
-        }
+        std::weak_ptr<AuthPolicy> get_weak() override { return weak_from_this(); }
 
-        std::shared_ptr<AuthPolicy> get_self() override
-        {
-            return shared_from_this();
-        }
+        std::shared_ptr<AuthPolicy> get_self() override { return shared_from_this(); }
     };
 
     struct FileAuthPolicy final : public AuthPolicy, public std::enable_shared_from_this<FileAuthPolicy>
@@ -98,15 +76,9 @@ namespace llarp::auth
             : AuthPolicy{r}, _files{std::move(files)}, _type{filetype}
         {}
 
-        std::weak_ptr<AuthPolicy> get_weak() override
-        {
-            return weak_from_this();
-        }
+        std::weak_ptr<AuthPolicy> get_weak() override { return weak_from_this(); }
 
-        std::shared_ptr<AuthPolicy> get_self() override
-        {
-            return shared_from_this();
-        }
+        std::shared_ptr<AuthPolicy> get_self() override { return shared_from_this(); }
 
       private:
         const std::set<fs::path> _files;
@@ -126,15 +98,9 @@ namespace llarp::auth
 
         ~RPCAuthPolicy() override = default;
 
-        std::weak_ptr<AuthPolicy> get_weak() override
-        {
-            return weak_from_this();
-        }
+        std::weak_ptr<AuthPolicy> get_weak() override { return weak_from_this(); }
 
-        std::shared_ptr<AuthPolicy> get_self() override
-        {
-            return shared_from_this();
-        }
+        std::shared_ptr<AuthPolicy> get_self() override { return shared_from_this(); }
 
         void start();
 
@@ -150,7 +116,7 @@ namespace llarp::auth
     };
 
     template <typename auth_t>
-    concept CONCEPT_COMPAT AuthPolicyType = std::is_base_of_v<AuthPolicy, auth_t>;
+    concept AuthPolicyType = std::is_base_of_v<AuthPolicy, auth_t>;
 
     template <AuthPolicyType auth_t, typename... Opt>
     inline static std::shared_ptr<auth_t> make_auth_policy(Router& r, Opt&&... opts)

@@ -92,7 +92,7 @@ namespace llarp::net
             return IPRange::find_private_range(current_ranges);
         }
 
-        std::optional<int> get_interface_index(ip ip) const override
+        std::optional<int> get_interface_index(ip_v ip) const override
         {
             std::optional<int> ret = std::nullopt;
             oxen::quic::Address ip_addr{};
@@ -183,7 +183,7 @@ namespace llarp::net
             return found;
         }
 
-        bool has_interface_address(ip ip) const override
+        bool has_interface_address(ip_v ip) const override
         {
             bool found{false};
             oxen::quic::Address ip_addr{};
