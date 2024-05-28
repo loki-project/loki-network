@@ -428,8 +428,8 @@ namespace llarp
         {
             auto is_v4 = itr->second.is_ipv4();
 
-            if ((is_v4 and conf._local_ip_range->contains(itr->second.to_ipv4()))
-                || (conf._local_ip_range->contains(itr->second.to_ipv6())))
+            if ((is_v4 and conf._local_ip_range->_contains(itr->second.to_ipv4()))
+                || (conf._local_ip_range->_contains(itr->second.to_ipv6())))
                 itr = client_addrs.erase(itr);
             else
                 ++itr;

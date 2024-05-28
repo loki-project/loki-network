@@ -4,11 +4,20 @@ namespace llarp
 {
     static auto logcat = log::Cat("iprange");
 
-    ip_range_v IPRange::init_ip()
+    void IPRange::_init_ip()
     {
         if (_is_ipv4)
-            return ipv4_range{ipv4{oxenc::big_to_host<uint32_t>(_addr.in4().sin_addr.s_addr)}, _mask};
-        return ipv6_range{ipv6{&_addr.in6().sin6_addr}, _mask};
+        {
+            _base_ip = _addr.to_ipv4().to_base(_mask);
+            _ip_range = ipv4_range{std::get<ipv4>(_base_ip), _mask};
+            _max_ip = std::get<ipv4_range>(_ip_range).max_ip();
+        }
+        else
+        {
+            _base_ip = _addr.to_ipv6().to_base(_mask);
+            _ip_range = ipv6_range{std::get<ipv6>(_base_ip), _mask};
+            _max_ip = std::get<ipv6_range>(_ip_range).max_ip();
+        }
     }
 
     std::optional<IPRange> IPRange::from_string(std::string arg)
@@ -39,103 +48,66 @@ namespace llarp
         return range;
     }
 
-    std::optional<ipv4_range> IPRange::get_ipv4_net() const
-    {
-        std::optional<ipv4_range> ret = std::nullopt;
-
-        if (auto* maybe = std::get_if<ipv4_range>(&_ip))
-            ret = *maybe;
-
-        return ret;
-    }
-
-    std::optional<ipv6_range> IPRange::get_ipv6_net() const
-    {
-        std::optional<ipv6_range> ret = std::nullopt;
-
-        if (auto* maybe = std::get_if<ipv6_range>(&_ip))
-            ret = *maybe;
-
-        return ret;
-    }
-
-    std::optional<ipv4> IPRange::get_ipv4() const
-    {
-        std::optional<ipv4> ret = std::nullopt;
-
-        if (auto ipv4 = get_ipv4_net())
-            ret = ipv4->base;
-
-        return ret;
-    }
-
-    std::optional<ipv6> IPRange::get_ipv6() const
-    {
-        std::optional<ipv6> ret = std::nullopt;
-
-        if (auto ipv6 = get_ipv6_net())
-            ret = ipv6->base;
-
-        return ret;
-    }
-
-    std::optional<ip_v> IPRange::get_ip()
-    {
-        if (auto maybe_v4 = get_ipv4())
-            return *maybe_v4;
-
-        if (auto maybe_v6 = get_ipv6())
-            return *maybe_v6;
-
-        return std::nullopt;
-    }
-
     bool IPRange::contains(const IPRange& other) const
     {
         if (is_ipv4() ^ other.is_ipv4())
             return false;
 
         if (is_ipv4())
-            return get_ipv4_net()->contains(*other.get_ipv4());
+            return _contains(std::get<ipv4>(other.get_ip()));
 
-        return get_ipv6_net()->contains(*other.get_ipv6());
+        return _contains(std::get<ipv6>(other.get_ip()));
     }
 
-    bool IPRange::contains(const ipv4& other) const
+    bool IPRange::_contains(const ipv4& other) const
     {
-        if (not is_ipv4())
-            return false;
-
-        return get_ipv4_net()->contains(other);
+        return _ipv4_range().contains(other);
     }
 
-    bool IPRange::contains(const ipv6& other) const
+    bool IPRange::_contains(const ipv6& other) const
     {
-        if (is_ipv4())
-            return false;
-
-        return get_ipv6_net()->contains(other);
+        return _ipv6_range().contains(other);
     }
 
     bool IPRange::contains(const ip_v& other) const
     {
-        if (auto maybe_v4 = std::get_if<ipv4>(&other))
-            return contains(*maybe_v4);
-        if (auto maybe_v6 = std::get_if<ipv6>(&other))
-            return contains(*maybe_v6);
-        return false;
+        if (is_ipv4() ^ std::holds_alternative<ipv4>(other))
+            return false;
+
+        return is_ipv4() ? _contains(std::get<ipv4>(other)) : _contains(std::get<ipv6>(other));
     }
 
     std::optional<IPRange> IPRange::find_private_range(const std::list<IPRange>& excluding)
     {
-        auto filter = [&excluding](const IPRange& range) -> bool {
+        if (excluding.empty())
+            return std::nullopt;
+
+        auto filter = [&excluding](const ip_range_v& range) -> bool {
             for (const auto& e : excluding)
                 if (e == range)
                     return false;
             return true;
         };
 
-        (void)filter;
+        using ip_type = decltype(excluding.front());
+
+        // check ipv4 private addresses
+        if constexpr (std::is_same_v<ip_type, ipv4_range>)
+        {
+            for (const auto& r : ipv4_private)
+            {
+                if (filter(r))
+                    return r;
+            }
+        }
+        else  // check ipv6 private addresses
+        {
+            for (size_t n = 0; n < num_ipv6_private; ++n)
+            {
+                if (auto v6 = ipv6(0xfd2e, 0x6c6f, 0x6b69, n) / 64; filter(v6))
+                    return v6;
+            }
+        }
 
         return std::nullopt;
     }

@@ -744,7 +744,7 @@ namespace llarp
 
                 std::vector<char> data;
 
-                if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary); maybe and load_file)
+                if (auto maybe = util::OpenFileStream<std::ifstream>(file, std::ios_base::binary); maybe and load_file)
                 {
                     log::debug(logcat, "Config loading persisting address map file from path:{}", file);
 

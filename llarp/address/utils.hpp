@@ -105,33 +105,30 @@ namespace llarp
             return result;
         }
 
-        template <std::integral T>
-        inline constexpr T max_value()
-        {
-            return std::numeric_limits<T>::max();
-        }
-
         inline constexpr size_t num_ipv4_private{272};
 
-        template <std::integral T>
-        constexpr std::array<ipv4_range, num_ipv4_private> generate_private_ipv4()
+        inline constexpr std::array<ipv4_range, num_ipv4_private> generate_private_ipv4()
         {
             std::array<ipv4_range, num_ipv4_private> ret{};
 
-            std::generate(ret.begin(), ret.begin() + 16, [n = 16]() mutable {
-                ipv4_range r = ipv4(172, n, 0, 0) / 16;
-                n += 1;
-                return r;
-            });
+            for (size_t n = 16; n < 32; ++n)
+                ret[n - 16] = ipv4(172, n, 0, 0) / 16;
 
-            std::generate(ret.begin() + 16, ret.end(), [n = 0]() mutable {
-                ipv4_range r = ipv4(10, n, 0, 0) / 16;
-                n += 1;
-                return r;
-            });
+            for (size_t n = 0; n < 256; ++n)
+                ret[n + 16] = ipv4(10, n, 0, 0) / 16;
 
             return ret;
         }
+
+        // inline constexpr std::array<ipv6_range, num_ipv6_private> generate_private_ipv6()
+        // {
+        //     std::array<ipv6_range, num_ipv6_private> ret{};
+
+        //     for (size_t n = 0; n < num_ipv6_private; ++n)
+        //         ret[n] = ipv6(0xfd2e, 0x6c6f, 0x6b69, n) / 64;
+
+        //     return ret;
+        // }
 
     }  //  namespace detail
 
