@@ -5,6 +5,7 @@
 #include <fmt/core.h>
 
 #include <cassert>
+#include <filesystem>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -16,6 +17,8 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+
+namespace fs = std::filesystem;
 
 namespace llarp
 {

@@ -156,22 +156,23 @@ namespace llarp::rpc
             return;
         }
 
-        auto endpoint =
-            (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router, req.endpoint);
+        // auto endpoint =
+        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     req.endpoint);
 
-        if (not endpoint)
-        {
-            SetJSONError("No such local endpoint found.", quicconnect.response);
-            return;
-        }
+        // if (not endpoint)
+        // {
+        //     SetJSONError("No such local endpoint found.", quicconnect.response);
+        //     return;
+        // }
 
-        auto quic = endpoint->GetQUICTunnel();
+        // auto quic = endpoint->GetQUICTunnel();
 
-        if (not quic)
-        {
-            SetJSONError("No quic interface available on endpoint " + req.endpoint, quicconnect.response);
-            return;
-        }
+        // if (not quic)
+        // {
+        //     SetJSONError("No quic interface available on endpoint " + req.endpoint, quicconnect.response);
+        //     return;
+        // }
 
         if (req.closeID)
         {
@@ -211,22 +212,23 @@ namespace llarp::rpc
             return;
         }
 
-        auto endpoint =
-            (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router, req.endpoint);
+        // auto endpoint =
+        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     req.endpoint);
 
-        if (not endpoint)
-        {
-            SetJSONError("No such local endpoint found", quiclistener.response);
-            return;
-        }
+        // if (not endpoint)
+        // {
+        //     SetJSONError("No such local endpoint found", quiclistener.response);
+        //     return;
+        // }
 
-        auto quic = endpoint->GetQUICTunnel();
+        // auto quic = endpoint->GetQUICTunnel();
 
-        if (not quic)
-        {
-            SetJSONError("No quic interface available on endpoint " + req.endpoint, quiclistener.response);
-            return;
-        }
+        // if (not quic)
+        // {
+        //     SetJSONError("No quic interface available on endpoint " + req.endpoint, quiclistener.response);
+        //     return;
+        // }
 
         if (req.closeID)
         {
@@ -254,13 +256,13 @@ namespace llarp::rpc
             nlohmann::json result;
             result["id"] = id;
             std::string localAddress;
-            var::visit([&](auto&& addr) { localAddress = addr.to_string(); }, endpoint->local_address());
+            // var::visit([&](auto&& addr) { localAddress = addr.to_string(); }, endpoint->local_address());
             result["addr"] = localAddress + ":" + std::to_string(req.port);
 
             if (not req.srvProto.empty())
             {
                 dns::SRVData srvData{req.srvProto, 1, 1, req.port, ""};
-                endpoint->put_srv_record(std::move(srvData));
+                // endpoint->put_srv_record(std::move(srvData));
             }
 
             SetJSONResponse(result, quiclistener.response);
@@ -450,28 +452,29 @@ namespace llarp::rpc
 
         dns::Message msg{dns::Question{qname, qtype}};
 
-        auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(m_Router, "default")
-                                                            : GetEndpointByName(m_Router, dnsquery.request.endpoint);
+        // auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(m_Router, "default")
+        //                                                     : GetEndpointByName(m_Router, dnsquery.request.endpoint);
 
-        if (endpoint == nullptr)
-        {
-            SetJSONError("No such endpoint found for dns query", dnsquery.response);
-            return;
-        }
+        // if (endpoint == nullptr)
+        // {
+        //     SetJSONError("No such endpoint found for dns query", dnsquery.response);
+        //     return;
+        // }
 
-        if (auto dns = endpoint->DNS())
-        {
-            auto packet_src = std::make_shared<DummyPacketSource>([&](auto result) {
-                if (result)
-                    SetJSONResponse(result->ToJSON(), dnsquery.response);
-                else
-                    SetJSONError("No response from DNS", dnsquery.response);
-            });
-            if (not dns->maybe_handle_packet(packet_src, packet_src->dumb, packet_src->dumb, IPPacket{msg.to_buffer()}))
-                SetJSONError("DNS query not accepted by endpoint", dnsquery.response);
-        }
-        else
-            SetJSONError("Endpoint does not have dns", dnsquery.response);
+        // if (auto dns = endpoint->DNS())
+        // {
+        //     auto packet_src = std::make_shared<DummyPacketSource>([&](auto result) {
+        //         if (result)
+        //             SetJSONResponse(result->ToJSON(), dnsquery.response);
+        //         else
+        //             SetJSONError("No response from DNS", dnsquery.response);
+        //     });
+        //     if (not dns->maybe_handle_packet(packet_src, packet_src->dumb, packet_src->dumb,
+        //     IPPacket{msg.to_buffer()}))
+        //         SetJSONError("DNS query not accepted by endpoint", dnsquery.response);
+        // }
+        // else
+        //     SetJSONError("Endpoint does not have dns", dnsquery.response);
         return;
     }
 

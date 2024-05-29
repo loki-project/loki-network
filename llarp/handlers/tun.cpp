@@ -323,22 +323,22 @@ namespace llarp::handlers
         _if_name = *net_conf._if_name;
         _local_range = *net_conf._local_ip_range;
         _local_addr = *net_conf._local_addr;
-        _local_ip = *net_conf._local_ip;
+        _local_base_ip = *net_conf._local_base_ip;
 
         _is_ipv6 = not _local_range.is_ipv4();
 
         _persisting_addr_file = net_conf.addr_map_persist_file;
 
-        if (not net_conf._reserved_local_addrs.empty())
+        if (not net_conf._reserved_local_ips.empty())
         {
-            for (auto& [remote, local] : net_conf._reserved_local_addrs)
+            for (auto& [remote, local] : net_conf._reserved_local_ips)
             {
-                local_ip_mapping.insert_or_assign(local, remote);
+                _local_ip_mapping.insert_or_assign(local, remote);
             }
         }
 
         _local_netaddr = NetworkAddress::from_pubkey(_router.pubkey(), not _router.is_service_node());
-        local_ip_mapping.insert_or_assign(get_if_addr(), _local_netaddr);
+        _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
 
         vpn::InterfaceInfo info;
         info.addrs.emplace_back(_local_range);
@@ -390,7 +390,6 @@ namespace llarp::handlers
         // }
 
         setup_dns();
-        assert(has_mapped_address(_local_netaddr));
     }
 
     static bool is_random_snode(const dns::Message& msg)
@@ -895,6 +894,87 @@ namespace llarp::handlers
         return true;
     }
 
+    std::optional<ip_v> TunEndpoint::get_next_local_ip()
+    {
+        // if our IP range is exhausted, we loop back around to see if any have been unmapped from terminated sessions;
+        // we only want to reset the iterator and loop back through once though
+        bool has_reset = false;
+
+        do
+        {
+            // this will be std::nullopt if IP range is exhausted OR the IP incrementing overflowed (basically equal)
+            if (auto maybe_next_ip = _local_range_iterator.next_ip(); maybe_next_ip)
+            {
+                if (not _local_ip_mapping.has_local(*maybe_next_ip))
+                    return maybe_next_ip;
+                // local IP is already assigned; try again
+                continue;
+            }
+
+            if (not has_reset)
+            {
+                log::debug(logcat, "Resetting IP range iterator for range: {}...", _local_range);
+                _local_range_iterator.reset();
+                has_reset = true;
+            }
+            else
+                break;
+        } while (true);
+
+        return std::nullopt;
+    }
+
+    std::optional<ip_v> TunEndpoint::map_session_to_local_ip(const NetworkAddress& remote)
+    {
+        std::optional<ip_v> ret = std::nullopt;
+
+        // first: check if we have a config value for this remote
+        if (auto maybe_ip = _local_ip_mapping.get_local_from_remote(remote); maybe_ip)
+        {
+            ret = maybe_ip;
+            log::info(
+                logcat,
+                "Local IP for session to remote ({}) pre-loaded from config: {}",
+                remote,
+                std::holds_alternative<ipv4>(*maybe_ip) ? std::get<ipv4>(*maybe_ip).to_string()
+                                                        : std::get<ipv6>(*maybe_ip).to_string());
+        }
+        else
+        {
+            // We need to check that we both have a valid IP in our local range and that it is not already pre-assigned
+            // to a remote from the config
+            if (auto maybe_next_ip = get_next_local_ip(); maybe_next_ip)
+            {
+                ret = maybe_next_ip;
+                _local_ip_mapping.insert_or_assign(*maybe_next_ip, remote);
+
+                log::info(
+                    logcat,
+                    "Local IP for session to remote ({}) assigned: {}",
+                    remote,
+                    std::holds_alternative<ipv4>(*maybe_next_ip) ? std::get<ipv4>(*maybe_next_ip).to_string()
+                                                                 : std::get<ipv6>(*maybe_next_ip).to_string());
+            }
+            else
+                log::critical(logcat, "TUN device failed to assign local private IP for session to remote: {}", remote);
+        }
+
+        return ret;
+    }
+
+    void TunEndpoint::unmap_session_to_local_ip(const NetworkAddress& remote)
+    {
+        if (_local_ip_mapping.has_remote(remote))
+        {
+            _local_ip_mapping.unmap(remote);
+            log::info(logcat, "TUN device unmapped session to remote: {}", remote);
+        }
+        else
+        {
+            log::critical(logcat, "TUN device could not unmap session (remote: {})", remote);
+        }
+    }
+
     // std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
     //     huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
     // {
@@ -1218,9 +1298,14 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::has_mapped_address(const NetworkAddress& addr) const
+    bool TunEndpoint::has_mapping_to_remote(const NetworkAddress& addr) const
     {
-        return local_ip_mapping.has_remote(addr);
+        return _local_ip_mapping.has_remote(addr);
+    }
+
+    std::optional<ip_v> TunEndpoint::get_mapped_ip(const NetworkAddress& addr)
+    {
+        return _local_ip_mapping.get_local_from_remote(addr);
     }
 
     oxen::quic::Address TunEndpoint::get_if_addr() const

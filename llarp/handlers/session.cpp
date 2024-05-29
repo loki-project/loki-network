@@ -20,6 +20,11 @@ namespace llarp::handlers
         return _router.loop();
     }
 
+    void SessionEndpoint::Tick(std::chrono::milliseconds now)
+    {
+        (void)now;
+    }
+
     void SessionEndpoint::configure()
     {
         auto net_config = _router.config()->network;
@@ -56,13 +61,13 @@ namespace llarp::handlers
         _if_name = *net_config._if_name;
         _local_range = *net_config._local_ip_range;
         _local_addr = *net_config._local_addr;
-        _local_ip = *net_config._local_ip;
+        _local_base_ip = *net_config._local_base_ip;
 
         _is_v4 = _local_range.is_ipv4();
 
         for (auto& [addr, range] : net_config._exit_ranges)
         {
-            map_remote_to_local_range(addr, range);
+            _range_map.insert_or_assign(range, addr);
         }
 
         if (not net_config.exit_auths.empty())
@@ -122,7 +127,7 @@ namespace llarp::handlers
                                 "Successfully resolved ONS lookup for {} mapped to IPRange:{}",
                                 *maybe_addr,
                                 ip_range);
-                            map_remote_to_local_range(std::move(*maybe_addr), std::move(ip_range));
+                            _range_map.insert_or_assign(std::move(ip_range), std::move(*maybe_addr));
                         }
                         // we don't need to print a fail message, as it is logged prior to invoking with std::nullopt
                     });
@@ -339,6 +344,7 @@ namespace llarp::handlers
     bool SessionEndpoint::prefigure_session(
         NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun)
     {
+        bool ret = true;
         assert(path->is_client_path());
 
         auto inbound =
@@ -346,12 +352,35 @@ namespace llarp::handlers
 
         auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
 
-        log::info(
-            logcat, "SessionEndpoint successfully created and mapped InboundSession object! Starting TCP tunnel...");
+        auto msg = "SessionEndpoint successfully created and mapped InboundSession object!";
 
-        session->tcp_backend_connect();
+        // TESTNET:
+        // instruct the lokinet TUN device to create a mapping from a local IP to this session
+        if (session->using_tun())
+        {
+            log::info(logcat, "{} Instructing lokinet TUN device to create mapped route...", msg);
 
-        return true;
+            if (auto maybe_ip = _router.tun_endpoint()->map_session_to_local_ip(session->remote()))
+            {
+                log::info(
+                    logcat,
+                    "TUN device successfully routing session (remote: {}) via local ip: {}",
+                    session->remote(),
+                    std::holds_alternative<ipv4>(*maybe_ip) ? std::get<ipv4>(*maybe_ip).to_string()
+                                                            : std::get<ipv6>(*maybe_ip).to_string());
+            }
+            else
+            {
+                // TODO: if this fails, we should close the session
+            }
+        }
+        else
+        {
+            log::info(logcat, "{} Connecting to TCP backend to route session traffic...", msg);
+            session->tcp_backend_connect();
+        }
+
+        return ret;
     }
 
     bool SessionEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
@@ -404,12 +433,29 @@ namespace llarp::handlers
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 
-                    log::info(
-                        logcat,
-                        "SessionEndpoint successfully created and mapped OutboundSession object! Starting TCP "
-                        "tunnel...");
+                    auto msg = "SessionEndpoint successfully created and mapped InboundSession object!";
 
-                    session->tcp_backend_listen(std::move(hook));
+                    // TESTNET:
+                    if (session->using_tun())
+                    {
+                        log::info(logcat, "{} Instructing lokinet TUN device to create mapped route...", msg);
+                        if (auto maybe_ip = _router.tun_endpoint()->map_session_to_local_ip(session->remote()))
+                        {
+                            log::info(
+                                logcat, "TUN device successfully routing session to remote: {}", session->remote());
+
+                            hook(*maybe_ip);
+                        }
+                        else
+                        {
+                            // TODO: if this fails, we should close the session
+                        }
+                    }
+                    else
+                    {
+                        log::info(logcat, "{} Starting TCP listener to route session traffic to backend...", msg);
+                        session->tcp_backend_listen(std::move(hook));
+                    }
                 }
             });
     }

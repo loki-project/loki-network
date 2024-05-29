@@ -584,7 +584,7 @@ namespace llarp
                 {
                     _local_ip_range = *maybe_range;
                     _local_addr = _local_ip_range->address();
-                    _local_ip = _local_ip_range->get_ip();
+                    _local_base_ip = _local_ip_range->base_ip();
                 }
                 else
                     throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
@@ -645,8 +645,14 @@ namespace llarp
 
                 if (auto maybe_raddr = NetworkAddress::from_network_addr(std::move(addr_arg)); maybe_raddr)
                 {
-                    oxen::quic::Address addr{std::move(ip_arg), 0};
-                    _reserved_local_addrs.emplace(std::move(*maybe_raddr), std::move(addr));
+                    ip_v ipv;
+                    // ipv6
+                    if (ip_arg.find(':') != std::string_view::npos)
+                        ipv = ipv6{std::move(ip_arg)};
+                    else
+                        ipv = ipv4{std::move(ip_arg)};
+
+                    _reserved_local_ips.emplace(std::move(*maybe_raddr), std::move(ipv));
                 }
                 else
                     throw std::invalid_argument{"[endpoint]:mapaddr invalid entry: {}"_format(arg)};
@@ -777,25 +783,18 @@ namespace llarp
                         try
                         {
                             oxen::quic::Address addr{key, 0};
-                            bool in_range{false}, is_local{false};
+
+                            ip_v _ip;
 
                             if (addr.is_ipv4())
-                            {
-                                auto addr_v4 = addr.to_ipv4();
-                                in_range = _local_ip_range->contains(addr_v4);
-                                is_local = addr_v4 == std::get<ipv4>(*_local_ip);
-                            }
+                                _ip = addr.to_ipv4();
                             else
-                            {
-                                auto addr_v6 = addr.to_ipv6();
-                                in_range = _local_ip_range->contains(addr_v6);
-                                is_local = addr_v6 == std::get<ipv6>(*_local_ip);
-                            }
+                                _ip = addr.to_ipv6();
 
-                            if (is_local)
+                            if (_ip == _local_base_ip)
                                 continue;
 
-                            if (not in_range)
+                            if (not _local_ip_range->contains(_ip))
                             {
                                 log::warning(
                                     logcat,
@@ -821,7 +820,7 @@ namespace llarp
 
                             if (auto maybe_netaddr = NetworkAddress::from_network_addr(*arg))
                             {
-                                _reserved_local_addrs.emplace(std::move(*maybe_netaddr), std::move(addr));
+                                _reserved_local_ips.emplace(std::move(*maybe_netaddr), std::move(_ip));
                             }
                             else
                                 log::warning(logcat, "{}: {}", addrmap_errorstr, *arg);

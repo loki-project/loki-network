@@ -3,6 +3,8 @@
 #include <oxenc/base64.h>
 #include <oxenc/hex.h>
 
+using namespace std::literals;
+
 namespace llarp::rpc
 {
 

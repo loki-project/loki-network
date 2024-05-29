@@ -315,8 +315,8 @@ namespace llarp::vpn
                 throw std::runtime_error{"we dont have our own network interface?"};
 
             const _inet_addr gateway{*maybe};
-            const _inet_addr lower{ToNet(ipaddr_ipv4_bits(0, 0, 0, 0)), 1};
-            const _inet_addr upper{ToNet(ipaddr_ipv4_bits(128, 0, 0, 0)), 1};
+            const _inet_addr lower{ipv4(0, 0, 0, 0)};
+            const _inet_addr upper{ipv4(128, 0, 0, 0)};
 
             make_route(cmd, flags, lower, gateway, GatewayMode::eLowerDefault, info.index);
             make_route(cmd, flags, upper, gateway, GatewayMode::eUpperDefault, info.index);

@@ -31,10 +31,6 @@ namespace llarp::path
 
         std::shared_ptr<Path> get_path(const HopID& hop_id);
 
-        // std::shared_ptr<Path> get_path_by_pivot(const HopID& path_id);
-
-        // std::shared_ptr<Path> get_path_by_upstream(const HopID& pivot);
-
         std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
         std::shared_ptr<TransitHop> get_transit_hop(const HopID&);

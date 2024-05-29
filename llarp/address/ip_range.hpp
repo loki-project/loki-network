@@ -24,29 +24,27 @@ namespace llarp
 
         void _init_ip();
 
-        oxen::quic::Address init_max();
-
         // internal functions that do no type checking for ipv4 vs ipv6
         bool _contains(const ipv4& other) const;
         bool _contains(const ipv6& other) const;
 
-        // getters to DRY out varianta access
+        // getters to DRY out variant access
         ipv4_range& _ipv4_range() { return std::get<ipv4_range>(_ip_range); }
         const ipv4_range& _ipv4_range() const { return std::get<ipv4_range>(_ip_range); }
         ipv6_range& _ipv6_range() { return std::get<ipv6_range>(_ip_range); }
         const ipv6_range& _ipv6_range() const { return std::get<ipv6_range>(_ip_range); }
 
       public:
-        IPRange() : IPRange{"", 0} {}
+        IPRange() : IPRange{oxen::quic::Address{}, 0} {}
 
         explicit IPRange(std::string a, uint8_t m = 0) : IPRange{oxen::quic::Address{std::move(a), 0}, m} {}
 
-        explicit IPRange(oxen::quic::Address a, uint8_t m) : _addr{a}, _mask{m}, _is_ipv4{_addr.is_ipv4()}
+        explicit IPRange(oxen::quic::Address a, uint8_t m) : _addr{std::move(a)}, _mask{m}, _is_ipv4{_addr.is_ipv4()}
         {
             _init_ip();
         }
 
-        IPRange(ipv4_range ipv4)
+        IPRange(const ipv4_range& ipv4)
             : _addr{ipv4.base},
               _mask{ipv4.mask},
               _is_ipv4{true},
@@ -55,10 +53,10 @@ namespace llarp
               _max_ip{ipv4.max_ip()}
         {}
 
-        IPRange(ipv6_range ipv6)
+        IPRange(const ipv6_range& ipv6)
             : _addr{ipv6.base},
               _mask{ipv6.mask},
-              _is_ipv4{true},
+              _is_ipv4{false},
               _base_ip{ipv6.base},
               _ip_range{ipv6},
               _max_ip{ipv6.max_ip()}
@@ -79,7 +77,7 @@ namespace llarp
 
         ip_range_v get_ip_range() const { return _ip_range; }
 
-        ip_v get_ip() const { return _base_ip; }
+        ip_v base_ip() const { return _base_ip; }
 
         ip_v max_ip() const { return _max_ip; }
 
@@ -108,6 +106,10 @@ namespace llarp
         }
     };
 
+    /** IPRangeIterator
+        - When lokinet is assigning IP's within a range, this object functions as a robust managing context for the
+            distribution and tracking of IP's within that range
+    */
     struct IPRangeIterator
     {
       private:
@@ -155,8 +157,10 @@ namespace llarp
         }
 
       public:
+        IPRangeIterator() = default;
+
         IPRangeIterator(const IPRange& range)
-            : _ip_range{range}, _is_ipv4{range.is_ipv4()}, _current_ip{range.get_ip()}, _max_ip{range.max_ip()}
+            : _ip_range{range}, _is_ipv4{range.is_ipv4()}, _current_ip{range.base_ip()}, _max_ip{range.max_ip()}
         {}
 
         // Returns the next ip address in the iterating range; returns std::nullopt if range is exhausted
@@ -177,7 +181,7 @@ namespace llarp
 
         void reset()
         {
-            _current_ip = _ip_range.get_ip();
+            _current_ip = _ip_range.base_ip();
             _max_ip = _ip_range.max_ip();
         }
 
@@ -190,24 +194,27 @@ namespace llarp
     };
 
     template <typename local_t>
-    concept LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>;
+    concept LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>
+        || std::is_same_v<ip_v, local_t>;
 }  //  namespace llarp
 
 namespace std
 {
-    inline constexpr size_t golden_ratio_inverse = sizeof(size_t) >= 8 ? 0x9e37'79b9'7f4a'7c15 : 0x9e37'79b9;
-
     template <>
     struct hash<llarp::IPRange>
     {
         size_t operator()(const llarp::IPRange& r) const
         {
-            auto& addr = r.address();
-            auto& m = r.mask();
+            size_t h;
 
             if (r.is_ipv4())
-                return hash<llarp::ipv4>{}(addr.to_ipv4().to_base(m));
-            return hash<llarp::ipv6>{}(addr.to_ipv6().to_base(m));
+                h = hash<llarp::ipv4>{}(std::get<llarp::ipv4>(r.base_ip()));
+            else
+                h = hash<llarp::ipv6>{}(std::get<llarp::ipv6>(r.base_ip()));
+
+            h ^= hash<uint8_t>{}(r.mask()) + inverse_golden_ratio + (h << 6) + (h >> 2);
+
+            return h;
         }
     };
 

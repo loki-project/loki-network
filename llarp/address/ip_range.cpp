@@ -54,9 +54,9 @@ namespace llarp
             return false;
 
         if (is_ipv4())
-            return _contains(std::get<ipv4>(other.get_ip()));
+            return _contains(std::get<ipv4>(other.base_ip()));
 
-        return _contains(std::get<ipv6>(other.get_ip()));
+        return _contains(std::get<ipv6>(other.base_ip()));
     }
 
     bool IPRange::_contains(const ipv4& other) const

@@ -127,7 +127,7 @@ namespace std
         size_t operator()(const llarp::ipv6& obj) const
         {
             auto h = hash<decltype(obj.hi)>{}(obj.hi);
-            h ^= hash<decltype(obj.lo)>{}(obj.lo);
+            h ^= hash<decltype(obj.lo)>{}(obj.lo) + inverse_golden_ratio + (h << 6) + (h >> 2);
             return h;
         }
     };
@@ -140,8 +140,7 @@ namespace std
             if (auto maybe_v4 = std::get_if<llarp::ipv4>(&obj))
                 return hash<llarp::ipv4>{}(*maybe_v4);
 
-            auto maybe_v6 = std::get_if<llarp::ipv6>(&obj);
-            return hash<llarp::ipv6>{}(*maybe_v6);
+            return hash<llarp::ipv6>{}(std::get<llarp::ipv6>(obj));
         }
     };
 }  //  namespace std

@@ -98,12 +98,12 @@ namespace llarp::net
         {
             if (is_ipv4)
             {
-                if (range._contains(v4))
+                if (range.contains(v4))
                     return true;
             }
             else
             {
-                if (range._contains(v6))
+                if (range.contains(v6))
                     return true;
             }
         }

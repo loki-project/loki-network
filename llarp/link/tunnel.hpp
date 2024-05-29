@@ -41,7 +41,7 @@ namespace llarp
       public:
         const std::unique_ptr<oxen::quic::Network>& net() { return _q; }
 
-        const std::shared_ptr<oxen::quic::GNUTLSCreds>& creds() { return _tls_creds; }
+        std::shared_ptr<oxen::quic::GNUTLSCreds> creds() { return _tls_creds; }
 
         uint16_t listen();
 

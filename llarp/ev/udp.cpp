@@ -18,10 +18,17 @@ namespace llarp
         _local = socket->address();
     }
 
+    UDPHandle::~UDPHandle()
+    {
+        socket.reset();
+    }
+
     io_result UDPHandle::_send_impl(
-        const oxen::quic::Path& path, std::byte* buf, size_t* bufsize, uint8_t ecn, size_t& n_pkts)
+        const oxen::quic::Path& path, std::byte* buf, size_t size, uint8_t ecn, size_t& n_pkts)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        auto* bufsize = &size;
 
         if (!socket)
         {
@@ -83,8 +90,8 @@ namespace llarp
         }
 
         size_t n_pkts = 1;
-        size_t bufsize = buf.size();
-        auto res = _send_impl(path, buf.data(), &bufsize, ecn, n_pkts);
+        // size_t bufsize = buf.size();
+        auto res = _send_impl(path, buf.data(), buf.size(), ecn, n_pkts);
 
         if (res.blocked())
         {
@@ -94,5 +101,18 @@ namespace llarp
         }
         else if (callback)
             callback({});
+    }
+
+    io_result UDPHandle::send(const oxen::quic::Address& dest, bstring data)
+    {
+        size_t n_pkts = 1;
+        return _send_impl(oxen::quic::Path{_local, dest}, data.data(), data.size(), 0, n_pkts);
+    }
+
+    io_result UDPHandle::send(const oxen::quic::Address& dest, std::vector<uint8_t> data)
+    {
+        size_t n_pkts = 1;
+        return _send_impl(
+            oxen::quic::Path{_local, dest}, reinterpret_cast<std::byte*>(data.data()), data.size(), 0, n_pkts);
     }
 }  //  namespace llarp

@@ -33,14 +33,16 @@ namespace llarp
 
     class EventLoop
     {
+        EventLoop();
+        EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+
+        std::atomic<bool> _close_immediately{false};
+
       public:
         static std::shared_ptr<EventLoop> make();
         static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
-        EventLoop();
-        EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
-
-        ~EventLoop();  // TODO:
+        ~EventLoop();
 
         std::shared_ptr<oxen::quic::Loop> _loop;
 
@@ -48,7 +50,8 @@ namespace llarp
 
         std::shared_ptr<EventHandler> make_handler();
 
-      public:
+        void set_close_immediate(bool b) { _close_immediately.store(b); }
+
         const loop_ptr& loop() const { return _loop->loop(); }
 
         bool in_event_loop() const { return _loop->in_event_loop(); }
@@ -111,7 +114,7 @@ namespace llarp
         template <typename T, typename Callable>
         std::shared_ptr<T> shared_ptr(T* obj, Callable&& deleter)
         {
-            return _loop->shared_ptr<T, Callable>(std::forward<T>(obj), std::forward<Callable>(deleter));
+            return _loop->shared_ptr<T, Callable>(obj, std::forward<Callable>(deleter));
         }
 
         template <typename Callable>

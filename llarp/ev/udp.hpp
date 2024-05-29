@@ -21,8 +21,7 @@ namespace llarp
         std::unique_ptr<UDPSocket> socket;
         oxen::quic::Address _local;
 
-        io_result _send_impl(
-            const oxen::quic::Path& path, std::byte* buf, size_t* bufsize, uint8_t ecn, size_t& n_pkts);
+        io_result _send_impl(const oxen::quic::Path& path, std::byte* buf, size_t bufsize, uint8_t ecn, size_t& n_pkts);
 
         void _send_or_queue(
             const oxen::quic::Path& path,
@@ -31,13 +30,15 @@ namespace llarp
             std::function<void(io_result)> callback = nullptr);
 
       public:
+        const std::shared_ptr<EventLoop>& loop() const { return _loop; }
+
         io_result send(const oxen::quic::Address& dest, bstring data);
 
         io_result send(const oxen::quic::Address& dest, std::vector<uint8_t> data);
 
         oxen::quic::Address bind() { return _local; }
 
-        void close();
+        // void close();
     };
 
 }  //  namespace llarp

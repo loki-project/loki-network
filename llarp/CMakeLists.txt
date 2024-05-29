@@ -206,7 +206,7 @@ lokinet_add_library(lokinet-config
 # All path objects; link directly to lokinet-core
 lokinet_add_library(lokinet-path
   path/path.cpp
-  # path/path_context.cpp
+  path/path_context.cpp
   path/path_handler.cpp
   path/transit_hop.cpp
 )

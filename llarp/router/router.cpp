@@ -373,7 +373,7 @@ namespace llarp
         std::string _if_name;
         IPRange _local_range;
         oxen::quic::Address _local_addr;
-        ip_v _local_ip;
+        ip_v _local_base_ip;
 
         auto& conf = _config->network;
 
@@ -406,31 +406,28 @@ namespace llarp
 
             _local_range = *maybe;
             _local_addr = _local_range.address();
-            _local_ip = *_local_range.get_ip();
+            _local_base_ip = _local_range.base_ip();
         }
         else
         {
             _local_range = *conf._local_ip_range;
             _local_addr = *conf._local_addr;
-            _local_ip = *conf._local_ip;
+            _local_base_ip = *conf._local_base_ip;
         }
 
         // set values back in config
         conf._local_ip_range = _local_range;
         conf._local_addr = _local_addr;
-        conf._local_ip = _local_ip;
+        conf._local_base_ip = _local_base_ip;
         conf._if_name = _if_name;
 
-        // process remote client map; addresses muyst be within _local_ip_range
-        auto& client_addrs = conf._reserved_local_addrs;
+        // process remote client map; addresses must be within _local_ip_range
+        auto& client_ips = conf._reserved_local_ips;
 
-        for (auto itr = client_addrs.begin(); itr != client_addrs.end();)
+        for (auto itr = client_ips.begin(); itr != client_ips.end();)
         {
-            auto is_v4 = itr->second.is_ipv4();
-
-            if ((is_v4 and conf._local_ip_range->_contains(itr->second.to_ipv4()))
-                || (conf._local_ip_range->_contains(itr->second.to_ipv6())))
-                itr = client_addrs.erase(itr);
+            if (conf._local_ip_range->contains(itr->second))
+                itr = client_ips.erase(itr);
             else
                 ++itr;
         }

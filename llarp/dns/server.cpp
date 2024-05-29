@@ -9,7 +9,6 @@
 
 #include <oxen/log.hpp>
 #include <unbound.h>
-#include <uvw.hpp>
 
 #include <memory>
 #include <optional>
@@ -76,7 +75,7 @@ namespace llarp::dns
             _udp->send(to, std::move(data));
         }
 
-        void stop() override { _udp->close(); }
+        void stop() override { _udp->loop()->stop(); }
     };
 
     namespace libunbound
@@ -118,7 +117,7 @@ namespace llarp::dns
             std::thread runner;
             std::atomic<bool> running;
 #else
-            std::shared_ptr<uvw::PollHandle> _poller;
+            // std::shared_ptr<uvw::PollHandle> _poller;
 #endif
 
             std::optional<oxen::quic::Address> _local_addr;
@@ -375,8 +374,8 @@ namespace llarp::dns
                     runner.join();
                 }
 #else
-                if (_poller)
-                    _poller->close();
+                // if (_poller)
+                //     _poller->close();
 #endif
                 if (m_ctx)
                 {
@@ -557,7 +556,7 @@ namespace llarp::dns
     std::shared_ptr<PacketSource_Base> Server::make_packet_source_on(
         const oxen::quic::Address& addr, const llarp::DnsConfig&)
     {
-        return std::make_shared<UDPReader>(*this, _loop->loop(), addr);
+        return std::make_shared<UDPReader>(*this, _loop, addr);
     }
 
     std::shared_ptr<Resolver_Base> Server::make_default_resolver()

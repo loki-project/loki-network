@@ -1,6 +1,5 @@
 #include <llarp/constants/files.hpp>
 #include <llarp/constants/version.hpp>
-#include <llarp/util/fs.hpp>
 
 #include <cpr/cpr.h>
 
@@ -93,8 +92,8 @@ int main(int argc, char* argv[])
         try
         {
             std::cout << "writing bootstrap file to: " << outputfile << std::endl;
-            fs::ofstream ofs{outputfile, std::ios::binary};
-            ofs.exceptions(fs::ofstream::failbit);
+            std::ofstream ofs{outputfile, std::ios::binary};
+            ofs.exceptions(std::ofstream::failbit);
             ofs << data;
             return 0;
         }

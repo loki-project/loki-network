@@ -75,6 +75,13 @@ namespace llarp::handlers
         // Handle a packet coming into the network through the TUN device
         bool handle_inbound_packet(IPPacket pkt);
 
+        // TODO: think of a better name
+        // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
+        // route session traffic
+        std::optional<ip_v> map_session_to_local_ip(const NetworkAddress& remote);
+
+        void unmap_session_to_local_ip(const NetworkAddress& remote);
+
         // TONUKE: this old bullshit
         // bool handle_inbound_packet(
         //     const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno);
@@ -98,7 +105,9 @@ namespace llarp::handlers
         /// returns true otherwise
         bool is_allowing_traffic(const IPPacket& pkt) const;
 
-        bool has_mapped_address(const NetworkAddress& addr) const;
+        bool has_mapping_to_remote(const NetworkAddress& addr) const;
+
+        std::optional<ip_v> get_mapped_ip(const NetworkAddress& addr);
 
         const Router& router() const { return _router; }
 
@@ -116,9 +125,11 @@ namespace llarp::handlers
         // Stores assigned IP's for each session in/out of this lokinet instance
         //  - Reserved local addresses is directly pre-loaded from config
         //  - Persisting address map is directly pre-loaded from config
-        address_map<oxen::quic::Address, NetworkAddress> local_ip_mapping;
+        address_map<ip_v, NetworkAddress> _local_ip_mapping;
 
       private:
+        std::optional<ip_v> get_next_local_ip();
+
         template <typename Addr_t, typename Endpoint_t>
         void send_dns_reply(
             Addr_t addr,
@@ -143,24 +154,18 @@ namespace llarp::handlers
         /// dns subsystem for this endpoint
         std::shared_ptr<dns::Server> _dns;
 
-        // std::shared_ptr<auth::AuthPolicy> _auth_policy;
-
         /// our local ip range (config-mapped as `if-addr`), address, and ip
         IPRange _local_range;
         oxen::quic::Address _local_addr;
-        ip_v _local_ip;
+        ip_v _local_base_ip;
+
+        IPRangeIterator _local_range_iterator;
 
         /// Our local Network Address holding our network pubkey
         NetworkAddress _local_netaddr;
 
         /// our network interface's ipv6 address
         oxen::quic::Address _local_ipv6;
-
-        /// next ip address to allocate
-        ip_v _next_ip;
-
-        /// highest ip address to allocate
-        ip_v _max_ip;  // last IP address in the range (add to IPRange class)
 
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;

@@ -37,6 +37,8 @@ namespace llarp
             return true;
         }
 
+        oxenc::bt_deserialize(tmp, *data());
+        // return true;
         return bt_decode(tmp);
     }
 

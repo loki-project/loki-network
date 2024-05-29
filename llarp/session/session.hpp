@@ -14,7 +14,7 @@
 
 namespace llarp
 {
-    using on_session_init_hook = std::function<void(oxen::quic::Address)>;
+    using on_session_init_hook = std::function<void(ip_v)>;
 
     namespace link
     {
@@ -78,7 +78,11 @@ namespace llarp
                 bool use_tun,
                 bool is_outbound);
 
-            constexpr bool is_outbound() const { return _is_outbound; }
+            bool is_outbound() const { return _is_outbound; }
+
+            const NetworkAddress& remote() const { return _remote; }
+
+            NetworkAddress remote() { return _remote; }
 
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func = nullptr);
@@ -92,6 +96,12 @@ namespace llarp
             void tcp_backend_connect();
 
             void tcp_backend_listen(on_session_init_hook cb, uint16_t port = 0);
+
+            bool using_tun() const { return _use_tun; }
+
+            service::SessionTag tag() { return _tag; }
+
+            const service::SessionTag& tag() const { return _tag; }
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -162,10 +172,6 @@ namespace llarp
             }
 
             bool is_expired(std::chrono::milliseconds now) const;
-
-            service::SessionTag tag() { return _tag; }
-
-            const service::SessionTag& tag() const { return _tag; }
         };
 
         struct InboundSession final : public BaseSession

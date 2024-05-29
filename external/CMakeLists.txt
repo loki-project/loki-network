@@ -26,15 +26,12 @@ if(SUBMODULE_CHECK)
     message(STATUS "Checking submodules")
     check_submodule(CLI11)
     check_submodule(cpr)
-    check_submodule(ghc-filesystem)
     check_submodule(nlohmann)
     check_submodule(oxen-encoding)
     check_submodule(oxen-libquic)
     check_submodule(oxen-mq)
     check_submodule(pybind11)
-    check_submodule(span-lite)
     check_submodule(sqlite_orm)
-    check_submodule(uvw)
   endif()
 endif()
 
@@ -89,8 +86,6 @@ target_include_directories(uvw INTERFACE uvw/src)
 target_link_libraries(uvw INTERFACE libuv)
 
 add_subdirectory(oxen-libquic)
-
-add_subdirectory(span-lite)
 
 # cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires
 # 3.15+, and we target lower than that (and this is fairly simple to build).

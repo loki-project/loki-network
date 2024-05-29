@@ -27,9 +27,8 @@ namespace llarp
 
             address_map<oxen::quic::Address, NetworkAddress> _address_map;
 
-            // Remote client exit addresses mapped to local IP ranges
+            // Remote client exit-node addresses mapped to local IP ranges
             //  - Directly pre-loaded from config
-            //
             address_map<IPRange, NetworkAddress> _range_map;
 
             service::Identity _identity;
@@ -50,7 +49,7 @@ namespace llarp
 
             IPRange _local_range;
             oxen::quic::Address _local_addr;
-            ip_v _local_ip;
+            ip_v _local_base_ip;
             ip_v _next_ip;
             std::string _if_name;
 
@@ -128,7 +127,6 @@ namespace llarp
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
 
-            // TODO: add callback to return local TCPHandle bind address for requesting app
             bool initiate_remote_service_session(const NetworkAddress& remote, on_session_init_hook cb)
             {
                 return initiate_session(remote, std::move(cb), false);
@@ -141,6 +139,7 @@ namespace llarp
 
             void Tick(std::chrono::milliseconds now) override;
 
+            // TESTNET: the following functions may not be needed -- revisit this
             /*  Address Mapping - Public Mutators  */
             void map_remote_to_local_addr(NetworkAddress remote, oxen::quic::Address local);
 

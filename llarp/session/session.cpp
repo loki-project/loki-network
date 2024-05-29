@@ -98,6 +98,7 @@ namespace llarp::session
                 //  - make a TCP connection over the bufferevent to lokinet-primary-ip:port
                 auto tcp_conn = h->connect(s.shared_from_this());
                 _tcp_conns.insert(std::move(tcp_conn));
+                return 0;
             });
 
         _handles.emplace(_handle->port(), std::move(_handle));
@@ -139,7 +140,7 @@ namespace llarp::session
         _ci = _ep->connect(
             KeyedAddress{TUNNEL_PUBKEY},
             _r.quic_tunnel()->creds(),
-            [addr = *bind, hook = std::move(cb)](oxen::quic::connection_interface&) { hook(std::move(addr)); },
+            [addr = *bind, hook = std::move(cb)](oxen::quic::connection_interface&) { hook(addr.to_ipv4()); },
             [](oxen::quic::connection_interface&, uint64_t) {
                 //
             });

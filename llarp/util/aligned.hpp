@@ -155,7 +155,7 @@ namespace llarp
 
         bool bt_decode(std::string buf)
         {
-            oxenc::bt_deserialize<decltype(*this)>(buf, *this);
+            oxenc::bt_deserialize(buf, *data());
             return true;
         }
 

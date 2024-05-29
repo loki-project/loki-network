@@ -9,8 +9,14 @@
 
 namespace llarp
 {
+    /** TODO:
+        - if libquic Address is never used for this templated class, then either:
+            - this map can potentially be made (mostly) constexpr
+            - a new map just for IP addresses can be made fully constexpr
+    */
+
     /** This class will accept any types satisfying the concepts LocalAddrType and RemoteAddrType
-            LocalAddrType: oxen::quic::Address or IPRange
+            LocalAddrType: oxen::quic::Address, IPRange, or ip_v (ipv{4,6} variant)
             NetworkAddrType: must be inherited from NetworkAddress
     */
     template <LocalAddrType local_addr_t, NetworkAddrType net_addr_t>
@@ -90,6 +96,13 @@ namespace llarp
                 ret = get_local_from_remote(itr->second);
 
             return ret;
+        }
+
+        bool has_local(const local_addr_t& local) const
+        {
+            Lock_t l{addr_mutex};
+
+            return _local_to_remote.contains(local);
         }
 
         bool has_remote(const net_addr_t& remote) const

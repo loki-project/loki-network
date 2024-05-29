@@ -9,7 +9,7 @@ namespace llarp::auth
     {
         for (const auto& f : _files)
         {
-            fs::ifstream i{f};
+            std::ifstream i{f};
             std::string line{};
             while (std::getline(i, line))
             {
