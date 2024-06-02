@@ -81,10 +81,6 @@ if(WITH_PEERSTATS)
   target_link_libraries(sqlite_orm INTERFACE sqlite3)
 endif()
 
-add_library(uvw INTERFACE)
-target_include_directories(uvw INTERFACE uvw/src)
-target_link_libraries(uvw INTERFACE libuv)
-
 add_subdirectory(oxen-libquic)
 
 # cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires

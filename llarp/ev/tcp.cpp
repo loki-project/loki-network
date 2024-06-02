@@ -61,6 +61,7 @@ namespace llarp
 
             auto *conn = reinterpret_cast<TCPConnection *>(user_arg);
             assert(conn);
+            (void)conn;
 
             // conn->stream->close();
         }
@@ -92,6 +93,7 @@ namespace llarp
 
         auto *handle = reinterpret_cast<TCPHandle *>(user_arg);
         assert(handle);
+        (void)handle;
 
         // DISCUSS: close everything here?
     };

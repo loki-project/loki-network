@@ -43,13 +43,12 @@ namespace llarp::handlers
     /// (windows/macos/ios/android ... aka everything that is not linux... funny that)
     class DnsInterceptor : public dns::PacketSource_Base
     {
-        // TODO: refactor this with deprecating IP_packet_deprecated
-        udp_pkt_hook _hook;
+        ip_pkt_hook _hook;
         oxen::quic::Address _our_ip;  // maybe should be an IP type...?
         llarp::DnsConfig _config;
 
       public:
-        explicit DnsInterceptor(udp_pkt_hook reply, oxen::quic::Address our_ip, llarp::DnsConfig conf)
+        explicit DnsInterceptor(ip_pkt_hook reply, oxen::quic::Address our_ip, llarp::DnsConfig conf)
             : _hook{std::move(reply)}, _our_ip{std::move(our_ip)}, _config{std::move(conf)}
         {}
 
@@ -104,17 +103,21 @@ namespace llarp::handlers
         ~TunDNS() override = default;
 
         explicit TunDNS(TunEndpoint* ep, const llarp::DnsConfig& conf)
-            : dns::Server{ep->router().loop(), conf, 0}, _tun{ep}, _query_bind{conf._query_bind}
-        // TOFIX:
-        //   _our_ip{ep->get_if_addr(), _query_bind ? _query_bind->port() : 0}
-        {}
+            : dns::Server{ep->router().loop(), conf, 0},
+              _tun{ep},
+              _query_bind{conf._query_bind},
+              _our_ip{ep->get_if_addr()}
+        {
+            if (_query_bind)
+                _our_ip.set_port(_query_bind->port());
+        }
 
         std::shared_ptr<dns::PacketSource_Base> make_packet_source_on(
             const oxen::quic::Address&, const llarp::DnsConfig& conf) override
         {
             (void)_tun;
             auto ptr = std::make_shared<DnsInterceptor>(
-                [](UDPPacket pkt) {
+                [](IPPacket pkt) {
                     (void)pkt;
                     // ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0);
                 },
@@ -144,7 +147,7 @@ namespace llarp::handlers
         }
 
         _packet_router =
-            std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_user_packet(std::move(pkt)); });
+            std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_outbound_packet(std::move(pkt)); });
     }
 
     void TunEndpoint::setup_dns()
@@ -159,16 +162,16 @@ namespace llarp::handlers
             auto dns = std::make_shared<TunDNS>(this, dns_config);
             _dns = dns;
 
-            _packet_router->add_udp_handler(uint16_t{53}, [this, dns](UDPPacket pkt) {
+            _packet_router->add_udp_handler(uint16_t{53}, [this, dns](NetworkPacket pkt) {
                 auto dns_pkt_src = dns->pkt_source;
 
                 auto& pkt_path = pkt.path;
 
                 if (dns->maybe_handle_packet(
-                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_udp(pkt)))
+                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_netpkt(pkt)))
                     return;
 
-                handle_user_packet(IPPacket::from_udp(pkt));
+                handle_outbound_packet(IPPacket::from_netpkt(pkt));
             });
         }
         else
@@ -207,6 +210,8 @@ namespace llarp::handlers
                     // });
                     // m_RawDNS = dns_io;
                 }
+
+                (void)vpn;
             }
 
             if (_raw_DNS)
@@ -830,11 +835,7 @@ namespace llarp::handlers
 
     std::string TunEndpoint::get_if_name() const
     {
-#ifdef _WIN32
-        return net::TruncateV6(GetIfAddr()).to_string();
-#else
         return _if_name;
-#endif
     }
 
     bool TunEndpoint::is_service_node() const
@@ -880,17 +881,6 @@ namespace llarp::handlers
         if (_dns)
             _dns->stop();
 
-        return true;
-    }
-
-    void TunEndpoint::handle_outbound_packet(bstring data)
-    {
-        (void)data;
-    }
-
-    bool TunEndpoint::handle_inbound_packet(IPPacket pkt)
-    {
-        (void)pkt;
         return true;
     }
 
@@ -975,326 +965,177 @@ namespace llarp::handlers
         }
     }
 
-    // std::optional<service::Address> TunEndpoint::get_exit_address_for_ip(
-    //     huint128_t ip, std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
-    // {
-    //     // is it already mapped? return the mapping
-    //     if (auto itr = _exit_to_ip.find(ip); itr != _exit_to_ip.end())
-    //         return itr->second;
-
-    //     const auto& net = router().net();
-    //     const bool is_bogon = net.IsBogonIP(ip);
-    //     build up our candidates to choose
-
-    //     std::unordered_set<service::Address> candidates;
-    //     for (const auto& entry : _exit_map.FindAllEntries(ip))
-    //     {
-    //       // in the event the exit's range is a bogon range, make sure the ip is located in that
-    //       range
-    //       // to allow it
-    //       if ((is_bogon and net.IsBogonRange(entry.first) and entry.first.Contains(ip))
-    //           or entry.first.Contains(ip))
-    //         candidates.emplace(entry.second);
-    //     }
-    //     // no candidates? bail.
-    //     if (candidates.empty())
-    //       return std::nullopt;
-    //     if (not exitSelectionStrat)
-    //     {
-    //       // default strat to random choice
-    //       exitSelectionStrat = [](auto candidates) {
-    //         auto itr = candidates.begin();
-    //         std::advance(itr, llarp::randint() % candidates.size());
-    //         return *itr;
-    //       };
-    //     }
-    //     // map the exit and return the endpoint we mapped it to
-    //     return _exit_to_ip.emplace(ip, exitSelectionStrat(candidates)).first->second;
-    // }
-
-    void TunEndpoint::handle_user_packet(IPPacket pkt)
+    void TunEndpoint::handle_outbound_packet(IPPacket pkt)
     {
-        (void)pkt;
-        // huint128_t dst, src;
-        // if (pkt.IsV4())
-        // {
-        //     dst = pkt.dst4to6();
-        //     src = pkt.src4to6();
-        // }
-        // else
-        // {
-        //     dst = pkt.dstv6();
-        //     src = pkt.srcv6();
-        // }
+        ip_v src, dest;
 
-        // if constexpr (llarp::platform::is_apple)
-        // {
-        //     if (dst == _local_ip)
-        //     {
-        //         handle_write_ip_packet(pkt.ConstBuffer(), src, dst, 0);
-        //         return;
-        //     }
-        // }
+        auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        // // if (_state->is_exit_enabled)
-        // // {
-        // //   dst = net::ExpandV4(net::TruncateV6(dst));
-        // // }
+        if (pkt_is_ipv4)
+        {
+            src = pkt.source_ipv4();
+            dest = pkt.dest_ipv4();
+        }
+        else
+        {
+            src = pkt.source_ipv6();
+            dest = pkt.dest_ipv6();
+        }
 
-        // auto itr = _ip_to_addr.find(dst);
+        if constexpr (llarp::platform::is_apple)
+        {
+            if (ip_equals_address(dest, _local_addr, pkt_is_ipv4))
+            {
+                rewrite_and_send_packet(std::move(pkt), src, dest);
+                return;
+            }
+        }
 
-        // if (itr == _ip_to_addr.end())
-        // {
-        //     service::Address addr{};
+        // we pass `dest` because that is our local private IP on the outgoing IPPacket
+        if (auto maybe_remote = _local_ip_mapping.get_remote_from_local(dest))
+        {
+            auto& remote = *maybe_remote;
+            pkt.clear_addresses();
 
-        //     if (auto maybe = get_exit_address_for_ip(dst))
-        //         addr = *maybe;
-        //     else
-        //     {
-        //         // send icmp unreachable as we dont have any exits for this ip
-        //         if (const auto icmp = pkt.MakeICMPUnreachable())
-        //             handle_write_ip_packet(icmp->ConstBuffer(), dst, src, 0);
-
-        //         return;
-        //     }
-
-        //     std::function<void(void)> extra_cb;
-
-        //     // if (not HasFlowToService(addr))
-        //     // {
-        //     //   extra_cb = [poker = router().route_poker()]() { poker->put_up(); };
-        //     // }
-
-        //     // pkt.ZeroSourceAddress();
-        //     // MarkAddressOutbound(addr);
-
-        //     // EnsurePathToService(
-        //     //     addr,
-        //     //     [pkt, extra_cb, this](service::Address addr, service::OutboundContext* ctx)
-        //     //     mutable {
-        //     //       if (ctx)
-        //     //       {
-        //     //         if (extra_cb)
-        //     //           extra_cb();
-        //     //         ctx->send_packet_to_remote(pkt.to_string());
-        //     //         router().TriggerPump();
-        //     //         return;
-        //     //       }
-        //     //       log::warning(logcat, "cannot ensure path to exit {}; so we drop some packets", addr);
-        //     //     },
-        //     //     PathAlignmentTimeout());
-        //     return;
-        // }
-        // std::variant<service::Address, RouterID> to;
-        // service::ProtocolType type{};
-        // // if (m_SNodes.at(itr->second))
-        // // {
-        // //   to = RouterID{itr->second.as_array()};
-        // //   type = service::ProtocolType::TrafficV4;
-        // // }
-        // // else
-        // // {
-        // //   to = service::Address{itr->second.as_array()};
-        // //   type = _state->is_exit_enabled and src != m_OurIP ? service::ProtocolType::Exit
-        // //                                                     : pkt.ServiceProtocol();
-        // // }
-
-        // // prepare packet for insertion into network
-        // // this includes clearing IP addresses, recalculating checksums, etc
-        // // this does not happen for exits because the point is they don't rewrite addresses
-        // // TODO: can we fix this shit
-        // //  - clear addresses if it is our local TUN address, invariant of protocoltype
-        // if (type != service::ProtocolType::Exit)
-        // {
-        //     if (pkt.IsV4())
-        //         pkt.UpdateIPv4Address({0}, {0});
-        //     else
-        //         pkt.UpdateIPv6Address({0}, {0});
-        // }
-        // // try sending it on an existing convotag
-        // // this succeds for inbound convos, probably.
-        // // if (auto maybe = GetBestConvoTagFor(to))
-        // // {
-        // //   if (send_to(*maybe, pkt.to_string()))
-        // //   {
-        // //     MarkIPActive(dst);
-        // //     router().TriggerPump();
-        // //     return;
-        // //   }
-        // // }
-        // // // try establishing a path to this guy
-        // // // will fail if it's an inbound convo
-        // // EnsurePathTo(
-        // //     to,
-        // //     [pkt, dst, to, this](auto maybe) mutable {
-        // //       if (not maybe)
-        // //       {
-        // //         var::visit(
-        // //             [this](auto&& addr) {
-        // //               Log Warn(name(), " failed to ensure path to ", addr, " no convo tag found");
-        // //             },
-        // //             to);
-        // //       }
-        // //       if (send_to(*maybe, pkt.to_string()))
-        // //       {
-        // //         MarkIPActive(dst);
-        // //         router().TriggerPump();
-        // //       }
-        // //       else
-        // //       {
-        // //         var::visit(
-        // //             [this](auto&& addr) {
-        // //               Log Warn(name(), " failed to send to ", addr, ", SendToOrQueue failed");
-        // //             },
-        // //             to);
-        // //       }
-        // //     },
-        // //     PathAlignmentTimeout());
+            if (auto session = _router.session_endpoint()->get_session(remote))
+            {
+                log::info(logcat, "Dispatching outbound packet for session (remote: {})", remote);
+                session->send_path_data_message(std::move(pkt).steal_payload());
+                return;
+            }
+            throw std::runtime_error{"Could not find session (remote: {}) for outbound packet!"_format(remote)};
+        }
+        throw std::runtime_error{"Could not find remote mapped to local ip: {}"_format(dest)};
     }
 
-    bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
+    bool TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4)
     {
-        // if (auto exitPolicy = get_traffic_policy())
-        //     return exitPolicy->allow_ip_traffic(pkt);
-
-        (void)pkt;
+        // we are receiving traffic from a session to a local exit node
+        if (auto maybe_src = _local_ip_mapping.get_local_from_remote(remote))
+        {
+            if (std::holds_alternative<ipv4>(*maybe_src))
+            {
+                if (use_ipv4)
+                    src = *maybe_src;
+                else
+                {
+                    auto quicaddr = oxen::quic::Address{std::get<ipv4>(*maybe_src)};
+                    src = quicaddr.to_ipv6();
+                }
+            }
+            else
+            {
+                if (use_ipv4)
+                {
+                    auto quicaddr = oxen::quic::Address{std::get<ipv6>(*maybe_src)};
+                    src = quicaddr.to_ipv4();
+                }
+                else
+                    src = *maybe_src;
+            }
+        }
+        else
+        {
+            log::critical(logcat, "Unable to find local IP for inbound packet from remote: {}", remote);
+            return false;
+        }
 
         return true;
     }
 
-    // bool TunEndpoint::handle_inbound_packet(
-    //     const service::SessionTag tag, const llarp_buffer_t& buf, service::ProtocolType t, uint64_t seqno)
-    // {
-    //     log::trace(logcat, "Inbound packet on session:{}", tag);
-
-    //     // if (t == service::ProtocolType::QUIC)
-    //     // {
-    //     //   auto* quic = GetQUICTunnel();
-    //     //   if (!quic)
-    //     //   {
-    //     //     Log Warn("incoming quic packet but this endpoint is not quic capable; dropping");
-    //     //     return false;
-    //     //   }
-    //     //   if (buf.sz < 4)
-    //     //   {
-    //     //     Log Warn("invalid incoming quic packet, dropping");
-    //     //     return false;
-    //     //   }
-    //     //   log::info(logcat, "tag active T={}", tag);
-
-    //     //   // TODO:
-    //     //   // quic->receive_packet(tag, buf);
-    //     //   return true;
-    //     // }
-
-    //     if (t != service::ProtocolType::TrafficV4 && t != service::ProtocolType::TrafficV6
-    //         && t != service::ProtocolType::Exit)
-    //         return false;
-    //     // std::variant<service::Address, RouterID> addr;
-    //     // if (auto maybe = GetEndpointWithConvoTag(tag))
-    //     // {
-    //     //   addr = *maybe;
-    //     // }
-    //     // else
-    //     //   return false;
-    //     huint128_t src, dst;
-
-    //     IPPacket pkt;
-    //     if (not pkt.load(buf.base))
-    //         return false;
-
-    //     // if (_state->is_exit_enabled)
-    //     // {
-    //     //   // exit side from exit
-
-    //     //   // check packet against exit policy and if as needed
-    //     //   if (not ShouldAllowTraffic(pkt))
-    //     //     return false;
-
-    //     //   src = ObtainIPForAddr(addr);
-    //     //   if (t == service::ProtocolType::Exit)
-    //     //   {
-    //     //     if (pkt.IsV4())
-    //     //       dst = pkt.dst4to6();
-    //     //     else if (pkt.IsV6())
-    //     //     {
-    //     //       dst = pkt.dstv6();
-    //     //       src = net::ExpandV4Lan(net::TruncateV6(src));
-    //     //     }
-    //     //   }
-    //     //   else
-    //     //   {
-    //     //     // non exit traffic on exit
-    //     //     dst = m_OurIP;
-    //     //   }
-    //     // }
-    //     // else if (t == service::ProtocolType::Exit)
-    //     // {
-    //     //   // client side exit traffic from exit
-    //     //   if (pkt.IsV4())
-    //     //   {
-    //     //     dst = m_OurIP;
-    //     //     src = pkt.src4to6();
-    //     //   }
-    //     //   else if (pkt.IsV6())
-    //     //   {
-    //     //     dst = m_OurIPv6;
-    //     //     src = pkt.srcv6();
-    //     //   }
-    //     //   // find what exit we think this should be for
-    //     //   service::Address fromAddr{};
-    //     //   if (const auto* ptr = std::get_if<service::Address>(&addr))
-    //     //   {
-    //     //     fromAddr = *ptr;
-    //     //   }
-    //     //   else  // don't allow snode
-    //     //     return false;
-    //     //   // make sure the mapping matches
-    //     //   if (auto itr = m_ExitIPToExitAddress.find(src); itr != m_ExitIPToExitAddress.end())
-    //     //   {
-    //     //     if (itr->second != fromAddr)
-    //     //       return false;
-    //     //   }
-    //     //   else
-    //     //     return false;
-    //     // }
-    //     // else
-    //     // {
-    //     //   // snapp traffic
-    //     //   src = ObtainIPForAddr(addr);
-    //     //   dst = m_OurIP;
-    //     // }
-    //     handle_write_ip_packet(buf, src, dst, seqno);
-    //     return true;
-    // }
-
-    bool TunEndpoint::handle_write_ip_packet(const llarp_buffer_t& b, huint128_t src, huint128_t dst, uint64_t seqno)
+    void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
     {
-        ManagedBuffer buf(b);
-        IPPacket pkt;
+        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->WritePacket(std::move(pkt)); });
+    }
 
-        // load
-        if (!pkt.load(buf.underlying.base))
+    void TunEndpoint::rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest)
+    {
+        if (pkt.is_ipv4())
+            pkt.update_ipv4_address(std::get<ipv4>(src), std::get<ipv4>(dest));
+        else
+            pkt.update_ipv6_address(std::get<ipv6>(src), std::get<ipv6>(dest));
+
+        send_packet_to_net_if(std::move(pkt));
+    }
+
+    bool TunEndpoint::handle_inbound_packet(
+        IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
+    {
+        ip_v src, dest;
+
+        auto pkt_is_ipv4 = pkt.is_ipv4();
+
+        if (is_exit_session and is_outbound_session)
         {
-            return false;
+            // we are receiving traffic from a session to a remote exit node
+            if (pkt_is_ipv4)
+            {
+                src = pkt.source_ipv4();
+                dest = _local_addr.to_ipv4();
+            }
+            else
+            {
+                src = pkt.source_ipv6();
+                dest = _local_ipv6.to_ipv6();
+            }
+
+            assert(remote.is_client());
+
+            auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
+
+            if (not maybe_remote)
+            {
+                log::critical(
+                    logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
+                return false;
+            }
+            if (*maybe_remote != remote)
+            {
+                log::critical(
+                    logcat,
+                    "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
+                    src,
+                    *maybe_remote,
+                    remote);
+                return false;
+            }
         }
-        // if (pkt.IsV4())
-        // {
-        //     pkt.UpdateIPv4Address(xhtonl(net::TruncateV6(src)), xhtonl(net::TruncateV6(dst)));
-        // }
-        // else if (pkt.IsV6())
-        // {
-        //     pkt.UpdateIPv6Address(src, dst);
-        // }
-        (void)src;
-        (void)dst;
-        (void)seqno;
+        else
+        {
+            if (is_exit_session and not is_outbound_session)
+            {
+                // we are receiving traffic from a session to a local exit node
+                if (not is_allowing_traffic(pkt))
+                    return false;
 
-        // TODO: send this along but without a fucking huint182_t
-        // m_NetworkToUserPktQueue.push(std::move(write));
+                if (pkt_is_ipv4)
+                    dest = pkt.dest_ipv4();
+                else
+                    dest = pkt.dest_ipv6();
+            }
+            else
+            {
+                // we are receiving hidden service traffic
+                if (pkt_is_ipv4)
+                    dest = _local_addr.to_ipv4();
+                else
+                    dest = _local_ipv6.to_ipv6();
+            }
 
-        // wake up so we ensure that all packets are written to user
-        // router().TriggerPump();
+            if (not obtain_src_for_remote(remote, src, pkt_is_ipv4))
+                return false;
+        }
+
+        rewrite_and_send_packet(std::move(pkt), src, dest);
+
+        return true;
+    }
+
+    bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
+    {
+        if (auto exitPolicy = get_traffic_policy())
+            return exitPolicy->allow_ip_traffic(pkt);
+
         return true;
     }
 

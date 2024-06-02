@@ -75,6 +75,6 @@ namespace llarp::net
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise
-        bool allow_ip_traffic(IPPacket& pkt) const;
+        bool allow_ip_traffic(const IPPacket& pkt);
     };
 }  // namespace llarp::net

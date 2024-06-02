@@ -5,15 +5,21 @@
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 
+#include <oxen/quic.hpp>
+
 namespace llarp
 {
     class EventLoop;
+
+    using UDPSocket = oxen::quic::UDPSocket;
+
+    using io_result = oxen::quic::io_result;
 
     class UDPHandle
     {
       public:
         UDPHandle() = delete;
-        explicit UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, udp_pkt_hook cb);
+        explicit UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, net_pkt_hook cb);
         ~UDPHandle();
 
       private:
@@ -37,8 +43,6 @@ namespace llarp
         io_result send(const oxen::quic::Address& dest, std::vector<uint8_t> data);
 
         oxen::quic::Address bind() { return _local; }
-
-        // void close();
     };
 
 }  //  namespace llarp

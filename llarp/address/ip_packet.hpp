@@ -12,6 +12,24 @@ namespace llarp
     inline constexpr size_t MAX_PACKET_SIZE{1500};
     inline constexpr size_t MIN_PACKET_SIZE{20};
 
+    struct IPPacket;
+
+    // Typedef for packets being transmitted between lokinet instances
+    using NetworkPacket = oxen::quic::Packet;
+
+    using net_pkt_hook = std::function<void(NetworkPacket&& pkt)>;
+    using ip_pkt_hook = std::function<void(IPPacket)>;
+
+    /** IPPacket
+        This class encapsulates the functionalities and attributes required for data transmission between the local
+        lokinet instance and the surrounding IP landscape. As data enters lokinet from the device/internet/etc, it is
+        transmitted across the network as a NetworkPacket via QUIC. As it exits lokinet to the device/internet/etc, it
+        is constructed into an IPPacket.
+
+        This allows for necessary functionalities at the junction that data is entering and exiting the local lokinet
+        instance. For example
+
+    */
     struct IPPacket
     {
       private:
@@ -36,10 +54,10 @@ namespace llarp
         explicit IPPacket(std::vector<uint8_t> data);
         explicit IPPacket(const uint8_t* buf, size_t len);
 
-        static IPPacket from_udp(UDPPacket pkt);
+        static IPPacket from_netpkt(NetworkPacket pkt);
         static std::optional<IPPacket> from_buffer(const uint8_t* buf, size_t len);
 
-        UDPPacket make_udp();
+        NetworkPacket make_netpkt();
 
         bool is_ipv4() const { return _is_v4; }
 
@@ -55,9 +73,9 @@ namespace llarp
 
         ipv6 source_ipv6() { return _src_addr.to_ipv6(); }
 
-        ipv4 dest_ipv4() { return _dst_addr.to_ipv4(); }
+        ipv4 dest_ipv4() const { return _dst_addr.to_ipv4(); }
 
-        ipv6 dest_ipv6() { return _dst_addr.to_ipv6(); }
+        ipv6 dest_ipv6() const { return _dst_addr.to_ipv6(); }
 
         ip_header* header() { return _header; }
 
@@ -69,6 +87,13 @@ namespace llarp
 
         std::optional<std::pair<const char*, size_t>> l4_data() const;
 
+        void clear_addresses()
+        {
+            if (_is_v4)
+                return update_ipv4_address(ipv4{}, ipv4{});
+            return update_ipv6_address(ipv6{}, ipv6{});
+        }
+
         void update_ipv4_address(ipv4 src, ipv4 dst);
 
         void update_ipv6_address(ipv6 src, ipv6 dst, std::optional<uint32_t> flowlabel = std::nullopt);
@@ -78,6 +103,8 @@ namespace llarp
         uint8_t* data() { return _buf.data(); }
 
         const uint8_t* data() const { return _buf.data(); }
+
+        const uint8_t* protocol() const { return _is_v4 ? &header()->protocol : &v6_header()->protocol; }
 
         size_t size() const { return _buf.size(); }
 
@@ -95,10 +122,12 @@ namespace llarp
         bool take(std::vector<uint8_t> data);
 
         // steals posession of the underlying data, and can only be used in an r-value context
-        std::vector<uint8_t> steal() &&;
+        std::vector<uint8_t> steal_buffer() &&;
+
+        std::string steal_payload() &&;
 
         // gives a copy of the underlying data
-        std::vector<uint8_t> give();
+        std::vector<uint8_t> give_buffer();
 
         std::string_view view() const { return {reinterpret_cast<const char*>(data()), size()}; }
 

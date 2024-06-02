@@ -51,6 +51,8 @@ namespace llarp
             bool _use_tun;
             bool _is_outbound;
 
+            const bool _is_exit_session{false};
+
             std::shared_ptr<path::Path> _current_path;
             HopID _current_hop_id;
 
@@ -76,6 +78,7 @@ namespace llarp
                 NetworkAddress remote,
                 service::SessionTag _t,
                 bool use_tun,
+                bool is_exit,
                 bool is_outbound);
 
             bool is_outbound() const { return _is_outbound; }
@@ -102,6 +105,8 @@ namespace llarp
             service::SessionTag tag() { return _tag; }
 
             const service::SessionTag& tag() const { return _tag; }
+
+            bool is_exit_session() const { return _is_exit_session; }
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -123,8 +128,7 @@ namespace llarp
 
             std::chrono::milliseconds _last_use;
 
-            const bool _is_exit_service{false};
-            const bool _is_snode_service{false};
+            const bool _is_snode_session{false};
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
@@ -186,9 +190,6 @@ namespace llarp
             ~InboundSession() = default;
 
             void set_new_tag(const service::SessionTag& tag);
-
-          private:
-            const bool _is_exit_node{false};  // TODO: remember why I added this here...
         };
 
         template <typename session_t>

@@ -44,7 +44,7 @@ namespace llarp
         _init_internals();
     }
 
-    IPPacket IPPacket::from_udp(UDPPacket pkt)
+    IPPacket IPPacket::from_netpkt(NetworkPacket pkt)
     {
         auto data = pkt.data();
         return IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()};
@@ -217,6 +217,7 @@ namespace llarp
         {
             case 6:  // TCP
                 chksumoff = 16;
+                [[fallthrough]];
             case 33:  // DCCP
                 chksum = tcp_checksum_ipv6(&hdr->srcaddr, &hdr->dstaddr, hdr->payload_len, 0);
 
@@ -296,9 +297,9 @@ namespace llarp
         return std::nullopt;
     }
 
-    UDPPacket IPPacket::make_udp()
+    NetworkPacket IPPacket::make_netpkt()
     {
-        return UDPPacket{oxen::quic::Path{_src_addr, _dst_addr}, bview()};
+        return NetworkPacket{oxen::quic::Path{_src_addr, _dst_addr}, bview()};
     }
 
     bool IPPacket::load(ustring_view data)
@@ -345,7 +346,7 @@ namespace llarp
         return true;
     }
 
-    std::vector<uint8_t> IPPacket::steal() &&
+    std::vector<uint8_t> IPPacket::steal_buffer() &&
     {
         std::vector<uint8_t> b;
         b.resize(size());
@@ -353,7 +354,14 @@ namespace llarp
         return b;
     }
 
-    std::vector<uint8_t> IPPacket::give()
+    std::string IPPacket::steal_payload() &&
+    {
+        auto ret = to_string();
+        _buf.clear();
+        return ret;
+    }
+
+    std::vector<uint8_t> IPPacket::give_buffer()
     {
         std::vector<uint8_t> b;
         b.resize(size());

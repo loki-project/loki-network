@@ -62,24 +62,12 @@ namespace llarp::net
             port = std::nullopt;
     }
 
-    // DISCUSS: wtf is this
-    bool ProtocolInfo::matches_packet_proto(const IPPacket&) const
+    bool ProtocolInfo::matches_packet_proto(const IPPacket& pkt) const
     {
-        // if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
-        //     return false;
-
-        if (not port)
-            return true;
-
-        // if (const auto maybe = pkt.DstPort())
-        // {
-        //     return *port == *maybe;
-        // }
-        // we can't tell what the port is but the protocol matches and that's good enough
-        return true;
+        return pkt.header()->protocol == static_cast<std::underlying_type_t<IPProtocol>>(protocol);
     }
 
-    bool TrafficPolicy::allow_ip_traffic(IPPacket& pkt) const
+    bool TrafficPolicy::allow_ip_traffic(const IPPacket& pkt)
     {
         if (protocols.empty() and ranges.empty())
             return true;

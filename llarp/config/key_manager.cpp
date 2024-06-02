@@ -119,10 +119,10 @@ namespace llarp
 
     bool KeyManager::copy_backup_keyfile(const fs::path& filepath)
     {
-        auto findFreeBackupFilename = [](const fs::path& filepath) {
+        auto findFreeBackupFilename = [](const fs::path& filepath) mutable {
             for (int i = 0; i < 9; i++)
             {
-                std::string ext("." + std::to_string(i) + ".bak");
+                auto ext = ".{}.bak"_format(i);
                 fs::path newPath = filepath;
                 newPath += ext;
 

@@ -72,10 +72,10 @@ namespace llarp::dns
     class PacketSource_Wrapper : public PacketSource_Base
     {
         std::weak_ptr<PacketSource_Base> _wrapped;
-        udp_pkt_hook _write_pkt;
+        ip_pkt_hook _write_pkt;
 
       public:
-        explicit PacketSource_Wrapper(std::weak_ptr<PacketSource_Base> wrapped, udp_pkt_hook write_packet)
+        explicit PacketSource_Wrapper(std::weak_ptr<PacketSource_Base> wrapped, ip_pkt_hook write_packet)
             : _wrapped{std::move(wrapped)}, _write_pkt{std::move(write_packet)}
         {}
 
@@ -93,7 +93,7 @@ namespace llarp::dns
             (void)to;
             (void)from;
             (void)data;
-            _write_pkt(data.make_udp());
+            _write_pkt(data);
         }
 
         void send_to(

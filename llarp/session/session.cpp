@@ -20,13 +20,15 @@ namespace llarp::session
         NetworkAddress remote,
         service::SessionTag _t,
         bool use_tun,
+        bool is_exit,
         bool is_outbound)
         : _r{r},
           _parent{parent},
           _tag{std::move(_t)},
           _remote{std::move(remote)},
           _use_tun{use_tun},
-          _is_outbound{is_outbound}
+          _is_outbound{is_outbound},
+          _is_exit_session{is_exit}
     {
         set_new_current_path(std::move(_p));
     }
@@ -57,11 +59,13 @@ namespace llarp::session
         _current_hop_id = _current_path->intro.pivot_hop_id;
 
         if (_use_tun)
-            _current_path->link_session(
-                [this](bstring data) { _r.tun_endpoint()->handle_outbound_packet(std::move(data)); });
+            _current_path->link_session([this](bstring data) {
+                _r.tun_endpoint()->handle_inbound_packet(
+                    IPPacket{std::move(data)}, _remote, _is_exit_session, _is_outbound);
+            });
         else
             _current_path->link_session([this](bstring data) {
-                _ep->manually_receive_packet(UDPPacket{oxen::quic::Path{}, std::move(data)});
+                _ep->manually_receive_packet(NetworkPacket{oxen::quic::Path{}, std::move(data)});
             });
 
         assert(_current_path->is_linked());
@@ -153,18 +157,25 @@ namespace llarp::session
         service::SessionTag _t,
         bool is_exit)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
-          BaseSession{_router, std::move(path), parent, std::move(remote), std::move(_t), _router.using_tun_if(), true},
+          BaseSession{
+              _router,
+              std::move(path),
+              parent,
+              std::move(remote),
+              std::move(_t),
+              _router.using_tun_if(),
+              is_exit,
+              true},
           _last_use{_router.now()},
-          _is_exit_service{is_exit},
-          _is_snode_service{not _remote.is_client()}
+          _is_snode_session{not _remote.is_client()}
     {
         // These can both be false but CANNOT both be true
-        if (_is_exit_service and _is_snode_service)
+        if (_is_exit_session and _is_snode_session)
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
 
-        if (_is_snode_service)
+        if (_is_snode_session)
             _session_key = _router.identity();
         else
             crypto::identity_keygen(_session_key);
@@ -312,8 +323,15 @@ namespace llarp::session
         handlers::SessionEndpoint& parent,
         service::SessionTag _t,
         bool use_tun)
-        : BaseSession{parent._router, std::move(_path), parent, std::move(remote), std::move(_t), use_tun, false},
-          _is_exit_node{_parent.is_exit_node()}
+        : BaseSession{
+            parent._router,
+            std::move(_path),
+            parent,
+            std::move(remote),
+            std::move(_t),
+            use_tun,
+            parent.is_exit_node(),
+            false}
     {
         if (not _current_path->is_client_path() and _remote.is_client())
             throw std::runtime_error{

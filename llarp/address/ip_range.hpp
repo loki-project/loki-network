@@ -171,7 +171,7 @@ namespace llarp
             if (range_exhausted())
                 return ret;
 
-            if (auto b = is_ipv4() ? _increment_ipv4() : _increment_ipv6())
+            if (is_ipv4() ? _increment_ipv4() : _increment_ipv6())
                 ret = _current_ip;
 
             return ret;

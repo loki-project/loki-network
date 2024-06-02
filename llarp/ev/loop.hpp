@@ -1,7 +1,6 @@
 #pragma once
 
-#include "types.hpp"
-
+#include <llarp/address/ip_packet.hpp>
 #include <llarp/net/interface_info.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
@@ -16,6 +15,11 @@ namespace llarp
     {
         class NetworkInterface;
     }  // namespace vpn
+
+    using event_ptr = oxen::quic::event_ptr;
+
+    // shared_ptr containing the actual libev loop
+    using loop_ptr = std::shared_ptr<::event_base>;
 
     struct EventHandler
     {

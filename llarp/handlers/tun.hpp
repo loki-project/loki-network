@@ -70,30 +70,22 @@ namespace llarp::handlers
         // };
 
         // INPROGRESS: new API
-        // Handles a packet going out of the network through the TUN device
-        void handle_outbound_packet(bstring data);
-        // Handle a packet coming into the network through the TUN device
-        bool handle_inbound_packet(IPPacket pkt);
+        // Handles an outbound packet going out INTO the network
+        void handle_outbound_packet(IPPacket pkt);
 
-        // TODO: think of a better name
+        void rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest);
+
+        // Handle an inbound packet coming in FROM the network
+        bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session);
+
         // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
         // route session traffic
         std::optional<ip_v> map_session_to_local_ip(const NetworkAddress& remote);
 
         void unmap_session_to_local_ip(const NetworkAddress& remote);
 
-        // TONUKE: this old bullshit
-        // bool handle_inbound_packet(
-        //     const service::SessionTag tag, const llarp_buffer_t& pkt, service::ProtocolType t, uint64_t seqno);
-        /// handle inbound traffic
-        bool handle_write_ip_packet(const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
-        /// we got a packet from the user
-        void handle_user_packet(llarp::IPPacket pkt);
-
-        /// get the local interface's address
         oxen::quic::Address get_if_addr() const;
 
-        /// we have an interface addr
         bool has_if_addr() const { return true; }
 
         std::optional<net::TrafficPolicy> get_traffic_policy() const { return _traffic_policy; }
@@ -129,6 +121,10 @@ namespace llarp::handlers
 
       private:
         std::optional<ip_v> get_next_local_ip();
+
+        bool obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4);
+
+        void send_packet_to_net_if(IPPacket&& pkt);
 
         template <typename Addr_t, typename Endpoint_t>
         void send_dns_reply(

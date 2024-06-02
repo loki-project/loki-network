@@ -36,14 +36,13 @@ namespace llarp::dns
       public:
         explicit UDPReader(Server& dns, const std::shared_ptr<EventLoop>& loop, oxen::quic::Address bind) : _dns{dns}
         {
-            _udp = std::make_unique<UDPHandle>(loop, bind, [&](UDPPacket pkt) {
+            _udp = std::make_unique<UDPHandle>(loop, bind, [&](NetworkPacket pkt) {
                 auto& src = pkt.path.local;
 
                 if (src == _local_addr)
                     return;
-                (void)_dns;
 
-                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_udp(pkt)))
+                if (not _dns.maybe_handle_packet(shared_from_this(), _local_addr, src, IPPacket::from_netpkt(pkt)))
                 {
                     log::warning(logcat, "did not handle dns packet from {} to {}", src, _local_addr);
                 }
@@ -66,7 +65,7 @@ namespace llarp::dns
 
         void send_to(const oxen::quic::Address& to, const oxen::quic::Address&, IPPacket data) const override
         {
-            _udp->send(to, data.give());
+            _udp->send(to, data.give_buffer());
         }
 
         void send_to(
@@ -157,7 +156,7 @@ namespace llarp::dns
                 hdr.Encode(&buf);
 
                 // send reply
-                query->send_reply(std::move(pkt).give());
+                query->send_reply(std::move(pkt).give_buffer());
             }
 
             void add_upstream_resolver(const oxen::quic::Address& dns)

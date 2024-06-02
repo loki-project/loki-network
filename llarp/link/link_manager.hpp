@@ -14,6 +14,7 @@
 #include <llarp/util/priority_queue.hpp>
 
 #include <oxen/quic.hpp>
+#include <oxen/quic/format.hpp>
 
 #include <atomic>
 #include <set>

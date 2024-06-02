@@ -30,6 +30,24 @@ namespace llarp
 
     inline constexpr size_t ICMP_HEADER_SIZE{8};
 
+    // Compares the given ip variant against a quic address
+    // Returns:
+    //  - true : ip == address
+    //  - false : ip != address
+    // Error:
+    //  - throws : ip and address are mismatched ipv4 vs ipv6
+    inline bool ip_equals_address(const ip_v& ip, const oxen::quic::Address& addr, bool compare_v4)
+    {
+        if (compare_v4 and std::holds_alternative<ipv4>(ip))
+            return std::get<ipv4>(ip) == addr.to_ipv4();
+
+        if (not compare_v4 and std::holds_alternative<ipv6>(ip))
+            return std::get<ipv6>(ip) == addr.to_ipv6();
+
+        throw std::invalid_argument{
+            "Failed to compare ip variant in desired {} scheme!"_format(compare_v4 ? "ipv4" : "ipv6")};
+    }
+
     struct ip_header_le
     {
         uint8_t header_len : 4;

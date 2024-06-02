@@ -11,7 +11,7 @@ namespace llarp
         1;
 #endif
 
-    UDPHandle::UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, udp_pkt_hook cb)
+    UDPHandle::UDPHandle(const std::shared_ptr<EventLoop>& ev, const oxen::quic::Address& bind, net_pkt_hook cb)
         : _loop{ev}
     {
         socket = std::make_unique<UDPSocket>(ev->loop().get(), bind, std::move(cb));

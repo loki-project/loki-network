@@ -188,14 +188,22 @@ if(NOT TARGET sodium)
 endif()
 
 set(warning_flags -Wall -Wextra -Wno-unknown-pragmas -Wno-unused-function -Werror=vla)
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   list(APPEND warning_flags -Wno-unknown-warning-option)
 endif()
+
+if(WARNINGS_AS_ERRORS)
+  list(APPEND warning_flags -Werror -Wno-error=array-bounds)
+endif()
+
 list(APPEND warning_flags -Wno-deprecated-declarations)
+
+add_library(lokinet-base-internal_warnings INTERFACE)
 
 # If we blindly add these directly as compile_options then they get passed to swiftc on Apple and
 # break, so we use a generate expression to set them only for C++/C/ObjC
-add_compile_options("$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:OBJC>>:${warning_flags}>")
+target_compile_options(lokinet-base-internal_warnings INTERFACE "$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:OBJC>>:${warning_flags}>")
 
 if(XSAN)
   string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fsanitize=${XSAN} -fno-omit-frame-pointer -fno-sanitize-recover")
@@ -268,6 +276,11 @@ add_library(lokinet-base INTERFACE)
 target_include_directories(lokinet-base INTERFACE . include)
 target_link_libraries(lokinet-base INTERFACE quic nlohmann_json::nlohmann_json)
 
+add_library(lokinet-base-internal INTERFACE)
+target_include_directories(lokinet-base-internal INTERFACE include/lokinet)
+
+target_link_libraries(lokinet-base-internal INTERFACE lokinet-base-internal_warnings)
+
 if(WITH_SYSTEMD AND (NOT ANDROID))
   if(NOT SD_FOUND)
     message(FATAL_ERROR "libsystemd not found")
@@ -275,7 +288,6 @@ if(WITH_SYSTEMD AND (NOT ANDROID))
   target_link_libraries(lokinet-base INTERFACE PkgConfig::SD)
   target_compile_definitions(lokinet-base INTERFACE WITH_SYSTEMD)
 endif()
-
 
 if(USE_JEMALLOC AND NOT STATIC_LINK)
   pkg_check_modules(JEMALLOC jemalloc IMPORTED_TARGET)

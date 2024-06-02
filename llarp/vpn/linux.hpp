@@ -69,7 +69,9 @@ namespace llarp::vpn
                     ifr.ifr_addr.sa_family = AF_INET;
                     auto in4 = range.address().in4();
                     std::memcpy(
-                        &((sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr, &in4.sin_addr.s_addr, sizeof(sockaddr));
+                        &((sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr,
+                        &in4.sin_addr.s_addr,
+                        range.address().socklen());
 
                     control.ioctl(SIOCSIFADDR, &ifr);
 
