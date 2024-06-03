@@ -544,8 +544,7 @@ namespace llarp::path
 
     std::string PathHandler::build2(std::shared_ptr<Path>& path)
     {
-        oxenc::bt_list_producer frames;
-        std::vector<std::string> frame_str(path::MAX_LEN);
+        std::vector<std::string> frames(path::MAX_LEN);
         auto& path_hops = path->hops;
         size_t n_hops = path_hops.size();
         size_t last_len{0};
@@ -571,15 +570,15 @@ namespace llarp::path
 
             const auto& next_hop = lastHop ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
 
-            frame_str[i] = PathBuildMessage::serialize_hop(path_hops[i], next_hop);
+            frames[i] = PathBuildMessage::serialize_hop(path_hops[i], next_hop);
 
             // all frames should be the same length...not sure what that is yet
             // it may vary if path lifetime is non-default, as that is encoded as an
             // integer in decimal, but it should be constant for a given path
             if (last_len != 0)
-                assert(frame_str[i].size() == last_len);
+                assert(frames[i].size() == last_len);
 
-            last_len = frame_str[i].size();
+            last_len = frames[i].size();
 
             // onion each previously-created frame using the established shared secret and
             // onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR, which the transit hop
@@ -591,8 +590,8 @@ namespace llarp::path
                 auto onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
 
                 crypto::onion(
-                    reinterpret_cast<unsigned char*>(frame_str[j].data()),
-                    frame_str[j].size(),
+                    reinterpret_cast<unsigned char*>(frames[j].data()),
+                    frames[j].size(),
                     path_hops[i].shared,
                     onion_nonce,
                     onion_nonce);
@@ -604,14 +603,11 @@ namespace llarp::path
         // append dummy frames; path build request must always have MAX_LEN frames
         for (i = n_hops; i < path::MAX_LEN; i++)
         {
-            frame_str[i].resize(last_len);
-            randombytes(reinterpret_cast<uint8_t*>(frame_str[i].data()), frame_str[i].size());
+            frames[i].resize(last_len);
+            randombytes(reinterpret_cast<uint8_t*>(frames[i].data()), frames[i].size());
         }
 
-        for (auto& str : frame_str)  // NOLINT
-        {
-            frames.append(std::move(str));
-        }
+        auto frame_str = Frames::serialize(frames);
 
         // TODO: move this to success function to avoid repetition
         // add_path(path);
@@ -619,7 +615,7 @@ namespace llarp::path
 
         _build_stats.attempts++;
 
-        return std::move(frames).str();
+        return frame_str;
     }
 
     bool PathHandler::build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler)

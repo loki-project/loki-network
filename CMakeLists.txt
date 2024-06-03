@@ -104,6 +104,7 @@ option(WARN_DEPRECATED "show deprecation warnings" OFF)
 
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -275,6 +276,8 @@ add_subdirectory(external)
 add_library(lokinet-base INTERFACE)
 target_include_directories(lokinet-base INTERFACE . include)
 target_link_libraries(lokinet-base INTERFACE quic nlohmann_json::nlohmann_json)
+
+target_compile_features(lokinet-base INTERFACE cxx_std_20)
 
 add_library(lokinet-base-internal INTERFACE)
 target_include_directories(lokinet-base-internal INTERFACE include/lokinet)

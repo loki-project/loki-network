@@ -1384,7 +1384,8 @@ namespace llarp
 
         try
         {
-            auto payload_list = oxenc::bt_deserialize<std::deque<ustring>>(m.body());
+            oxenc::bt_list_consumer btlc{m.body()};
+            auto payload_list = Frames::deserialize(btlc);
 
             if (payload_list.size() != path::MAX_LEN)
             {
@@ -1435,7 +1436,7 @@ namespace llarp
             send_control_message(
                 hop->upstream(),
                 "path_build",
-                oxenc::bt_serialize(payload_list),
+                Frames::serialize(payload_list),
                 [hop, this, prev_message = std::move(m)](oxen::quic::message m) {
                     if (m)
                     {

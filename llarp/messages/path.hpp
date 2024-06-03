@@ -6,6 +6,49 @@
 
 namespace llarp
 {
+    namespace Frames
+    {
+        static auto logcat = llarp::log::Cat("path-build-frames");
+
+        inline static std::string serialize(std::vector<std::string>& frames)
+        {
+            oxenc::bt_list_producer btlp;
+
+            for (auto& f : frames)
+                btlp.append(std::move(f));
+
+            return std::move(btlp).str();
+        }
+
+        inline static std::string serialize(std::deque<ustring>& frames)
+        {
+            oxenc::bt_list_producer btlp;
+
+            for (auto& f : frames)
+                btlp.append(std::move(f));
+
+            return std::move(btlp).str();
+        }
+
+        inline static std::deque<ustring> deserialize(oxenc::bt_list_consumer& btlc)
+        {
+            try
+            {
+                std::deque<ustring> ret{};
+
+                while (not btlc.is_finished())
+                    ret.push_back(btlc.consume<ustring>());
+
+                return ret;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing path frames:{}", e.what());
+                throw;
+            }
+        }
+    }  // namespace Frames
+
     namespace PathData
     {
         static auto logcat = llarp::log::Cat("path-data");

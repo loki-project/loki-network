@@ -400,14 +400,16 @@ local docs_pipeline(name, image, extra_cmds=[], allow_fail=false) = {
   clang(16),
   full_llvm(16),
   debian_pipeline('Debian stable (i386)', docker_base + 'debian-stable/i386'),
-  debian_pipeline('Debian buster (amd64)', docker_base + 'debian-buster', extra_setup=kitware_repo('bionic') + local_gnutls(), cmake_extra='-DDOWNLOAD_SODIUM=ON'),
+  debian_pipeline('Debian bullseye (amd64)',
+                  docker_base + 'debian-bullseye',
+                  extra_setup=debian_backports('bullseye', ['cmake']) + local_gnutls()),
   debian_pipeline('Ubuntu latest (amd64)', docker_base + 'ubuntu-rolling'),
   debian_pipeline('Ubuntu LTS (amd64)', docker_base + 'ubuntu-lts'),
-  debian_pipeline('Ubuntu bionic (amd64)',
-                  docker_base + 'ubuntu-bionic',
-                  deps=['g++-8'] + default_deps_nocxx,
-                  extra_setup=kitware_repo('bionic') + local_gnutls(),
-                  cmake_extra='-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8',
+  debian_pipeline('Ubuntu focal (amd64)',
+                  docker_base + 'ubuntu-focal',
+                  deps=['g++-10'] + default_deps_nocxx,
+                  extra_setup=kitware_repo('focal') + local_gnutls(),
+                  cmake_extra='-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10',
                   oxen_repo=true),
 
   // ARM builds (ARM64 and armhf)
@@ -433,16 +435,16 @@ local docs_pipeline(name, image, extra_cmds=[], allow_fail=false) = {
                            './contrib/ci/drone-static-upload.sh',
                          ]),
 
-  // Static build (on bionic) which gets uploaded to builds.lokinet.dev:
-  debian_pipeline('Static (bionic amd64)',
-                  docker_base + 'ubuntu-bionic',
-                  deps=['g++-8', 'python3-dev', 'automake', 'libtool'],
-                  extra_setup=kitware_repo('bionic'),
+  // Static build (on focal) which gets uploaded to builds.lokinet.dev:
+  debian_pipeline('Static (focal amd64)',
+                  docker_base + 'ubuntu-focal',
+                  deps=['g++-10', 'python3-dev', 'automake', 'libtool'],
+                  extra_setup=kitware_repo('focal'),
                   lto=true,
                   tests=false,
                   oxen_repo=true,
                   cmake_extra='-DBUILD_STATIC_DEPS=ON -DBUILD_SHARED_LIBS=OFF -DSTATIC_LINK=ON ' +
-                              '-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 ' +
+                              '-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10 ' +
                               '-DCMAKE_CXX_FLAGS="-march=x86-64 -mtune=haswell" ' +
                               '-DCMAKE_C_FLAGS="-march=x86-64 -mtune=haswell" ' +
                               '-DNATIVE_BUILD=OFF -DWITH_SYSTEMD=OFF -DWITH_BOOTSTRAP=OFF -DBUILD_LIBLOKINET=OFF',
