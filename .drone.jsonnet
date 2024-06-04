@@ -409,8 +409,7 @@ local docs_pipeline(name, image, extra_cmds=[], allow_fail=false) = {
                   docker_base + 'ubuntu-focal',
                   deps=['g++-10'] + default_deps_nocxx,
                   extra_setup=kitware_repo('focal') + local_gnutls(),
-                  cmake_extra='-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10',
-                  oxen_repo=true),
+                  cmake_extra='-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10'),
 
   // ARM builds (ARM64 and armhf)
   debian_pipeline('Debian sid (ARM64)', docker_base + 'debian-sid', arch='arm64', jobs=4),

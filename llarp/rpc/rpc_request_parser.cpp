@@ -2,8 +2,6 @@
 
 #include "param_parser.hpp"
 
-#include <llarp/rpc/rpc_request_definitions.hpp>
-
 namespace llarp::rpc
 {
     using nlohmann::json;

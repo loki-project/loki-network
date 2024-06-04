@@ -94,7 +94,7 @@ namespace llarp
             {
                 if (auto q = addr.find_first_not_of("0123456789abcdef:."); q != std::string_view::npos)
                     throw std::invalid_argument{"Invalid address: does not look like IPv4 or IPv6!"};
-                if (!had_sq_brackets)
+                else if (!had_sq_brackets)
                     throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
             }
 

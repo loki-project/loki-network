@@ -1,10 +1,5 @@
 #pragma once
 
-extern "C"
-{
-#include <netinet/ip.h>
-}
-
 #include <llarp/util/formattable.hpp>
 
 #include <oxen/quic.hpp>

@@ -87,17 +87,40 @@ add_subdirectory(oxen-libquic)
 # 3.15+, and we target lower than that (and this is fairly simple to build).
 if(WITH_BOOTSTRAP)
   if(NOT BUILD_STATIC_DEPS)
-    find_package(CURL REQUIRED COMPONENTS HTTP HTTPS SSL)
+    find_package(CURL "7.71.0" COMPONENTS HTTP HTTPS SSL)
 
-    # CURL::libcurl wasn't added to FindCURL until cmake 3.12, so add it if necessary
-    if (CMAKE_VERSION VERSION_LESS 3.12 AND NOT TARGET CURL::libcurl)
-      add_library(libcurl UNKNOWN IMPORTED GLOBAL)
-      set_target_properties(libcurl PROPERTIES
-        IMPORTED_LOCATION ${CURL_LIBRARIES}
-        INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}")
-      add_library(CURL_libcurl INTERFACE)
-      target_link_libraries(CURL_libcurl INTERFACE libcurl)
-      add_library(CURL::libcurl ALIAS CURL_libcurl)
+    if(CURL_FOUND)
+      if(NOT (CURL_VERSION_STRING VERSION_GREATER_EQUAL "7.71.0"))
+        message(STATUS "System curl version (${CURL_VERSION_STRING}) is too old; using submodule...")
+        set(USE_CURL_SUBMODULE TRUE)
+      else()
+        set(USE_CURL_SUBMODULE FALSE)
+      endif()
+    else()
+      message(STATUS "Could not find system curl; using submodule...")
+      set(USE_CURL_SUBMODULE TRUE)
+    endif()
+
+    if(USE_CURL_SUBMODULE)
+
+      SET(CURL_ZLIB OFF CACHE STRING "" FORCE)
+      set(HTTP_ONLY ON CACHE INTERNAL "" FORCE)
+      set(BUILD_CURL_EXE OFF CACHE INTERNAL "" FORCE)
+      set(BUILD_TESTING OFF)
+      set(CURL_ENABLE_SSL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_CA_PATH "none" CACHE INTERNAL "" FORCE)
+      set(CURL_USE_SCHANNEL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_WINDOWS_SSPI OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_OPENSSL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_SECTRANSP OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_MBEDTLS OFF CACHE INTERNAL "" FORCE)
+      
+      FetchContent_Declare(curl
+                           URL                    https://github.com/curl/curl/releases/download/curl-8_4_0/curl-8.4.0.tar.xz
+                           URL_HASH               SHA256=16c62a9c4af0f703d28bda6d7bbf37ba47055ad3414d70dec63e2e6336f2a82d # the file hash for curl-8.4.0.tar.xz
+                           USES_TERMINAL_DOWNLOAD TRUE)   # <---- This is needed only for Ninja to show download progress
+      FetchContent_MakeAvailable(curl)
+
     endif()
   endif()
 

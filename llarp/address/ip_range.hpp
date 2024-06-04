@@ -99,10 +99,12 @@ namespace llarp
 
         bool operator==(const ip_range_v& other) const
         {
-            if (std::holds_alternative<ipv4_range>(other))
+            if (_is_ipv4 and std::holds_alternative<ipv4_range>(other))
                 return _ipv4_range() == std::get<ipv4_range>(other);
+            if (not _is_ipv4 and std::holds_alternative<ipv6_range>(other))
+                return _ipv6_range() == std::get<ipv6_range>(other);
 
-            return _ipv6_range() == std::get<ipv6_range>(other);
+            return false;
         }
     };
 

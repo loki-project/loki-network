@@ -232,7 +232,7 @@ namespace llarp
         static constexpr Default ReachableDefault{true};
         static constexpr Default HopsDefault{4};
         static constexpr Default PathsDefault{4};
-        static constexpr Default IP6RangeDefault{"fd00::"};
+        static constexpr Default IP6RangeDefault{"[fd00::]/16"};
 
         conf.define_option<bool>(
             "network", "save-profiles", SaveProfilesDefault, Hidden, assignment_acceptor(save_profiles));
@@ -1043,7 +1043,8 @@ namespace llarp
 
             if (auto pos = arg_v.find(':'); pos != arg_v.npos)
             {
-                host = arg_v.substr(0, pos);
+                // host = arg_v.substr(0, pos);
+                std::tie(host, p) = detail::parse_addr(arg_v.substr(0, pos), DEFAULT_LISTEN_PORT);
 
                 if (not llarp::parse_int<uint16_t>(arg_v.substr(pos + 1), p))
                     throw std::invalid_argument{"Failed to parse port in arg:{}"_format(arg)};
@@ -1090,8 +1091,11 @@ namespace llarp
                 "router can be reached.",
             },
             [this, parse_addr_for_link](const std::string& arg) {
-                if (auto a = parse_addr_for_link(arg); a and a->is_addressable())
+                if (auto a = parse_addr_for_link(arg))
                 {
+                    if (not a->is_addressable())
+                        throw std::invalid_argument{"Listen address ({}) is not addressible!"_format(a)};
+
                     listen_addr = *a;
                     using_user_value = true;
                     using_new_api = true;

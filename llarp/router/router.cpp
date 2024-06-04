@@ -421,6 +421,8 @@ namespace llarp
         conf._local_base_ip = _local_base_ip;
         conf._if_name = _if_name;
 
+        log::info(logcat, "Processing remote client map...");
+
         // process remote client map; addresses must be within _local_ip_range
         auto& client_ips = conf._reserved_local_ips;
 
@@ -566,8 +568,10 @@ namespace llarp
         _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
         _session_endpoint->configure();
 
+        log::info(logcat, "Creating QUIC link manager...");
         _link_manager = LinkManager::make(*this);
 
+        log::info(logcat, "Creating QUIC tunnel...");
         _quic_tun = QUICTunnel::make(*this);
 
         // API config

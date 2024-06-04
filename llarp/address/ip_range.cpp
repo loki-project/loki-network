@@ -34,10 +34,15 @@ namespace llarp
                 assert(p == 0);
                 _addr = oxen::quic::Address{host, p};
 
-                if (parse_int(arg.substr(pos), _mask))
-                    range = IPRange{std::move(_addr), std::move(_mask)};
+                if (parse_int(arg.substr(pos + 1), _mask))
+                    range = IPRange{std::move(_addr), _mask};
                 else
-                    log::warning(logcat, "Failed to construct IPRange from string input:{}", arg);
+                    log::warning(
+                        logcat,
+                        "Failed to construct IPRange from string input:{} parsed into addr:{}, mask:{}",
+                        arg,
+                        _addr,
+                        arg.substr(pos + 1));
             }
             catch (const std::exception& e)
             {
