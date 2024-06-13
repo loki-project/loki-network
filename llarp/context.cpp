@@ -62,7 +62,11 @@ namespace llarp
         if (!_loop)
         {
             log::info(logcat, "Initializing event loop...");
-            _loop = EventLoop::make();
+
+            auto p = std::promise<void>();
+            loop_waiter = std::make_unique<std::future<void>>(p.get_future());
+            _loop = EventLoop::make(std::move(p));
+
             log::debug(logcat, "Event loop initialized!");
         }
 
@@ -107,9 +111,17 @@ namespace llarp
         if (not router->run())
             return 2;
 
-        if (closeWaiter)
+        log::critical(logcat, "Router running; starting tickers...");
+
+        router->start();
+
+        log::critical(logcat, "Context waiting...");
+
+        loop_waiter->get();
+
+        if (close_waiter)
         {
-            closeWaiter->set_value();
+            close_waiter->set_value();
         }
         close();
         return 0;
@@ -122,20 +134,20 @@ namespace llarp
             return;
 
         _loop->call([this]() { handle_signal(SIGTERM); });
-        closeWaiter = std::make_unique<std::promise<void>>();
+        close_waiter = std::make_unique<std::promise<void>>();
     }
 
     bool Context::is_stopping() const
     {
-        return closeWaiter.operator bool();
+        return close_waiter.operator bool();
     }
 
     void Context::wait()
     {
-        if (closeWaiter)
+        if (close_waiter)
         {
-            closeWaiter->get_future().wait();
-            closeWaiter.reset();
+            close_waiter->get_future().wait();
+            close_waiter.reset();
         }
     }
 

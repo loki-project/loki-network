@@ -96,7 +96,7 @@ namespace llarp::vpn
       protected:
         /// get a new network interface fully configured given the interface info
         /// blocks until ready, throws on error
-        virtual std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router* router) = 0;
+        virtual std::shared_ptr<NetworkInterface> obtain_interface(InterfaceInfo info, Router* router) = 0;
 
       public:
         Platform() = default;
@@ -107,7 +107,7 @@ namespace llarp::vpn
         /// create and start a network interface
         std::shared_ptr<NetworkInterface> CreateInterface(InterfaceInfo info, Router* router)
         {
-            if (auto netif = ObtainInterface(std::move(info), router))
+            if (auto netif = obtain_interface(std::move(info), router))
             {
                 netif->Start();
                 return netif;

@@ -77,7 +77,7 @@ namespace llarp
 
         void clear_profile(const RouterID& r);
 
-        void Tick();
+        void tick();
 
         bool load(const fs::path fname);
 

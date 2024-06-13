@@ -99,8 +99,6 @@ namespace llarp
         std::atomic<bool> _is_stopping{false};
         std::atomic<bool> _is_running{false};
 
-        int _outbound_udp_socket{-1};  // TODO: wtf?
-
         bool _is_service_node{false};
 
         bool _is_exit_node{false};
@@ -118,7 +116,8 @@ namespace llarp
         // TESTNET: underway
         std::shared_ptr<handlers::SessionEndpoint> _session_endpoint;
 
-        std::shared_ptr<LinkManager> _link_manager;
+        std::unique_ptr<LinkManager> _link_manager;
+        std::unique_ptr<std::future<void>> _link_close_waiter;
 
         std::shared_ptr<QUICTunnel> _quic_tun;
 
@@ -132,6 +131,9 @@ namespace llarp
         std::shared_ptr<path::PathContext> _path_context;
         std::shared_ptr<Contacts> _contacts;
         std::shared_ptr<NodeDB> _node_db;
+
+        std::shared_ptr<Ticker> _loop_ticker;
+        std::shared_ptr<Ticker> _reachability_ticker;
 
         SecretKey _identity;
         RouterID _id_pubkey;
@@ -195,6 +197,8 @@ namespace llarp
         std::chrono::system_clock::time_point next_bootstrap_attempt{last_rc_gossip};
 
       public:
+        void start();
+
         bool fully_meshed() const;
 
         bool using_tun_if() const { return _should_init_tun; }
@@ -217,7 +221,7 @@ namespace llarp
 
         const std::shared_ptr<handlers::SessionEndpoint>& session_endpoint() const { return _session_endpoint; }
 
-        const std::shared_ptr<LinkManager>& link_manager() const { return _link_manager; }
+        const std::unique_ptr<LinkManager>& link_manager() const { return _link_manager; }
 
         const std::shared_ptr<QUICTunnel>& quic_tunnel() const { return _quic_tun; }
 
@@ -234,8 +238,6 @@ namespace llarp
         const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _lmq; }
 
         const std::shared_ptr<rpc::RPCClient>& rpc_client() const { return _rpc_client; }
-
-        int outbound_udp_socket() const { return _outbound_udp_socket; }
 
         const std::shared_ptr<KeyManager>& key_manager() const { return _key_manager; }
 
@@ -372,7 +374,7 @@ namespace llarp
         bool is_bootstrap_node(RouterID rid) const;
 
         /// call internal router ticker
-        void Tick();
+        void tick();
 
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 
@@ -386,8 +388,8 @@ namespace llarp
 
         uint32_t NextPathBuildNumber();
 
-        void AfterStopLinks();
+        void teardown();
 
-        void AfterStopIssued();
+        void cleanup();
     };
 }  // namespace llarp

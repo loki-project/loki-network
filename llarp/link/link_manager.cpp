@@ -177,9 +177,29 @@ namespace llarp
     }
 
     void LinkManager::register_commands(
-        const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& router_id, bool)
+        const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& remote_rid, bool client_only)
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        log::critical(logcat, "Registering {}-only BTStream commands!", client_only ? "client" : "relay");
+
+        s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) {
+            _router.loop()->call(
+                [this, &rid, msg = std::move(m)]() mutable { handle_path_control(std::move(msg), rid); });
+        });
+
+        if (client_only)
+        {
+            s->register_handler("session_init", [this](oxen::quic::message m) {
+                _router.loop()->call([this, msg = std::move(m)]() mutable { handle_initiate_session(std::move(msg)); });
+            });
+            return;
+        }
+
+        s->register_handler("path_build"s, [this, rid = remote_rid](oxen::quic::message m) {
+            _router.loop()->call(
+                [this, &rid, msg = std::move(m)]() mutable { handle_path_build(std::move(msg), rid); });
+        });
 
         s->register_handler("bfetch_rcs"s, [this](oxen::quic::message m) {
             _router.loop()->call([this, msg = std::move(m)]() mutable { handle_fetch_bootstrap_rcs(std::move(msg)); });
@@ -191,16 +211,6 @@ namespace llarp
 
         s->register_handler("fetch_rids"s, [this](oxen::quic::message m) {
             _router.loop()->call([this, msg = std::move(m)]() mutable { handle_fetch_router_ids(std::move(msg)); });
-        });
-
-        s->register_handler("path_build"s, [this, rid = router_id](oxen::quic::message m) {
-            _router.loop()->call(
-                [this, &rid, msg = std::move(m)]() mutable { handle_path_build(std::move(msg), rid); });
-        });
-
-        s->register_handler("path_control"s, [this, rid = router_id](oxen::quic::message m) {
-            _router.loop()->call(
-                [this, &rid, msg = std::move(m)]() mutable { handle_path_control(std::move(msg), rid); });
         });
 
         s->register_handler("gossip_rc"s, [this](oxen::quic::message m) {
@@ -221,14 +231,15 @@ namespace llarp
                 });
         }
 
-        log::critical(logcat, "Registered all commands! (RID:{})", router_id);
+        log::critical(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
 
-    LinkManager::LinkManager(Router& r)
+    LinkManager::LinkManager(Router& r, std::promise<void> p)
         : _router{r},
+          _close_promise{std::make_unique<std::promise<void>>(std::move(p))},
           node_db{_router.node_db()},
           _is_service_node{_router.is_service_node()},
-          quic{std::make_unique<oxen::quic::Network>()},
+          quic{std::unique_ptr<oxen::quic::Network, decltype(net_deleter)>{new oxen::quic::Network(), net_deleter}},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), size_t{32}},
               {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), size_t{32}})},
@@ -237,10 +248,10 @@ namespace llarp
         is_stopping = false;
     }
 
-    std::shared_ptr<LinkManager> LinkManager::make(Router& r)
+    std::unique_ptr<LinkManager> LinkManager::make(Router& r, std::promise<void> p)
     {
-        std::shared_ptr<LinkManager> p{new LinkManager(r)};
-        return p;
+        std::unique_ptr<LinkManager> ptr{new LinkManager(r, std::move(p))};
+        return ptr;
     }
 
     std::shared_ptr<oxen::quic::Endpoint> LinkManager::startup_endpoint()
@@ -342,24 +353,24 @@ namespace llarp
                 throw std::runtime_error{"Clients should not be validating inbound connections!"};
             });
         });
+
         if (_router.is_service_node())
-        {
             e->listen(tls_creds);
-        }
+
         return e;
     }
 
     std::shared_ptr<oxen::quic::BTRequestStream> LinkManager::make_control(
-        oxen::quic::connection_interface& ci, const RouterID& rid)
+        oxen::quic::connection_interface& ci, const RouterID& remote)
     {
         auto control_stream = ci.queue_incoming_stream<oxen::quic::BTRequestStream>(
-            [rid = rid](oxen::quic::Stream&, uint64_t error_code) {
+            [rid = remote](oxen::quic::Stream&, uint64_t error_code) {
                 log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
             });
 
         log::critical(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
         assert(control_stream->stream_id() == 0);
-        register_commands(control_stream, rid);
+        register_commands(control_stream, remote, not _is_service_node);
 
         return control_stream;
     }

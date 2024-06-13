@@ -22,3 +22,11 @@ namespace llarp::link
             bool is_relay = true);
     };
 }  // namespace llarp::link
+
+/**
+    TODO:
+        - add a boolean in this connection object
+        - do not continue to try to send things to the bootstarp until the connection
+            is actually established!
+
+ */

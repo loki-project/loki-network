@@ -36,7 +36,7 @@ namespace llarp
 
     using static_secret = oxen::quic::opt::static_secret;
 
-    inline const keep_alive ROUTER_KEEP_ALIVE{10s};
+    inline const keep_alive RELAY_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 
     inline constexpr int MIN_CLIENT_ROUTER_CONNS{4};
@@ -118,7 +118,7 @@ namespace llarp
     struct LinkManager
     {
       public:
-        static std::shared_ptr<LinkManager> make(Router& r);
+        static std::unique_ptr<LinkManager> make(Router& r, std::promise<void> p);
 
         bool send_control_message(
             const RouterID& remote,
@@ -131,7 +131,7 @@ namespace llarp
         Router& router() const { return _router; }
 
       private:
-        explicit LinkManager(Router& r);
+        explicit LinkManager(Router& r, std::promise<void> p);
 
         friend struct link::Endpoint;
 
@@ -144,16 +144,30 @@ namespace llarp
 
         Router& _router;
 
+        std::unique_ptr<std::promise<void>> _close_promise;
+
         std::shared_ptr<NodeDB> node_db;
 
         oxen::quic::Address addr;
 
         const bool _is_service_node;
 
+        const std::function<void(oxen::quic::Network*)> net_deleter = [this](oxen::quic::Network* n) {
+            if (n)
+                delete n;
+            if (_close_promise)
+            {
+                auto logcat = log::Cat("net deleter");
+                log::critical(logcat, "Setting close promise...");
+                _close_promise->set_value();
+                _close_promise.reset();
+            }
+        };
+
         // NOTE: DO NOT CHANGE THE ORDER OF THESE THREE OBJECTS
         // The quic Network must be created prior to the GNUTLS credentials, which are necessary for the creation of the
         // quic endpoint. These are delegate initialized in the LinkManager constructor sequentially
-        std::unique_ptr<oxen::quic::Network> quic;
+        std::unique_ptr<oxen::quic::Network, decltype(net_deleter)> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
         link::Endpoint ep;
 
@@ -316,9 +330,8 @@ namespace llarp
                 try
                 {
                     const auto& rid = rc.router_id();
-                    const auto& is_snode = _is_service_node;
                     const auto& is_control = ep.has_value();
-                    const auto us = is_snode ? "Relay"s : "Client"s;
+                    const auto us = _is_service_node ? "Relay"s : "Client"s;
 
                     log::critical(logcat, "Establishing connection to RID:{}", rid);
                     // add to service conns
@@ -336,7 +349,7 @@ namespace llarp
                     auto conn_interface = endpoint->connect(
                         remote,
                         link_manager.tls_creds,
-                        is_snode ? ROUTER_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
                         std::forward<Opt>(opts)...);
 
                     // auto
@@ -346,16 +359,13 @@ namespace llarp
                                 log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
                             });
 
-                    if (is_snode)
-                        link_manager.register_commands(control_stream, rid);
-                    else
-                        log::critical(logcat, "Client NOT registering BTStream commands!");
+                    link_manager.register_commands(control_stream, rid, not _is_service_node);
 
                     log::critical(
                         logcat,
                         "{} dispatching {} on outbound connection to remote (rid:{})",
                         us,
-                        is_control ? "control message (ep:{})"_format(ep) : "data message",
+                        is_control ? "control message (ep:{})"_format(*ep) : "data message",
                         rid);
 
                     (is_control) ? control_stream->command(std::move(*ep), std::move(body), std::move(func))
@@ -381,7 +391,6 @@ namespace llarp
                 try
                 {
                     const auto& rid = rc.router_id();
-                    const auto& is_snode = _is_service_node;
 
                     log::critical(logcat, "Establishing connection to RID:{}", rid);
                     // add to service conns
@@ -396,7 +405,7 @@ namespace llarp
                     auto conn_interface = endpoint->connect(
                         remote,
                         link_manager.tls_creds,
-                        is_snode ? ROUTER_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
                         std::forward<Opt>(opts)...);
 
                     auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
@@ -404,10 +413,8 @@ namespace llarp
                             log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
                         });
 
-                    if (is_snode)
-                        link_manager.register_commands(control_stream, rid);
-                    else
-                        log::critical(logcat, "Client NOT registering BTStream commands!");
+                    link_manager.register_commands(control_stream, rid, not _is_service_node);
+
                     itr->second = std::make_shared<link::Connection>(conn_interface, control_stream, true);
 
                     log::critical(logcat, "Outbound connection to RID:{} added to service conns...", rid);

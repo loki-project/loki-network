@@ -88,7 +88,6 @@ namespace llarp::net
                 }
             });
 
-            // TODO:
             return IPRange::find_private_range(current_ranges);
         }
 

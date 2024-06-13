@@ -32,7 +32,7 @@ namespace llarp::win32
 
     void VPNPlatform::route_via_interface(NetworkInterface& vpn, std::string addr, std::string mask, std::string cmd)
     {
-        const auto& info = vpn.Info();
+        const auto& info = vpn.interface_info();
         auto ifaddr = ip_to_string(info[0]);
         // this changes the last 1 to a 0 so that it routes over the interface
         // this is required because windows is idiotic af
@@ -64,7 +64,7 @@ namespace llarp::win32
     {
         std::set<oxen::quic::Address> gateways;
 
-        const auto ifaddr = vpn.Info()[0];
+        const auto ifaddr = vpn.interface_info()[0];
         for (const auto& iface : Net().all_network_interfaces())
         {
             if (not iface._gateway)
@@ -105,7 +105,7 @@ namespace llarp::win32
         default_route_via_interface(vpn, "DELETE");
     }
 
-    std::shared_ptr<NetworkInterface> VPNPlatform::ObtainInterface(InterfaceInfo info, Router* router)
+    std::shared_ptr<NetworkInterface> VPNPlatform::obtain_interface(InterfaceInfo info, Router* router)
     {
         return wintun::make_interface(std::move(info), router);
     }
@@ -120,13 +120,14 @@ namespace llarp::win32
                 "supported on "
                 "windows (yet)"};
 
-        uint16_t upstream_src_port = dns_upstream_src ? dns_upstream_src->getPort() : 0;
+        uint16_t upstream_src_port = dns_upstream_src ? dns_upstream_src->port() : 0;
         std::string udp_filter = upstream_src_port != 0
             ? fmt::format("( udp.DstPort == 53 and udp.SrcPort != {} )", upstream_src_port)
             : "udp.DstPort == 53";
 
         auto filter = "outbound and ( " + udp_filter + " or tcp.DstPort == 53 )";
 
-        return WinDivert::make_interceptor(filter, [router = _ctx->router] { router->TriggerPump(); });
+        // TESTNET:
+        return WinDivert::make_interceptor(filter, [router = _ctx->router] { /* router->TriggerPump(); */ });
     }
 }  // namespace llarp::win32

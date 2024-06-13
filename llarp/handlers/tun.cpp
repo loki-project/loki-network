@@ -275,6 +275,7 @@ namespace llarp::handlers
 
     void TunEndpoint::configure()
     {
+        log::info(logcat, "{} called", __PRETTY_FUNCTION__);
         auto& net_conf = _router.config()->network;
 
         /** DISCUSS: Can the auth objects be further simplified?

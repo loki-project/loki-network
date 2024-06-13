@@ -31,7 +31,7 @@
 
 #include <oxenmq/oxenmq.h>
 
-static constexpr std::chrono::milliseconds ROUTER_TICK_INTERVAL = 250ms;
+static constexpr std::chrono::milliseconds ROUTER_TICK_INTERVAL{250ms};
 
 namespace llarp
 {
@@ -156,6 +156,38 @@ namespace llarp
         //   stats["lokiAddress"] = services["default"]["identity"];
         // }
         return stats;
+    }
+
+    void Router::start()
+    {
+        if (not _loop_ticker)
+            throw std::runtime_error{"Router has no main event loop ticker -- Does not exist!"};
+
+        if (not _loop_ticker->is_running())
+        {
+            if (not _loop_ticker->start())
+                throw std::runtime_error{"Router failed to start main event loop ticker!"};
+
+            log::info(logcat, "Router successfully started main event loop ticker!");
+        }
+        else
+            log::info(logcat, "Main event loop ticker already auto-started!");
+
+        if (is_service_node() and not _testing_disabled)
+        {
+            if (not _reachability_ticker)
+                throw std::runtime_error{"Router has no service node reachability loop ticker -- Does not exist!"};
+
+            if (not _reachability_ticker->is_running())
+            {
+                if (not _reachability_ticker->start())
+                    throw std::runtime_error{"Router failed to start service node reachability loop ticker!"};
+
+                log::info(logcat, "Router successfully started service node reachability loop ticker!");
+            }
+            else
+                log::info(logcat, "Service node reachability loop ticker already auto-started!");
+        }
     }
 
     bool Router::fully_meshed() const
@@ -421,17 +453,20 @@ namespace llarp
         conf._local_base_ip = _local_base_ip;
         conf._if_name = _if_name;
 
-        log::info(logcat, "Processing remote client map...");
-
         // process remote client map; addresses must be within _local_ip_range
         auto& client_ips = conf._reserved_local_ips;
 
-        for (auto itr = client_ips.begin(); itr != client_ips.end();)
+        if (not client_ips.empty())
         {
-            if (conf._local_ip_range->contains(itr->second))
-                itr = client_ips.erase(itr);
-            else
-                ++itr;
+            log::info(logcat, "Processing remote client map...");
+
+            for (auto itr = client_ips.begin(); itr != client_ips.end();)
+            {
+                if (conf._local_ip_range->contains(itr->second))
+                    itr = client_ips.erase(itr);
+                else
+                    ++itr;
+            }
         }
 
         /// build a set of strictConnectPubkeys
@@ -563,13 +598,14 @@ namespace llarp
         router_contact =
             LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
 
-        // TODO: decide between factory functions and constructors
-
         _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
         _session_endpoint->configure();
 
+        auto p = std::promise<void>();
+        _link_close_waiter = std::make_unique<std::future<void>>(p.get_future());
+
         log::info(logcat, "Creating QUIC link manager...");
-        _link_manager = LinkManager::make(*this);
+        _link_manager = LinkManager::make(*this, std::move(p));
 
         log::info(logcat, "Creating QUIC tunnel...");
         _quic_tun = QUICTunnel::make(*this);
@@ -580,6 +616,7 @@ namespace llarp
         //  All relays have TUN
         if (_should_init_tun = conf.network.init_tun; _should_init_tun)
         {
+            log::critical(logcat, "Initializing virtual TUN device...");
             init_tun();
         }
 
@@ -609,19 +646,6 @@ namespace llarp
         if (appears_funded() and insufficient_peers() and not _testing_disabled)
             return "too few peer connections; lokinet is not adequately connected to the network";
         return std::nullopt;
-    }
-
-    void Router::close()
-    {
-        log::info(logcat, "closing");
-
-        if (_router_close_cb)
-            _router_close_cb();
-
-        log::debug(logcat, "stopping mainloop");
-
-        _loop->stop();
-        _is_running.store(false);
     }
 
     bool Router::have_snode_whitelist() const
@@ -719,8 +743,10 @@ namespace llarp
         return line;
     }
 
-    void Router::Tick()
+    void Router::tick()
     {
+        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
         if (_is_stopping)
             return;
 
@@ -752,7 +778,7 @@ namespace llarp
 
         _pathbuild_limiter.Decay(now);
 
-        router_profiling().Tick();
+        router_profiling().tick();
 
         if (should_report_stats(now))
         {
@@ -929,7 +955,7 @@ namespace llarp
             queue_disk_io([&]() { router_profiling().save(_profile_file); });
         }
 
-        _node_db->Tick(now);
+        _node_db->tick(now);
 
         // update tick timestamp
         _last_tick = llarp::time_now_ms();
@@ -979,6 +1005,7 @@ namespace llarp
         }
         else
         {
+            log::info(logcat, "Client generating keys and resigning RC...");
             // we are a client, regenerate keys and resign rc before everything else
             crypto::identity_keygen(_identity);
             crypto::encryption_keygen(_encryption);
@@ -986,12 +1013,13 @@ namespace llarp
         }
 
         // This must be constructed AFTER router creates its LocalRC
-        log::info(logcat, "Creating Introset Contacts...");
         _contacts = std::make_unique<Contacts>(*this);
 
-        _loop->call_every(ROUTER_TICK_INTERVAL, weak_from_this(), [this] { Tick(); });
+        log::debug(logcat, "Creating Router::Tick() repeating event...");
+        _loop_ticker = _loop->call_every(
+            ROUTER_TICK_INTERVAL, [this] { tick(); }, true);
 
-        _route_poker->start();
+        // _route_poker->start();
 
         // Resolve needed ONS values now that we have the necessary things prefigured
         _session_endpoint->resolve_ons_mappings();
@@ -1003,66 +1031,71 @@ namespace llarp
         if (is_service_node() and not _testing_disabled)
         {
             // do service node testing if we are in service node whitelist mode
-            _loop->call_every(consensus::REACHABILITY_TESTING_TIMER_INTERVAL, weak_from_this(), [this] {
-                // dont run tests if we are not running or we are stopping
-                if (not _is_running)
-                    return;
-                // dont run tests if we think we should not test other routers
-                // this occurs when we are deregistered or do not have the service node list
-                // yet when we expect to have one.
-                if (not can_test_routers())
-                    return;
+            _reachability_ticker = _loop->call_every(
+                consensus::REACHABILITY_TESTING_TIMER_INTERVAL,
+                [this] {
+                    // dont run tests if we are not running or we are stopping
+                    if (not _is_running)
+                        return;
+                    // dont run tests if we think we should not test other routers
+                    // this occurs when we are deregistered or do not have the service node list
+                    // yet when we expect to have one.
+                    if (not can_test_routers())
+                        return;
 
-                auto tests = router_testing.get_failing();
+                    auto tests = router_testing.get_failing();
 
-                if (auto maybe = router_testing.next_random(this))
-                {
-                    tests.emplace_back(*maybe, 0);
-                }
-                for (const auto& [router, fails] : tests)
-                {
-                    if (not _node_db->is_connection_allowed(router))
+                    if (auto maybe = router_testing.next_random(this))
                     {
-                        log::debug(
-                            logcat,
-                            "{} is no longer a registered service node; dropping from test "
-                            "list",
-                            router);
-                        router_testing.remove_node_from_failing(router);
-                        continue;
+                        tests.emplace_back(*maybe, 0);
                     }
-
-                    log::critical(logcat, "Establishing session to {} for service node testing", router);
-
-                    // try to make a session to this random router
-                    // this will do a dht lookup if needed
-                    _link_manager->test_reachability(
-                        router,
-                        [this, rid = router, previous = fails](oxen::quic::connection_interface& conn) {
-                            log::info(
+                    for (const auto& [router, fails] : tests)
+                    {
+                        if (not _node_db->is_connection_allowed(router))
+                        {
+                            log::debug(
                                 logcat,
-                                "Successful SN reachability test to {}{}",
-                                rid,
-                                previous ? "after {} previous failures"_format(previous) : "");
-                            router_testing.remove_node_from_failing(rid);
-                            _rpc_client->inform_connection(rid, true);
-                            conn.close_connection();
-                        },
-                        [this, rid = router, previous = fails](oxen::quic::connection_interface&, uint64_t ec) {
-                            if (ec != 0)
-                            {
+                                "{} is no longer a registered service node; dropping from test "
+                                "list",
+                                router);
+                            router_testing.remove_node_from_failing(router);
+                            continue;
+                        }
+
+                        log::critical(logcat, "Establishing session to {} for service node testing", router);
+
+                        // try to make a session to this random router
+                        // this will do a dht lookup if needed
+                        _link_manager->test_reachability(
+                            router,
+                            [this, rid = router, previous = fails](oxen::quic::connection_interface& conn) {
                                 log::info(
                                     logcat,
-                                    "Unsuccessful SN reachability test to {} after {} previous "
-                                    "failures",
+                                    "Successful SN reachability test to {}{}",
                                     rid,
-                                    previous);
-                                router_testing.add_failing_node(rid, previous);
-                            }
-                        });
-                }
-            });
+                                    previous ? "after {} previous failures"_format(previous) : "");
+                                router_testing.remove_node_from_failing(rid);
+                                _rpc_client->inform_connection(rid, true);
+                                conn.close_connection();
+                            },
+                            [this, rid = router, previous = fails](oxen::quic::connection_interface&, uint64_t ec) {
+                                if (ec != 0)
+                                {
+                                    log::info(
+                                        logcat,
+                                        "Unsuccessful SN reachability test to {} after {} previous "
+                                        "failures",
+                                        rid,
+                                        previous);
+                                    router_testing.add_failing_node(rid, previous);
+                                }
+                            });
+                    }
+                },
+                false);
         }
+
+        log::critical(logcat, "LOCAL INSTANCE ID: {}", local_rid());
 
         llarp::sys::service_manager->ready();
         return _is_running;
@@ -1081,27 +1114,42 @@ namespace llarp
         return 0s;
     }
 
-    void Router::AfterStopLinks()
+    void Router::close()
     {
-        llarp::sys::service_manager->stopping();
+        log::critical(logcat, "closing");
+
+        if (_router_close_cb)
+            _router_close_cb();
+
+        log::critical(logcat, "stopping mainloop");
+
+        _loop->stop();
+        _is_running.store(false);
+    }
+
+    void Router::teardown()
+    {
         close();
-        log::debug(logcat, "stopping oxenmq");
+        log::critical(logcat, "stopping oxenmq");
         _lmq.reset();
     }
 
-    void Router::AfterStopIssued()
+    void Router::cleanup()
     {
-        llarp::sys::service_manager->stopping();
-        log::debug(logcat, "stopping links");
+        log::critical(logcat, "stopping links");
         stop_sessions();
-        log::debug(logcat, "saving nodedb to disk");
+
+        log::critical(logcat, "saving nodedb to disk");
         node_db()->save_to_disk();
-        _loop->call_later(200ms, [this] { AfterStopLinks(); });
+
+        _loop->call_later(200ms, [this] { teardown(); });
     }
 
     void Router::stop_sessions()
     {
         _link_manager->stop();
+        log::critical(logcat, "Awaiting quic network close...");
+        _link_close_waiter->wait();
     }
 
     void Router::stop_immediately()
@@ -1142,7 +1190,9 @@ namespace llarp
         log::info(logcat, "stopping service manager...");
         llarp::sys::service_manager->stopping();
 
-        _loop->call_later(200ms, [this] { AfterStopIssued(); });
+        // TESTNET: close all sessions and exit functions here
+
+        _loop->call_later(200ms, [this] { cleanup(); });
     }
 
     uint32_t Router::NextPathBuildNumber()

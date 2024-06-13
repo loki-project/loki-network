@@ -3,6 +3,8 @@
 #include "kademlia.hpp"
 #include "key.hpp"
 
+#include <llarp/util/logging.hpp>
+
 #include <map>
 #include <set>
 #include <vector>

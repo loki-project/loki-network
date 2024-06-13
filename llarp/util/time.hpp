@@ -39,8 +39,7 @@ namespace llarp
 
     inline timeval loop_time_to_timeval(loop_time t)
     {
-        return timeval{
-            .tv_sec = static_cast<long>(t.count() / 1000), .tv_usec = static_cast<long>((t.count() % 1000) * 1000)};
+        return timeval{.tv_sec = t / 1s, .tv_usec = (t % 1s) / 1us};
     }
 
     std::chrono::nanoseconds get_timestamp();

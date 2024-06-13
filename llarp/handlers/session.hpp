@@ -129,12 +129,12 @@ namespace llarp
 
             bool initiate_remote_service_session(const NetworkAddress& remote, on_session_init_hook cb)
             {
-                return initiate_session(remote, std::move(cb), false);
+                return _initiate_session(remote, std::move(cb), false);
             }
 
             bool initiate_remote_exit_session(const NetworkAddress& remote, on_session_init_hook cb)
             {
-                return initiate_session(remote, std::move(cb), true);
+                return _initiate_session(remote, std::move(cb), true);
             }
 
             void Tick(std::chrono::milliseconds now) override;
@@ -155,12 +155,12 @@ namespace llarp
             void unmap_range_by_name(const std::string& name);
 
           private:
-            bool initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
+            bool _initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
-            void make_session_path(
+            void _make_session_path(
                 service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
-            void make_session(
+            void _make_session(
                 NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);
         };
 

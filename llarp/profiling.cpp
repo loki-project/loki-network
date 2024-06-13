@@ -166,7 +166,7 @@ namespace llarp
         return not itr->second.is_good(chances);
     }
 
-    void Profiling::Tick()
+    void Profiling::tick()
     {
         util::Lock lock(_m);
         for (auto& [rid, profile] : _profiles)

@@ -53,7 +53,7 @@ namespace llarp
     // the maximum number of fetch requests we make across all bootstraps
     inline constexpr int MAX_BOOTSTRAP_FETCH_ATTEMPTS{5};
     // if all bootstraps fail, router will trigger re-bootstrapping after this cooldown
-    inline constexpr auto BOOTSTRAP_COOLDOWN{1min};
+    inline constexpr auto BOOTSTRAP_COOLDOWN{30s};
 
     /*  Other Constants  */
     // the maximum number of RC/RID fetches that can pass w/o an unconfirmed rc/rid appearing
@@ -296,7 +296,7 @@ namespace llarp
         size_t num_rids() const;
 
         /// do periodic tasks like flush to disk and expiration
-        void Tick(std::chrono::milliseconds now);
+        void tick(std::chrono::milliseconds now);
 
         /// find the absolute closets router to a dht location
         RemoteRC find_closest_to(dht::Key_t location) const;

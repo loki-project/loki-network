@@ -30,16 +30,16 @@ namespace llarp::vpn
 
         int PollFD() const override { return m_fd; }
 
-        net::IPPacket ReadNextPacket() override
+        IPPacket ReadNextPacket() override
         {
             std::vector<uint8_t> pkt;
-            pkt.reserve(net::IPPacket::MaxSize);
+            pkt.reserve(MAX_PACKET_SIZE);
             const auto n = read(m_fd, pkt.data(), pkt.capacity());
             pkt.resize(std::min(std::max(ssize_t{}, n), static_cast<ssize_t>(pkt.capacity())));
-            return net::IPPacket{std::move(pkt)};
+            return IPPacket{std::move(pkt)};
         }
 
-        bool WritePacket(net::IPPacket pkt) override
+        bool WritePacket(IPPacket pkt) override
         {
             const auto sz = write(m_fd, pkt.data(), pkt.size());
             if (sz <= 0)
@@ -76,7 +76,7 @@ namespace llarp::vpn
       public:
         AndroidPlatform(llarp::Context* ctx) : fd{ctx->androidFD} {}
 
-        std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router*) override
+        std::shared_ptr<NetworkInterface> obtain_interface(InterfaceInfo info, Router*) override
         {
             return std::make_shared<AndroidInterface>(std::move(info), fd);
         }

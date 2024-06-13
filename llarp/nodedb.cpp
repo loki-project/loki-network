@@ -136,7 +136,7 @@ namespace llarp
         return selected;
     }
 
-    void NodeDB::Tick(std::chrono::milliseconds now)
+    void NodeDB::tick(std::chrono::milliseconds now)
     {
         if (_next_flush_time == 0s)
             return;
@@ -620,6 +620,13 @@ namespace llarp
     void NodeDB::fallback_to_bootstrap()
     {
         log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (_router._is_stopping || not _router._is_running)
+        {
+            log::info(logcat, "NodeDB unable to continue bootstrap fetch -- router is stopped!");
+            return;
+        }
+
         auto at_max_failures = bootstrap_attempts >= MAX_BOOTSTRAP_FETCH_ATTEMPTS;
 
         // base case: we have failed to query all bootstraps, or we received a sample of
@@ -641,6 +648,8 @@ namespace llarp
                 return;
             }
         }
+
+        log::critical(logcat, "using_bootstrap_fallback: {}", _using_bootstrap_fallback ? "TRUE" : "FALSE");
 
         auto& rc = (_using_bootstrap_fallback) ? _bootstraps.next() : _bootstraps.current();
         fetch_source = rc.router_id();
@@ -671,7 +680,7 @@ namespace llarp
                         src,
                         bootstrap_attempts,
                         MAX_BOOTSTRAP_FETCH_ATTEMPTS);
-                    fallback_to_bootstrap();
+                    // fallback_to_bootstrap();
                     return;
                 }
 
@@ -701,7 +710,7 @@ namespace llarp
                         bootstrap_attempts,
                         MAX_BOOTSTRAP_FETCH_ATTEMPTS,
                         e.what());
-                    fallback_to_bootstrap();
+                    // fallback_to_bootstrap();
                     return;
                 }
 
@@ -876,6 +885,7 @@ namespace llarp
         _router.loop()->call([this]() {
             for (const auto& rc : rc_lookup)
             {
+                log::critical(logcat, "Writing RC for rid: {}", rc.first);
                 rc.second.write(get_path_by_pubkey(rc.first));
             }
         });

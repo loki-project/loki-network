@@ -17,42 +17,27 @@ namespace llarp
     }  // namespace vpn
 
     using event_ptr = oxen::quic::event_ptr;
+    using Ticker = oxen::quic::Ticker;
 
     // shared_ptr containing the actual libev loop
     using loop_ptr = std::shared_ptr<::event_base>;
 
-    struct EventHandler
-    {
-        event_ptr ev;
-        timeval interval;
-        std::function<void()> f;
-        bool repeat = false;
-
-        EventHandler() = default;
-
-        ~EventHandler();
-
-        void start(const loop_ptr& _loop, loop_time _interval, std::function<void()> task, bool repeat = false);
-    };
-
     class EventLoop
     {
-        EventLoop();
+        EventLoop(std::promise<void> p);
         EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         std::atomic<bool> _close_immediately{false};
 
+        std::unique_ptr<std::promise<void>> _close_promise;
+
       public:
-        static std::shared_ptr<EventLoop> make();
-        static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
+        static std::shared_ptr<EventLoop> make(std::promise<void> p);
+        // static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         ~EventLoop();
 
         std::shared_ptr<oxen::quic::Loop> _loop;
-
-        void add_oneshot_event(loop_time delay, std::function<void()> hook);
-
-        std::shared_ptr<EventHandler> make_handler();
 
         void set_close_immediate(bool b) { _close_immediately.store(b); }
 
@@ -74,26 +59,29 @@ namespace llarp
             return _loop->call_get(std::forward<Callable>(f));
         }
 
-        void call_soon(std::function<void(void)> f) { _loop->call_soon(std::move(f)); }
-
-        void call_later(loop_time delay, std::function<void()> hook);
+        template <typename Callable>
+        void call_soon(Callable&& f)
+        {
+            _loop->call_soon(std::forward<Callable>(f));
+        }
 
         template <typename Callable>
-        void call_every(loop_time interval, std::weak_ptr<void> caller, Callable f)
+        void call_later(loop_time delay, Callable&& hook)
         {
-            auto handler = make_handler();
-            // grab the reference before giving ownership of the repeater to the lambda
-            auto& h = *handler;
-            h.start(
-                loop(),
-                interval,
-                [hndlr = std::move(handler), owner = std::move(caller), func = std::move(f)]() mutable {
-                    if (auto ptr = owner.lock())
-                        func();
-                    else
-                        hndlr.reset();
-                },
-                true);
+            _loop->call_later(delay, std::forward<Callable>(hook));
+        }
+
+        template <typename Callable>
+        void call_every(loop_time interval, std::weak_ptr<void> caller, Callable&& f)
+        {
+            _loop->call_every(interval, std::move(caller), std::forward<Callable>(f));
+        }
+
+        template <typename Callable>
+        [[nodiscard]] std::shared_ptr<Ticker> call_every(
+            loop_time interval, Callable&& f, bool start_immediately = true)
+        {
+            return _loop->call_every(interval, std::forward<Callable>(f), start_immediately);
         }
 
         // Returns a pointer deleter that defers invocation of a custom deleter to the event loop
@@ -122,9 +110,9 @@ namespace llarp
         }
 
         template <typename Callable>
-        auto make_caller(Callable f)
+        auto make_caller(Callable&& f)
         {
-            return [this, f = std::move(f)](auto&&... args) {
+            return [this, f = std::forward<Callable>(f)](auto&&... args) {
                 if (in_event_loop())
                     return f(std::forward<decltype(args)>(args)...);
 

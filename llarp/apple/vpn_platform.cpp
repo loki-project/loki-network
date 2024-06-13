@@ -16,7 +16,7 @@ namespace llarp::apple
           _read_cb{std::move(on_readable)}
     {}
 
-    std::shared_ptr<vpn::NetworkInterface> VPNPlatform::ObtainInterface(vpn::InterfaceInfo, Router* router)
+    std::shared_ptr<vpn::NetworkInterface> VPNPlatform::obtain_interface(vpn::InterfaceInfo, Router* router)
     {
         return std::make_shared<VPNInterface>(_context, _packet_writer, _read_cb, router);
     }

@@ -92,7 +92,9 @@ namespace llarp
 
         void close();
 
-        std::unique_ptr<std::promise<void>> closeWaiter;
+        std::unique_ptr<std::promise<void>> close_waiter;
+
+        std::unique_ptr<std::future<void>> loop_waiter;
     };
 }  // namespace llarp
 

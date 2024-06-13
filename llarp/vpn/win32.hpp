@@ -50,7 +50,7 @@ namespace llarp::win32
 
         void delete_default_route_via_interface(NetworkInterface& vpn) override;
 
-        std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router* router) override;
+        std::shared_ptr<NetworkInterface> obtain_interface(InterfaceInfo info, Router* router) override;
 
         std::shared_ptr<I_Packet_IO> create_packet_io(
             unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src) override;

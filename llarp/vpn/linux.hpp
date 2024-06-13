@@ -464,7 +464,7 @@ namespace llarp::vpn
         LinuxRouteManager _routeManager{};
 
       public:
-        std::shared_ptr<NetworkInterface> ObtainInterface(InterfaceInfo info, Router*) override
+        std::shared_ptr<NetworkInterface> obtain_interface(InterfaceInfo info, Router*) override
         {
             return std::make_shared<LinuxInterface>(std::move(info));
         };
