@@ -92,6 +92,7 @@ lokinet_add_library(lokinet-time-place
 
   ev/loop.cpp
   ev/tcp.cpp
+  ev/types.cpp
   ev/udp.cpp
 
   net/ip.cpp

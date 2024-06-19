@@ -17,7 +17,7 @@ namespace llarp
     }  // namespace vpn
 
     using event_ptr = oxen::quic::event_ptr;
-    using Ticker = oxen::quic::Ticker;
+    using EventTicker = oxen::quic::Ticker;
 
     // shared_ptr containing the actual libev loop
     using loop_ptr = std::shared_ptr<::event_base>;
@@ -78,7 +78,7 @@ namespace llarp
         }
 
         template <typename Callable>
-        [[nodiscard]] std::shared_ptr<Ticker> call_every(
+        [[nodiscard]] std::shared_ptr<EventTicker> call_every(
             loop_time interval, Callable&& f, bool start_immediately = true)
         {
             return _loop->call_every(interval, std::forward<Callable>(f), start_immediately);

@@ -45,6 +45,11 @@ namespace llarp
             : endpoint{std::move(ep)}, link_manager{lm}, _is_service_node{link_manager.is_service_node()}
         {}
 
+        // Endpoint::~Endpoint()
+        // {
+
+        // }
+
         std::shared_ptr<link::Connection> Endpoint::get_service_conn(const RouterID& rid) const
         {
             if (auto itr = service_conns.find(rid); itr != service_conns.end())
@@ -117,6 +122,19 @@ namespace llarp
             });
         }
 
+        void Endpoint::close_all()
+        {
+            for (auto& conn : service_conns)
+                conn.second->conn->close_connection();
+
+            service_conns.clear();
+
+            for (auto& conn : client_conns)
+                conn.second->conn->close_connection();
+
+            client_conns.clear();
+        }
+
         std::tuple<size_t, size_t, size_t, size_t> Endpoint::connection_stats() const
         {
             size_t in{0}, out{0};
@@ -153,17 +171,17 @@ namespace llarp
 
     std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const
     {
-        return ep.connection_stats();
+        return ep->connection_stats();
     }
 
     size_t LinkManager::get_num_connected_routers() const
     {
-        return ep.num_router_conns();
+        return ep->num_router_conns();
     }
 
     size_t LinkManager::get_num_connected_clients() const
     {
-        return ep.num_client_conns();
+        return ep->num_client_conns();
     }
 
     using messages::serialize_response;
@@ -173,7 +191,7 @@ namespace llarp
         if (is_stopping)
             return;
 
-        return ep.for_each_connection(func);
+        return ep->for_each_connection(func);
     }
 
     void LinkManager::register_commands(
@@ -243,7 +261,7 @@ namespace llarp
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), size_t{32}},
               {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), size_t{32}})},
-          ep{startup_endpoint(), *this}
+          ep{std::make_unique<link::Endpoint>(startup_endpoint(), *this)}
     {
         is_stopping = false;
     }
@@ -289,7 +307,7 @@ namespace llarp
                     if (alpn == alpns::C_ALPNS)
                     {
                         log::critical(logcat, "{} node accepting client connection (remote ID:{})!", us, other);
-                        ep.client_conns.emplace(other, nullptr);
+                        ep->client_conns.emplace(other, nullptr);
                         return true;
                     }
 
@@ -300,7 +318,7 @@ namespace llarp
 
                         if (result)
                         {
-                            auto [itr, b] = ep.service_conns.try_emplace(other, nullptr);
+                            auto [itr, b] = ep->service_conns.try_emplace(other, nullptr);
 
                             if (not b)
                             {
@@ -383,13 +401,13 @@ namespace llarp
         auto control = make_control(ci, rid);
 
         _router.loop()->call([this, ci_ptr = ci.shared_from_this(), bstream = std::move(control), rid]() {
-            if (auto it = ep.service_conns.find(rid); it != ep.service_conns.end())
+            if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
             {
                 log::critical(logcat, "Configuring inbound connection from relay RID:{}", rid);
 
                 it->second = std::make_shared<link::Connection>(ci_ptr, std::move(bstream));
             }
-            else if (auto it = ep.client_conns.find(rid); it != ep.client_conns.end())
+            else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
             {
                 log::critical(logcat, "Configuring inbound connection from client RID:{}", rid);
                 it->second = std::make_shared<link::Connection>(ci_ptr, std::move(bstream), false);
@@ -411,7 +429,7 @@ namespace llarp
     {
         RouterID rid{ci.remote_key()};
 
-        if (auto it = ep.service_conns.find(rid); it != ep.service_conns.end())
+        if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
         {
             log::critical(logcat, "Fetched configured outbound connection to relay RID:{}", rid);
         }
@@ -453,15 +471,15 @@ namespace llarp
         _router.loop()->call([this, ref_id = ci.reference_id(), rid = RouterID{ci.remote_key()}, error_code = ec]() {
             log::critical(logcat, "Purging quic connection {} (ec:{})", ref_id, error_code);
 
-            if (auto s_itr = ep.service_conns.find(rid); s_itr != ep.service_conns.end())
+            if (auto s_itr = ep->service_conns.find(rid); s_itr != ep->service_conns.end())
             {
                 log::critical(logcat, "Quic connection to relay RID:{} purged successfully", rid);
-                ep.service_conns.erase(s_itr);
+                ep->service_conns.erase(s_itr);
             }
-            else if (auto c_itr = ep.client_conns.find(rid); c_itr != ep.client_conns.end())
+            else if (auto c_itr = ep->client_conns.find(rid); c_itr != ep->client_conns.end())
             {
                 log::critical(logcat, "Quic connection to client RID:{} purged successfully", rid);
-                ep.client_conns.erase(c_itr);
+                ep->client_conns.erase(c_itr);
             }
             else
                 log::critical(logcat, "Nothing to purge for quic connection {}", ref_id);
@@ -485,7 +503,7 @@ namespace llarp
             };
         }
 
-        if (auto conn = ep.get_conn(remote); conn)
+        if (auto conn = ep->get_conn(remote); conn)
         {
             conn->control_stream->command(std::move(endpoint), std::move(body), std::move(func));
             return true;
@@ -506,7 +524,7 @@ namespace llarp
         if (is_stopping)
             return false;
 
-        if (auto conn = ep.get_conn(remote); conn)
+        if (auto conn = ep->get_conn(remote); conn)
         {
             conn->conn->send_datagram(std::move(body));
             return true;
@@ -522,7 +540,7 @@ namespace llarp
 
     void LinkManager::close_connection(RouterID rid)
     {
-        return ep.close_connection(rid);
+        return ep->close_connection(rid);
     }
 
     void LinkManager::test_reachability(const RouterID& rid, conn_open_hook on_open, conn_closed_hook on_close)
@@ -547,7 +565,7 @@ namespace llarp
         {
             const auto& remote_addr = rc->addr();
 
-            if (auto rv = ep.establish_and_send(
+            if (auto rv = ep->establish_and_send(
                     KeyedAddress{router.to_view(), remote_addr},
                     *rc,
                     std::move(endpoint),
@@ -569,7 +587,7 @@ namespace llarp
     {
         const auto& rid = rc.router_id();
 
-        if (ep.have_service_conn(rid))
+        if (ep->have_service_conn(rid))
         {
             log::warning(logcat, "We already have a connection to {}!", rid);
             // TODO: should implement some connection failed logic, but not the same logic that
@@ -579,7 +597,7 @@ namespace llarp
 
         const auto& remote_addr = rc.addr();
 
-        if (auto rv = ep.establish_connection(
+        if (auto rv = ep->establish_connection(
                 KeyedAddress{rid.to_view(), remote_addr}, rc, std::move(on_open), std::move(on_close));
             rv)
         {
@@ -591,19 +609,20 @@ namespace llarp
 
     bool LinkManager::have_connection_to(const RouterID& remote) const
     {
-        return ep.have_conn(remote);
+        return ep->have_conn(remote);
     }
 
     bool LinkManager::have_service_connection_to(const RouterID& remote) const
     {
-        return ep.have_service_conn(remote);
+        return ep->have_service_conn(remote);
     }
 
     bool LinkManager::have_client_connection_to(const RouterID& remote) const
     {
-        return ep.have_client_conn(remote);
+        return ep->have_client_conn(remote);
     }
 
+    // TODO: put this in ~LinkManager() after sorting out close sequence and logic
     void LinkManager::stop()
     {
         if (is_stopping)
@@ -613,6 +632,18 @@ namespace llarp
 
         log::info(logcat, "stopping links");
         is_stopping = true;
+
+        // std::promise<void> p;
+        // auto f = p.get_future();
+
+        // _router.loop()->call([&]() mutable {
+        //     ep->close_all();
+        //     p.set_value();
+        // });
+
+        // f.get();
+
+        // ep.reset();
 
         quic.reset();
     }
@@ -653,7 +684,7 @@ namespace llarp
     {
         auto filter = [this, client_only](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
-            auto res = client_only ? not ep.have_client_conn(rid) : not ep.have_conn(rid);
+            auto res = client_only ? not ep->have_client_conn(rid) : not ep->have_conn(rid);
 
             log::trace(logcat, "RID:{} {}", rid, res ? "ACCEPTED" : "REJECTED");
 
@@ -740,7 +771,7 @@ namespace llarp
             int count = 0;
             const auto& gossip_src = rc.router_id();
 
-            for (auto& [rid, conn] : ep.service_conns)
+            for (auto& [rid, conn] : ep->service_conns)
             {
                 // don't send back to the gossip source or the last sender
                 if (rid == gossip_src or rid == last_sender)
@@ -799,7 +830,7 @@ namespace llarp
 
         const auto& rid = source.router_id();
 
-        if (auto conn = ep.get_service_conn(rid); conn)
+        if (auto conn = ep->get_service_conn(rid); conn)
         {
             conn->control_stream->command("bfetch_rcs"s, std::move(payload), std::move(func));
             log::critical(logcat, "Dispatched bootstrap fetch request!");

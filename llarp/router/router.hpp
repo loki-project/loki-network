@@ -132,8 +132,8 @@ namespace llarp
         std::shared_ptr<Contacts> _contacts;
         std::shared_ptr<NodeDB> _node_db;
 
-        std::shared_ptr<Ticker> _loop_ticker;
-        std::shared_ptr<Ticker> _reachability_ticker;
+        std::shared_ptr<EventTicker> _loop_ticker;
+        std::shared_ptr<EventTicker> _reachability_ticker;
 
         SecretKey _identity;
         RouterID _id_pubkey;
@@ -196,7 +196,14 @@ namespace llarp
         std::chrono::system_clock::time_point last_rid_fetch{last_rc_gossip};
         std::chrono::system_clock::time_point next_bootstrap_attempt{last_rc_gossip};
 
+        void _relay_tick();
+
+        void _tick();
+
       public:
+        /// call internal router ticker
+        void tick();
+
         void start();
 
         bool fully_meshed() const;
@@ -340,7 +347,7 @@ namespace llarp
         void stop_immediately();
 
         /// close all sessions and shutdown all links
-        void stop_sessions();
+        void stop_links();
 
         void persist_connection_until(const RouterID& remote, std::chrono::milliseconds until);
 
@@ -372,9 +379,6 @@ namespace llarp
             std::function<void(oxen::quic::message m)> func = nullptr);
 
         bool is_bootstrap_node(RouterID rid) const;
-
-        /// call internal router ticker
-        void tick();
 
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 

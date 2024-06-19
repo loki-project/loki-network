@@ -61,6 +61,7 @@ namespace llarp
         struct Endpoint
         {
             Endpoint(std::shared_ptr<oxen::quic::Endpoint> ep, LinkManager& lm);
+            // ~Endpoint();
 
             std::shared_ptr<oxen::quic::Endpoint> endpoint;
             LinkManager& link_manager;
@@ -107,6 +108,8 @@ namespace llarp
             void for_each_connection(std::function<void(link::Connection&)> func);
 
             void close_connection(RouterID rid);
+
+            void close_all();
 
           private:
             const bool _is_service_node;
@@ -156,7 +159,7 @@ namespace llarp
             if (n)
                 delete n;
             if (_close_promise)
-            {
+            {  // TESTNET: remove this logcat when unnecessary
                 auto logcat = log::Cat("net deleter");
                 log::critical(logcat, "Setting close promise...");
                 _close_promise->set_value();
@@ -169,7 +172,7 @@ namespace llarp
         // quic endpoint. These are delegate initialized in the LinkManager constructor sequentially
         std::unique_ptr<oxen::quic::Network, decltype(net_deleter)> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
-        link::Endpoint ep;
+        std::unique_ptr<link::Endpoint> ep;
 
         void handle_path_data_message(bstring dgram);
 
@@ -190,7 +193,7 @@ namespace llarp
             const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& rid, bool client_only = false);
 
       public:
-        const link::Endpoint& endpoint() const { return ep; }
+        const std::unique_ptr<link::Endpoint>& endpoint() const { return ep; }
 
         const oxen::quic::Address& local() { return addr; }
 

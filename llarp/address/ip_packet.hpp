@@ -2,7 +2,6 @@
 
 #include "types.hpp"
 
-#include <llarp/ev/types.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/formattable.hpp>
 #include <llarp/util/time.hpp>
