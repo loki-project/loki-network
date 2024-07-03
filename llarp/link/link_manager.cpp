@@ -125,12 +125,12 @@ namespace llarp
         void Endpoint::close_all()
         {
             for (auto& conn : service_conns)
-                conn.second->conn->close_connection();
+                conn.second->close_quietly();
 
             service_conns.clear();
 
             for (auto& conn : client_conns)
-                conn.second->conn->close_connection();
+                conn.second->close_quietly();
 
             client_conns.clear();
         }
@@ -252,12 +252,11 @@ namespace llarp
         log::critical(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
 
-    LinkManager::LinkManager(Router& r, std::promise<void> p)
+    LinkManager::LinkManager(Router& r)
         : _router{r},
-          _close_promise{std::make_unique<std::promise<void>>(std::move(p))},
           node_db{_router.node_db()},
           _is_service_node{_router.is_service_node()},
-          quic{std::unique_ptr<oxen::quic::Network, decltype(net_deleter)>{new oxen::quic::Network(), net_deleter}},
+          quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), size_t{32}},
               {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), size_t{32}})},
@@ -266,9 +265,16 @@ namespace llarp
         is_stopping = false;
     }
 
-    std::unique_ptr<LinkManager> LinkManager::make(Router& r, std::promise<void> p)
+    // LinkManager::~LinkManager()
+    // {
+    //     // ep.reset();
+    //     tls_creds.reset();
+    //     quic.reset();
+    // }
+
+    std::unique_ptr<LinkManager> LinkManager::make(Router& r)
     {
-        std::unique_ptr<LinkManager> ptr{new LinkManager(r, std::move(p))};
+        std::unique_ptr<LinkManager> ptr{new LinkManager(r)};
         return ptr;
     }
 
@@ -622,6 +628,24 @@ namespace llarp
         return ep->have_client_conn(remote);
     }
 
+    void LinkManager::close_all_links()
+    {
+        log::info(logcat, "Closing all connections...");
+
+        std::promise<void> p;
+        auto f = p.get_future();
+
+        _router.loop()->call([&]() mutable {
+            ep->close_all();
+            p.set_value();
+        });
+
+        f.get();
+
+        ep.reset();
+        log::info(logcat, "All connections closed!");
+    }
+
     // TODO: put this in ~LinkManager() after sorting out close sequence and logic
     void LinkManager::stop()
     {
@@ -630,22 +654,11 @@ namespace llarp
             return;
         }
 
-        log::info(logcat, "stopping links");
+        log::info(logcat, "stopping loop");
         is_stopping = true;
-
-        // std::promise<void> p;
-        // auto f = p.get_future();
-
-        // _router.loop()->call([&]() mutable {
-        //     ep->close_all();
-        //     p.set_value();
-        // });
-
-        // f.get();
-
-        // ep.reset();
-
+        quic->set_shutdown_immediate();
         quic.reset();
+        // ep.reset();
     }
 
     void LinkManager::set_conn_persist(const RouterID& remote, std::chrono::milliseconds until)
@@ -869,7 +882,7 @@ namespace llarp
         if (remote)
         {
             auto is_snode = _router.is_service_node();
-            auto& rid = remote->router_id();
+            auto rid = remote->router_id();
 
             if (is_snode)
             {

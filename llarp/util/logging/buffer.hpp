@@ -51,6 +51,7 @@ namespace llarp
         {}
 
         std::string to_string() const;
+        static constexpr bool to_string_formattable = true;
     };
 
 }  // namespace llarp

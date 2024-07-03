@@ -45,6 +45,8 @@ namespace llarp
             return _proto == other._proto && _version == other._version;
         }
 
+        static constexpr bool to_string_formattable = true;
+
       private:
         std::array<uint16_t, 3> _version = {{0, 0, 0}};
         int64_t _proto = llarp::constants::proto_version;

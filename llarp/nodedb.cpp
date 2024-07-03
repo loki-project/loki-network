@@ -136,10 +136,51 @@ namespace llarp
         return selected;
     }
 
-    void NodeDB::tick(std::chrono::milliseconds now)
+    bool NodeDB::tick(std::chrono::milliseconds now)
     {
+        if (_is_bootstrapping)
+        {
+            assert(not _is_fetching);
+            assert(not _needs_initial_fetch);  // only set after client succeeds at bootstrapping
+            log::critical(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
+            return false;
+        }
+
+        if (_is_fetching)
+        {
+            assert(not _is_service_node);  // relays should never initial fetch
+            assert(not needs_bootstrap());
+            log::critical(logcat, "NodeDB deferring ::tick() to initial fetch completion...");
+            return false;
+        }
+
+        auto n_rcs = num_rcs();
+
+        // TESTNET: could maybe move this check to the end of ::purge_rcs(), since _needs_bootstrap is set
+        // in Router::run()...
+        // only enter bootstrap process if we have NOT marked initial fetch as needed
+        if (_needs_bootstrap = n_rcs < MIN_ACTIVE_RCS; _needs_bootstrap and not _needs_initial_fetch)
+        {
+            log::critical(
+                logcat,
+                "{} has {} of {} minimum RCs; initiating BootstrapRC fetch...",
+                _is_service_node ? "Relay" : "Client",
+                n_rcs,
+                MIN_ACTIVE_RCS);
+            _bootstrap_handler->begin();
+            return false;
+        }
+
+        if (_needs_initial_fetch)
+        {
+            assert(not _is_service_node);  // move this to be first in the conditional after testing
+            log::critical(logcat, "NodeDB initiating initial fetch...");
+            _fetch_handler->begin();
+            return false;
+        }
+
         if (_next_flush_time == 0s)
-            return;
+            return true;
 
         if (now > _next_flush_time)
         {
@@ -159,6 +200,62 @@ namespace llarp
                 });
             });
         }
+
+        purge_rcs(now);
+        return true;
+    }
+
+    void NodeDB::purge_rcs(std::chrono::milliseconds now)
+    {
+        remove_if([&](const RemoteRC& rc) -> bool {
+            // don't purge bootstrap nodes from nodedb
+            if (is_bootstrap_node(rc.router_id()))
+            {
+                log::trace(logcat, "Not removing {}: is bootstrap node", rc.router_id());
+                return false;
+            }
+
+            // if for some reason we stored an RC that isn't a valid router
+            // purge this entry
+            if (not rc.is_public_addressable())
+            {
+                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
+                return true;
+            }
+
+            // clear out a fully expired RC
+            if (rc.is_expired(now))
+            {
+                log::debug(logcat, "Removing {}: RC is expired", rc.router_id());
+                return true;
+            }
+
+            // clients have no notion of a whilelist
+            // we short circuit logic here so we dont remove
+            // routers that are not whitelisted for first hops
+            if (not _is_service_node)
+            {
+                log::trace(logcat, "Not removing {}: we are a client and it looks fine", rc.router_id());
+                return false;
+            }
+
+            // if we don't have the whitelist yet don't remove the entry
+            if (not _router.whitelist_received)
+            {
+                log::debug(logcat, "Skipping check on {}: don't have whitelist yet", rc.router_id());
+                return false;
+            }
+            // if we have no whitelist enabled or we have
+            // the whitelist enabled and we got the whitelist
+            // check against the whitelist and remove if it's not
+            // in the whitelist OR if there is no whitelist don't remove
+            if (not is_connection_allowed(rc.router_id()))
+            {
+                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
+                return true;
+            }
+            return false;
+        });
     }
 
     fs::path NodeDB::get_path_by_pubkey(const RouterID& pubkey) const
@@ -168,7 +265,7 @@ namespace llarp
 
     bool NodeDB::want_rc(const RouterID& rid) const
     {
-        if (not _router.is_service_node())
+        if (not _is_service_node)
             return true;
 
         return known_rids.count(rid);
@@ -226,7 +323,7 @@ namespace llarp
     bool NodeDB::ingest_fetched_rcs(std::set<RemoteRC> rcs)
     {
         // if we are not bootstrapping, we should check the rc's against the ones we currently hold
-        if (not _using_bootstrap_fallback)
+        if (not _using_bootstrap_fallback_OLD)
         {
             log::critical(logcat, "Checking returned RCs against locally held...");
 
@@ -326,11 +423,11 @@ namespace llarp
         else if (is_snode)
         {
             // service nodes who have sufficient local RC's can bypass initial fetching
-            _needs_initial_fetch = false;
+            _needs_initial_fetch_OLD = false;
         }
         else
         {
-            _fetching_initial = true;
+            _fetching_initial_OLD = true;
             // Set fetch source as random selection of known active client routers
             fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
             fetch_rcs(true);
@@ -519,7 +616,7 @@ namespace llarp
             }
 
             if (initial)
-                _needs_initial_fetch = true;
+                _needs_initial_fetch_OLD = true;
 
             // If we have passed the last last conditional, then it means we are not bootstrapping
             // and the current fetch_source has more attempts before being rotated. As a result, we
@@ -591,9 +688,9 @@ namespace llarp
     // This function is only called after a successful FetchRC request
     void NodeDB::post_fetch_rcs(bool initial)
     {
-        _needs_rebootstrap = false;
-        _needs_initial_fetch = false;
-        _using_bootstrap_fallback = false;
+        _needs_rebootstrap_OLD = false;
+        _needs_initial_fetch_OLD = false;
+        _using_bootstrap_fallback_OLD = false;
         fail_sources.clear();
         fetch_failures = 0;
 
@@ -606,15 +703,124 @@ namespace llarp
         fail_sources.clear();
         fetch_failures = 0;
         fetch_counters.clear();
-        _needs_rebootstrap = false;
-        _using_bootstrap_fallback = false;
+        _needs_rebootstrap_OLD = false;
+        _using_bootstrap_fallback_OLD = false;
 
         if (initial)
         {
-            _needs_initial_fetch = false;
-            _fetching_initial = false;
-            _initial_completed = true;
+            _needs_initial_fetch_OLD = false;
+            _fetching_initial_OLD = false;
+            _initial_completed_OLD = true;
         }
+    }
+
+    bool NodeDB::is_bootstrap_node(RouterID rid) const
+    {
+        return has_bootstraps() ? _bootstraps.contains(rid) : false;
+    }
+
+    void NodeDB::configure()
+    {
+        _is_service_node = _router._is_service_node;
+
+        bootstrap_init();
+        load_from_disk();
+    }
+
+    void NodeDB::stop_bootstrap(bool success)
+    {
+        _is_bootstrapping = false;
+        // this function is only called in success or lokinet shutdown, so we will never need bootstrapping
+        _needs_bootstrap = false;
+        _bootstrap_handler->halt();
+
+        if (success)
+        {
+            _needs_initial_fetch = not _is_service_node;
+            log::critical(
+                logcat,
+                "{} completed processing BootstrapRC fetch{}",
+                _is_service_node ? "Relay" : "Client",
+                _is_service_node ? "!" : "; proceeding to initial fetch...");
+        }
+        else
+            log::critical(
+                logcat, "{} stopping bootstrap without a successful fetch!", _is_service_node ? "Relay" : "Client");
+    }
+
+    void NodeDB::bootstrap()
+    {
+        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (_router._is_stopping || not _router._is_running)
+        {
+            log::info(logcat, "NodeDB unable to continue bootstrap fetch -- router is stopped!");
+            return stop_bootstrap(false);
+        }
+
+        _is_bootstrapping = true;
+
+        const auto& rc = _bootstraps.next();
+        auto source = rc.router_id();
+
+        log::critical(logcat, "Dispatching BootstrapRC fetch request to {}", source);
+
+        auto num_needed = _is_service_node ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
+
+        _router.link_manager()->fetch_bootstrap_rcs(
+            rc,
+            BootstrapFetchMessage::serialize(
+                _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
+            [this, src = source](oxen::quic::message m) mutable {
+                log::critical(logcat, "Received response to BootstrapRC fetch request...");
+
+                if (not m)
+                {
+                    log::warning(logcat, "BootstrapRC fetch request to {} failed", src);
+                    return;
+                }
+
+                size_t num = 0;
+
+                try
+                {
+                    oxenc::bt_dict_consumer btdc{m.body()};
+
+                    {
+                        auto btlc = btdc.require<oxenc::bt_list_consumer>("rcs"sv);
+
+                        while (not btlc.is_finished())
+                        {
+                            auto rc = RemoteRC{btlc.consume_dict_data()};
+                            put_rc(rc);
+                            ++num;
+                        }
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(logcat, "Failed to parse BootstrapRC fetch response from {}: {}", src, e.what());
+                    return;
+                }
+
+                if (num >= MIN_ACTIVE_RCS)
+                {
+                    log::critical(
+                        logcat,
+                        "{} BootstrapRC fetch successfully produced {} RCs ({} minimum needed)",
+                        _is_service_node ? "Relay" : "Client",
+                        num,
+                        MIN_ACTIVE_RCS);
+                    return stop_bootstrap(/* true */);
+                }
+
+                log::critical(
+                    logcat,
+                    "BootstrapRC response from {} returned {} RCs ({} minimum needed); continuing bootstrapping...",
+                    src,
+                    num,
+                    MIN_ACTIVE_RCS);
+            });
     }
 
     void NodeDB::fallback_to_bootstrap()
@@ -633,13 +839,13 @@ namespace llarp
         // the network, but the sample was unusable or unreachable. We will also enter this
         // if we are on our first fallback to bootstrap so we can set the fetch_source (by
         // checking not using_bootstrap_fallback)
-        if (at_max_failures || not _using_bootstrap_fallback)
+        if (at_max_failures || not _using_bootstrap_fallback_OLD)
         {
             bootstrap_attempts = 0;
 
             // Fail case: if we have returned to the front of the bootstrap list, we're in a
             // bad spot; we are unable to do anything
-            if (_using_bootstrap_fallback)
+            if (_using_bootstrap_fallback_OLD)
             {
                 auto err = fmt::format("ERROR: ALL BOOTSTRAPS ARE BAD... REATTEMPTING IN {}...", BOOTSTRAP_COOLDOWN);
                 log::error(logcat, "{}", err);
@@ -649,27 +855,25 @@ namespace llarp
             }
         }
 
-        log::critical(logcat, "using_bootstrap_fallback: {}", _using_bootstrap_fallback ? "TRUE" : "FALSE");
+        log::critical(logcat, "using_bootstrap_fallback: {}", _using_bootstrap_fallback_OLD ? "TRUE" : "FALSE");
 
-        auto& rc = (_using_bootstrap_fallback) ? _bootstraps.next() : _bootstraps.current();
+        auto& rc = (_using_bootstrap_fallback_OLD) ? _bootstraps.next() : _bootstraps.current();
         fetch_source = rc.router_id();
 
         // By passing the last conditional, we ensure this is set to true
-        _using_bootstrap_fallback = true;
-        _needs_rebootstrap = false;
+        _using_bootstrap_fallback_OLD = true;
+        _needs_rebootstrap_OLD = false;
         ++bootstrap_attempts;
 
         log::critical(logcat, "Dispatching BootstrapRC fetch request to {}", fetch_source);
 
-        auto is_snode = _router.is_service_node();
-
-        auto num_needed = is_snode ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
+        auto num_needed = _is_service_node ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
 
         _router.link_manager()->fetch_bootstrap_rcs(
             rc,
             BootstrapFetchMessage::serialize(
-                is_snode ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
-            [this, is_snode = _router.is_service_node(), src = rc.router_id()](oxen::quic::message m) mutable {
+                _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
+            [this, src = rc.router_id()](oxen::quic::message m) mutable {
                 log::critical(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
@@ -717,7 +921,7 @@ namespace llarp
                 log::critical(
                     logcat, "BootstrapRC fetch response from {} returned {}/{} needed RCs", src, num, MIN_ACTIVE_RCS);
 
-                if (not is_snode)
+                if (not _is_service_node)
                 {
                     log::critical(
                         logcat,
@@ -735,15 +939,15 @@ namespace llarp
 
     void NodeDB::post_snode_bootstrap()
     {
-        _needs_rebootstrap = false;
-        _using_bootstrap_fallback = false;
-        _needs_initial_fetch = false;
+        _needs_rebootstrap_OLD = false;
+        _using_bootstrap_fallback_OLD = false;
+        _needs_initial_fetch_OLD = false;
     }
 
     void NodeDB::bootstrap_cooldown()
     {
-        _needs_rebootstrap = true;
-        _using_bootstrap_fallback = false;
+        _needs_rebootstrap_OLD = true;
+        _using_bootstrap_fallback_OLD = false;
         _router.next_bootstrap_attempt = llarp::time_point_now() + BOOTSTRAP_COOLDOWN;
     }
 
@@ -796,7 +1000,7 @@ namespace llarp
 
     bool NodeDB::is_connection_allowed(const RouterID& remote) const
     {
-        if (not _router.is_service_node())
+        if (not _is_service_node)
         {
             if (_pinned_edges.size() && _pinned_edges.count(remote) == 0 && not _bootstraps.contains(remote))
                 return false;
@@ -814,9 +1018,9 @@ namespace llarp
         return true;
     }
 
-    void NodeDB::store_bootstraps()
+    void NodeDB::bootstrap_init()
     {
-        log::trace(logcat, "NodeDB storing bootstraps...");
+        log::debug(logcat, "NodeDB storing bootstraps...");
 
         if (_bootstraps.empty())
             return;
@@ -834,11 +1038,15 @@ namespace llarp
             log::debug(logcat, "{}", msg);
         else
             log::critical(logcat, "{}", msg);
+
+        log::debug(logcat, "NodeDB creating bootstrap event handler...");
+        _bootstrap_handler = EventTrigger::make(
+            _router.loop(), BOOTSTRAP_COOLDOWN, [this]() mutable { bootstrap(); }, MAX_BOOTSTRAP_FETCH_ATTEMPTS);
     }
 
     void NodeDB::load_from_disk()
     {
-        log::debug(logcat, "Loading NodeDB from disk...");
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_root.empty())
             return;
@@ -879,16 +1087,27 @@ namespace llarp
 
     void NodeDB::save_to_disk() const
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
         if (_root.empty())
             return;
 
         _router.loop()->call([this]() {
             for (const auto& rc : rc_lookup)
-            {
-                log::critical(logcat, "Writing RC for rid: {}", rc.first);
                 rc.second.write(get_path_by_pubkey(rc.first));
-            }
         });
+    }
+
+    void NodeDB::cleanup()
+    {
+        // save_to_disk();
+
+        if (_bootstrap_handler)
+        {
+            log::critical(logcat, "NodeDB clearing bootstrap handler...");
+            _bootstrap_handler->halt();
+            _bootstrap_handler.reset();
+        }
     }
 
     bool NodeDB::has_rc(const RemoteRC& rc) const
@@ -921,7 +1140,7 @@ namespace llarp
     {
         auto cutoff_time = time_point_now();
 
-        cutoff_time -= _router.is_service_node() ? RouterContact::OUTDATED_AGE : RouterContact::LIFETIME;
+        cutoff_time -= _is_service_node ? RouterContact::OUTDATED_AGE : RouterContact::LIFETIME;
 
         for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
         {

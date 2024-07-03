@@ -21,6 +21,8 @@ namespace llarp::dns
 
         /// convert this whatever into json
         virtual nlohmann::json ToJSON() const = 0;
+
+        static constexpr bool to_string_formattable = true;
     };
 
     bool EncodeRData(llarp_buffer_t* buf, const std::vector<uint8_t>& rdata);

@@ -1,13 +1,13 @@
 #pragma once
 
+#include "types.hpp"
+
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/net/interface_info.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
-
-#include <oxen/quic.hpp>
 
 namespace llarp
 {
@@ -16,23 +16,15 @@ namespace llarp
         class NetworkInterface;
     }  // namespace vpn
 
-    using event_ptr = oxen::quic::event_ptr;
-    using EventTicker = oxen::quic::Ticker;
-
-    // shared_ptr containing the actual libev loop
-    using loop_ptr = std::shared_ptr<::event_base>;
-
     class EventLoop
     {
-        EventLoop(std::promise<void> p);
+        EventLoop();
         EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         std::atomic<bool> _close_immediately{false};
 
-        std::unique_ptr<std::promise<void>> _close_promise;
-
       public:
-        static std::shared_ptr<EventLoop> make(std::promise<void> p);
+        static std::shared_ptr<EventLoop> make();
         // static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         ~EventLoop();

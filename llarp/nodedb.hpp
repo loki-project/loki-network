@@ -91,6 +91,8 @@ namespace llarp
         const fs::path _root;
         const std::function<void(std::function<void()>)> _disk;
 
+        bool _is_service_node;
+
         std::chrono::milliseconds _next_flush_time;
 
         /******** RouterID/RouterContacts ********/
@@ -119,7 +121,7 @@ namespace llarp
         std::set<RemoteRC> known_rcs;
         std::set<Unconfirmed<RemoteRC>> unconfirmed_rcs;
 
-        std::map<RouterID, const RemoteRC&> rc_lookup;
+        std::unordered_map<RouterID, RemoteRC> rc_lookup;
 
         BootstrapList _bootstraps{};
 
@@ -149,18 +151,6 @@ namespace llarp
         // tracks the number of times each rid appears in the above responses
         std::unordered_map<RouterID, int> fetch_counters{};
 
-        /** Failure counters:
-            - fetch_failures: tracks errors fetching RC's from the RC node and requesting RID's
-              from the 12 RID sources. Errors in the individual RID sets are NOT counted towards
-              this, their performance as a group is evaluated wholistically
-            - bootstrap_failures: tracks errors fetching both RC's from bootstrasps and RID requests
-              they mediate. This is a different counter as we only bootstrap in problematic cases
-        */
-        std::atomic<int> fetch_failures{0}, bootstrap_attempts{0};
-
-        std::atomic<bool> _using_bootstrap_fallback{false}, _needs_rebootstrap{false}, _needs_initial_fetch{true},
-            _fetching_initial{false}, _initial_completed{false};
-
         bool want_rc(const RouterID& rid) const;
 
         /// asynchronously remove the files for a set of rcs on disk given their public ident key
@@ -169,11 +159,28 @@ namespace llarp
         /// get filename of an RC file given its public ident key
         fs::path get_path_by_pubkey(const RouterID& pk) const;
 
+        /** Failure counters:
+            - fetch_failures: tracks errors fetching RC's from the RC node and requesting RID's
+              from the 12 RID sources. Errors in the individual RID sets are NOT counted towards
+              this, their performance as a group is evaluated wholistically
+            - bootstrap_failures: tracks errors fetching both RC's from bootstrasps and RID requests
+              they mediate. This is a different counter as we only bootstrap in problematic cases
+        */
+        std::atomic<int> fetch_failures{0}, bootstrap_attempts{0};
+        // TESTNET: OLD MEMBERS
+        std::atomic<bool> _using_bootstrap_fallback_OLD{false}, _needs_rebootstrap_OLD{false},
+            _needs_initial_fetch_OLD{true}, _fetching_initial_OLD{false}, _initial_completed_OLD{false};
+
+        // TESTNET: NEW MEMBERS FOR BOOTSTRAPPING MANAGED BY EVENTTRIGGER OBJECT
+        std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _needs_initial_fetch{false},
+            _is_fetching{false};
+        std::shared_ptr<EventTrigger> _bootstrap_handler;
+        std::shared_ptr<EventTrigger> _fetch_handler;
+
       public:
         explicit NodeDB(fs::path rootdir, std::function<void(std::function<void()>)> diskCaller, Router* r);
 
-        /// in memory nodedb
-        NodeDB();
+        void configure();
 
         // returns {num_rcs, num_rids, num_bootstraps}
         std::tuple<size_t, size_t, size_t> db_stats() const;
@@ -184,13 +191,13 @@ namespace llarp
 
         std::optional<RemoteRC> get_rc_by_rid(const RouterID& rid);
 
-        bool is_initial_fetching() const { return _fetching_initial; }
+        bool is_initial_fetching_OLD() const { return _fetching_initial_OLD; }
 
-        bool initial_fetch_completed() const { return _initial_completed; }
+        bool initial_fetch_completed_OLD() const { return _initial_completed_OLD; }
 
-        bool needs_initial_fetch() const { return _needs_initial_fetch; }
+        bool needs_initial_fetch_OLD() const { return _needs_initial_fetch_OLD; }
 
-        bool needs_rebootstrap() const { return _needs_rebootstrap; }
+        bool needs_rebootstrap_OLD() const { return _needs_rebootstrap_OLD; }
 
         void ingest_bootstrap_seed();
 
@@ -213,6 +220,16 @@ namespace llarp
         void fetch_rids(bool initial = false);
         void post_fetch_rids(bool initial = false);
         void fetch_rids_result(bool initial = false);
+
+        // TESTNET: new bootstrap/initial fetch functions
+        void bootstrap();                          //  private
+        void stop_bootstrap(bool success = true);  //  private
+        void set_needs_bootstrap(bool v) { _needs_bootstrap = v; }
+        bool is_bootstrapping() const { return _is_bootstrapping; }
+        bool needs_bootstrap() const { return _needs_bootstrap; }
+        bool bootstrap_completed() const { return not(_is_bootstrapping or _needs_bootstrap); }
+        bool is_bootstrap_node(RouterID rid) const;
+        void purge_rcs(std::chrono::milliseconds now);
 
         //  Bootstrap fallback fetching
         void fallback_to_bootstrap();
@@ -254,7 +271,7 @@ namespace llarp
 
         std::set<RouterID>& pinned_edges() { return _pinned_edges; }
 
-        void store_bootstraps();
+        void bootstrap_init();
 
         size_t num_bootstraps() const { return _bootstraps.size(); }
 
@@ -290,13 +307,16 @@ namespace llarp
         /// explicit save all RCs to disk synchronously
         void save_to_disk() const;
 
+        /// called on close
+        void cleanup();
+
         /// the number of known RC's currently held
         size_t num_rcs() const;
 
         size_t num_rids() const;
 
         /// do periodic tasks like flush to disk and expiration
-        void tick(std::chrono::milliseconds now);
+        bool tick(std::chrono::milliseconds now);
 
         /// find the absolute closets router to a dht location
         RemoteRC find_closest_to(dht::Key_t location) const;

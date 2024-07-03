@@ -7,9 +7,9 @@
 
 namespace llarp
 {
-    /** This class will accept any types satisfying the concepts OutboundSessionType and NetworkAddrType
+    /** This class will accept any types satisfying the concepts SessionType and NetworkAddrType
             NetworkAddrType: must be inherited from NetworkAddress
-            OutboundSessionType: must be inherited from BaseSession
+            SessionType: must be inherited from BaseSession
 
         OutboundSessionType objects are held in shared_ptr's, and getters will return the shared_ptr
         or nullptr if not found. MAKE SURE TO CHECK ON RETURN!!
@@ -25,6 +25,22 @@ namespace llarp
         mutable util::NullMutex session_mutex;
 
       public:
+        /** Called by owning object to tick OutboundSessions. InboundSession objects are not PathHandlers, so they have
+            no concept of tick functionality
+         */
+        void tick_outbounds(std::chrono::milliseconds now)
+        {
+            Lock_t l{session_mutex};
+
+            for (auto& s : _sessions)
+            {
+                if constexpr (std::is_same_v<session::OutboundSession, decltype(s)>)
+                {
+                    std::dynamic_pointer_cast<session::OutboundSession>(s)->tick(now);
+                }
+            }
+        }
+
         /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent
             to `local` already exists in the container, `sesh` is assigned to the mapped type. If the key
             does NOT exist, `sesh` is inserted as the value corresponding to the key `local`.

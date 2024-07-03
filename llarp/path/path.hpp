@@ -95,7 +95,7 @@ namespace llarp
             /// regenerates keys
             void rebuild();
 
-            void Tick(std::chrono::milliseconds now, Router* r);
+            void Tick(std::chrono::milliseconds now);
 
             bool resolve_ons(std::string name, std::function<void(std::string)> func = nullptr);
 
@@ -160,6 +160,8 @@ namespace llarp
             bool operator==(const Path& other) const;
 
             bool operator!=(const Path& other) const;
+
+            static constexpr bool to_string_formattable = true;
 
           private:
             std::string make_outer_payload(ustring_view payload);

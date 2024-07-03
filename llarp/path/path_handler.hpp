@@ -73,6 +73,7 @@ namespace llarp
             double SuccessRatio() const;
 
             std::string to_string() const;
+            static constexpr bool to_string_formattable = true;
         };
 
         /// TODO: supplant the PathRole int typedef with this, potentially make these ints rather
@@ -202,7 +203,7 @@ namespace llarp
 
             std::chrono::milliseconds now() const;
 
-            virtual void Tick(std::chrono::milliseconds now);
+            virtual void tick(std::chrono::milliseconds now);
 
             void tick_paths();
 

@@ -106,6 +106,8 @@ namespace llarp
 
             return false;
         }
+
+        static constexpr bool to_string_formattable = true;
     };
 
     /** IPRangeIterator

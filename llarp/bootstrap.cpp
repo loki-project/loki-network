@@ -15,21 +15,24 @@ namespace llarp
         switch (f)
         {
             case 'l':
-                return bt_decode(oxenc::bt_list_consumer{buf});
+                return bt_decode_list(buf);
             case 'd':
-                return bt_decode(oxenc::bt_dict_consumer{buf});
+                return bt_decode_dict(buf);
             default:
                 log::critical(logcat, "Unable to parse bootstrap as bt list or dict!");
                 return false;
         }
     }
 
-    bool BootstrapList::bt_decode(oxenc::bt_list_consumer btlc)
+    bool BootstrapList::bt_decode_dict(std::string_view buf)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        bool ret = true;
+
         try
         {
-            while (not btlc.is_finished())
-                emplace(btlc.consume_dict_data());
+            ret &= emplace(buf).second;
         }
         catch (...)
         {
@@ -38,14 +41,21 @@ namespace llarp
         }
 
         _curr = begin();
-        return true;
+        return ret;
     }
 
-    bool BootstrapList::bt_decode(oxenc::bt_dict_consumer btdc)
+    bool BootstrapList::bt_decode_list(std::string_view buf)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        bool ret = true;
+
         try
         {
-            emplace(btdc);
+            oxenc::bt_list_consumer btlc{buf};
+
+            while (not btlc.is_finished())
+                ret &= emplace(btlc.consume_dict_data()).second;
         }
         catch (const std::exception& e)
         {
@@ -54,7 +64,7 @@ namespace llarp
         }
 
         _curr = begin();
-        return true;
+        return ret;
     }
 
     bool BootstrapList::contains(const RouterID& rid) const
@@ -95,13 +105,13 @@ namespace llarp
 
         if (empty())
         {
-            log::debug(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
+            log::critical(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
             read_from_file(def);
         }
 
         for (auto itr = begin(); itr != end(); ++itr)
         {
-            if (RouterContact::is_obsolete(*itr))  // can move this into ::read_from_file
+            if (RouterContact::is_obsolete(*itr))  // TODO: move this into ::read_from_file
             {
                 log::critical(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
                 itr = erase(itr);
@@ -150,7 +160,13 @@ namespace llarp
         auto content = util::file_to_string(fpath);
         result = bt_decode(content);
 
-        log::critical(logcat, "{}uccessfully loaded BootstrapRC file at path:{}", result ? "S" : "Un", fpath);
+        log::debug(
+            logcat,
+            "{}uccessfully loaded BootstrapRC file ({}B) at path:{}, contents: {}",
+            result ? "S" : "Uns",
+            content.size(),
+            fpath,
+            buffer_printer{content});
 
         _curr = begin();
         return result;

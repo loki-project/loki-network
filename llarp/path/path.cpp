@@ -414,12 +414,14 @@ namespace llarp::path
         return false;
     }
 
-    void Path::Tick(std::chrono::milliseconds now, Router* r)
+    void Path::Tick(std::chrono::milliseconds now)
     {
-        (void)r;
-
         if (is_expired(now))
             return;
+
+        if (_is_linked)
+        {
+        }
 
         // m_LastRXRate = m_RXRate;
         // m_LastTXRate = m_TXRate;

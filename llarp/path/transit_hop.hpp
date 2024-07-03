@@ -87,6 +87,8 @@ namespace llarp
 
             void QueueDestroySelf(Router* r);
 
+            static constexpr bool to_string_formattable = true;
+
           private:
             void SetSelfDestruct();
         };

@@ -1,12 +1,20 @@
 #pragma once
 
-#include "loop.hpp"
+#include <oxen/quic.hpp>
 
 namespace llarp
 {
+    class EventLoop;
+
+    using event_ptr = oxen::quic::event_ptr;
+    using EventTicker = oxen::quic::Ticker;
+
+    // shared_ptr containing the actual libev loop
+    using loop_ptr = std::shared_ptr<::event_base>;
+
     /** EventTrigger
-            This class is a parallel implementation of libquic Ticker (typedef'ed as 'EventTicker' in llarp/ev/loop);
-        rather than invoking at regular intervals, it is manually invoked with an optional time delay. This is a useful
+            This class is a parallel implementation of libquic Ticker (typedef'ed as 'EventTicker' above). Rather than
+        invoking at regular intervals, it is manually invoked with an optional time delay. This is a useful
         functionality that allows us to manage events that are repeated, but not necessarily at fixed intervals; one
         example is lokinet instance bootstrapping (both client and relay), initial RouterID fetching, etc
 
@@ -17,15 +25,25 @@ namespace llarp
     */
     struct EventTrigger
     {
+        // Allows the libquic loop object to call the private constructor when constructing the shared pointer with
+        // the loop deleter
+        friend class oxen::quic::Loop;
+
       private:
-        EventTrigger(const loop_ptr& _loop, std::chrono::microseconds _cooldown, std::function<void()> task, int _n);
+        EventTrigger(
+            const loop_ptr& _loop,
+            std::chrono::microseconds _cooldown,
+            std::function<void()> task,
+            int _n,
+            bool start_immediately);
 
       public:
         static std::shared_ptr<EventTrigger> make(
             const std::shared_ptr<EventLoop>& _loop,
             std::chrono::microseconds _cooldown,
             std::function<void()> task,
-            int _n);
+            int _n,
+            bool start_immediately = false);
 
         // No move/copy/etc
         EventTrigger() = delete;
@@ -36,20 +54,26 @@ namespace llarp
 
         ~EventTrigger();
 
-        // TODO: maybe this should be private and only called internally
+        // Resumes iterative execution after successfully cooling down or being signalled to stop by the callback
+        bool begin();
+
+        // Called by the passed callback to signal that the iterative invocation should STOP
+        bool halt();
+
+      private:
         // Invokes the function `f`, incrementing `::current` up to `n` before cooling down
         void fire();
 
-        // TODO: rethink this part of the API
-        // Resumes iterative execution
-        void resume();
+        // Awaits further execution for `_cooldown` amount of time
+        void cooldown();
 
-      private:
-        int n;
-        std::atomic<int> current{0};
+        const int n;
+        std::atomic<int> _current{0};
 
         event_ptr ev;
-        timeval cooldown;
+        event_ptr cv;
+        const timeval _cooldown;
+        const timeval _null_tv{};
         std::function<void()> f;
 
         std::atomic<bool> _is_cooling_down{false};
@@ -68,17 +92,3 @@ namespace llarp
         bool is_cooling_down() const { return _is_cooling_down; }
     };
 }  //  namespace llarp
-
-/**
-    Notes:
-    - Methods:
-        - ::fire()
-            - invoke stored callback
-        - ::
-
-    - Key functionalities:
-        - number of executions before cooling down
-        - cooldown (::call_later)
-        - callback must be able to signal termination from within
-
- */

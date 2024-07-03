@@ -8,11 +8,6 @@
 #include <unistd.h>
 #endif
 
-// namespace fs
-// {
-//     using namespace std::filesystem;
-// }
-
 namespace fs = std::filesystem;
 
 namespace llarp

@@ -72,9 +72,8 @@ namespace llarp
         /// return false if not queued for calling
         bool call_safe(std::function<void(void)> f);
 
-        /// Creates a router. Can be overridden to allow a different class of router
-        /// to be created instead. Defaults to llarp::Router.
-        virtual std::shared_ptr<Router> make_router(const std::shared_ptr<EventLoop>& loop);
+        /// Creates a router
+        std::shared_ptr<Router> make_router(const std::shared_ptr<EventLoop>& loop, std::promise<void> p);
 
         /// create the nodedb given our current configs
         virtual std::shared_ptr<NodeDB> make_nodedb();

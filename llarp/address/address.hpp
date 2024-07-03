@@ -80,6 +80,8 @@ namespace llarp
         std::string name() const { return _pubkey.to_string(); }
 
         std::string to_string() const { return name().append(_tld); }
+
+        static constexpr bool to_string_formattable{true};
     };
 
     /** RelayAddress:
@@ -127,6 +129,8 @@ namespace llarp
         RouterID& router_id() { return static_cast<RouterID&>(pubkey()); }
 
         std::string to_string() const { return _pubkey.to_string().append(TLD::SNODE); }
+
+        static constexpr bool to_string_formattable = true;
     };
 
     template <typename addr_t>

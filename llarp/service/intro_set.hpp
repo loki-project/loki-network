@@ -72,6 +72,8 @@ namespace llarp::service
         bool verify(std::chrono::milliseconds now) const;
 
         nlohmann::json ExtractStatus() const;
+
+        static constexpr bool to_string_formattable = true;
     };
 
     inline bool operator<(const IntroSet& lhs, const IntroSet& rhs)
@@ -138,6 +140,7 @@ namespace llarp::service
         nlohmann::json ExtractStatus() const;
 
         std::optional<IntroSet> decrypt(const PubKey& root) const;
+        static constexpr bool to_string_formattable = true;
     };
 
     inline bool operator<(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)

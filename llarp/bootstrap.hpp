@@ -17,6 +17,10 @@ namespace llarp
 
         bool bt_decode(std::string_view buf);
 
+        bool bt_decode_dict(std::string_view buf);
+
+        bool bt_decode_list(std::string_view buf);
+
         bool bt_decode(oxenc::bt_list_consumer btlc);
 
         bool bt_decode(oxenc::bt_dict_consumer btdc);
@@ -29,8 +33,7 @@ namespace llarp
 
         bool contains(const RouterID& rid) const;
 
-        // returns a reference to the next index and a boolean that equals true if
-        // this is the front of the set
+        // returns a reference to the next bootstrap in the list
         const RemoteRC& next()
         {
             if (size() < 2)

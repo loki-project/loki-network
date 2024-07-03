@@ -1,5 +1,7 @@
 #pragma once
 
+#include "buffer.hpp"
+
 #include <filesystem>
 #include <optional>
 #include <set>
@@ -10,10 +12,33 @@
 #include <dirent.h>
 #endif
 
+#include <oxenc/common.h>
+
 namespace fs = std::filesystem;
 
 namespace llarp::util
 {
+    template <oxenc::basic_char T>
+    std::streampos file_reader_impl(const fs::path& filename, std::basic_ifstream<T>& in)
+    {
+        in.exceptions(std::basic_ifstream<T>::failbit | std::basic_ifstream<T>::badbit);
+        in.open(filename, std::ios::binary | std::ios::in);
+        in.seekg(0, std::ios::end);
+        auto size = in.tellg();
+        in.seekg(0, std::ios::beg);
+        return size;
+    }
+
+    template <oxenc::basic_char T>
+    std::basic_string<T> file_to_string(const fs::path& filename)
+    {
+        std::basic_ifstream<T> in;
+        std::basic_string<T> contents;
+        auto size = file_reader_impl(filename, in);
+        in.read(contents.data(), size);
+        return contents;
+    }
+
     /// Reads a binary file from disk into a string.  Throws on error.
     std::string file_to_string(const fs::path& filename);
 

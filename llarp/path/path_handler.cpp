@@ -191,7 +191,7 @@ namespace llarp::path
 
         for (auto& item : _paths)
         {
-            item.second->Tick(now, &_router);
+            item.second->Tick(now);
         }
     }
 
@@ -270,8 +270,10 @@ namespace llarp::path
         return intros;
     }
 
-    void PathHandler::Tick(std::chrono::milliseconds now)
+    void PathHandler::tick(std::chrono::milliseconds now)
     {
+        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
         Lock_t l{paths_mutex};
         std::unordered_set<RouterID> endpoints;
 

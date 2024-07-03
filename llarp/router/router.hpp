@@ -74,7 +74,11 @@ namespace llarp
     {
         friend class NodeDB;
 
-        explicit Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform);
+        explicit Router(
+            std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p);
+
+        static std::shared_ptr<Router> make(
+            std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p);
 
         ~Router() = default;
 
@@ -117,7 +121,6 @@ namespace llarp
         std::shared_ptr<handlers::SessionEndpoint> _session_endpoint;
 
         std::unique_ptr<LinkManager> _link_manager;
-        std::unique_ptr<std::future<void>> _link_close_waiter;
 
         std::shared_ptr<QUICTunnel> _quic_tun;
 
@@ -125,6 +128,7 @@ namespace llarp
         std::unique_ptr<handlers::TunEndpoint> _tun;
 
         std::shared_ptr<EventLoop> _loop;
+        std::unique_ptr<std::promise<void>> _close_promise;
 
         std::shared_ptr<vpn::Platform> _vpn;
 
@@ -196,13 +200,15 @@ namespace llarp
         std::chrono::system_clock::time_point last_rid_fetch{last_rc_gossip};
         std::chrono::system_clock::time_point next_bootstrap_attempt{last_rc_gossip};
 
-        void _relay_tick();
+        void _relay_tick(std::chrono::milliseconds now);
 
-        void _tick();
+        void _client_tick(std::chrono::milliseconds now);
+
+        void tick();
 
       public:
         /// call internal router ticker
-        void tick();
+        // void tick_old();
 
         void start();
 

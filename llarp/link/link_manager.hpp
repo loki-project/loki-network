@@ -121,7 +121,7 @@ namespace llarp
     struct LinkManager
     {
       public:
-        static std::unique_ptr<LinkManager> make(Router& r, std::promise<void> p);
+        static std::unique_ptr<LinkManager> make(Router& r);
 
         bool send_control_message(
             const RouterID& remote,
@@ -134,7 +134,7 @@ namespace llarp
         Router& router() const { return _router; }
 
       private:
-        explicit LinkManager(Router& r, std::promise<void> p);
+        explicit LinkManager(Router& r);
 
         friend struct link::Endpoint;
 
@@ -147,30 +147,16 @@ namespace llarp
 
         Router& _router;
 
-        std::unique_ptr<std::promise<void>> _close_promise;
-
         std::shared_ptr<NodeDB> node_db;
 
         oxen::quic::Address addr;
 
         const bool _is_service_node;
 
-        const std::function<void(oxen::quic::Network*)> net_deleter = [this](oxen::quic::Network* n) {
-            if (n)
-                delete n;
-            if (_close_promise)
-            {  // TESTNET: remove this logcat when unnecessary
-                auto logcat = log::Cat("net deleter");
-                log::critical(logcat, "Setting close promise...");
-                _close_promise->set_value();
-                _close_promise.reset();
-            }
-        };
-
         // NOTE: DO NOT CHANGE THE ORDER OF THESE THREE OBJECTS
         // The quic Network must be created prior to the GNUTLS credentials, which are necessary for the creation of the
         // quic endpoint. These are delegate initialized in the LinkManager constructor sequentially
-        std::unique_ptr<oxen::quic::Network, decltype(net_deleter)> quic;
+        std::unique_ptr<oxen::quic::Network> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
         std::unique_ptr<link::Endpoint> ep;
 
@@ -234,6 +220,8 @@ namespace llarp
         void close_connection(RouterID rid);
 
         void stop();
+
+        void close_all_links();
 
         void set_conn_persist(const RouterID& remote, std::chrono::milliseconds until);
 

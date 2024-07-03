@@ -38,5 +38,7 @@ namespace llarp::dns
         RRClass_t rr_class;
         RR_TTL_t ttl;
         RR_RData_t rData;
+
+        static constexpr bool to_string_formattable = true;
     };
 }  // namespace llarp::dns

@@ -20,9 +20,14 @@ namespace llarp::handlers
         return _router.loop();
     }
 
-    void SessionEndpoint::Tick(std::chrono::milliseconds now)
+    void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
-        (void)now;
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        log::critical(logcat, "SessionEndpoint ticking outbound sessions...");
+        _sessions.tick_outbounds(now);
+
+        path::PathHandler::tick(now);
     }
 
     void SessionEndpoint::configure()
@@ -378,7 +383,7 @@ namespace llarp::handlers
         else
         {
             log::info(logcat, "{} Connecting to TCP backend to route session traffic...", msg);
-            session->tcp_backend_connect();
+            // session->tcp_backend_connect();
         }
 
         return ret;

@@ -20,6 +20,8 @@ namespace llarp::link
         bool remote_is_relay{true};
 
         bool is_inbound() const { return conn->is_inbound(); }
+
+        void close_quietly();
     };
 }  // namespace llarp::link
 

@@ -37,11 +37,19 @@ namespace llarp
 {
     static auto logcat = log::Cat("router");
 
-    Router::Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform)
+    std::shared_ptr<Router> Router::make(
+        std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p)
+    {
+        std::shared_ptr<Router> ptr{new Router{std::move(loop), std::move(vpnPlatform), std::move(p)}};
+        return ptr;
+    }
+
+    Router::Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p)
         : _route_poker{std::make_shared<RoutePoker>(*this)},
           _next_explore_at{std::chrono::steady_clock::now()},
           _lmq{std::make_shared<oxenmq::OxenMQ>()},
           _loop{std::move(loop)},
+          _close_promise{std::make_unique<std::promise<void>>(std::move(p))},
           _vpn{std::move(vpnPlatform)},
           _disk_thread{_lmq->add_tagged_thread("disk")},
           _key_manager{std::make_shared<KeyManager>()},
@@ -197,12 +205,12 @@ namespace llarp
 
     bool Router::needs_initial_fetch() const
     {
-        return _node_db->needs_initial_fetch();
+        return _node_db->needs_initial_fetch_OLD();
     }
 
     bool Router::needs_rebootstrap() const
     {
-        return _node_db->needs_rebootstrap();
+        return _node_db->needs_rebootstrap_OLD();
     }
 
     void Router::persist_connection_until(const RouterID& remote, std::chrono::milliseconds until)
@@ -327,7 +335,8 @@ namespace llarp
             llarp::logRingBuffer = nullptr;
 
         // TESTNET:
-        // oxen::log::set_level("quic", oxen::log::Level::critical);
+        oxen::log::reset_level(oxen::log::Level::trace);
+        oxen::log::set_level("quic", oxen::log::Level::info);
     }
 
     void Router::init_rpc()
@@ -350,6 +359,8 @@ namespace llarp
 
     void Router::init_bootstrap()
     {
+        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
         auto& conf = *_config;
 
         _bootstrap_seed = conf.bootstrap.seednode;
@@ -358,8 +369,8 @@ namespace llarp
 
         fs::path default_bootstrap = conf.router.data_dir / "bootstrap.signed";
 
-        _node_db->bootstrap_list().populate_bootstraps(bootstrap_paths, default_bootstrap, not _bootstrap_seed);
-        _node_db->store_bootstraps();
+        _node_db->bootstrap_list().populate_bootstraps(
+            std::move(bootstrap_paths), default_bootstrap, not _bootstrap_seed);
     }
 
     void Router::process_routerconfig()
@@ -588,7 +599,7 @@ namespace llarp
         process_netconfig();
 
         init_bootstrap();
-        _node_db->load_from_disk();
+        _node_db->configure();
 
         if (not ensure_identity())
             throw std::runtime_error{"EnsureIdentity() failed"};
@@ -601,11 +612,8 @@ namespace llarp
         _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
         _session_endpoint->configure();
 
-        auto p = std::promise<void>();
-        _link_close_waiter = std::make_unique<std::future<void>>(p.get_future());
-
         log::info(logcat, "Creating QUIC link manager...");
-        _link_manager = LinkManager::make(*this, std::move(p));
+        _link_manager = LinkManager::make(*this);
 
         log::info(logcat, "Creating QUIC tunnel...");
         _quic_tun = QUICTunnel::make(*this);
@@ -692,7 +700,7 @@ namespace llarp
 
     bool Router::is_bootstrap_node(const RouterID r) const
     {
-        return _node_db->has_bootstraps() ? _node_db->bootstrap_list().contains(r) : false;
+        return _node_db->is_bootstrap_node(r);
     }
 
     bool Router::should_report_stats(std::chrono::milliseconds now) const
@@ -743,17 +751,11 @@ namespace llarp
         return line;
     }
 
-    // TESTNET: siloing the relay-specific logic here
-    void Router::_relay_tick()
+    void Router::_relay_tick(std::chrono::milliseconds now)
     {
         log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        if (_is_stopping)
-            return;
-
-        const bool is_snode = is_service_node();
-        const bool is_decommed = appears_decommed();
-
+        auto now_timepoint = std::chrono::system_clock::time_point(now);
         const auto& local = local_rid();
 
         if (not node_db()->registered_routers().count(local))
@@ -764,129 +766,37 @@ namespace llarp
             return;
         }
 
-        const auto now = llarp::time_now_ms();
-        auto now_timepoint = std::chrono::system_clock::time_point(now);
+        llarp::sys::service_manager->report_periodic_stats();
 
-        if (const auto delta = now - _last_tick; _last_tick != 0s and delta > NETWORK_RESET_SKIP_INTERVAL)
+        if (should_report_stats(now))
+            report_stats();
+
+        if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            // we detected a time skip into the futre, thaw the network
-            log::error(logcat, "Timeskip of {} detected, resetting network state!", delta.count());
-            // TODO: implement a better way to reset the network
+            log::critical(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
-        llarp::sys::service_manager->report_periodic_stats();
-
-        _pathbuild_limiter.Decay(now);
-
-        router_profiling().tick();
-
-        if (should_report_stats(now))
+        if (now_timepoint > next_rc_gossip)
         {
-            report_stats();
+            log::critical(logcat, "Regenerating and gossiping RC...");
+
+            router_contact.resign();
+            save_rc();
+
+            _link_manager->gossip_rc(local, router_contact.to_remote());
+
+            last_rc_gossip = now_timepoint;
+
+            // TESTNET: 0 to 3 minutes before testnet gossip interval
+            auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
+
+            next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
         }
-
-        // (relay-only) if we have fetched the relay list from oxend and
-        // we are registered and funded, we want to gossip our RC periodically
-        if (is_snode)
-        {
-            if (now_timepoint > next_rc_gossip)
-            {
-                log::critical(logcat, "Regenerating and gossiping RC...");
-
-                router_contact.resign();
-                save_rc();
-
-                _link_manager->gossip_rc(local_rid(), router_contact.to_remote());
-
-                last_rc_gossip = now_timepoint;
-
-                // TESTNET: 0 to 3 minutes before testnet gossip interval
-                auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
-
-                next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
-            }
-        }
-
-        if (needs_rebootstrap() and now_timepoint > next_bootstrap_attempt)
-        {
-            node_db()->fallback_to_bootstrap();
-        }
-        else if (needs_initial_fetch() and now_timepoint > next_initial_fetch_attempt)
-        {
-            if (not _config->bootstrap.seednode)
-                node_db()->fetch_initial(is_service_node());
-        }
-        else if (not is_snode and node_db()->initial_fetch_completed())
-        {
-            // (client-only) periodically fetch updated RCs
-            if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
-            {
-                log::critical(logcat, "Time to fetch RCs!");
-                node_db()->fetch_rcs();
-            }
-
-            // (client-only) periodically fetch updated RouterID list
-            if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
-            {
-                log::critical(logcat, "Time to fetch RIDs!");
-                node_db()->fetch_rids();
-            }
-        }
-
-        // remove RCs for nodes that are no longer allowed by network policy
-        node_db()->remove_if([&](const RemoteRC& rc) -> bool {
-            // don't purge bootstrap nodes from nodedb
-            if (is_bootstrap_node(rc.router_id()))
-            {
-                log::trace(logcat, "Not removing {}: is bootstrap node", rc.router_id());
-                return false;
-            }
-
-            // if for some reason we stored an RC that isn't a valid router
-            // purge this entry
-            if (not rc.is_public_addressable())
-            {
-                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
-                return true;
-            }
-
-            // clear out a fully expired RC
-            if (rc.is_expired(now))
-            {
-                log::debug(logcat, "Removing {}: RC is expired", rc.router_id());
-                return true;
-            }
-
-            // clients have no notion of a whilelist
-            // we short circuit logic here so we dont remove
-            // routers that are not whitelisted for first hops
-            if (not is_snode)
-            {
-                log::trace(logcat, "Not removing {}: we are a client and it looks fine", rc.router_id());
-                return false;
-            }
-
-            // if we don't have the whitelist yet don't remove the entry
-            if (not whitelist_received)
-            {
-                log::debug(logcat, "Skipping check on {}: don't have whitelist yet", rc.router_id());
-                return false;
-            }
-            // if we have no whitelist enabled or we have
-            // the whitelist enabled and we got the whitelist
-            // check against the whitelist and remove if it's not
-            // in the whitelist OR if there is no whitelist don't remove
-            if (not node_db()->is_connection_allowed(rc.router_id()))
-            {
-                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
-                return true;
-            }
-            return false;
-        });
 
         _link_manager->check_persisting_conns(now);
 
+        const bool is_decommed = appears_decommed();
         auto num_router_conns = num_router_connections();
         auto num_rcs = node_db()->num_rcs();
 
@@ -920,51 +830,76 @@ namespace llarp
                 logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
             _link_manager->connect_to_random(FULL_MESH_ITERATION);
         }
-        if (is_snode)
-        {
-        }
-
-        // save profiles
-        if (router_profiling().should_save(now) and _config->network.save_profiles)
-        {
-            queue_disk_io([&]() { router_profiling().save(_profile_file); });
-        }
-
-        _node_db->tick(now);
-
-        // update tick timestamp
-        _last_tick = llarp::time_now_ms();
     }
 
-    // TESTNET: reworked implementation (WIP)
-    void Router::_tick()
+    void Router::_client_tick(std::chrono::milliseconds now)
     {
         log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        auto now_timepoint = std::chrono::system_clock::time_point(now);
+        llarp::sys::service_manager->report_periodic_stats();
+        _pathbuild_limiter.Decay(now);
+        router_profiling().tick();
+
+        if (should_report_stats(now))
+            report_stats();
+
+        if (auto should_proceed = _node_db->tick(now); should_proceed == false)
+        {
+            log::critical(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            return;
+        }
+
+        // periodically fetch updated RCs
+        if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
+        {
+            log::critical(logcat, "Time to fetch RCs!");
+            node_db()->fetch_rcs();
+        }
+
+        // periodically fetch updated RouterID list
+        if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
+        {
+            log::critical(logcat, "Time to fetch RIDs!");
+            node_db()->fetch_rids();
+        }
+
+        _link_manager->check_persisting_conns(now);
+
+        auto _num_router_conns = num_router_connections();
+
+        const auto& pinned_edges = _node_db->pinned_edges();
+        const auto pinned_count = pinned_edges.size();
+
+        auto min_client_conns =
+            (pinned_count and MIN_CLIENT_ROUTER_CONNS > pinned_count) ? pinned_count : MIN_CLIENT_ROUTER_CONNS;
+
+        // if we need more sessions to routers we shall connect out to others
+        if (_num_router_conns < min_client_conns)
+        {
+            size_t needed = min_client_conns - _num_router_conns;
+            log::critical(logcat, "Client connecting to {} random routers to keep alive", needed);
+            _link_manager->connect_to_random(needed);
+        }
+
+        _session_endpoint->tick(now);
+
+        // save profiles
+        if (_config->network.save_profiles and router_profiling().should_save(now))
+            queue_disk_io([&]() { router_profiling().save(_profile_file); });
     }
 
-    // TESTNET: original implementation
     void Router::tick()
     {
         log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_is_stopping)
-            return;
-
-        const bool is_snode = is_service_node();
-        const bool is_decommed = appears_decommed();
-
-        const auto& local = local_rid();
-
-        if (is_snode and not node_db()->registered_routers().count(local))
         {
-            log::critical(logcat, "We are NOT a registered router, figure it out!");
-            // update tick timestamp
-            _last_tick = llarp::time_now_ms();
+            log::critical(logcat, "Router is stopping; exiting ::tick()...");
             return;
         }
 
         const auto now = llarp::time_now_ms();
-        auto now_timepoint = std::chrono::system_clock::time_point(now);
 
         if (const auto delta = now - _last_tick; _last_tick != 0s and delta > NETWORK_RESET_SKIP_INTERVAL)
         {
@@ -974,188 +909,7 @@ namespace llarp
             return;
         }
 
-        llarp::sys::service_manager->report_periodic_stats();
-
-        _pathbuild_limiter.Decay(now);
-
-        router_profiling().tick();
-
-        if (should_report_stats(now))
-        {
-            report_stats();
-        }
-
-        // (relay-only) if we have fetched the relay list from oxend and
-        // we are registered and funded, we want to gossip our RC periodically
-        if (is_snode)
-        {
-            if (now_timepoint > next_rc_gossip)
-            {
-                log::critical(logcat, "Regenerating and gossiping RC...");
-
-                router_contact.resign();
-                save_rc();
-
-                _link_manager->gossip_rc(local_rid(), router_contact.to_remote());
-
-                last_rc_gossip = now_timepoint;
-
-                // TESTNET: 0 to 3 minutes before testnet gossip interval
-                auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
-
-                next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
-            }
-        }
-
-        if (needs_rebootstrap() and now_timepoint > next_bootstrap_attempt)
-        {
-            node_db()->fallback_to_bootstrap();
-        }
-        else if (needs_initial_fetch() and now_timepoint > next_initial_fetch_attempt)
-        {
-            if (not _config->bootstrap.seednode)
-                node_db()->fetch_initial(is_service_node());
-        }
-        else if (not is_snode and node_db()->initial_fetch_completed())
-        {
-            // (client-only) periodically fetch updated RCs
-            if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
-            {
-                log::critical(logcat, "Time to fetch RCs!");
-                node_db()->fetch_rcs();
-            }
-
-            // (client-only) periodically fetch updated RouterID list
-            if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
-            {
-                log::critical(logcat, "Time to fetch RIDs!");
-                node_db()->fetch_rids();
-            }
-        }
-
-        // remove RCs for nodes that are no longer allowed by network policy
-        node_db()->remove_if([&](const RemoteRC& rc) -> bool {
-            // don't purge bootstrap nodes from nodedb
-            if (is_bootstrap_node(rc.router_id()))
-            {
-                log::trace(logcat, "Not removing {}: is bootstrap node", rc.router_id());
-                return false;
-            }
-
-            // if for some reason we stored an RC that isn't a valid router
-            // purge this entry
-            if (not rc.is_public_addressable())
-            {
-                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
-                return true;
-            }
-
-            // clear out a fully expired RC
-            if (rc.is_expired(now))
-            {
-                log::debug(logcat, "Removing {}: RC is expired", rc.router_id());
-                return true;
-            }
-
-            // clients have no notion of a whilelist
-            // we short circuit logic here so we dont remove
-            // routers that are not whitelisted for first hops
-            if (not is_snode)
-            {
-                log::trace(logcat, "Not removing {}: we are a client and it looks fine", rc.router_id());
-                return false;
-            }
-
-            // if we don't have the whitelist yet don't remove the entry
-            if (not whitelist_received)
-            {
-                log::debug(logcat, "Skipping check on {}: don't have whitelist yet", rc.router_id());
-                return false;
-            }
-            // if we have no whitelist enabled or we have
-            // the whitelist enabled and we got the whitelist
-            // check against the whitelist and remove if it's not
-            // in the whitelist OR if there is no whitelist don't remove
-            if (not node_db()->is_connection_allowed(rc.router_id()))
-            {
-                log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
-                return true;
-            }
-            return false;
-        });
-
-        _link_manager->check_persisting_conns(now);
-
-        auto num_router_conns = num_router_connections();
-        auto num_rcs = node_db()->num_rcs();
-
-        if (is_snode)
-        {
-            if (now >= _next_decomm_warning)
-            {
-                if (auto registered = appears_registered(), funded = appears_funded();
-                    not(registered and funded and not is_decommed))
-                {
-                    // complain about being deregistered/decommed/unfunded
-                    log::error(
-                        logcat,
-                        "We are running as a service node but we seem to be {}",
-                        not registered    ? "deregistered"
-                            : is_decommed ? "decommissioned"
-                                          : "not fully staked");
-                    _next_decomm_warning = now + DECOMM_WARNING_INTERVAL;
-                }
-                else if (insufficient_peers())
-                {
-                    log::error(
-                        logcat,
-                        "We appear to be an active service node, but have only {} known peers.",
-                        node_db()->num_rcs());
-                    _next_decomm_warning = now + DECOMM_WARNING_INTERVAL;
-                }
-            }
-
-            if (num_router_conns < num_rcs)
-            {
-                log::critical(
-                    logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
-                _link_manager->connect_to_random(FULL_MESH_ITERATION);
-            }
-        }
-        else
-        {
-            size_t min_client_conns = MIN_CLIENT_ROUTER_CONNS;
-            const auto& pinned_edges = _node_db->pinned_edges();
-            const auto pinned_count = pinned_edges.size();
-
-            if (pinned_count > 0 && min_client_conns > pinned_count)
-                min_client_conns = pinned_count;
-
-            // if we need more sessions to routers and we are not a service node kicked from the
-            // network or we are a client we shall connect out to others
-            if (num_router_conns < min_client_conns)
-            {
-                size_t needed = min_client_conns - num_router_conns;
-                log::critical(logcat, "Client connecting to {} random routers to keep alive", needed);
-                _link_manager->connect_to_random(needed);
-            }
-            else
-            {
-                // log::critical(
-                //     logcat, "Client skipping hidden service exit tick or whatever the fuck that
-                //     means");
-                // _hidden_service_context.Tick(now);
-                // _exit_context.Tick(now);
-            }
-        }
-
-        // save profiles
-        if (router_profiling().should_save(now) and _config->network.save_profiles)
-        {
-            queue_disk_io([&]() { router_profiling().save(_profile_file); });
-        }
-
-        _node_db->tick(now);
+        _is_service_node ? _relay_tick(now) : _client_tick(now);
 
         // update tick timestamp
         _last_tick = llarp::time_now_ms();
@@ -1215,6 +969,9 @@ namespace llarp
         // This must be constructed AFTER router creates its LocalRC
         _contacts = std::make_unique<Contacts>(*this);
 
+        // Pre-instruct nodedb to bootstrap on first Router::tick()
+        node_db()->set_needs_bootstrap(node_db()->num_rcs() < MIN_ACTIVE_RCS);
+
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, true);
@@ -1224,7 +981,7 @@ namespace llarp
         // Resolve needed ONS values now that we have the necessary things prefigured
         _session_endpoint->resolve_ons_mappings();
 
-        _is_running = true;
+        _is_running.store(true);
 
         _started_at = now();
 
@@ -1295,7 +1052,7 @@ namespace llarp
                 false);
         }
 
-        log::critical(logcat, "LOCAL INSTANCE ID: {}", local_rid());
+        log::critical(logcat, "\n\n\tLOCAL INSTANCE ROUTER ID: {}\n", local_rid());
 
         llarp::sys::service_manager->ready();
         return _is_running;
@@ -1321,25 +1078,12 @@ namespace llarp
         if (_router_close_cb)
             _router_close_cb();
 
-        log::critical(logcat, "stopping tickers");
-
-        _loop_ticker->stop();
-        _loop_ticker.reset();
-
         if (_reachability_ticker)
         {
+            log::critical(logcat, "clearing reachability ticker...");
             _reachability_ticker->stop();
             _reachability_ticker.reset();
         }
-
-        // log::critical(logcat, "erasing linkmanager");
-        // _link_manager.reset();
-
-        // log::critical(logcat, "Awaiting quic network close...");
-        // _link_close_waiter->wait();
-
-        log::critical(logcat, "stopping mainloop");
-        _loop->stop();
 
         _is_running.store(false);
     }
@@ -1349,26 +1093,37 @@ namespace llarp
         close();
         log::critical(logcat, "stopping oxenmq");
         _lmq.reset();
+        _close_promise->set_value();
+        _close_promise.reset();
     }
 
     void Router::cleanup()
     {
-        log::critical(logcat, "stopping links");
+        log::critical(logcat, "stopping outbound links");
         stop_links();
 
-        log::critical(logcat, "saving nodedb to disk");
+        log::critical(logcat, "cleaning up nodedb");
         node_db()->save_to_disk();
+
+        log::critical(logcat, "cleaning up quic_tun...");
+        _quic_tun.reset();
+
+        log::critical(logcat, "cleaning up link_manager");
+        _link_manager.reset();
 
         _loop->call_later(200ms, [this] { teardown(); });
     }
 
     void Router::stop_links()
     {
-        // TODO: after sorting out close errors/logic/etc, move ::stop() into ~LinkManager()
-        // TODO: this promise might be useless, revisit
-        _link_manager->stop();
-        // log::critical(logcat, "Awaiting quic network close...");
-        // _link_close_waiter->wait();
+        _link_manager->close_all_links();
+
+        auto rv = _loop_ticker->stop();
+        log::critical(logcat, "router loop ticker stopped {}successfully!", rv ? "" : "un");
+        _loop_ticker.reset();
+
+        log::critical(logcat, "stopping nodedb events");
+        node_db()->cleanup();
     }
 
     void Router::stop_immediately()

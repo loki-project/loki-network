@@ -65,12 +65,15 @@ namespace llarp
 
         /// Getters for private attributes
         const oxen::quic::Address& addr() const { return _addr; }
+        oxen::quic::Address addr() { return _addr; }
 
         const std::optional<oxen::quic::Address>& addr6() const { return _addr6; }
 
         const RouterID& router_id() const { return _router_id; }
+        RouterID router_id() { return _router_id; }
 
         const rc_time& timestamp() const { return _timestamp; }
+        rc_time timestamp() { return _timestamp; }
 
       protected:
         // advertised addresses
@@ -148,6 +151,8 @@ namespace llarp
         void bt_verify(oxenc::bt_dict_consumer& data, bool reject_expired = false) const;
 
         void bt_load(oxenc::bt_dict_consumer& data);
+
+        static constexpr bool to_string_formattable = true;
     };
 
     struct RemoteRC;
@@ -233,6 +238,10 @@ namespace llarp
     /// the data in the constructor, eliminating the need for a ::verify method/
     struct RemoteRC final : public RouterContact
     {
+      private:
+        // this ctor is private because it doesn't set ::_payload
+        explicit RemoteRC(oxenc::bt_dict_consumer btdc);
+
       public:
         RemoteRC() = default;
         explicit RemoteRC(std::string_view data) : RemoteRC{oxenc::bt_dict_consumer{data}}
@@ -240,7 +249,6 @@ namespace llarp
             _payload = {reinterpret_cast<const unsigned char*>(data.data()), data.size()};
         }
         explicit RemoteRC(ustring_view data) : RemoteRC{oxenc::bt_dict_consumer{data}} { _payload = data; }
-        explicit RemoteRC(oxenc::bt_dict_consumer btdc);
         ~RemoteRC() = default;
 
         std::string_view view() const { return {reinterpret_cast<const char*>(_payload.data()), _payload.size()}; }

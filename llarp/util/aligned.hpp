@@ -175,6 +175,8 @@ namespace llarp
             return true;
         }
 
+        static constexpr bool to_string_formattable = true;
+
       private:
         std::array<uint8_t, SIZE> _data;
     };

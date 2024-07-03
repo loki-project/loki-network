@@ -137,7 +137,7 @@ namespace llarp
                 return _initiate_session(remote, std::move(cb), true);
             }
 
-            void Tick(std::chrono::milliseconds now) override;
+            void tick(std::chrono::milliseconds now) override;
 
             // TESTNET: the following functions may not be needed -- revisit this
             /*  Address Mapping - Public Mutators  */

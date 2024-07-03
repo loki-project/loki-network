@@ -1,5 +1,7 @@
 #include "types.hpp"
 
+#include "loop.hpp"
+
 namespace llarp
 {
     static auto logcat = llarp::log::Cat("ev-trigger");
@@ -8,15 +10,20 @@ namespace llarp
         const std::shared_ptr<EventLoop>& _loop,
         std::chrono::microseconds _cooldown,
         std::function<void()> task,
-        int _n)
+        int _n,
+        bool start_immediately)
     {
-        auto evt = _loop->template make_shared<EventTrigger>(_loop->loop(), _cooldown, std::move(task), _n);
-        return evt;
+        return _loop->template make_shared<EventTrigger>(
+            _loop->loop(), _cooldown, std::move(task), _n, start_immediately);
     }
 
     EventTrigger::EventTrigger(
-        const loop_ptr& _loop, std::chrono::microseconds _cooldown, std::function<void()> task, int _n)
-        : n{_n}, cooldown{loop_time_to_timeval(_cooldown)}, f{std::move(task)}
+        const loop_ptr& _loop,
+        std::chrono::microseconds _cooldown,
+        std::function<void()> task,
+        int _n,
+        bool start_immediately)
+        : n{_n}, _cooldown{loop_time_to_timeval(_cooldown)}, f{std::move(task)}
     {
         ev.reset(event_new(
             _loop.get(),
@@ -34,14 +41,20 @@ namespace llarp
                         return;
                     }
 
+                    if (self->_is_cooling_down)
+                    {
+                        log::critical(logcat, "EventTrigger attempting to execute cooling down event!");
+                        return;
+                    }
+
                     if (not self->_proceed)
                     {
                         log::critical(logcat, "EventTrigger attempting to execute finished event!");
                         return;
                     }
 
-                    // execute callback
-                    self->f();
+                    log::critical(logcat, "EventTrigger executing callback...");
+                    self->fire();
                 }
                 catch (const std::exception& e)
                 {
@@ -49,6 +62,50 @@ namespace llarp
                 }
             },
             this));
+
+        cv.reset(event_new(
+            _loop.get(),
+            -1,
+            0,
+            [](evutil_socket_t, short, void* s) {
+                try
+                {
+                    auto* self = reinterpret_cast<EventTrigger*>(s);
+                    assert(self);
+
+                    if (not self->f)
+                    {
+                        log::critical(logcat, "EventTrigger does not have a callback to execute!");
+                        return;
+                    }
+
+                    if (not self->_is_cooling_down)
+                    {
+                        log::critical(logcat, "EventTrigger attempting to resume when it is NOT cooling down!");
+                        return;
+                    }
+
+                    if (not self->_proceed)
+                    {
+                        log::critical(logcat, "EventTrigger attempting to resume when it is halted!");
+                        return;
+                    }
+
+                    log::critical(logcat, "EventTrigger resuming callback iteration...");
+                    self->begin();
+                }
+                catch (const std::exception& e)
+                {
+                    log::critical(logcat, "EventTrigger caught exception: {}", e.what());
+                }
+            },
+            this));
+
+        if (start_immediately)
+        {
+            auto rv = begin();
+            log::debug(logcat, "EventTrigger started {}successfully!", rv ? "" : "un");
+        }
     }
 
     EventTrigger::~EventTrigger()
@@ -59,6 +116,57 @@ namespace llarp
 
     void EventTrigger::fire()
     {
-        event_active(ev.get(), 0, 0);
+        if (_current < n)
+        {
+            _current += 1;
+
+            log::critical(logcat, "Attempting callback {}/{} times!", _current.load(), n);
+            f();
+        }
+
+        if (_current == n)
+        {
+            log::critical(logcat, "Callback attempted {} times! Cooling down...", n);
+            return cooldown();
+        }
+
+        event_del(ev.get());
+        event_add(ev.get(), &_null_tv);
+    }
+
+    bool EventTrigger::halt()
+    {
+        _is_cooling_down = false;
+        _is_iterating = false;
+        _proceed = false;
+
+        bool ret = event_del(ev.get()) == 0;
+        ret &= event_del(cv.get()) == 0;
+        log::critical(logcat, "EventTrigger halted {}successfully!", ret ? "" : "un");
+
+        return ret;
+    }
+
+    bool EventTrigger::begin()
+    {
+        _is_cooling_down = false;
+        _is_iterating = true;
+        _proceed = true;
+        _current = 0;
+
+        auto rv = event_add(ev.get(), &_null_tv);
+        log::critical(logcat, "EventTrigger begun {}successfully!", rv == 0 ? "" : "un");
+
+        return rv == 0;
+    }
+
+    void EventTrigger::cooldown()
+    {
+        event_del(ev.get());
+
+        _is_iterating = false;
+        _is_cooling_down = event_add(cv.get(), &_cooldown) == 0;
+
+        log::critical(logcat, "EventTrigger scheduled cooldown resume {}successfully!", _is_cooling_down ? "" : "un");
     }
 }  //  namespace llarp

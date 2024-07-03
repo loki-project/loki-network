@@ -58,20 +58,15 @@ namespace llarp
         if (opts.showBanner)
             log::info(logcat, "{}", llarp::LOKINET_VERSION_FULL);
 
-        // TODO: configurable job queue size?
-        if (!_loop)
-        {
-            log::info(logcat, "Initializing event loop...");
+        log::info(logcat, "Initializing event loop...");
 
-            auto p = std::promise<void>();
-            loop_waiter = std::make_unique<std::future<void>>(p.get_future());
-            _loop = EventLoop::make(std::move(p));
-
-            log::debug(logcat, "Event loop initialized!");
-        }
+        auto p = std::promise<void>();
+        loop_waiter = std::make_unique<std::future<void>>(p.get_future());
+        _loop = EventLoop::make();
+        log::debug(logcat, "Event loop initialized!");
 
         log::info(logcat, "Making main router...");
-        router = make_router(_loop);
+        router = Router::make(_loop, make_vpn_platform(), std::move(p));
 
         log::info(logcat, "Making local nodeDB instance...");
         nodedb = make_nodedb();
@@ -86,9 +81,9 @@ namespace llarp
             nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
-    std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EventLoop>& loop)
+    std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EventLoop>& loop, std::promise<void> p)
     {
-        return std::make_shared<Router>(loop, make_vpn_platform());
+        return std::make_shared<Router>(loop, make_vpn_platform(), std::move(p));
     }
 
     std::shared_ptr<vpn::Platform> Context::make_vpn_platform()
@@ -117,7 +112,8 @@ namespace llarp
 
         log::critical(logcat, "Context waiting...");
 
-        loop_waiter->get();
+        if (loop_waiter)
+            loop_waiter->get();
 
         if (close_waiter)
         {

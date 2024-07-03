@@ -55,6 +55,8 @@ namespace llarp::service
         }
 
         bool operator!=(const Introduction& other) const { return !(*this == other); }
+
+        static constexpr bool to_string_formattable = true;
     };
 
     /// comparator for introduction timestamp in order of nearest to furthest expiry time
