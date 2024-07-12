@@ -2,7 +2,7 @@ lokinet (0.9.11-2~ubuntu2404) noble; urgency=medium
 
   * Add noble build
 
- -- Jason Rhinelander <jason@imaginary.ca>  Sun, 04 Feb 2024 19:57:41 -0400
+ -- Jason Rhinelander <jason@imaginary.ca>  Fri, 12 Jul 2024 09:35:46 -0300
 
 lokinet (0.9.11-2~ubuntu2304) lunar; urgency=medium
 
