@@ -144,7 +144,7 @@ namespace llarp::net
                 if (addr)
                     return;
                 if (i and i->ifa_addr and i->ifa_addr->sa_family == af and i->ifa_name == ifname)
-                    addr = oxen::quic::Address{i->ifa_addr};
+                    addr = i->ifa_addr;
             });
 
             return addr;

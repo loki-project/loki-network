@@ -200,7 +200,9 @@ namespace llarp
 
     bool Router::fully_meshed() const
     {
-        return num_router_connections() >= _node_db->num_rcs();
+        if (auto n_conns = num_router_connections(); n_conns)
+            return n_conns >= _node_db->num_rcs();
+        return false;
     }
 
     bool Router::needs_initial_fetch() const
@@ -335,8 +337,8 @@ namespace llarp
             llarp::logRingBuffer = nullptr;
 
         // TESTNET:
-        oxen::log::reset_level(oxen::log::Level::trace);
-        oxen::log::set_level("quic", oxen::log::Level::info);
+        // oxen::log::reset_level(oxen::log::Level::trace);
+        oxen::log::set_level("quic", oxen::log::Level::warn);
     }
 
     void Router::init_rpc()
@@ -346,8 +348,6 @@ namespace llarp
             log::debug(logcat, "Starting RPC client");
             rpc_addr = oxenmq::address(_config->lokid.rpc_addr);
             _rpc_client = std::make_shared<rpc::RPCClient>(_lmq, weak_from_this());
-            log::debug(logcat, "RPC client connecting to RPC bind address");
-            _rpc_client->connect_async(rpc_addr);
         }
 
         if (_config->api.enable_rpc_server)
@@ -359,7 +359,7 @@ namespace llarp
 
     void Router::init_bootstrap()
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto& conf = *_config;
 
@@ -553,11 +553,7 @@ namespace llarp
             if (_testing_disabled and not _testnet)
                 throw std::runtime_error{"Error: reachability testing can only be disabled on testnet!"};
 
-            auto err = "Lokinet network ID is {}, NOT mainnet! {}"_format(
-                netid,
-                _testnet ? "Please ensure your local instance is configured to operate on testnet"
-                         : "Local lokinet instance will attempt to run on the specified network");
-            log::critical(logcat, "{}", err);
+            log::critical(logcat, "Lokinet network ID is {}, NOT mainnet!", netid);
         }
 
         log::debug(logcat, "Configuring router");
@@ -575,13 +571,18 @@ namespace llarp
             _is_service_node ? "relay mode!"
                              : "client mode{}"_format(_is_exit_node ? " operating an exit node service!" : "!"));
 
-        init_rpc();
-
         if (conf.router.worker_threads > 0)
             _lmq->set_general_threads(conf.router.worker_threads);
 
-        log::debug(logcat, "Starting OMQ server");
-        _lmq->start();
+        init_rpc();
+
+        if (_is_service_node)
+        {
+            log::debug(logcat, "Starting OMQ server");
+            _lmq->start();
+            log::debug(logcat, "RPC client connecting to RPC bind address");
+            _rpc_client->connect_async(rpc_addr);
+        }
 
         _node_db = std::move(nodedb);
 
@@ -612,10 +613,10 @@ namespace llarp
         _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
         _session_endpoint->configure();
 
-        log::info(logcat, "Creating QUIC link manager...");
+        log::debug(logcat, "Creating QUIC link manager...");
         _link_manager = LinkManager::make(*this);
 
-        log::info(logcat, "Creating QUIC tunnel...");
+        log::debug(logcat, "Creating QUIC tunnel...");
         _quic_tun = QUICTunnel::make(*this);
 
         // API config
@@ -624,7 +625,7 @@ namespace llarp
         //  All relays have TUN
         if (_should_init_tun = conf.network.init_tun; _should_init_tun)
         {
-            log::critical(logcat, "Initializing virtual TUN device...");
+            log::debug(logcat, "Initializing virtual TUN device...");
             init_tun();
         }
 
@@ -753,18 +754,18 @@ namespace llarp
 
     void Router::_relay_tick(std::chrono::milliseconds now)
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto now_timepoint = std::chrono::system_clock::time_point(now);
         const auto& local = local_rid();
 
-        if (not node_db()->registered_routers().count(local))
-        {
-            log::critical(logcat, "We are NOT a registered router, figure it out!");
-            // update tick timestamp
-            _last_tick = llarp::time_now_ms();
-            return;
-        }
+        // if (not node_db()->registered_routers().count(local))
+        // {
+        //     log::critical(logcat, "We are NOT a registered router, figure it out!");
+        //     // update tick timestamp
+        //     _last_tick = llarp::time_now_ms();
+        //     return;
+        // }
 
         llarp::sys::service_manager->report_periodic_stats();
 
@@ -773,7 +774,7 @@ namespace llarp
 
         if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            log::critical(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::info(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
@@ -834,7 +835,7 @@ namespace llarp
 
     void Router::_client_tick(std::chrono::milliseconds now)
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto now_timepoint = std::chrono::system_clock::time_point(now);
         llarp::sys::service_manager->report_periodic_stats();
@@ -846,21 +847,21 @@ namespace llarp
 
         if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            log::critical(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::info(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
         // periodically fetch updated RCs
         if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
         {
-            log::critical(logcat, "Time to fetch RCs!");
+            log::info(logcat, "Client beginning RC fetch from network");
             node_db()->fetch_rcs();
         }
 
         // periodically fetch updated RouterID list
         if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
         {
-            log::critical(logcat, "Time to fetch RIDs!");
+            log::critical(logcat, "Client beginning RID fetch from network");
             node_db()->fetch_rids();
         }
 
@@ -891,7 +892,7 @@ namespace llarp
 
     void Router::tick()
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_is_stopping)
         {
@@ -931,7 +932,7 @@ namespace llarp
 
     bool Router::run()
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_is_running || _is_stopping)
             return false;
@@ -959,7 +960,7 @@ namespace llarp
         }
         else
         {
-            log::info(logcat, "Client generating keys and resigning RC...");
+            log::debug(logcat, "Client generating keys and resigning RC...");
             // we are a client, regenerate keys and resign rc before everything else
             crypto::identity_keygen(_identity);
             crypto::encryption_keygen(_encryption);
@@ -1073,14 +1074,14 @@ namespace llarp
 
     void Router::close()
     {
-        log::critical(logcat, "closing");
+        log::debug(logcat, "closing");
 
         if (_router_close_cb)
             _router_close_cb();
 
         if (_reachability_ticker)
         {
-            log::critical(logcat, "clearing reachability ticker...");
+            log::debug(logcat, "clearing reachability ticker...");
             _reachability_ticker->stop();
             _reachability_ticker.reset();
         }
@@ -1091,7 +1092,7 @@ namespace llarp
     void Router::teardown()
     {
         close();
-        log::critical(logcat, "stopping oxenmq");
+        log::debug(logcat, "stopping oxenmq");
         _lmq.reset();
         _close_promise->set_value();
         _close_promise.reset();
@@ -1099,30 +1100,30 @@ namespace llarp
 
     void Router::cleanup()
     {
-        log::critical(logcat, "stopping outbound links");
-        stop_links();
+        log::debug(logcat, "stopping outbound links");
+        stop_outbounds();
 
-        log::critical(logcat, "cleaning up nodedb");
+        log::debug(logcat, "cleaning up nodedb");
         node_db()->save_to_disk();
 
-        log::critical(logcat, "cleaning up quic_tun...");
+        log::debug(logcat, "cleaning up quic_tun...");
         _quic_tun.reset();
 
-        log::critical(logcat, "cleaning up link_manager");
+        log::debug(logcat, "cleaning up link_manager");
         _link_manager.reset();
 
         _loop->call_later(200ms, [this] { teardown(); });
     }
 
-    void Router::stop_links()
+    void Router::stop_outbounds()
     {
         _link_manager->close_all_links();
 
         auto rv = _loop_ticker->stop();
-        log::critical(logcat, "router loop ticker stopped {}successfully!", rv ? "" : "un");
+        log::debug(logcat, "router loop ticker stopped {}successfully!", rv ? "" : "un");
         _loop_ticker.reset();
 
-        log::critical(logcat, "stopping nodedb events");
+        log::debug(logcat, "stopping nodedb events");
         node_db()->cleanup();
     }
 
@@ -1139,7 +1140,7 @@ namespace llarp
 
         log::warning(logcat, "Hard stopping router");
         llarp::sys::service_manager->stopping();
-        stop_links();
+        stop_outbounds();
         close();
     }
 
@@ -1161,7 +1162,7 @@ namespace llarp
         if (auto level = log::get_level_default(); level > log::Level::info and level != log::Level::off)
             log::reset_level(log::Level::info);
 
-        log::info(logcat, "stopping service manager...");
+        log::debug(logcat, "stopping service manager...");
         llarp::sys::service_manager->stopping();
 
         // TESTNET: close all sessions and exit functions here

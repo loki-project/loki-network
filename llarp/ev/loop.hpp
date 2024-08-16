@@ -19,13 +19,11 @@ namespace llarp
     class EventLoop
     {
         EventLoop();
-        EventLoop(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         std::atomic<bool> _close_immediately{false};
 
       public:
         static std::shared_ptr<EventLoop> make();
-        // static std::shared_ptr<EventLoop> make(loop_ptr loop_ptr, std::thread::id loop_thread_id);
 
         ~EventLoop();
 

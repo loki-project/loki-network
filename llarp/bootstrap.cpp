@@ -105,7 +105,7 @@ namespace llarp
 
         if (empty())
         {
-            log::critical(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
+            log::debug(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
             read_from_file(def);
         }
 
@@ -113,7 +113,7 @@ namespace llarp
         {
             if (RouterContact::is_obsolete(*itr))  // TODO: move this into ::read_from_file
             {
-                log::critical(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
+                log::debug(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
                 itr = erase(itr);
                 continue;
             }
@@ -126,7 +126,7 @@ namespace llarp
 
             if (auto itr = fallbacks.find(RouterContact::ACTIVE_NETID); itr != fallbacks.end())
             {
-                log::critical(logcat, "Loading {} default fallback bootstrap router(s)!", itr->second.size());
+                log::debug(logcat, "Loading {} default fallback bootstrap router(s)!", itr->second.size());
                 merge(itr->second);
             }
 

@@ -199,7 +199,7 @@ namespace llarp
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        log::critical(logcat, "Registering {}-only BTStream commands!", client_only ? "client" : "relay");
+        log::debug(logcat, "Registering {}-only BTStream commands!", client_only ? "client" : "relay");
 
         s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) {
             _router.loop()->call(
@@ -846,7 +846,7 @@ namespace llarp
         if (auto conn = ep->get_service_conn(rid); conn)
         {
             conn->control_stream->command("bfetch_rcs"s, std::move(payload), std::move(func));
-            log::critical(logcat, "Dispatched bootstrap fetch request!");
+            log::debug(logcat, "Dispatched bootstrap fetch request!");
             return;
         }
 

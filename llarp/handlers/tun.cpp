@@ -152,7 +152,7 @@ namespace llarp::handlers
 
     void TunEndpoint::setup_dns()
     {
-        log::info(logcat, "{} setting up DNS...", name());
+        log::debug(logcat, "{} setting up DNS...", name());
 
         auto& dns_config = _router.config()->dns;
         const auto& info = get_vpn_interface()->interface_info();
@@ -275,7 +275,7 @@ namespace llarp::handlers
 
     void TunEndpoint::configure()
     {
-        log::info(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         auto& net_conf = _router.config()->network;
 
         /** DISCUSS: Can the auth objects be further simplified?
@@ -351,12 +351,12 @@ namespace llarp::handlers
 
         if (_base_ipv6_range)
         {
-            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+            log::debug(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
             info.addrs.emplace_back(*_base_ipv6_range);
         }
 
         info.ifname = _if_name;
-        log::info(logcat, "{} setting up network...", name());
+        log::debug(logcat, "{} setting up network...", name());
 
         _net_if = router().vpn_platform()->CreateInterface(std::move(info), &_router);
 
@@ -861,7 +861,7 @@ namespace llarp::handlers
         if (_persisting_addr_file and not platform::is_android)
         {
             const auto& file = *_persisting_addr_file;
-            log::info(logcat, "{} saving address map to {}", name(), file);
+            log::debug(logcat, "{} saving address map to {}", name(), file);
             // if (auto maybe = util::OpenFileStream<fs::ofstream>(file, std::ios_base::binary))
             // {
             //   std::map<std::string, std::string> addrmap;
@@ -923,7 +923,7 @@ namespace llarp::handlers
         if (auto maybe_ip = _local_ip_mapping.get_local_from_remote(remote); maybe_ip)
         {
             ret = maybe_ip;
-            log::info(
+            log::debug(
                 logcat,
                 "Local IP for session to remote ({}) pre-loaded from config: {}",
                 remote,
@@ -939,7 +939,7 @@ namespace llarp::handlers
                 ret = maybe_next_ip;
                 _local_ip_mapping.insert_or_assign(*maybe_next_ip, remote);
 
-                log::info(
+                log::debug(
                     logcat,
                     "Local IP for session to remote ({}) assigned: {}",
                     remote,
@@ -958,11 +958,11 @@ namespace llarp::handlers
         if (_local_ip_mapping.has_remote(remote))
         {
             _local_ip_mapping.unmap(remote);
-            log::info(logcat, "TUN device unmapped session to remote: {}", remote);
+            log::debug(logcat, "TUN device unmapped session to remote: {}", remote);
         }
         else
         {
-            log::critical(logcat, "TUN device could not unmap session (remote: {})", remote);
+            log::debug(logcat, "TUN device could not unmap session (remote: {})", remote);
         }
     }
 
@@ -1000,7 +1000,7 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::info(logcat, "Dispatching outbound packet for session (remote: {})", remote);
+                log::debug(logcat, "Dispatching outbound packet for session (remote: {})", remote);
                 session->send_path_data_message(std::move(pkt).steal_payload());
                 return;
             }

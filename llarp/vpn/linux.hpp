@@ -75,8 +75,13 @@ namespace llarp::vpn
 
                     control.ioctl(SIOCSIFADDR, &ifr);
 
-                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
-                        oxenc::load_host_to_big<unsigned int>(&range.mask());
+                    auto subnet_mask = ipv4{255, 255, 255, 255} / range.mask();
+
+                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr = 
+                        oxenc::load_host_to_big<unsigned int>(&subnet_mask.base.addr);
+
+                    // ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
+                    //     oxenc::load_host_to_big<unsigned int>(&range.mask());
                     control.ioctl(SIOCSIFNETMASK, &ifr);
                 }
                 if (ifaddr.fam == AF_INET6)

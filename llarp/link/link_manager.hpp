@@ -324,13 +324,13 @@ namespace llarp
                     const auto& is_control = ep.has_value();
                     const auto us = _is_service_node ? "Relay"s : "Client"s;
 
-                    log::critical(logcat, "Establishing connection to RID:{}", rid);
+                    log::debug(logcat, "Establishing connection to RID:{}", rid);
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);
 
                     if (not b)
                     {
-                        log::critical(logcat, "ERROR: attempting to establish an already-existing connection");
+                        log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
                         (is_control)
                             ? itr->second->control_stream->command(std::move(*ep), std::move(body), std::move(func))
                             : itr->second->conn->send_datagram(std::move(body));
@@ -352,7 +352,7 @@ namespace llarp
 
                     link_manager.register_commands(control_stream, rid, not _is_service_node);
 
-                    log::critical(
+                    log::debug(
                         logcat,
                         "{} dispatching {} on outbound connection to remote (rid:{})",
                         us,
@@ -364,7 +364,7 @@ namespace llarp
 
                     itr->second = std::make_shared<link::Connection>(conn_interface, control_stream, true);
 
-                    log::critical(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
                 }
                 catch (...)
@@ -383,13 +383,13 @@ namespace llarp
                 {
                     const auto& rid = rc.router_id();
 
-                    log::critical(logcat, "Establishing connection to RID:{}", rid);
+                    log::debug(logcat, "Establishing connection to RID:{}", rid);
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);
 
                     if (not b)
                     {
-                        log::critical(logcat, "ERROR: attempting to establish an already-existing connection");
+                        log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
                         return b;
                     }
 
@@ -408,7 +408,7 @@ namespace llarp
 
                     itr->second = std::make_shared<link::Connection>(conn_interface, control_stream, true);
 
-                    log::critical(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
                 }
                 catch (...)

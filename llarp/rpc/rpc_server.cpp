@@ -77,7 +77,7 @@ namespace llarp::rpc
         for (const auto& addr : r.config()->api.rpc_bind_addrs)
         {
             m_LMQ->listen_plain(addr.zmq_address());
-            log::info(logcat, "Bound RPC server to {}", addr.full_address());
+            log::debug(logcat, "Bound RPC server to {}", addr.full_address());
         }
 
         AddCategories();
@@ -555,7 +555,7 @@ namespace llarp::rpc
 
         if (endpoint == "unsubscribe")
         {
-            log::info(logcat, "New logs unsubscribe request from conn {}@{}", m.conn.to_string(), m.remote);
+            log::debug(logcat, "New logs unsubscribe request from conn {}@{}", m.conn.to_string(), m.remote);
             log_subs.unsubscribe(m.conn);
             m.send_reply("OK");
             return;
@@ -565,7 +565,7 @@ namespace llarp::rpc
 
         if (is_new)
         {
-            log::info(logcat, "New logs subscription request from conn {}@{}", m.conn.to_string(), m.remote);
+            log::debug(logcat, "New logs subscription request from conn {}@{}", m.conn.to_string(), m.remote);
             m.send_reply("OK");
             log_subs.send_all(m.conn, endpoint);
         }

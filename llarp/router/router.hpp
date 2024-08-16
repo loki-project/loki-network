@@ -353,7 +353,7 @@ namespace llarp
         void stop_immediately();
 
         /// close all sessions and shutdown all links
-        void stop_links();
+        void stop_outbounds();
 
         void persist_connection_until(const RouterID& remote, std::chrono::milliseconds until);
 

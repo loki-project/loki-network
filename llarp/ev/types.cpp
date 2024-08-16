@@ -53,7 +53,7 @@ namespace llarp
                         return;
                     }
 
-                    log::critical(logcat, "EventTrigger executing callback...");
+                    log::debug(logcat, "EventTrigger executing callback...");
                     self->fire();
                 }
                 catch (const std::exception& e)
@@ -91,7 +91,7 @@ namespace llarp
                         return;
                     }
 
-                    log::critical(logcat, "EventTrigger resuming callback iteration...");
+                    log::info(logcat, "EventTrigger resuming callback iteration...");
                     self->begin();
                 }
                 catch (const std::exception& e)
@@ -120,13 +120,13 @@ namespace llarp
         {
             _current += 1;
 
-            log::critical(logcat, "Attempting callback {}/{} times!", _current.load(), n);
+            log::debug(logcat, "Attempting callback {}/{} times!", _current.load(), n);
             f();
         }
 
         if (_current == n)
         {
-            log::critical(logcat, "Callback attempted {} times! Cooling down...", n);
+            log::debug(logcat, "Callback attempted {} times! Cooling down...", n);
             return cooldown();
         }
 
@@ -142,7 +142,7 @@ namespace llarp
 
         bool ret = event_del(ev.get()) == 0;
         ret &= event_del(cv.get()) == 0;
-        log::critical(logcat, "EventTrigger halted {}successfully!", ret ? "" : "un");
+        log::debug(logcat, "EventTrigger halted {}successfully!", ret ? "" : "un");
 
         return ret;
     }
@@ -155,7 +155,7 @@ namespace llarp
         _current = 0;
 
         auto rv = event_add(ev.get(), &_null_tv);
-        log::critical(logcat, "EventTrigger begun {}successfully!", rv == 0 ? "" : "un");
+        log::debug(logcat, "EventTrigger begun {}successfully!", rv == 0 ? "" : "un");
 
         return rv == 0;
     }
@@ -167,6 +167,6 @@ namespace llarp
         _is_iterating = false;
         _is_cooling_down = event_add(cv.get(), &_cooldown) == 0;
 
-        log::critical(logcat, "EventTrigger scheduled cooldown resume {}successfully!", _is_cooling_down ? "" : "un");
+        log::info(logcat, "EventTrigger {}successfully began cooldown timer!", _is_cooling_down ? "" : "un");
     }
 }  //  namespace llarp

@@ -142,7 +142,7 @@ namespace llarp
         {
             assert(not _is_fetching);
             assert(not _needs_initial_fetch);  // only set after client succeeds at bootstrapping
-            log::critical(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
+            log::debug(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
             return false;
         }
 
@@ -150,7 +150,7 @@ namespace llarp
         {
             assert(not _is_service_node);  // relays should never initial fetch
             assert(not needs_bootstrap());
-            log::critical(logcat, "NodeDB deferring ::tick() to initial fetch completion...");
+            log::debug(logcat, "NodeDB deferring ::tick() to initial fetch completion...");
             return false;
         }
 
@@ -159,7 +159,8 @@ namespace llarp
         // TESTNET: could maybe move this check to the end of ::purge_rcs(), since _needs_bootstrap is set
         // in Router::run()...
         // only enter bootstrap process if we have NOT marked initial fetch as needed
-        if (_needs_bootstrap = n_rcs < MIN_ACTIVE_RCS; _needs_bootstrap and not _needs_initial_fetch)
+        if (_needs_bootstrap = n_rcs < MIN_ACTIVE_RCS;
+            _needs_bootstrap and not _needs_initial_fetch and not _router.is_bootstrap_seed())
         {
             log::critical(
                 logcat,
@@ -750,7 +751,7 @@ namespace llarp
 
     void NodeDB::bootstrap()
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_router._is_stopping || not _router._is_running)
         {
@@ -763,7 +764,7 @@ namespace llarp
         const auto& rc = _bootstraps.next();
         auto source = rc.router_id();
 
-        log::critical(logcat, "Dispatching BootstrapRC fetch request to {}", source);
+        log::info(logcat, "Dispatching BootstrapRC fetch request to {}", source);
 
         auto num_needed = _is_service_node ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
 
@@ -772,7 +773,7 @@ namespace llarp
             BootstrapFetchMessage::serialize(
                 _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
             [this, src = source](oxen::quic::message m) mutable {
-                log::critical(logcat, "Received response to BootstrapRC fetch request...");
+                log::info(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
                 {
@@ -814,7 +815,7 @@ namespace llarp
                     return stop_bootstrap(/* true */);
                 }
 
-                log::critical(
+                log::info(
                     logcat,
                     "BootstrapRC response from {} returned {} RCs ({} minimum needed); continuing bootstrapping...",
                     src,
@@ -1100,11 +1101,9 @@ namespace llarp
 
     void NodeDB::cleanup()
     {
-        // save_to_disk();
-
         if (_bootstrap_handler)
         {
-            log::critical(logcat, "NodeDB clearing bootstrap handler...");
+            log::debug(logcat, "NodeDB clearing bootstrap handler...");
             _bootstrap_handler->halt();
             _bootstrap_handler.reset();
         }

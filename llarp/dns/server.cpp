@@ -273,7 +273,7 @@ namespace llarp::dns
                     }
                     _local_addr = addr;
 
-                    log::info(logcat, "sending dns queries from {}", addr.to_string());
+                    log::debug(logcat, "sending dns queries from {}", addr.to_string());
                     // set up query bind port if needed
                     set_opt("outgoing-interface:", host);
                     set_opt("outgoing-range:", "1");
@@ -424,7 +424,7 @@ namespace llarp::dns
                 // no questions, send fail
                 if (query.questions.empty())
                 {
-                    log::info(logcat, "dns from {} to {} has empty query questions, sending failure reply", from, to);
+                    log::debug(logcat, "dns from {} to {} has empty query questions, sending failure reply", from, to);
                     tmp->cancel();
                     return true;
                 }
@@ -562,7 +562,7 @@ namespace llarp::dns
     {
         if (_conf._upstream_dns.empty())
         {
-            log::info(
+            log::debug(
                 logcat,
                 "explicitly no upstream dns providers specified, we will not resolve anything but "
                 ".loki "

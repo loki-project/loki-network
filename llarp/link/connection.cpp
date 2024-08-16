@@ -13,7 +13,7 @@ namespace llarp::link
 
     void Connection::close_quietly()
     {
-        log::info(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         conn->set_close_quietly();
         conn->close_connection();
     }

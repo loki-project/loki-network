@@ -114,7 +114,7 @@ namespace llarp::handlers
 
     void SessionEndpoint::resolve_ons_mappings()
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         auto& ons_ranges = _router.config()->network._ons_ranges;
 
         if (auto n_ons_ranges = ons_ranges.size(); n_ons_ranges > 0)

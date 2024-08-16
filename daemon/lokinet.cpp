@@ -591,11 +591,12 @@ int main(int argc, char* argv[])
 {
     // Set up a default, stderr logging for very early logging; we'll replace this later once we
     // read the desired log info from config.
-    llarp::log::add_sink(llarp::log::Type::Print, "stderr");
-    llarp::log::reset_level(llarp::log::Level::info);
+    oxen::log::add_sink(llarp::log::Type::Print, "stderr");
+    oxen::log::reset_level(llarp::log::Level::info);
+    oxen::log::set_level("quic", oxen::log::Level::warn);
 
     llarp::logRingBuffer = std::make_shared<llarp::log::RingBufferSink>(100);
-    llarp::log::add_sink(llarp::logRingBuffer, llarp::log::DEFAULT_PATTERN_MONO);
+    oxen::log::add_sink(llarp::logRingBuffer, llarp::log::DEFAULT_PATTERN_MONO);
 
 #ifndef _WIN32
     return lokinet_main(argc, argv);

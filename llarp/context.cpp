@@ -58,17 +58,17 @@ namespace llarp
         if (opts.showBanner)
             log::info(logcat, "{}", llarp::LOKINET_VERSION_FULL);
 
-        log::info(logcat, "Initializing event loop...");
+        log::debug(logcat, "Initializing event loop...");
 
         auto p = std::promise<void>();
         loop_waiter = std::make_unique<std::future<void>>(p.get_future());
         _loop = EventLoop::make();
         log::debug(logcat, "Event loop initialized!");
 
-        log::info(logcat, "Making main router...");
+        log::debug(logcat, "Making main router...");
         router = Router::make(_loop, make_vpn_platform(), std::move(p));
 
-        log::info(logcat, "Making local nodeDB instance...");
+        log::debug(logcat, "Making local nodeDB instance...");
         nodedb = make_nodedb();
 
         if (!router->configure(config, nodedb))
@@ -106,11 +106,11 @@ namespace llarp
         if (not router->run())
             return 2;
 
-        log::critical(logcat, "Router running; starting tickers...");
+        log::debug(logcat, "Router running; starting tickers...");
 
         router->start();
 
-        log::critical(logcat, "Context waiting...");
+        log::debug(logcat, "Context waiting...");
 
         if (loop_waiter)
             loop_waiter->get();
