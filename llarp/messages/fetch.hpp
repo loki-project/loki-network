@@ -65,7 +65,7 @@ namespace llarp
 
             if (local_rc)
             {
-                log::critical(messages::logcat, "Serializing localRC: {}", oxenc::to_hex(local_rc->view()));
+                log::trace(messages::logcat, "Serializing localRC: {}", oxenc::to_hex(local_rc->view()));
                 btdp.append_encoded("local", oxen::quic::to_sv(local_rc->view()));
             }
 

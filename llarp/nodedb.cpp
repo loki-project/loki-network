@@ -156,12 +156,42 @@ namespace llarp
 
         auto n_rcs = num_rcs();
 
-        // TESTNET: could maybe move this check to the end of ::purge_rcs(), since _needs_bootstrap is set
-        // in Router::run()...
         // only enter bootstrap process if we have NOT marked initial fetch as needed
-        if (_needs_bootstrap = n_rcs < MIN_ACTIVE_RCS;
-            _needs_bootstrap and not _needs_initial_fetch and not _router.is_bootstrap_seed())
+        if (_needs_bootstrap and not _needs_initial_fetch and not _router.is_bootstrap_seed())
         {
+            if (not _has_bstrap_connection)
+            {
+                if (_is_connecting_bstrap)
+                {
+                    log::trace(logcat, "{} awaiting bstrap connect attempt...", _is_service_node ? "Relay" : "Client");
+                    return false;
+                }
+
+                auto& brc = _bootstraps.current();
+                auto bsrc = brc.router_id();
+
+                log::critical(
+                    logcat,
+                    "{} has 0 router connections; connecting to bootstrap {}...",
+                    _is_service_node ? "Relay" : "Client",
+                    bsrc);
+
+                _router.link_manager()->connect_to(
+                    brc,
+                    [this](oxen::quic::connection_interface&) {
+                        log::critical(logcat, "Successfully connected to bootstrap node!");
+                        _has_bstrap_connection = true;
+                        _is_connecting_bstrap = false;
+                    },
+                    [this](oxen::quic::connection_interface&, uint64_t) {
+                        log::critical(logcat, "Failed to connect to bootstrap node!");
+                        _is_connecting_bstrap = false;
+                    });
+
+                _is_connecting_bstrap = true;
+                return false;
+            }
+
             log::critical(
                 logcat,
                 "{} has {} of {} minimum RCs; initiating BootstrapRC fetch...",
@@ -257,6 +287,8 @@ namespace llarp
             }
             return false;
         });
+
+        _needs_bootstrap = num_rcs() < MIN_ACTIVE_RCS;
     }
 
     fs::path NodeDB::get_path_by_pubkey(const RouterID& pubkey) const
@@ -726,6 +758,8 @@ namespace llarp
 
         bootstrap_init();
         load_from_disk();
+
+        _needs_bootstrap = num_rcs() < MIN_ACTIVE_RCS;
     }
 
     void NodeDB::stop_bootstrap(bool success)
@@ -764,7 +798,7 @@ namespace llarp
         const auto& rc = _bootstraps.next();
         auto source = rc.router_id();
 
-        log::info(logcat, "Dispatching BootstrapRC fetch request to {}", source);
+        log::info(logcat, "Dispatching BootstrapRC to {}", source);
 
         auto num_needed = _is_service_node ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
 

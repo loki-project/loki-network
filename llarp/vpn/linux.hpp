@@ -26,6 +26,8 @@ namespace llarp::vpn
 {
     static auto logcat = log::Cat("vpn.linux");
 
+    inline constexpr ipv4 ipv4_subnet{255, 255, 255, 255};
+
     struct in6_ifreq
     {
         in6_addr addr;
@@ -68,20 +70,20 @@ namespace llarp::vpn
                 {
                     ifr.ifr_addr.sa_family = AF_INET;
                     auto in4 = range.address().in4();
+
                     std::memcpy(
-                        &((sockaddr_in*)&ifr.ifr_addr)->sin_addr.s_addr,
+                        &reinterpret_cast<sockaddr_in&>(ifr.ifr_addr).sin_addr.s_addr,
                         &in4.sin_addr.s_addr,
-                        range.address().socklen());
+                        sizeof(in4.sin_addr));
 
                     control.ioctl(SIOCSIFADDR, &ifr);
 
-                    auto subnet_mask = ipv4{255, 255, 255, 255} / range.mask();
+                    auto subnet_mask = (ipv4_subnet / range.mask()).base;
+                    log::trace(logcat, "IP Range:{}, subnet mask: {}", range, subnet_mask);
 
-                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr = 
-                        oxenc::load_host_to_big<unsigned int>(&subnet_mask.base.addr);
+                    ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
+                        oxenc::load_host_to_big<unsigned int>(&subnet_mask.addr);
 
-                    // ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
-                    //     oxenc::load_host_to_big<unsigned int>(&range.mask());
                     control.ioctl(SIOCSIFNETMASK, &ifr);
                 }
                 if (ifaddr.fam == AF_INET6)
@@ -92,6 +94,7 @@ namespace llarp::vpn
 
                     ifr6.prefixlen = std::popcount(range.mask());
                     ifr6.ifindex = _info.index;
+
                     try
                     {
                         IOCTL{AF_INET6}.ioctl(SIOCSIFADDR, &ifr6);

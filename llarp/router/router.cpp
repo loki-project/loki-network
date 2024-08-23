@@ -176,10 +176,10 @@ namespace llarp
             if (not _loop_ticker->start())
                 throw std::runtime_error{"Router failed to start main event loop ticker!"};
 
-            log::info(logcat, "Router successfully started main event loop ticker!");
+            log::debug(logcat, "Router successfully started main event loop ticker!");
         }
         else
-            log::info(logcat, "Main event loop ticker already auto-started!");
+            log::debug(logcat, "Main event loop ticker already auto-started!");
 
         if (is_service_node() and not _testing_disabled)
         {
@@ -191,10 +191,10 @@ namespace llarp
                 if (not _reachability_ticker->start())
                     throw std::runtime_error{"Router failed to start service node reachability loop ticker!"};
 
-                log::info(logcat, "Router successfully started service node reachability loop ticker!");
+                log::debug(logcat, "Router successfully started service node reachability loop ticker!");
             }
             else
-                log::info(logcat, "Service node reachability loop ticker already auto-started!");
+                log::debug(logcat, "Service node reachability loop ticker already auto-started!");
         }
     }
 
@@ -420,27 +420,12 @@ namespace llarp
 
         auto& conf = _config->network;
 
-        if (conf._if_name)
-        {
-            _if_name = *conf._if_name;
-        }
-        else
-        {
-            // DISCUSS: is this only relevant when _should_init_tun is true?
-            const auto maybe = net().FindFreeTun();
-
-            if (not maybe.has_value())
-                throw std::runtime_error("cannot find free interface name");
-
-            _if_name = *maybe;
-        }
-
-        log::info(logcat, "if-name set to {}", _if_name);
+        auto ipv6_enabled = conf.enable_ipv6;
 
         // If an ip range is set in the config, then the address and ip optionls are as well
         if (not(conf._local_ip_range and conf._local_addr->is_addressable()))
         {
-            const auto maybe = net().find_free_range();
+            const auto maybe = net().find_free_range(ipv6_enabled);
 
             if (not maybe.has_value())
             {
@@ -458,6 +443,47 @@ namespace llarp
             _local_base_ip = *conf._local_base_ip;
         }
 
+        auto is_v4 = _local_range.is_ipv4();
+
+        log::critical(logcat, "Lokinet has private {} range: {}", is_v4 ? "ipv4" : "ipv6", _local_range);
+
+        net::if_info if_info;
+
+        if (conf._if_name)
+        {
+            if_info.if_name = *conf._if_name;
+
+            if (auto maybe_addr = net().get_interface_addr(*if_info.if_name, is_v4 ? AF_INET : AF_INET6))
+                if_info.if_addr = *maybe_addr;
+            else
+                throw std::runtime_error{"cannot find address for interface name: {}"_format(*if_info.if_name)};
+
+            ip_v ipv{};
+            if (is_v4)
+                ipv = if_info.if_addr->to_ipv4();
+            else
+                ipv = if_info.if_addr->to_ipv6();
+
+            if (auto maybe_index = net().get_interface_index(ipv))
+                if_info.if_index = *maybe_index;
+            else
+                throw std::runtime_error{"cannot find index for interface name: {}"_format(*if_info.if_name)};
+
+            _if_name = *if_info.if_name;
+        }
+        else
+        {
+            if (auto maybe_name = net().find_free_tun(is_v4 ? AF_INET : AF_INET6))
+                if_info.if_name = maybe_name;
+            else
+                throw std::runtime_error("cannot find free interface name");
+        }
+
+        conf._if_info = if_info;
+        _if_name = *if_info.if_name;
+
+        log::info(logcat, "if-name set to {}", _if_name);
+
         // set values back in config
         conf._local_ip_range = _local_range;
         conf._local_addr = _local_addr;
@@ -469,7 +495,7 @@ namespace llarp
 
         if (not client_ips.empty())
         {
-            log::info(logcat, "Processing remote client map...");
+            log::debug(logcat, "Processing remote client map...");
 
             for (auto itr = client_ips.begin(); itr != client_ips.end();)
             {
@@ -557,6 +583,10 @@ namespace llarp
         }
 
         log::debug(logcat, "Configuring router");
+
+        _gossip_interval = _testnet ? TESTNET_GOSSIP_INTERVAL
+                + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)}
+                                    : RC_UPDATE_INTERVAL;
 
         _is_service_node = conf.router.is_relay;
         _is_exit_node = conf.network.allow_exit;
@@ -743,29 +773,25 @@ namespace llarp
             fmt::join(llarp::LOKINET_VERSION, "."), (_is_service_node) ? " snode: " : " client: ", _stats_line());
 
         if (is_service_node())
-        {
-            bool have_gossiped = last_rc_gossip == std::chrono::system_clock::time_point::min();
-            line += ", gossip [{}:{} next:last]"_format(
-                short_time_from_now(next_rc_gossip), have_gossiped ? short_time_from_now(last_rc_gossip) : "never");
-        }
+            line += ", gossip interval={}"_format(_gossip_interval);
 
         return line;
     }
 
     void Router::_relay_tick(std::chrono::milliseconds now)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        auto now_timepoint = std::chrono::system_clock::time_point(now);
+        // auto now_timepoint = std::chrono::system_clock::time_point(now);
         const auto& local = local_rid();
 
-        // if (not node_db()->registered_routers().count(local))
-        // {
-        //     log::critical(logcat, "We are NOT a registered router, figure it out!");
-        //     // update tick timestamp
-        //     _last_tick = llarp::time_now_ms();
-        //     return;
-        // }
+        if (not node_db()->registered_routers().count(local))
+        {
+            log::critical(logcat, "We are NOT a registered router, figure it out!");
+            // update tick timestamp
+            _last_tick = llarp::time_now_ms();
+            return;
+        }
 
         llarp::sys::service_manager->report_periodic_stats();
 
@@ -774,26 +800,26 @@ namespace llarp
 
         if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            log::info(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::debug(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
-        if (now_timepoint > next_rc_gossip)
-        {
-            log::critical(logcat, "Regenerating and gossiping RC...");
+        // if (now_timepoint > next_rc_gossip)
+        // {
+        //     log::critical(logcat, "Regenerating and gossiping RC...");
 
-            router_contact.resign();
-            save_rc();
+        //     router_contact.resign();
+        //     save_rc();
 
-            _link_manager->gossip_rc(local, router_contact.to_remote());
+        //     _link_manager->gossip_rc(local, router_contact.to_remote());
 
-            last_rc_gossip = now_timepoint;
+        //     last_rc_gossip = now_timepoint;
 
-            // TESTNET: 0 to 3 minutes before testnet gossip interval
-            auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
+        //     // TESTNET: 0 to 3 minutes before testnet gossip interval
+        //     auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
 
-            next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
-        }
+        //     next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
+        // }
 
         _link_manager->check_persisting_conns(now);
 
@@ -835,7 +861,7 @@ namespace llarp
 
     void Router::_client_tick(std::chrono::milliseconds now)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto now_timepoint = std::chrono::system_clock::time_point(now);
         llarp::sys::service_manager->report_periodic_stats();
@@ -847,7 +873,7 @@ namespace llarp
 
         if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            log::info(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::debug(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
@@ -892,7 +918,7 @@ namespace llarp
 
     void Router::tick()
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_is_stopping)
         {
@@ -970,9 +996,6 @@ namespace llarp
         // This must be constructed AFTER router creates its LocalRC
         _contacts = std::make_unique<Contacts>(*this);
 
-        // Pre-instruct nodedb to bootstrap on first Router::tick()
-        node_db()->set_needs_bootstrap(node_db()->num_rcs() < MIN_ACTIVE_RCS);
-
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, true);
@@ -988,6 +1011,7 @@ namespace llarp
 
         if (is_service_node() and not _testing_disabled)
         {
+            _link_manager->start_tickers();
             // do service node testing if we are in service node whitelist mode
             _reachability_ticker = _loop->call_every(
                 consensus::REACHABILITY_TESTING_TIMER_INTERVAL,

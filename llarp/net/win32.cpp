@@ -127,7 +127,7 @@ namespace llarp::net
             return oxen::quic::Address{};
         }
 
-        std::optional<std::string> FindFreeTun() const override { return "lokitun0"; }
+        std::optional<std::string> find_free_tun(int) const override { return "lokitun0"; }
 
         std::optional<oxen::quic::Address> get_best_public_address(bool, uint16_t) const override
         {
@@ -135,7 +135,9 @@ namespace llarp::net
             return std::nullopt;
         }
 
-        std::optional<IPRange> find_free_range() const override
+        if_info find_free_interface(int af) const override { return if_info{af}; }
+
+        std::optional<IPRange> find_free_range(bool ipv6_enabled) const override
         {
             std::list<IPRange> currentRanges;
 

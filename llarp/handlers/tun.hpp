@@ -166,7 +166,8 @@ namespace llarp::handlers
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
-        bool _is_ipv6;
+        bool ipv6_enabled;
+
         std::string _if_name;
 
         std::optional<IPRange> _base_ipv6_range = std::nullopt;

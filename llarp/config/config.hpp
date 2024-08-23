@@ -110,6 +110,7 @@ namespace llarp
         std::optional<int> hops;
         std::optional<int> paths;
 
+        bool enable_ipv6{false};
         bool allow_exit{false};
         bool is_reachable{false};
         bool init_tun{true};
@@ -146,6 +147,9 @@ namespace llarp
 
         // the only member that refers to an actual interface
         std::optional<std::string> _if_name;
+
+        // used for in6_ifreq
+        net::if_info _if_info;
 
         // If _local_ip_range is set, the following two optionals are also set
         std::optional<IPRange> _local_ip_range;

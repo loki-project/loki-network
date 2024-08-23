@@ -34,7 +34,7 @@ namespace llarp
         try
         {
             auto nread = util::file_to_buffer(fname, _payload.data(), _payload.size());
-            log::debug(logcat, "{}B read from file (path:{})!", nread, fname);
+            log::trace(logcat, "{}B read from file (path:{})!", nread, fname);
             _payload.resize(nread);
 
             oxenc::bt_dict_consumer btdc{_payload};

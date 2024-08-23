@@ -149,6 +149,8 @@ namespace llarp
 
         std::shared_ptr<NodeDB> node_db;
 
+        std::shared_ptr<EventTicker> _gossip_ticker;
+
         oxen::quic::Address addr;
 
         const bool _is_service_node;
@@ -179,6 +181,8 @@ namespace llarp
             const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& rid, bool client_only = false);
 
       public:
+        void start_tickers();
+
         const std::unique_ptr<link::Endpoint>& endpoint() const { return ep; }
 
         const oxen::quic::Address& local() { return addr; }

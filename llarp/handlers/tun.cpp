@@ -331,7 +331,9 @@ namespace llarp::handlers
         _local_addr = *net_conf._local_addr;
         _local_base_ip = *net_conf._local_base_ip;
 
-        _is_ipv6 = not _local_range.is_ipv4();
+        ipv6_enabled = not _local_range.is_ipv4();
+        if (ipv6_enabled and not net_conf.enable_ipv6)
+            throw std::runtime_error{"Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
 
         _persisting_addr_file = net_conf.addr_map_persist_file;
 
@@ -347,15 +349,16 @@ namespace llarp::handlers
         _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
 
         vpn::InterfaceInfo info;
+        info.ifname = _if_name;
+        info.if_info = net_conf._if_info;
         info.addrs.emplace_back(_local_range);
 
-        if (_base_ipv6_range)
+        if (net_conf.enable_ipv6 and _base_ipv6_range)
         {
-            log::debug(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
             info.addrs.emplace_back(*_base_ipv6_range);
         }
 
-        info.ifname = _if_name;
         log::debug(logcat, "{} setting up network...", name());
 
         _net_if = router().vpn_platform()->CreateInterface(std::move(info), &_router);
@@ -376,16 +379,21 @@ namespace llarp::handlers
             throw std::runtime_error{std::move(err)};
         }
 
-        _local_ipv6 = _is_ipv6 ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
+        _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
 
-        if constexpr (not llarp::platform::is_apple)
+        if (ipv6_enabled)
         {
-            if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+            if constexpr (not llarp::platform::is_apple)
             {
-                _local_ipv6 = *maybe;
-                log::info(logcat, "{} has ipv6 address:{}", name(), _local_ipv6);
+                if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                {
+                    _local_ipv6 = *maybe;
+                }
             }
         }
+
+        log::debug(
+            logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
 
         // if (auto* quic = GetQUICTunnel())
         // {
@@ -801,7 +809,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::supports_ipv6() const
     {
-        return _is_ipv6;
+        return ipv6_enabled;
     }
 
     // FIXME: pass in which question it should be addressing

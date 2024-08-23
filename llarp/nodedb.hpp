@@ -173,7 +173,7 @@ namespace llarp
 
         // TESTNET: NEW MEMBERS FOR BOOTSTRAPPING MANAGED BY EVENTTRIGGER OBJECT
         std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _needs_initial_fetch{false},
-            _is_fetching{false};
+            _is_fetching{false}, _has_bstrap_connection{false}, _is_connecting_bstrap{false};
         std::shared_ptr<EventTrigger> _bootstrap_handler;
         std::shared_ptr<EventTrigger> _fetch_handler;
 
@@ -224,7 +224,6 @@ namespace llarp
         // TESTNET: new bootstrap/initial fetch functions
         void bootstrap();                          //  private
         void stop_bootstrap(bool success = true);  //  private
-        void set_needs_bootstrap(bool v) { _needs_bootstrap = v; }
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }
         bool bootstrap_completed() const { return not(_is_bootstrapping or _needs_bootstrap); }

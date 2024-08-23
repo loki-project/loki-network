@@ -82,7 +82,7 @@ namespace llarp
         return is_ipv4() ? _contains(std::get<ipv4>(other)) : _contains(std::get<ipv6>(other));
     }
 
-    std::optional<IPRange> IPRange::find_private_range(const std::list<IPRange>& excluding)
+    std::optional<IPRange> IPRange::find_private_range(const std::list<IPRange>& excluding, bool ipv6_enabled)
     {
         if (excluding.empty())
             return std::nullopt;
@@ -94,10 +94,8 @@ namespace llarp
             return true;
         };
 
-        using ip_type = decltype(excluding.front());
-
         // check ipv4 private addresses
-        if constexpr (std::is_same_v<ip_type, ipv4_range>)
+        if (excluding.front().is_ipv4())
         {
             for (const auto& r : ipv4_private)
             {
@@ -105,7 +103,9 @@ namespace llarp
                     return r;
             }
         }
-        else  // check ipv6 private addresses
+        // the invoking context also ensures thet the list `excluding` also does not include ipv6 before passing
+        // the boolean to this function
+        else if (ipv6_enabled)
         {
             for (size_t n = 0; n < num_ipv6_private; ++n)
             {

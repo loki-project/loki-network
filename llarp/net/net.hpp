@@ -44,6 +44,19 @@ namespace llarp
 
     namespace net
     {
+        struct if_info
+        {
+            explicit if_info(int _af = AF_INET) : af{_af} {}
+
+            int af{};
+            std::optional<std::string> if_name = std::nullopt;
+            std::optional<oxen::quic::Address> if_addr = std::nullopt;
+            std::optional<oxen::quic::Address> if_netmask = std::nullopt;
+            std::optional<int> if_index = std::nullopt;
+
+            operator bool() const { return if_name and if_addr /* and if_netmask */ and if_index; }
+        };
+
         /// network platform (all methods virtual so it can be mocked by unit tests)
         class Platform
         {
@@ -90,9 +103,11 @@ namespace llarp
             // addresses; the returned Address (if set) will have its port set to the given value.
             virtual std::optional<oxen::quic::Address> get_best_public_address(bool ipv4, uint16_t port) const = 0;
 
-            virtual std::optional<IPRange> find_free_range() const = 0;
+            virtual std::optional<IPRange> find_free_range(bool ipv6_enabled = false) const = 0;
 
-            virtual std::optional<std::string> FindFreeTun() const = 0;
+            virtual std::optional<std::string> find_free_tun(int af = AF_INET) const = 0;
+
+            virtual if_info find_free_interface(int af = AF_INET) const = 0;
 
             virtual std::optional<oxen::quic::Address> get_interface_addr(
                 std::string_view ifname, int af = AF_INET) const = 0;

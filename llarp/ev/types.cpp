@@ -167,6 +167,6 @@ namespace llarp
         _is_iterating = false;
         _is_cooling_down = event_add(cv.get(), &_cooldown) == 0;
 
-        log::info(logcat, "EventTrigger {}successfully began cooldown timer!", _is_cooling_down ? "" : "un");
+        log::info(logcat, "Cooldown {}successfully began after {} attempts!", _is_cooling_down ? "" : "un", _current);
     }
 }  //  namespace llarp

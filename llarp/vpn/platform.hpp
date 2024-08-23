@@ -38,6 +38,8 @@ namespace llarp::vpn
         unsigned int index;
         std::vector<InterfaceAddress> addrs;
 
+        net::if_info if_info;
+
         inline IPRange operator[](size_t idx) const { return addrs[idx].range; }
     };
 

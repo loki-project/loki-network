@@ -24,7 +24,7 @@ namespace llarp
 {
     static auto logcat = llarp::log::Cat("quic");
 
-    static ustring_view static_shared_key = "Lokinet static shared secret key"_usv;
+    static constexpr auto static_shared_key = "Lokinet static shared secret key"_usv;
 
     static static_secret make_static_secret(const SecretKey& sk)
     {
@@ -252,14 +252,27 @@ namespace llarp
         log::critical(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
 
+    void LinkManager::start_tickers()
+    {
+        _gossip_ticker = _router.loop()->call_every(
+            _router._gossip_interval,
+            [this] {
+                log::critical(logcat, "Regenerating and gossiping RC...");
+                _router.router_contact.resign();
+                _router.save_rc();
+                gossip_rc(_router.local_rid(), _router.router_contact.to_remote());
+            },
+            true);
+    }
+
     LinkManager::LinkManager(Router& r)
         : _router{r},
           node_db{_router.node_db()},
           _is_service_node{_router.is_service_node()},
           quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
-              {reinterpret_cast<const char*>(_router.identity().data()), size_t{32}},
-              {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), size_t{32}})},
+              {reinterpret_cast<const char*>(_router.identity().data()), 32},
+              {reinterpret_cast<const char*>(_router.pubkey().data()), 32})},
           ep{std::make_unique<link::Endpoint>(startup_endpoint(), *this)}
     {
         is_stopping = false;
@@ -292,7 +305,7 @@ namespace llarp
         auto e = quic->endpoint(
             _router.listen_addr(),
             oxen::quic::opt::enable_datagrams{oxen::quic::Splitting::ACTIVE},
-            make_static_secret(_router.identity()),
+            // make_static_secret(_router.identity()),  // TESTNET: figure this out later
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
             [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },

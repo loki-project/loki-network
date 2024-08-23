@@ -70,6 +70,7 @@ namespace llarp::handlers
 
         _is_v4 = _local_range.is_ipv4();
 
+        // TESTNET: TODO: check if ipv6 is disabled
         for (auto& [addr, range] : net_config._exit_ranges)
         {
             _range_map.insert_or_assign(range, addr);

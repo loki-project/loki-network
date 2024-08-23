@@ -15,6 +15,8 @@
 
 namespace llarp::net
 {
+    static auto logcat = log::Cat("posix");
+
     class Platform_Impl : public Platform
     {
         template <typename Visit_t>
@@ -75,20 +77,24 @@ namespace llarp::net
             return found;
         }
 
-        std::optional<IPRange> find_free_range() const override
+        std::optional<IPRange> find_free_range(bool ipv6_enabled) const override
         {
             std::list<IPRange> current_ranges;
 
-            iter_all([&current_ranges](ifaddrs* i) {
-                if (i and i->ifa_addr and i->ifa_addr->sa_family == AF_INET)
+            iter_all([&current_ranges, ipv6_enabled](ifaddrs* i) {
+                if (i and i->ifa_addr
+                    and (i->ifa_addr->sa_family == AF_INET or (i->ifa_addr->sa_family == AF_INET6 and ipv6_enabled)))
                 {
                     oxen::quic::Address addr{i->ifa_addr};
-                    uint8_t m = reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr;
+                    auto nma = reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr;
+                    auto m = std::popcount(nma);
+                    log::trace(
+                        logcat, "Adding {} {} (mask={}) to current ranges", addr.is_ipv4() ? "ipv4" : "ipv6", addr, m);
                     current_ranges.emplace_back(std::move(addr), std::move(m));
                 }
             });
 
-            return IPRange::find_private_range(current_ranges);
+            return IPRange::find_private_range(std::move(current_ranges), ipv6_enabled);
         }
 
         std::optional<int> get_interface_index(ip_v ip) const override
@@ -121,14 +127,46 @@ namespace llarp::net
             return ret;
         }
 
-        std::optional<std::string> FindFreeTun() const override
+        if_info find_free_interface(int af = AF_INET) const override
+        {
+            if_info info{af};
+            int num = 0;
+
+            while (num < 255)
+            {
+                auto ifname = "lokitun{}"_format(num);
+                log::trace(logcat, "Looking for interface ({})...", ifname);
+
+                iter_all([&info, if_name = ifname, af](ifaddrs* i) {
+                    if (info)
+                        return;
+
+                    if (i and i->ifa_addr and i->ifa_addr->sa_family == af and i->ifa_name == if_name)
+                    {
+                        info.if_name = if_name;
+                        info.if_addr = i->ifa_addr;
+                        info.if_netmask = i->ifa_netmask;
+                        info.if_index = if_nametoindex(i->ifa_name);
+                    }
+                });
+
+                if (info)
+                    break;
+
+                num++;
+            }
+
+            return info;
+        }
+
+        std::optional<std::string> find_free_tun(int af) const override
         {
             int num = 0;
 
             while (num < 255)
             {
                 std::string ifname = fmt::format("lokitun{}", num);
-                if (get_interface_addr(ifname, AF_INET) == std::nullopt)
+                if (get_interface_addr(ifname, af) == std::nullopt)
                     return ifname;
                 num++;
             }

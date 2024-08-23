@@ -53,7 +53,7 @@ namespace llarp
     // inline constexpr size_t INTROSET_STORAGE_REDUNDANCY{(INTROSET_RELAY_REDUNDANCY * INTROSET_REQS_PER_RELAY)};
 
     // TESTNET: these constants are shortened for testing purposes
-    inline constexpr std::chrono::milliseconds TESTNET_GOSSIP_INTERVAL{15min};
+    inline constexpr std::chrono::milliseconds TESTNET_GOSSIP_INTERVAL{5min};
     inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{5min};
     inline constexpr std::chrono::milliseconds INITIAL_ATTEMPT_INTERVAL{30s};
     // as we advance towards full mesh, we try to connect to this number per tick
@@ -73,6 +73,7 @@ namespace llarp
     struct Router : std::enable_shared_from_this<Router>
     {
         friend class NodeDB;
+        friend struct LinkManager;
 
         explicit Router(
             std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p);
@@ -192,6 +193,8 @@ namespace llarp
         void process_routerconfig();
 
         void process_netconfig();
+
+        std::chrono::milliseconds _gossip_interval;
 
         std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};
         std::chrono::system_clock::time_point next_rc_gossip{last_rc_gossip};

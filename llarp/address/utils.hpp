@@ -119,30 +119,6 @@ namespace llarp
 
             return ret;
         }
-
-        // inline constexpr std::array<ipv6_range, num_ipv6_private> generate_private_ipv6()
-        // {
-        //     std::array<ipv6_range, num_ipv6_private> ret{};
-
-        //     for (size_t n = 0; n < num_ipv6_private; ++n)
-        //         ret[n] = ipv6(0xfd2e, 0x6c6f, 0x6b69, n) / 64;
-
-        //     return ret;
-        // }
-
     }  //  namespace detail
 
-    /*
-        16
-        256
-
-        528 total IPv4 addresses
-
-        for (int oct = 16; oct <= 31; ++oct)
-            if (auto range = IPRange::FromIPv4(172, oct, 0, 1, 16); good(range))
-                return range;
-        for (int oct = 0; oct <= 255; ++oct)
-            if (auto range = IPRange::FromIPv4(10, oct, 0, 1, 16); good(range))
-                return range;
-    */
 }  //  namespace llarp

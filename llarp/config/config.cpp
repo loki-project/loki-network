@@ -590,6 +590,13 @@ namespace llarp
                     throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
             });
 
+        conf.define_option<bool>(
+            "network",
+            "enable-ipv6-tun",
+            Default{false},
+            assignment_acceptor(enable_ipv6),
+            Comment{"Enable IPv6 addressing for lokinet virtual TUN device interface (default: off)"});
+
         conf.define_option<std::string>(
             "network",
             "ip6-range",

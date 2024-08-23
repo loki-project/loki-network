@@ -62,7 +62,8 @@ namespace llarp
               _max_ip{ipv6.max_ip()}
         {}
 
-        static std::optional<IPRange> find_private_range(const std::list<IPRange>& excluding);
+        static std::optional<IPRange> find_private_range(
+            const std::list<IPRange>& excluding, bool ipv6_enabled = false);
 
         void bt_encode(oxenc::bt_list_producer& btlp) const { btlp.append(to_string()); }
 
