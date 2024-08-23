@@ -593,7 +593,7 @@ int main(int argc, char* argv[])
     // read the desired log info from config.
     oxen::log::add_sink(llarp::log::Type::Print, "stderr");
     oxen::log::reset_level(llarp::log::Level::info);
-    oxen::log::set_level("quic", oxen::log::Level::warn);
+    // oxen::log::set_level("quic", oxen::log::Level::info);
 
     llarp::logRingBuffer = std::make_shared<llarp::log::RingBufferSink>(100);
     oxen::log::add_sink(llarp::logRingBuffer, llarp::log::DEFAULT_PATTERN_MONO);

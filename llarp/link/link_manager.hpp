@@ -94,12 +94,12 @@ namespace llarp
             size_t num_router_conns() const;
 
             template <typename... Opt>
-            bool establish_connection(const KeyedAddress& remote, const RemoteRC& rc, Opt&&... opts);
+            bool establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts);
 
             template <typename... Opt>
             bool establish_and_send(
-                const KeyedAddress& remote,
-                const RemoteRC& rc,
+                KeyedAddress remote,
+                RemoteRC rc,
                 std::optional<std::string> endpoint,
                 std::string body,
                 std::function<void(oxen::quic::message m)> func = nullptr,
@@ -314,14 +314,20 @@ namespace llarp
 
         template <typename... Opt>
         bool Endpoint::establish_and_send(
-            const KeyedAddress& remote,
-            const RemoteRC& rc,
-            std::optional<std::string> ep,
-            std::string body,
-            std::function<void(oxen::quic::message m)> func,
-            Opt&&... opts)
+            KeyedAddress raddr,
+            RemoteRC _rc,
+            std::optional<std::string> _ep,
+            std::string _body,
+            std::function<void(oxen::quic::message m)> hook,
+            Opt&&... args)
         {
-            return link_manager.router().loop()->call_get([&]() {
+            return link_manager.router().loop()->call_get([this,
+                                                           remote = std::move(raddr),
+                                                           rc = std::move(_rc),
+                                                           ep = std::move(_ep),
+                                                           body = std::move(_body),
+                                                           func = std::move(hook),
+                                                           ... opts = std::forward<Opt>(args)]() mutable {
                 try
                 {
                     const auto& rid = rc.router_id();
@@ -366,7 +372,7 @@ namespace llarp
                     (is_control) ? control_stream->command(std::move(*ep), std::move(body), std::move(func))
                                  : conn_interface->send_datagram(std::move(body));
 
-                    itr->second = std::make_shared<link::Connection>(conn_interface, control_stream, true);
+                    itr->second = std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
 
                     log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
@@ -380,47 +386,48 @@ namespace llarp
         }
 
         template <typename... Opt>
-        bool Endpoint::establish_connection(const KeyedAddress& remote, const RemoteRC& rc, Opt&&... opts)
+        bool Endpoint::establish_connection(KeyedAddress raddr, RemoteRC _rc, Opt&&... args)
         {
-            return link_manager.router().loop()->call_get([&]() {
-                try
-                {
-                    const auto& rid = rc.router_id();
-
-                    log::debug(logcat, "Establishing connection to RID:{}", rid);
-                    // add to service conns
-                    auto [itr, b] = service_conns.try_emplace(rid, nullptr);
-
-                    if (not b)
+            return link_manager.router().loop()->call_get(
+                [this, remote = raddr, rc = _rc, ... opts = std::forward<Opt>(args)]() mutable {
+                    try
                     {
-                        log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
-                        return b;
+                        const auto& rid = rc.router_id();
+
+                        log::debug(logcat, "Establishing connection to RID:{}", rid);
+                        // add to service conns
+                        auto [itr, b] = service_conns.try_emplace(rid, nullptr);
+
+                        if (not b)
+                        {
+                            log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
+                            return b;
+                        }
+
+                        auto conn_interface = endpoint->connect(
+                            remote,
+                            link_manager.tls_creds,
+                            _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                            std::forward<Opt>(opts)...);
+
+                        auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
+                            [rid = rid](oxen::quic::Stream&, uint64_t error_code) {
+                                log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                            });
+
+                        link_manager.register_commands(control_stream, rid, not _is_service_node);
+
+                        itr->second = std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+
+                        log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                        return true;
                     }
-
-                    auto conn_interface = endpoint->connect(
-                        remote,
-                        link_manager.tls_creds,
-                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
-                        std::forward<Opt>(opts)...);
-
-                    auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
-                        [rid = rid](oxen::quic::Stream&, uint64_t error_code) {
-                            log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-                        });
-
-                    link_manager.register_commands(control_stream, rid, not _is_service_node);
-
-                    itr->second = std::make_shared<link::Connection>(conn_interface, control_stream, true);
-
-                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
-                    return true;
-                }
-                catch (...)
-                {
-                    log::error(logcat, "Error: failed to establish connection to {}", remote);
-                    return false;
-                }
-            });
+                    catch (...)
+                    {
+                        log::error(logcat, "Error: failed to establish connection to {}", remote);
+                        return false;
+                    }
+                });
         }
     }  // namespace link
 }  // namespace llarp

@@ -364,7 +364,7 @@ namespace llarp
 
         bool ensure_encryption_key();
 
-        const RouterID& pubkey() const { return _id_pubkey; }
+        const RouterID& pubkey() const { return router_contact.router_id(); }
 
         // const uint8_t* pubkey() const
         // {
@@ -390,8 +390,6 @@ namespace llarp
         bool is_bootstrap_node(RouterID rid) const;
 
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
-
-        void connect_to_random(int N);
 
         /// count the number of unique service nodes connected via pubkey
         size_t num_router_connections() const;

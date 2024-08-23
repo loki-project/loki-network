@@ -196,6 +196,11 @@ namespace llarp
             else
                 log::debug(logcat, "Service node reachability loop ticker already auto-started!");
         }
+        else
+        {
+            // Resolve needed ONS values now that we have the necessary things prefigured
+            _session_endpoint->resolve_ons_mappings();
+        }
     }
 
     bool Router::fully_meshed() const
@@ -338,7 +343,8 @@ namespace llarp
 
         // TESTNET:
         // oxen::log::reset_level(oxen::log::Level::trace);
-        oxen::log::set_level("quic", oxen::log::Level::warn);
+        oxen::log::set_level("quic", oxen::log::Level::info);
+        // oxen::log::set_level("quic", oxen::log::Level::debug);
     }
 
     void Router::init_rpc()
@@ -584,9 +590,8 @@ namespace llarp
 
         log::debug(logcat, "Configuring router");
 
-        _gossip_interval = _testnet ? TESTNET_GOSSIP_INTERVAL
-                + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)}
-                                    : RC_UPDATE_INTERVAL;
+        _gossip_interval =
+            TESTNET_GOSSIP_INTERVAL + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
 
         _is_service_node = conf.router.is_relay;
         _is_exit_node = conf.network.allow_exit;
@@ -998,12 +1003,9 @@ namespace llarp
 
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(
-            ROUTER_TICK_INTERVAL, [this] { tick(); }, true);
+            ROUTER_TICK_INTERVAL, [this] { tick(); }, false);
 
         // _route_poker->start();
-
-        // Resolve needed ONS values now that we have the necessary things prefigured
-        _session_endpoint->resolve_ons_mappings();
 
         _is_running.store(true);
 
@@ -1074,7 +1076,7 @@ namespace llarp
                             });
                     }
                 },
-                false);
+                true);
         }
 
         log::critical(logcat, "\n\n\tLOCAL INSTANCE ROUTER ID: {}\n", local_rid());
@@ -1197,17 +1199,6 @@ namespace llarp
     uint32_t Router::NextPathBuildNumber()
     {
         return _path_build_count++;
-    }
-
-    void Router::connect_to_random(int _want)
-    {
-        const size_t want = _want;
-        auto connected = num_router_connections();
-
-        if (connected >= want)
-            return;
-
-        _link_manager->connect_to_random(want);
     }
 
     bool Router::init_service_node()
