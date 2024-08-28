@@ -80,12 +80,12 @@ namespace llarp
 
         bool Endpoint::have_client_conn(const RouterID& remote) const
         {
-            return link_manager.router().loop()->call_get([&, remote]() { return client_conns.count(remote); });
+            return link_manager.router().loop()->call_get([this, remote]() { return client_conns.count(remote); });
         }
 
         bool Endpoint::have_service_conn(const RouterID& remote) const
         {
-            return link_manager.router().loop()->call_get([&]() { return service_conns.count(remote); });
+            return link_manager.router().loop()->call_get([this, remote]() { return service_conns.count(remote); });
         }
 
         void Endpoint::for_each_connection(std::function<void(link::Connection&)> hook)
@@ -240,9 +240,9 @@ namespace llarp
         for (auto& method : path_requests)
         {
             s->register_handler(std::string{method.first}, [this, func = method.second](oxen::quic::message m) {
-                _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() {
+                _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
                     auto body = msg.body_str();
-                    auto respond = [&, m = std::move(msg)](std::string response) {
+                    auto respond = [&, m = std::move(msg)](std::string response) mutable {
                         m.respond(std::move(response), m.is_error());
                     };
                     std::invoke(func, this, body, std::move(respond));
@@ -417,7 +417,6 @@ namespace llarp
             if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
             {
                 log::critical(logcat, "Configuring inbound connection from relay RID:{}", rid);
-
                 it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream));
             }
             else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
@@ -512,8 +511,8 @@ namespace llarp
 
         if (func)
         {
-            func = [this, f = std::move(func)](oxen::quic::message m) {
-                _router.loop()->call([&, func = std::move(f), msg = std::move(m)]() { func(std::move(msg)); });
+            func = [this, f = std::move(func)](oxen::quic::message m) mutable {
+                _router.loop()->call([&, func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
             };
         }
 
@@ -846,8 +845,8 @@ namespace llarp
     void LinkManager::fetch_bootstrap_rcs(
         const RemoteRC& source, std::string payload, std::function<void(oxen::quic::message m)> func)
     {
-        func = [this, f = std::move(func)](oxen::quic::message m) mutable {
-            _router.loop()->call([func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
+        func = [this, f = std::move(func)](oxen::quic::message m) {
+            _router.loop()->call([func = std::move(f), msg = std::move(m)]() { func(std::move(msg)); });
         };
 
         const auto& rid = source.router_id();
@@ -868,7 +867,7 @@ namespace llarp
     {
         // this handler should not be registered for clients
         assert(_router.is_service_node());
-        log::critical(logcat, "Handling fetch bootstrap fetch request...");
+        log::critical(logcat, "Handling bootstrap fetch request...");
 
         std::optional<RemoteRC> remote;
         size_t quantity;
@@ -900,16 +899,13 @@ namespace llarp
 
                 if (auto itr = registered.find(rid); itr != registered.end())
                 {
-                    _router.loop()->call_soon([this, remote_rc = *remote]() {
-                        if (node_db->verify_store_gossip_rc(remote_rc))
-                        {
-                            log::critical(
-                                logcat,
-                                "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
-                                remote_rc.router_id());
-                            gossip_rc(_router.local_rid(), remote_rc);
-                        }
-                    });
+                    auto remote_rc = *remote;
+                    if (node_db->verify_store_gossip_rc(remote_rc))
+                        log::critical(
+                            logcat,
+                            "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
+                            remote_rc.router_id());
+                    _router.loop()->call_soon([&, remote_rc]() { gossip_rc(_router.local_rid(), remote_rc); });
                 }
             }
         }
@@ -1063,7 +1059,7 @@ namespace llarp
                 source,
                 "fetch_rids"s,
                 m.body_str(),
-                [source_rid = std::move(source), original = std::move(m)](oxen::quic::message m) mutable {
+                [source_rid = std::move(source), original = std::move(m)](oxen::quic::message m) {
                     original.respond(m.body_str(), m.is_error());
                 });
             return;
@@ -1374,7 +1370,7 @@ namespace llarp
                 peer_key,
                 "find_intro",
                 FindIntroMessage::serialize(addr, is_relayed, relay_order),
-                [respond = std::move(respond)](oxen::quic::message relay_response) mutable {
+                [respond = std::move(respond)](oxen::quic::message relay_response) {
                     if (relay_response)
                         log::info(
                             logcat,
@@ -1909,8 +1905,7 @@ namespace llarp
             next_router,
             "path_control"s,
             std::move(new_payload),
-            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
-                oxen::quic::message response) mutable {
+            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](oxen::quic::message response) {
                 auto hop = hop_weak.lock();
 
                 if (not hop)

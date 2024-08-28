@@ -2,42 +2,12 @@
 
 #include "concept.hpp"
 
-// #include <fmt/format.h>
 #include <oxen/log/format.hpp>
-#include <oxen/quic/format.hpp>
-
-#include <type_traits>
 
 namespace llarp
 {
     using namespace std::literals;
     using namespace oxen::log::literals;
-
-    // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
-    template <typename T>
-    concept ToStringFormattable = oxen::quic::ToStringFormattable<T>;
-
-#ifndef __cpp_lib_is_scoped_enum
-    template <typename T, bool = std::is_enum_v<T>>
-    struct is_scoped_enum : std::false_type
-    {};
-
-    template <typename T>
-    struct is_scoped_enum<T, true> : std::bool_constant<!std::is_convertible_v<T, std::underlying_type_t<T>>>
-    {};
-
-    template <typename T>
-    constexpr bool is_scoped_enum_v = is_scoped_enum<T>::value;
-#endif
-
-    template <typename T>
-    concept ScopedEnum_t =
-#ifdef __cpp_lib_is_scoped_enum
-        std::is_scoped_enum_v<T>;
-#else
-        is_scoped_enum_v<T>;
-#endif
-
 }  // namespace llarp
 
 #if !defined(USE_GHC_FILESYSTEM) && FMT_VERSION >= 80102
@@ -68,7 +38,7 @@ namespace fmt
 
 namespace fmt
 {
-    template <llarp::ScopedEnum_t T>
+    template <llarp::concepts::is_scoped_enum T>
     struct formatter<T, char> : formatter<std::string_view>
     {
         template <typename FormatContext>

@@ -191,9 +191,11 @@ namespace llarp
 
             void set_new_tag(const service::SessionTag& tag);
         };
-
-        template <typename session_t>
-        concept SessionType = std::is_base_of_v<BaseSession, session_t>;
-
     }  // namespace session
+
+    namespace concepts
+    {
+        template <typename session_t>
+        concept SessionType = std::is_base_of_v<llarp::session::BaseSession, session_t>;
+    }  // namespace concepts
 }  // namespace llarp

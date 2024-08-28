@@ -134,8 +134,6 @@ macro_ensure_out_of_source_build("${PROJECT_NAME} requires an out-of-source buil
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(cmake/unix.cmake)
-include(cmake/check_for_std_optional.cmake)
-#include(cmake/check_for_std_filesystem.cmake)
 
 if(NOT WIN32)
   if(IOS OR ANDROID)
@@ -152,18 +150,6 @@ if(NOT WIN32)
 endif()
 
 find_package(PkgConfig REQUIRED)
-
-if(NOT BUILD_STATIC_DEPS)
-  pkg_check_modules(LIBUV libuv>=1.18.0 IMPORTED_TARGET)
-endif()
-if(LIBUV_FOUND AND NOT BUILD_STATIC_DEPS)
-  add_library(libuv INTERFACE)
-  target_link_libraries(libuv INTERFACE PkgConfig::LIBUV)
-else()
-  if(NOT BUILD_STATIC_DEPS)
-    message(FATAL_ERROR "Could not find libuv >= 1.28.0; install it on your system or use -DBUILD_STATIC_DEPS=ON")
-  endif()
-endif()
 
 if(NOT TARGET sodium)
 # Allow -D DOWNLOAD_SODIUM=FORCE to download without even checking for a local libsodium

@@ -14,7 +14,7 @@ namespace llarp
         OutboundSessionType objects are held in shared_ptr's, and getters will return the shared_ptr
         or nullptr if not found. MAKE SURE TO CHECK ON RETURN!!
     */
-    template <NetworkAddrType net_addr_t, session::SessionType session_t>
+    template <concepts::NetworkAddrType net_addr_t, concepts::SessionType session_t>
     struct session_map
     {
       protected:

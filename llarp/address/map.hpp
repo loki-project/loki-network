@@ -19,7 +19,7 @@ namespace llarp
             LocalAddrType: oxen::quic::Address, IPRange, or ip_v (ipv{4,6} variant)
             NetworkAddrType: must be inherited from NetworkAddress
     */
-    template <LocalAddrType local_addr_t, NetworkAddrType net_addr_t>
+    template <concepts::LocalAddrType local_addr_t, concepts::NetworkAddrType net_addr_t>
     struct address_map
     {
       protected:

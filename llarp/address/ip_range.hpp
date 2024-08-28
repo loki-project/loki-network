@@ -198,9 +198,13 @@ namespace llarp
         bool is_ipv4() const { return _is_ipv4; }
     };
 
-    template <typename local_t>
-    concept LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>
-        || std::is_same_v<ip_v, local_t>;
+    namespace concepts
+    {
+        template <typename local_t>
+        concept LocalAddrType = std::is_same_v<oxen::quic::Address, local_t> || std::is_same_v<IPRange, local_t>
+            || std::is_same_v<ip_v, local_t>;
+    }  // namespace concepts
+
 }  //  namespace llarp
 
 namespace std

@@ -133,8 +133,11 @@ namespace llarp
         static constexpr bool to_string_formattable = true;
     };
 
-    template <typename addr_t>
-    concept NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
+    namespace concepts
+    {
+        template <typename addr_t>
+        concept NetworkAddrType = std::is_base_of_v<NetworkAddress, addr_t>;
+    };  // namespace concepts
 
 }  // namespace llarp
 

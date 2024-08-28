@@ -281,7 +281,7 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     return;
-                auth_type = auth::parse_auth_type(arg);
+                auth_type = parse_auth_type(arg);
             });
 
         conf.define_option<std::string>(
@@ -348,7 +348,7 @@ namespace llarp
                 "How to interpret the contents of an auth file.",
                 "Possible values: hashes, plaintext",
             },
-            [this](std::string arg) { auth_file_type = auth::parse_auth_file_type(std::move(arg)); });
+            [this](std::string arg) { auth_file_type = parse_auth_file_type(std::move(arg)); });
 
         conf.define_option<std::string>(
             "network",

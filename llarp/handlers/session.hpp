@@ -87,13 +87,13 @@ namespace llarp
             // get copy of all srv records
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
-            template <session::SessionType session_t = session::BaseSession>
+            template <concepts::SessionType session_t = session::BaseSession>
             std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(tag));
             }
 
-            template <session::SessionType session_t = session::BaseSession>
+            template <concepts::SessionType session_t = session::BaseSession>
             std::shared_ptr<session_t> get_session(const NetworkAddress& remote) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(remote));

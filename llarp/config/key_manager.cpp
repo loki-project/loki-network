@@ -17,6 +17,12 @@ namespace llarp
         return crypto::encryption_keygen(key);
     }
 
+    static void transkeygen_hook(llarp::SecretKey& key)
+    {
+        key.zero();
+        return crypto::encryption_keygen(key);
+    }
+
     static void idkeygen_hook(llarp::SecretKey& key)
     {
         return crypto::identity_keygen(key);
@@ -89,15 +95,13 @@ namespace llarp
             }
         }
 
-        // load encryption key
         if (not keygen(enckey_path, encryption_key, enckeygen_hook))
         {
             log::critical(logcat, "KeyManager::keygen failed to generate encryption key line:{}", __LINE__);
             return false;
         }
 
-        // TODO: transport key (currently done in LinkLayer)
-        if (transport_key.zero(); not keygen(transkey_path, transport_key, enckeygen_hook))
+        if (not keygen(transkey_path, transport_key, transkeygen_hook))
         {
             log::critical(logcat, "KeyManager::keygen failed to generate transport key line:{}", __LINE__);
             return false;

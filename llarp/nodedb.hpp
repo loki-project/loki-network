@@ -159,6 +159,8 @@ namespace llarp
         /// get filename of an RC file given its public ident key
         fs::path get_path_by_pubkey(const RouterID& pk) const;
 
+        void _ensure_skiplist(fs::path nodedbDir);
+
         /** Failure counters:
             - fetch_failures: tracks errors fetching RC's from the RC node and requesting RID's
               from the 12 RID sources. Errors in the individual RID sets are NOT counted towards
@@ -178,7 +180,15 @@ namespace llarp
         std::shared_ptr<EventTrigger> _fetch_handler;
 
       public:
-        explicit NodeDB(fs::path rootdir, std::function<void(std::function<void()>)> diskCaller, Router* r);
+        explicit NodeDB(fs::path rootdir, std::function<void(std::function<void()>)> diskCaller, Router* r)
+            : _router{*r},
+              _root{std::move(rootdir)},
+              _disk(std::move(diskCaller)),
+              _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
+        {
+            _ensure_skiplist(_root);
+            fetch_counters.clear();
+        }
 
         void configure();
 

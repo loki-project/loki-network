@@ -38,8 +38,7 @@ namespace llarp
         }
 
         oxenc::bt_deserialize(tmp, *data());
-        // return true;
-        return bt_decode(tmp);
+        return true;
     }
 
     bool SecretKey::recalculate()

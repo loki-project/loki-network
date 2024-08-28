@@ -11,13 +11,13 @@
 #include <unordered_map>
 #include <utility>
 
-static const std::string RC_FILE_EXT = ".signed";
-
 namespace llarp
 {
     static auto logcat = llarp::log::Cat("nodedb");
 
-    static void EnsureSkiplist(fs::path nodedbDir)
+    static constexpr auto RC_FILE_EXT = ".signed"sv;
+
+    void NodeDB::_ensure_skiplist(fs::path nodedbDir)
     {
         if (not fs::exists(nodedbDir))
         {
@@ -32,16 +32,6 @@ namespace llarp
 
         if (not fs::is_directory(nodedbDir))
             throw std::runtime_error{fmt::format("nodedb {} is not a directory", nodedbDir)};
-    }
-
-    NodeDB::NodeDB(fs::path root, std::function<void(std::function<void()>)> diskCaller, Router* r)
-        : _router{*r},
-          _root{std::move(root)},
-          _disk(std::move(diskCaller)),
-          _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
-    {
-        EnsureSkiplist(_root);
-        fetch_counters.clear();
     }
 
     std::tuple<size_t, size_t, size_t> NodeDB::db_stats() const
@@ -178,10 +168,11 @@ namespace llarp
 
                 _router.link_manager()->connect_to(
                     brc,
-                    [this](oxen::quic::connection_interface&) {
+                    [this](oxen::quic::connection_interface& ci) {
                         log::critical(logcat, "Successfully connected to bootstrap node!");
                         _has_bstrap_connection = true;
                         _is_connecting_bstrap = false;
+                        return _router.link_manager()->on_conn_open(ci);
                     },
                     [this](oxen::quic::connection_interface& ci, uint64_t ec) {
                         log::critical(logcat, "Failed to connect to bootstrap node!");
@@ -294,7 +285,7 @@ namespace llarp
 
     fs::path NodeDB::get_path_by_pubkey(const RouterID& pubkey) const
     {
-        return _root / (pubkey.to_string() + RC_FILE_EXT);
+        return _root / pubkey.to_view() / RC_FILE_EXT;
     }
 
     bool NodeDB::want_rc(const RouterID& rid) const

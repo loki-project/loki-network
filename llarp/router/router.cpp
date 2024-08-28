@@ -346,8 +346,8 @@ namespace llarp
 
         // TESTNET:
         // oxen::log::reset_level(oxen::log::Level::trace);
-        // oxen::log::set_level("quic", oxen::log::Level::info);
-        oxen::log::set_level("quic", oxen::log::Level::debug);
+        oxen::log::set_level("quic", oxen::log::Level::info);
+        // oxen::log::set_level("quic", oxen::log::Level::debug);
     }
 
     void Router::init_rpc()
@@ -804,8 +804,8 @@ namespace llarp
         {  // TESTNET:
             log::trace(logcat, "We are NOT a registered router, figure it out!");
             // update tick timestamp
-            // _last_tick = llarp::time_now_ms();
-            // return;
+            _last_tick = llarp::time_now_ms();
+            return;
         }
 
         llarp::sys::service_manager->report_periodic_stats();
