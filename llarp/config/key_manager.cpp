@@ -12,6 +12,16 @@ namespace llarp
 
     KeyManager::KeyManager() : is_initialized(false), backup_keys(false) {}
 
+    static void enckeygen_hook(llarp::SecretKey& key)
+    {
+        return crypto::encryption_keygen(key);
+    }
+
+    static void idkeygen_hook(llarp::SecretKey& key)
+    {
+        return crypto::identity_keygen(key);
+    }
+
     bool KeyManager::initialize(const llarp::Config& config, bool gen_if_absent, bool is_snode)
     {
         if (is_initialized)
@@ -19,6 +29,7 @@ namespace llarp
 
         if (not is_snode)
         {
+            log::debug(logcat, "Client generating keys...");
             crypto::identity_keygen(identity_key);
             crypto::encryption_keygen(encryption_key);
             crypto::encryption_keygen(transport_key);
@@ -79,20 +90,14 @@ namespace llarp
         }
 
         // load encryption key
-        auto enckey_gen = [](llarp::SecretKey& key) { llarp::crypto::encryption_keygen(key); };
-        if (not keygen(enckey_path, encryption_key, enckey_gen))
+        if (not keygen(enckey_path, encryption_key, enckeygen_hook))
         {
             log::critical(logcat, "KeyManager::keygen failed to generate encryption key line:{}", __LINE__);
             return false;
         }
 
         // TODO: transport key (currently done in LinkLayer)
-        auto transkey_gen = [](llarp::SecretKey& key) {
-            key.zero();
-            crypto::encryption_keygen(key);
-        };
-
-        if (not keygen(transkey_path, transport_key, transkey_gen))
+        if (transport_key.zero(); not keygen(transkey_path, transport_key, enckeygen_hook))
         {
             log::critical(logcat, "KeyManager::keygen failed to generate transport key line:{}", __LINE__);
             return false;
@@ -100,13 +105,7 @@ namespace llarp
 
         if (not config.router.is_relay)
         {
-            // load identity key or create if needed
-            auto idkey_gen = [](llarp::SecretKey& key) {
-                // TODO: handle generating from service node seed
-                llarp::crypto::identity_keygen(key);
-            };
-
-            if (not keygen(idkey_path, identity_key, idkey_gen))
+            if (not keygen(idkey_path, identity_key, idkeygen_hook))
             {
                 log::critical(logcat, "KeyManager::keygen failed to generate identity key line:{}", __LINE__);
                 return false;

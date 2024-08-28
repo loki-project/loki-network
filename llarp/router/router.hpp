@@ -141,7 +141,6 @@ namespace llarp
         std::shared_ptr<EventTicker> _reachability_ticker;
 
         SecretKey _identity;
-        RouterID _id_pubkey;
         SecretKey _encryption;
         const oxenmq::TaggedThreadID _disk_thread;
 
@@ -277,6 +276,8 @@ namespace llarp
 
         oxen::quic::Address listen_addr() const;
 
+        oxen::quic::Address public_addr() const;
+
         nlohmann::json ExtractStatus() const;
 
         nlohmann::json ExtractSummaryStatus() const;
@@ -331,10 +332,6 @@ namespace llarp
 
         std::optional<RouterID> GetRandomGoodRouter();
 
-        /// initialize us as a service node
-        /// return true on success
-        bool init_service_node();
-
         bool is_running() const;
 
         bool is_service_node() const;
@@ -363,8 +360,6 @@ namespace llarp
         bool ensure_identity();
 
         bool ensure_encryption_key();
-
-        const RouterID& pubkey() const { return router_contact.router_id(); }
 
         // const uint8_t* pubkey() const
         // {

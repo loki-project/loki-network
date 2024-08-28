@@ -181,20 +181,25 @@ namespace llarp
         else
             log::debug(logcat, "Main event loop ticker already auto-started!");
 
-        if (is_service_node() and not _testing_disabled)
+        if (is_service_node())
         {
-            if (not _reachability_ticker)
-                throw std::runtime_error{"Router has no service node reachability loop ticker -- Does not exist!"};
+            _link_manager->start_tickers();
 
-            if (not _reachability_ticker->is_running())
+            if (not _testing_disabled)
             {
-                if (not _reachability_ticker->start())
-                    throw std::runtime_error{"Router failed to start service node reachability loop ticker!"};
+                if (not _reachability_ticker)
+                    throw std::runtime_error{"Router has no service node reachability loop ticker -- Does not exist!"};
 
-                log::debug(logcat, "Router successfully started service node reachability loop ticker!");
+                if (not _reachability_ticker->is_running())
+                {
+                    if (not _reachability_ticker->start())
+                        throw std::runtime_error{"Router failed to start service node reachability loop ticker!"};
+
+                    log::debug(logcat, "Router successfully started service node reachability loop ticker!");
+                }
+                else
+                    log::debug(logcat, "Service node reachability loop ticker already auto-started!");
             }
-            else
-                log::debug(logcat, "Service node reachability loop ticker already auto-started!");
         }
         else
         {
@@ -277,9 +282,8 @@ namespace llarp
                 try
                 {
                     _identity = rpc_client()->obtain_identity_key();
-                    _id_pubkey = seckey_to_pubkey(_identity);
 
-                    log::warning(logcat, "Obtained lokid identity key: {}", _id_pubkey);
+                    log::warning(logcat, "Obtained lokid identity key: {}", RouterID{seckey_to_pubkey(_identity)});
                     rpc_client()->start_pings();
                     break;
                 }
@@ -296,7 +300,6 @@ namespace llarp
         else
         {
             _identity = _key_manager->identity_key;
-            _id_pubkey = seckey_to_pubkey(_identity);
         }
 
         if (_identity.is_zero())
@@ -343,8 +346,8 @@ namespace llarp
 
         // TESTNET:
         // oxen::log::reset_level(oxen::log::Level::trace);
-        oxen::log::set_level("quic", oxen::log::Level::info);
-        // oxen::log::set_level("quic", oxen::log::Level::debug);
+        // oxen::log::set_level("quic", oxen::log::Level::info);
+        oxen::log::set_level("quic", oxen::log::Level::debug);
     }
 
     void Router::init_rpc()
@@ -365,11 +368,12 @@ namespace llarp
 
     void Router::init_bootstrap()
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto& conf = *_config;
 
-        _bootstrap_seed = conf.bootstrap.seednode;
+        if (_bootstrap_seed = conf.bootstrap.seednode; _bootstrap_seed)
+            log::critical(logcat, "Local instance is bootstrap seed node!");
 
         std::vector<fs::path> bootstrap_paths{std::move(conf.bootstrap.files)};
 
@@ -531,7 +535,7 @@ namespace llarp
         _profile_file = _config->router.data_dir / "profiles.dat";
 
         // Network config
-        if (_config->network.enable_profiling.value_or(false))
+        if (not _testnet and _config->network.enable_profiling.value_or(false))
         {
             log::debug(logcat, "Router profiling enabled");
             if (not fs::exists(_profile_file))
@@ -541,12 +545,12 @@ namespace llarp
             else
             {
                 log::debug(logcat, "Loading router profiles from {}", _profile_file);
-                router_profiling().load(_profile_file);
+                _router_profiling.load(_profile_file);
             }
         }
         else
         {
-            router_profiling().disable();
+            _router_profiling.disable();
             log::debug(logcat, "Router profiling disabled");
         }
     }
@@ -563,108 +567,114 @@ namespace llarp
 
     bool Router::configure(std::shared_ptr<Config> c, std::shared_ptr<NodeDB> nodedb)
     {
-        llarp::sys::service_manager->starting();
+        return _loop->call_get([&]() {
+            llarp::sys::service_manager->starting();
 
-        _config = std::move(c);
-        auto& conf = *_config;
+            _config = std::move(c);
+            auto& conf = *_config;
 
-        init_logging();
+            init_logging();
 
-        const auto& netid = conf.router.net_id;
+            const auto& netid = conf.router.net_id;
 
-        // Set netid before anything else
-        log::debug(logcat, "Network ID set to {}", netid);
+            _is_service_node = conf.router.is_relay;
+            _is_exit_node = conf.network.allow_exit;
 
-        if (not netid.empty() and netid != llarp::LOKINET_DEFAULT_NETID)
-        {
-            _testnet = netid == llarp::LOKINET_TESTNET_NETID;
-            _testing_disabled = conf.lokid.disable_testing;
+            if (_is_exit_node and _is_service_node)
+                throw std::runtime_error{
+                    "Lokinet cannot simultaneously operate as a service node and client-operated exit node service!"};
 
-            RouterContact::ACTIVE_NETID = netid;
+            auto us = _is_service_node ? "relay" : "client";
 
-            if (_testing_disabled and not _testnet)
-                throw std::runtime_error{"Error: reachability testing can only be disabled on testnet!"};
+            // Set netid before anything else
+            log::debug(logcat, "Network ID set to {}", netid);
 
-            log::critical(logcat, "Lokinet network ID is {}, NOT mainnet!", netid);
-        }
+            if (not netid.empty() and netid != llarp::LOKINET_DEFAULT_NETID)
+            {
+                _testnet = netid == llarp::LOKINET_TESTNET_NETID;
+                _testing_disabled = conf.lokid.disable_testing;
 
-        log::debug(logcat, "Configuring router");
+                RouterContact::ACTIVE_NETID = netid;
 
-        _gossip_interval =
-            TESTNET_GOSSIP_INTERVAL + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
+                if (_testing_disabled and not _testnet)
+                    throw std::runtime_error{"Error: reachability testing can only be disabled on testnet!"};
 
-        _is_service_node = conf.router.is_relay;
-        _is_exit_node = conf.network.allow_exit;
+                log::critical(logcat, "Lokinet network ID is {}, NOT mainnet!", netid);
+            }
 
-        if (_is_exit_node and _is_service_node)
-            throw std::runtime_error{
-                "Lokinet cannot simultaneously operate as a service node and client-operated exit node service!"};
+            log::trace(logcat, "Configuring router...");
 
-        log::critical(
-            logcat,
-            "Local instance operating in {}",
-            _is_service_node ? "relay mode!"
-                             : "client mode{}"_format(_is_exit_node ? " operating an exit node service!" : "!"));
+            _gossip_interval = TESTNET_GOSSIP_INTERVAL
+                + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
 
-        if (conf.router.worker_threads > 0)
-            _lmq->set_general_threads(conf.router.worker_threads);
+            log::critical(
+                logcat,
+                "Local instance operating in {} mode{}",
+                us,
+                _is_exit_node ? " operating an exit node service!" : "!");
 
-        init_rpc();
+            if (conf.router.worker_threads > 0)
+                _lmq->set_general_threads(conf.router.worker_threads);
 
-        if (_is_service_node)
-        {
-            log::debug(logcat, "Starting OMQ server");
-            _lmq->start();
-            log::debug(logcat, "RPC client connecting to RPC bind address");
-            _rpc_client->connect_async(rpc_addr);
-        }
+            init_rpc();
 
-        _node_db = std::move(nodedb);
+            if (_is_service_node)
+            {
+                log::trace(logcat, "Starting OMQ server");
+                _lmq->start();
+                log::trace(logcat, "RPC client connecting to RPC bind address");
+                _rpc_client->connect_async(rpc_addr);
+            }
 
-        log::debug(logcat, "Initializing key manager");
-        if (not _key_manager->initialize(*_config, true, _is_service_node))
-            throw std::runtime_error{"KeyManager failed to initialize"};
+            _node_db = std::move(nodedb);
 
-        log::debug(logcat, "Initializing from configuration");
+            log::debug(logcat, "Initializing key manager");
+            if (not _key_manager->initialize(*_config, true, _is_service_node))
+                throw std::runtime_error{"KeyManager failed to initialize"};
 
-        process_routerconfig();
+            log::trace(logcat, "Initializing from configuration");
 
-        // We process the relevant netconfig values (ip_range, address, and ip) here; in case the range or interface is
-        // bad, we search for a free one and set it BACK into the config. Every subsequent object configuring using the
-        // NetworkConfig (ex: tun/null, exit::Handler, etc) will have processed values
-        process_netconfig();
+            process_routerconfig();
 
-        init_bootstrap();
-        _node_db->configure();
+            log::critical(logcat, "public addr={}, listen addr={}", *_public_address, _listen_address);
 
-        if (not ensure_identity())
-            throw std::runtime_error{"EnsureIdentity() failed"};
+            // We process the relevant netconfig values (ip_range, address, and ip) here; in case the range or interface
+            // is bad, we search for a free one and set it BACK into the config. Every subsequent object configuring
+            // using the NetworkConfig (ex: tun/null, exit::Handler, etc) will have processed values
+            process_netconfig();
 
-        _path_context = std::make_shared<path::PathContext>(_id_pubkey);
+            init_bootstrap();
+            _node_db->configure();
 
-        router_contact =
-            LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
+            if (not ensure_identity())
+                throw std::runtime_error{"EnsureIdentity() failed"};
 
-        _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
-        _session_endpoint->configure();
+            _path_context = std::make_shared<path::PathContext>(local_rid());
 
-        log::debug(logcat, "Creating QUIC link manager...");
-        _link_manager = LinkManager::make(*this);
+            router_contact =
+                LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
 
-        log::debug(logcat, "Creating QUIC tunnel...");
-        _quic_tun = QUICTunnel::make(*this);
+            _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
+            _session_endpoint->configure();
 
-        // API config
-        //  Full clients have TUN
-        //  Embedded clients have nothing
-        //  All relays have TUN
-        if (_should_init_tun = conf.network.init_tun; _should_init_tun)
-        {
-            log::debug(logcat, "Initializing virtual TUN device...");
-            init_tun();
-        }
+            log::debug(logcat, "Creating QUIC link manager...");
+            _link_manager = LinkManager::make(*this);
 
-        return true;
+            log::debug(logcat, "Creating QUIC tunnel...");
+            _quic_tun = QUICTunnel::make(*this);
+
+            // API config
+            //  Full clients have TUN
+            //  Embedded clients have nothing
+            //  All relays have TUN
+            if (_should_init_tun = conf.network.init_tun; _should_init_tun)
+            {
+                log::critical(logcat, "Initializing virtual TUN device...");
+                init_tun();
+            }
+
+            return true;
+        });
     }
 
     bool Router::is_service_node() const
@@ -699,17 +709,17 @@ namespace llarp
 
     bool Router::appears_decommed() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->greylist().count(pubkey());
+        return _is_service_node and have_snode_whitelist() and node_db()->greylist().count(local_rid());
     }
 
     bool Router::appears_funded() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->is_connection_allowed(pubkey());
+        return _is_service_node and have_snode_whitelist() and node_db()->is_connection_allowed(local_rid());
     }
 
     bool Router::appears_registered() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->registered_routers().count(pubkey());
+        return _is_service_node and have_snode_whitelist() and node_db()->registered_routers().count(local_rid());
     }
 
     bool Router::can_test_routers() const
@@ -791,11 +801,11 @@ namespace llarp
         const auto& local = local_rid();
 
         if (not node_db()->registered_routers().count(local))
-        {
-            log::critical(logcat, "We are NOT a registered router, figure it out!");
+        {  // TESTNET:
+            log::trace(logcat, "We are NOT a registered router, figure it out!");
             // update tick timestamp
-            _last_tick = llarp::time_now_ms();
-            return;
+            // _last_tick = llarp::time_now_ms();
+            // return;
         }
 
         llarp::sys::service_manager->report_periodic_stats();
@@ -805,26 +815,9 @@ namespace llarp
 
         if (auto should_proceed = _node_db->tick(now); should_proceed == false)
         {
-            log::debug(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::trace(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
-
-        // if (now_timepoint > next_rc_gossip)
-        // {
-        //     log::critical(logcat, "Regenerating and gossiping RC...");
-
-        //     router_contact.resign();
-        //     save_rc();
-
-        //     _link_manager->gossip_rc(local, router_contact.to_remote());
-
-        //     last_rc_gossip = now_timepoint;
-
-        //     // TESTNET: 0 to 3 minutes before testnet gossip interval
-        //     auto delta = std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
-
-        //     next_rc_gossip = now_timepoint + TESTNET_GOSSIP_INTERVAL - delta;
-        // }
 
         _link_manager->check_persisting_conns(now);
 
@@ -871,7 +864,7 @@ namespace llarp
         auto now_timepoint = std::chrono::system_clock::time_point(now);
         llarp::sys::service_manager->report_periodic_stats();
         _pathbuild_limiter.Decay(now);
-        router_profiling().tick();
+        _router_profiling.tick();
 
         if (should_report_stats(now))
             report_stats();
@@ -917,8 +910,8 @@ namespace llarp
         _session_endpoint->tick(now);
 
         // save profiles
-        if (_config->network.save_profiles and router_profiling().should_save(now))
-            queue_disk_io([&]() { router_profiling().save(_profile_file); });
+        if (_router_profiling.is_enabled() and _config->network.save_profiles and _router_profiling.should_save(now))
+            queue_disk_io([&]() { _router_profiling.save(_profile_file); });
     }
 
     void Router::tick()
@@ -978,25 +971,37 @@ namespace llarp
 
             save_rc();
 
-            if (not init_service_node())
-            {
-                log::error(logcat, "Router failed to initialize service node!");
-                return false;
-            }
+            // _path_context = std::make_shared<path::PathContext>(local_rid());
 
-            log::info(logcat, "Router initialized as service node!");
+            log::info(logcat, "Router accepting transit traffic...");
+            _path_context->allow_transit();
 
             // relays do not use profiling
-            router_profiling().disable();
+            _router_profiling.disable();
+
+            log::info(logcat, "Router initialized as service node!");
         }
         else
         {
-            log::debug(logcat, "Client generating keys and resigning RC...");
+            // TESTNET:
+            _router_profiling.disable();
+            // log::debug(logcat, "Client generating keys and resigning RC...");
             // we are a client, regenerate keys and resign rc before everything else
-            crypto::identity_keygen(_identity);
-            crypto::encryption_keygen(_encryption);
-            router_contact.set_router_id(seckey_to_pubkey(identity()));  // resigns RC
+            // crypto::identity_keygen(_identity);
+            // crypto::encryption_keygen(_encryption);
+            // router_contact.set_router_id(seckey_to_pubkey(identity()));
+
+            // _path_context = std::make_shared<path::PathContext>(local_rid());
         }
+
+        // _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
+        // _session_endpoint->configure();
+
+        // log::debug(logcat, "Creating QUIC link manager...");
+        // _link_manager = LinkManager::make(*this);
+
+        // log::debug(logcat, "Creating QUIC tunnel...");
+        // _quic_tun = QUICTunnel::make(*this);
 
         // This must be constructed AFTER router creates its LocalRC
         _contacts = std::make_unique<Contacts>(*this);
@@ -1005,15 +1010,13 @@ namespace llarp
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, false);
 
-        // _route_poker->start();
-
         _is_running.store(true);
 
         _started_at = now();
 
         if (is_service_node() and not _testing_disabled)
         {
-            _link_manager->start_tickers();
+            log::debug(logcat, "Creating reachability testing ticker...");
             // do service node testing if we are in service node whitelist mode
             _reachability_ticker = _loop->call_every(
                 consensus::REACHABILITY_TESTING_TIMER_INTERVAL,
@@ -1076,13 +1079,13 @@ namespace llarp
                             });
                     }
                 },
-                true);
+                false);
         }
 
         log::critical(logcat, "\n\n\tLOCAL INSTANCE ROUTER ID: {}\n", local_rid());
 
         llarp::sys::service_manager->ready();
-        return _is_running;
+        return _is_running.load();
     }
 
     bool Router::is_running() const
@@ -1201,15 +1204,6 @@ namespace llarp
         return _path_build_count++;
     }
 
-    bool Router::init_service_node()
-    {
-        log::info(logcat, "Router accepting transit traffic...");
-        _path_context->allow_transit();
-        // TODO:
-        // _exit_context.add_exit_endpoint("default", _config->network, _config->dns);
-        return true;
-    }
-
     void Router::queue_work(std::function<void(void)> func)
     {
         _lmq->job(std::move(func));
@@ -1223,6 +1217,11 @@ namespace llarp
     oxen::quic::Address Router::listen_addr() const
     {
         return _listen_address;
+    }
+
+    oxen::quic::Address Router::public_addr() const
+    {
+        return _public_address.value_or(_listen_address);
     }
 
     const llarp::net::Platform& Router::net() const

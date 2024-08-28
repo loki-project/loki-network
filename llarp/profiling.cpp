@@ -133,6 +133,11 @@ namespace llarp
         _profiling_disabled.store(false);
     }
 
+    bool Profiling::is_enabled() const
+    {
+        return not _profiling_disabled.load();
+    }
+
     bool Profiling::is_bad_for_connect(const RouterID& r, uint64_t chances)
     {
         if (_profiling_disabled.load())
@@ -168,6 +173,8 @@ namespace llarp
 
     void Profiling::tick()
     {
+        if (_profiling_disabled.load())
+            return;
         util::Lock lock(_m);
         for (auto& [rid, profile] : _profiles)
             profile.Tick();

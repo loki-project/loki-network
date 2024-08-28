@@ -89,6 +89,8 @@ namespace llarp
 
         void enable();
 
+        bool is_enabled() const;
+
       private:
         void BEncode(oxenc::bt_dict_producer& dict) const;
 

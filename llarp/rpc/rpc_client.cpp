@@ -56,7 +56,7 @@ namespace llarp::rpc
                 throw std::runtime_error("we cannot talk to lokid while not a service node");
             }
 
-            log::info(logcat, "Connecting to oxend at {}", url.full_address());
+            log::info(logcat, "RPC client connecting to oxend at {}", url.full_address());
 
             m_Connection = m_lokiMQ->connect_remote(
                 url,
@@ -178,7 +178,7 @@ namespace llarp::rpc
             if (not r)
                 return;  // router has gone away, maybe shutting down?
 
-            pk = r->pubkey();
+            pk = r->local_rid();
 
             nlohmann::json payload = {
                 {"pubkey_ed25519", oxenc::to_hex(pk.begin(), pk.end())},

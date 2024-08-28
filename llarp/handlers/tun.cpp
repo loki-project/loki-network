@@ -345,7 +345,7 @@ namespace llarp::handlers
             }
         }
 
-        _local_netaddr = NetworkAddress::from_pubkey(_router.pubkey(), not _router.is_service_node());
+        _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
         _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
 
         vpn::InterfaceInfo info;
@@ -392,7 +392,7 @@ namespace llarp::handlers
             }
         }
 
-        log::debug(
+        log::info(
             logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
 
         // if (auto* quic = GetQUICTunnel())

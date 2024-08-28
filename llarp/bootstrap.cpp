@@ -26,7 +26,7 @@ namespace llarp
 
     bool BootstrapList::bt_decode_dict(std::string_view buf)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         bool ret = true;
 
@@ -46,7 +46,7 @@ namespace llarp
 
     bool BootstrapList::bt_decode_list(std::string_view buf)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         bool ret = true;
 
@@ -98,14 +98,14 @@ namespace llarp
         for (const auto& f : paths)
         {
             // TESTNET: TODO: revise fucked config
-            log::debug(logcat, "Loading BootstrapRC from file at path:{}", f);
+            log::trace(logcat, "Loading BootstrapRC from file at path:{}", f);
             if (not read_from_file(f))
                 throw std::invalid_argument{"User-provided BootstrapRC is invalid!"};
         }
 
         if (empty())
         {
-            log::debug(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
+            log::trace(logcat, "BootstrapRC list empty; looking for default BootstrapRC from file at path:{}", def);
             read_from_file(def);
         }
 
@@ -143,7 +143,7 @@ namespace llarp
             }
         }
 
-        log::critical(logcat, "We have {} Bootstrap router(s)!", size());
+        log::debug(logcat, "We have {} Bootstrap router(s)!", size());
         _curr = begin();
     }
 
@@ -160,7 +160,7 @@ namespace llarp
         auto content = util::file_to_string(fpath);
         result = bt_decode(content);
 
-        log::debug(
+        log::trace(
             logcat,
             "{}uccessfully loaded BootstrapRC file ({}B) at path:{}, contents: {}",
             result ? "S" : "Uns",

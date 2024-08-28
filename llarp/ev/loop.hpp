@@ -78,7 +78,7 @@ namespace llarp
         template <typename T, typename Callable>
         auto wrapped_deleter(Callable&& f)
         {
-            return _loop->wrapped_deleter<T>(std::forward<Callable>(f));
+            return _loop->template wrapped_deleter<T>(std::forward<Callable>(f));
         }
 
         // Similar in concept to std::make_shared<T>, but it creates the shared pointer with a
@@ -87,7 +87,7 @@ namespace llarp
         template <typename T, typename... Args>
         std::shared_ptr<T> make_shared(Args&&... args)
         {
-            return _loop->make_shared<T>(std::forward<Args>(args)...);
+            return _loop->template make_shared<T>(std::forward<Args>(args)...);
         }
 
         // Similar to the above make_shared, but instead of forwarding arguments for the
@@ -96,7 +96,7 @@ namespace llarp
         template <typename T, typename Callable>
         std::shared_ptr<T> shared_ptr(T* obj, Callable&& deleter)
         {
-            return _loop->shared_ptr<T, Callable>(obj, std::forward<Callable>(deleter));
+            return _loop->template shared_ptr<T, Callable>(obj, std::forward<Callable>(deleter));
         }
 
         template <typename Callable>

@@ -142,7 +142,7 @@ namespace llarp
         {
             assert(not _is_fetching);
             assert(not _needs_initial_fetch);  // only set after client succeeds at bootstrapping
-            log::debug(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
+            log::trace(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
             return false;
         }
 
@@ -183,9 +183,10 @@ namespace llarp
                         _has_bstrap_connection = true;
                         _is_connecting_bstrap = false;
                     },
-                    [this](oxen::quic::connection_interface&, uint64_t) {
+                    [this](oxen::quic::connection_interface& ci, uint64_t ec) {
                         log::critical(logcat, "Failed to connect to bootstrap node!");
                         _is_connecting_bstrap = false;
+                        return _router.link_manager()->on_conn_closed(ci, ec);
                     });
 
                 _is_connecting_bstrap = true;
@@ -793,9 +794,7 @@ namespace llarp
             return stop_bootstrap(false);
         }
 
-        _is_bootstrapping = true;
-
-        const auto& rc = _bootstraps.next();
+        auto rc = _is_bootstrapping.exchange(true) ? _bootstraps.next() : _bootstraps.current();
         auto source = rc.router_id();
 
         log::info(logcat, "Dispatching BootstrapRC to {}", source);
@@ -806,7 +805,7 @@ namespace llarp
             rc,
             BootstrapFetchMessage::serialize(
                 _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
-            [this, src = source](oxen::quic::message m) mutable {
+            [this, src = source](oxen::quic::message m) {
                 log::info(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
@@ -908,7 +907,7 @@ namespace llarp
             rc,
             BootstrapFetchMessage::serialize(
                 _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
-            [this, src = rc.router_id()](oxen::quic::message m) mutable {
+            [this, src = rc.router_id()](oxen::quic::message m) {
                 log::critical(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
@@ -1076,7 +1075,7 @@ namespace llarp
 
         log::debug(logcat, "NodeDB creating bootstrap event handler...");
         _bootstrap_handler = EventTrigger::make(
-            _router.loop(), BOOTSTRAP_COOLDOWN, [this]() mutable { bootstrap(); }, MAX_BOOTSTRAP_FETCH_ATTEMPTS);
+            _router.loop(), BOOTSTRAP_COOLDOWN, [this]() { bootstrap(); }, MAX_BOOTSTRAP_FETCH_ATTEMPTS);
     }
 
     void NodeDB::load_from_disk()

@@ -61,7 +61,6 @@ namespace llarp
         struct Endpoint
         {
             Endpoint(std::shared_ptr<oxen::quic::Endpoint> ep, LinkManager& lm);
-            // ~Endpoint();
 
             std::shared_ptr<oxen::quic::Endpoint> endpoint;
             LinkManager& link_manager;
@@ -137,8 +136,7 @@ namespace llarp
         explicit LinkManager(Router& r);
 
         friend struct link::Endpoint;
-
-        std::atomic<bool> is_stopping;
+        friend class NodeDB;
 
         // sessions to persist -> timestamp to end persist at
         std::unordered_map<RouterID, std::chrono::milliseconds> persisting_conns;
@@ -161,6 +159,8 @@ namespace llarp
         std::unique_ptr<oxen::quic::Network> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
         std::unique_ptr<link::Endpoint> ep;
+
+        std::atomic<bool> is_stopping;
 
         void handle_path_data_message(bstring dgram);
 
@@ -314,20 +314,14 @@ namespace llarp
 
         template <typename... Opt>
         bool Endpoint::establish_and_send(
-            KeyedAddress raddr,
-            RemoteRC _rc,
-            std::optional<std::string> _ep,
-            std::string _body,
-            std::function<void(oxen::quic::message m)> hook,
-            Opt&&... args)
+            KeyedAddress remote,
+            RemoteRC rc,
+            std::optional<std::string> ep,
+            std::string body,
+            std::function<void(oxen::quic::message m)> func,
+            Opt&&... opts)
         {
-            return link_manager.router().loop()->call_get([this,
-                                                           remote = std::move(raddr),
-                                                           rc = std::move(_rc),
-                                                           ep = std::move(_ep),
-                                                           body = std::move(_body),
-                                                           func = std::move(hook),
-                                                           ... opts = std::forward<Opt>(args)]() mutable {
+            return link_manager.router().loop()->call_get([&]() {
                 try
                 {
                     const auto& rid = rc.router_id();
@@ -354,11 +348,10 @@ namespace llarp
                         std::forward<Opt>(opts)...);
 
                     // auto
-                    std::shared_ptr<oxen::quic::BTRequestStream> control_stream =
-                        conn_interface->template open_stream<oxen::quic::BTRequestStream>(
-                            [rid = rid](oxen::quic::Stream&, uint64_t error_code) {
-                                log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-                            });
+                    auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
+                        [](oxen::quic::Stream&, uint64_t error_code) {
+                            log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                        });
 
                     link_manager.register_commands(control_stream, rid, not _is_service_node);
 
@@ -372,7 +365,8 @@ namespace llarp
                     (is_control) ? control_stream->command(std::move(*ep), std::move(body), std::move(func))
                                  : conn_interface->send_datagram(std::move(body));
 
-                    itr->second = std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+                    itr->second =
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
 
                     log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
@@ -386,48 +380,50 @@ namespace llarp
         }
 
         template <typename... Opt>
-        bool Endpoint::establish_connection(KeyedAddress raddr, RemoteRC _rc, Opt&&... args)
+        bool Endpoint::establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts)
         {
-            return link_manager.router().loop()->call_get(
-                [this, remote = raddr, rc = _rc, ... opts = std::forward<Opt>(args)]() mutable {
-                    try
+            return link_manager.router().loop()->call_get([&]() {
+                try
+                {
+                    const auto& rid = rc.router_id();
+
+                    log::debug(logcat, "Establishing connection to RID:{}", rid);
+                    // add to service conns
+                    auto [itr, b] = service_conns.try_emplace(rid, nullptr);
+
+                    if (not b)
                     {
-                        const auto& rid = rc.router_id();
-
-                        log::debug(logcat, "Establishing connection to RID:{}", rid);
-                        // add to service conns
-                        auto [itr, b] = service_conns.try_emplace(rid, nullptr);
-
-                        if (not b)
-                        {
-                            log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
-                            return b;
-                        }
-
-                        auto conn_interface = endpoint->connect(
-                            remote,
-                            link_manager.tls_creds,
-                            _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
-                            std::forward<Opt>(opts)...);
-
-                        auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
-                            [rid = rid](oxen::quic::Stream&, uint64_t error_code) {
-                                log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-                            });
-
-                        link_manager.register_commands(control_stream, rid, not _is_service_node);
-
-                        itr->second = std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
-
-                        log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
-                        return true;
+                        log::debug(logcat, "ERROR: attempting to establish an already-existing connection");
+                        return b;
                     }
-                    catch (...)
-                    {
-                        log::error(logcat, "Error: failed to establish connection to {}", remote);
-                        return false;
-                    }
-                });
+
+                    auto conn_interface = endpoint->connect(
+                        remote,
+                        link_manager.tls_creds,
+                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        std::forward<Opt>(opts)...);
+
+                    log::critical(logcat, "Created outbound connection with path: {}", conn_interface->path());
+
+                    auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
+                        [](oxen::quic::Stream&, uint64_t error_code) {
+                            log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                        });
+
+                    link_manager.register_commands(control_stream, rid, not _is_service_node);
+
+                    itr->second =
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    return true;
+                }
+                catch (...)
+                {
+                    log::error(logcat, "Error: failed to establish connection to {}", remote);
+                    return false;
+                }
+            });
         }
     }  // namespace link
 }  // namespace llarp

@@ -10,14 +10,14 @@
 
 namespace llarp
 {
-    LocalRC LocalRC::make(const SecretKey secret, oxen::quic::Address local)
+    LocalRC LocalRC::make(SecretKey secret, oxen::quic::Address local)
     {
-        return *new LocalRC{secret, local};
+        return *new LocalRC{std::move(secret), std::move(local)};
     }
 
-    LocalRC::LocalRC(const SecretKey secret, oxen::quic::Address local) : _secret_key{std::move(secret)}
+    LocalRC::LocalRC(SecretKey secret, oxen::quic::Address local) : _secret_key{std::move(secret)}
     {
-        _router_id = llarp::seckey_to_pubkey(_secret_key);
+        _router_id = seckey_to_pubkey(_secret_key);
         _addr = std::move(local);
         if (_addr.is_ipv6())
             _addr6.emplace(&_addr.in6());

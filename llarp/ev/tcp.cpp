@@ -186,7 +186,7 @@ namespace llarp
         _tcp.sin_addr.s_addr = INADDR_ANY;
         _tcp.sin_port = htonl(port);
 
-        _tcp_listener = _ev->shared_ptr<struct evconnlistener>(
+        _tcp_listener = _ev->template shared_ptr<struct evconnlistener>(
             evconnlistener_new_bind(
                 _ev->loop().get(),
                 tcp_listen_cb,

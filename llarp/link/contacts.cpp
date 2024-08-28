@@ -5,7 +5,7 @@
 
 namespace llarp
 {
-    Contacts::Contacts(Router& r) : _router{r}, _local_key{dht::Key_t::derive_from_rid(r.pubkey())}
+    Contacts::Contacts(Router& r) : _router{r}, _local_key{dht::Key_t::derive_from_rid(r.local_rid())}
     {
         timer_keepalive = std::make_shared<int>(0);
         _introset_nodes = std::make_unique<dht::Bucket<dht::ISNode>>(_local_key, llarp::randint);

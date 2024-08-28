@@ -80,7 +80,7 @@ namespace llarp
         oxen::quic::Address _addr;                  // refactor all 15 uses to use addr() method
         std::optional<oxen::quic::Address> _addr6;  // optional ipv6
         // public signing public key
-        RouterID _router_id;  // refactor all 103 uses to use router_id() method
+        RouterID _router_id;
 
         rc_time _timestamp{};
 
@@ -166,7 +166,7 @@ namespace llarp
     /// parameters and outputs a bt-serialized string
     struct LocalRC final : public RouterContact
     {
-        static LocalRC make(const SecretKey secret, oxen::quic::Address local);
+        static LocalRC make(SecretKey secret, oxen::quic::Address local);
 
       private:
         ustring _signature;
@@ -176,7 +176,7 @@ namespace llarp
 
         void bt_encode(oxenc::bt_dict_producer& btdp);
 
-        LocalRC(const SecretKey secret, oxen::quic::Address local);
+        LocalRC(SecretKey secret, oxen::quic::Address local);
 
       public:
         LocalRC() = default;
