@@ -104,31 +104,3 @@ std::vector<uint8_t> llarp_buffer_t::copy() const
 
     return copy;
 }
-
-namespace llarp
-{
-    std::vector<uint8_t> OwnedBuffer::copy() const
-    {
-        std::vector<uint8_t> ret;
-        ret.resize(sz);
-        const auto* ptr = buf.get();
-        std::copy(ptr, ptr + sz, ret.data());
-        return ret;
-    }
-
-    OwnedBuffer OwnedBuffer::copy_from(const llarp_buffer_t& b)
-    {
-        auto buf = std::make_unique<uint8_t[]>(b.sz);
-        std::copy(b.begin(), b.end(), buf.get());
-        return {std::move(buf), b.sz};
-    }
-
-    OwnedBuffer OwnedBuffer::copy_used(const llarp_buffer_t& b)
-    {
-        const size_t sz = b.cur - b.base;
-        auto buf = std::make_unique<uint8_t[]>(sz);
-        std::copy(b.base, b.cur, buf.get());
-        return {std::move(buf), sz};
-    }
-
-}  // namespace llarp

@@ -151,11 +151,15 @@ namespace llarp
             return true;
         }
 
-        std::string bt_encode() const { return oxenc::bt_serialize(_data); }
+        std::string bt_encode() const
+        {
+            return oxenc::bt_serialize(_data);
+            // return {reinterpret_cast<const char*>(data()), sz};
+        }
 
         bool bt_decode(std::string buf)
         {
-            oxenc::bt_deserialize(buf, *data());
+            oxenc::bt_deserialize(buf, _data);
             return true;
         }
 
@@ -180,6 +184,121 @@ namespace llarp
       private:
         std::array<uint8_t, SIZE> _data;
     };
+
+    template <typename T>
+    concept bt_type = std::is_base_of_v<oxenc::bt_list_consumer, T>;
+
+    template <bt_type T>
+    struct bt_printer
+    {
+        log::CategoryLogger logcat = log::Cat("bt-printer");
+
+        T _bt;
+
+        bool _read(std::string& entry, T& btc)
+        {
+            if (btc.is_string())
+            {
+                entry += "string, value='{}']\n"_format(btc.consume_string_view());
+            }
+            else if (btc.is_unsigned_integer())
+            {
+                entry += "uint, value='{}']\n"_format(btc.template consume_integer<uint64_t>());
+            }
+            else if (btc.is_negative_integer())
+            {
+                entry += "int, value='-{}']\n"_format(btc.template consume_integer<int64_t>());
+            }
+            else if (btc.is_integer())
+            {
+                entry += "int, value='{}']\n"_format(btc.template consume_integer<int64_t>());
+            }
+            else if (btc.is_list())
+            {
+                {
+                    auto sublist = btc.consume_list_consumer();
+                    entry += "bt-list, contents=[\n";
+                    _read_list(entry, sublist);
+                }
+            }
+            else if (btc.is_dict())
+            {
+                {
+                    auto subdict = btc.consume_dict_consumer();
+                    entry += "dict, contents=[ ...\n";
+                    _read_dict(entry, subdict);
+                }
+            }
+            else
+            {
+                entry += "UNKNOWN... early end to btc contents ]\n";
+                btc.finish();
+                return false;
+            }
+            return true;
+        }
+
+        void _read_list(std::string& entry, oxenc::bt_list_consumer& btlc)
+        {
+            while (not btlc.is_finished())
+            {
+                entry += "\tentry: [type="s;
+                if (not _read(entry, btlc))
+                    return;
+            }
+        }
+
+        void _read_dict(std::string& entry, oxenc::bt_dict_consumer& btdc)
+        {
+            while (not btdc.is_finished())
+            {
+                entry += "\tkey: {}, entry: [type="_format(btdc.key());
+                if (not _read(entry, btdc))
+                    return;
+            }
+
+            entry += "\t...end of dict contents ]\n";
+        }
+
+      public:
+        bt_printer(std::string_view data)
+        {
+            try
+            {
+                if (data.starts_with('l'))
+                    _bt = oxenc::bt_list_consumer{data};
+                else if (data.starts_with('d'))
+                    _bt = oxenc::bt_dict_consumer{data};
+                else
+                    throw std::invalid_argument{"bt_printer must be given bt list or dict!"};
+            }
+            catch (const std::exception& e)
+            {
+                log::critical(logcat, "bt_printer exception: {}", e.what());
+            }
+        }
+
+        std::string to_string() const
+        {
+            std::string ret{};
+
+            if constexpr (std::is_same_v<T, oxenc::bt_list_consumer>)
+            {
+                ret += "\nbt-list contents[ \n";
+                _read_list(_bt);
+            }
+            else
+            {
+                ret += "\nbt-dict contents[ \n";
+                _read_dict(_bt);
+            }
+            ret += "] ";
+            return ret;
+        }
+        static constexpr bool to_string_formattable = true;
+    };
+
+    // auto bt_printer::log_cat = log::Cat("bt_printer");
 
 }  // namespace llarp
 

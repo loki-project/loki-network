@@ -10,6 +10,8 @@
 
 namespace llarp
 {
+    static auto logcat = log::Cat("cryptoutils");
+
     PubKey SecretKey::to_pubkey() const
     {
         return PubKey(data() + 32);
@@ -25,8 +27,9 @@ namespace llarp
         {
             sz = util::file_to_buffer(fname, tmp.data(), tmp.size());
         }
-        catch (const std::exception&)
+        catch (const std::exception& e)
         {
+            log::critical(logcat, "Failed to read contents from file: {}", e.what());
             return false;
         }
 
@@ -37,8 +40,11 @@ namespace llarp
             return true;
         }
 
-        oxenc::bt_deserialize(tmp, *data());
-        return true;
+        return bt_decode(tmp);
+
+        // oxenc::bt_deserialize(tmp, *data());
+
+        // return true;
     }
 
     bool SecretKey::recalculate()
@@ -81,6 +87,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
+            log::critical(logcat, "Failed to write contents to file: {}", e.what());
             return false;
         }
 

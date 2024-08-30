@@ -345,7 +345,7 @@ namespace llarp
             llarp::logRingBuffer = nullptr;
 
         // TESTNET:
-        // oxen::log::reset_level(oxen::log::Level::trace);
+        // oxen::log::reset_level(oxen::log::Level::debug);
         oxen::log::set_level("quic", oxen::log::Level::info);
         // oxen::log::set_level("quic", oxen::log::Level::debug);
     }
@@ -800,8 +800,9 @@ namespace llarp
         // auto now_timepoint = std::chrono::system_clock::time_point(now);
         const auto& local = local_rid();
 
+        // TESTNET:
         if (not node_db()->registered_routers().count(local))
-        {  // TESTNET:
+        {
             log::trace(logcat, "We are NOT a registered router, figure it out!");
             // update tick timestamp
             _last_tick = llarp::time_now_ms();
@@ -1202,16 +1203,6 @@ namespace llarp
     uint32_t Router::NextPathBuildNumber()
     {
         return _path_build_count++;
-    }
-
-    void Router::queue_work(std::function<void(void)> func)
-    {
-        _lmq->job(std::move(func));
-    }
-
-    void Router::queue_disk_io(std::function<void(void)> func)
-    {
-        _lmq->job(std::move(func), _disk_thread);
     }
 
     oxen::quic::Address Router::listen_addr() const

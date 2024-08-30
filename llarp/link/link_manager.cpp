@@ -205,49 +205,50 @@ namespace llarp
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_path_control(std::move(msg), rid); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg), rid); });
         });
 
         if (client_only)
         {
             s->register_handler("session_init", [this](oxen::quic::message m) {
-                _router.loop()->call([&, msg = std::move(m)]() { handle_initiate_session(std::move(msg)); });
+                _router.loop()->call([&, msg = std::move(m)]() mutable { handle_initiate_session(std::move(msg)); });
             });
             log::debug(logcat, "Registered all client-only BTStream commands!");
             return;
         }
 
         s->register_handler("path_build"s, [this, rid = remote_rid](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_path_build(std::move(msg), rid); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_build(std::move(msg), rid); });
         });
 
         s->register_handler("bfetch_rcs"s, [this](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_fetch_bootstrap_rcs(std::move(msg)); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_bootstrap_rcs(std::move(msg)); });
         });
 
         s->register_handler("fetch_rcs"s, [this](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_fetch_rcs(std::move(msg)); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_rcs(std::move(msg)); });
         });
 
         s->register_handler("fetch_rids"s, [this](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_fetch_router_ids(std::move(msg)); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_router_ids(std::move(msg)); });
         });
 
         s->register_handler("gossip_rc"s, [this](oxen::quic::message m) {
-            _router.loop()->call([&, msg = std::move(m)]() { handle_gossip_rc(std::move(msg)); });
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_gossip_rc(std::move(msg)); });
         });
 
         for (auto& method : path_requests)
         {
-            s->register_handler(std::string{method.first}, [this, func = method.second](oxen::quic::message m) {
-                _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
-                    auto body = msg.body_str();
-                    auto respond = [&, m = std::move(msg)](std::string response) mutable {
-                        m.respond(std::move(response), m.is_error());
-                    };
-                    std::invoke(func, this, body, std::move(respond));
+            s->register_handler(
+                std::string{method.first}, [this, func = std::move(method.second)](oxen::quic::message m) {
+                    _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
+                        auto body = msg.body_str();
+                        auto respond = [&, m = std::move(msg)](std::string response) mutable {
+                            m.respond(std::move(response), m.is_error());
+                        };
+                        std::invoke(func, this, body, std::move(respond));
+                    });
                 });
-            });
         }
 
         log::debug(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
@@ -327,7 +328,7 @@ namespace llarp
                     {
                         // verify as service node!
                         bool result = node_db->registered_routers().count(other);
-                        result = true;  // TESTNET: turn this off for non-local testing
+                        // result = true;  // TESTNET: turn this off for non-local testing
 
                         if (result)
                         {
@@ -788,7 +789,7 @@ namespace llarp
 
     void LinkManager::gossip_rc(const RouterID& last_sender, const RemoteRC& rc)
     {
-        _router.loop()->call([this, last_sender, rc]() mutable {
+        _router.loop()->call([this, last_sender, rc]() {
             int count = 0;
             const auto& gossip_src = rc.router_id();
 
@@ -845,8 +846,8 @@ namespace llarp
     void LinkManager::fetch_bootstrap_rcs(
         const RemoteRC& source, std::string payload, std::function<void(oxen::quic::message m)> func)
     {
-        func = [this, f = std::move(func)](oxen::quic::message m) {
-            _router.loop()->call([func = std::move(f), msg = std::move(m)]() { func(std::move(msg)); });
+        func = [this, f = std::move(func)](oxen::quic::message m) mutable {
+            _router.loop()->call([func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
         };
 
         const auto& rid = source.router_id();
@@ -895,18 +896,20 @@ namespace llarp
             if (is_snode)
             {
                 // we already insert the
-                auto& registered = node_db->registered_routers();
+                // TESTNET: REMOVE BEFORE TESTING NONLOCALLY
+                // node_db->put_rc(*remote);
 
-                if (auto itr = registered.find(rid); itr != registered.end())
+                auto remote_rc = *remote;
+                if (node_db->verify_store_gossip_rc(remote_rc))
                 {
-                    auto remote_rc = *remote;
-                    if (node_db->verify_store_gossip_rc(remote_rc))
-                        log::critical(
-                            logcat,
-                            "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
-                            remote_rc.router_id());
+                    log::critical(
+                        logcat,
+                        "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
+                        remote_rc.router_id());
                     _router.loop()->call_soon([&, remote_rc]() { gossip_rc(_router.local_rid(), remote_rc); });
                 }
+                else
+                    log::critical(logcat, "Bootstrap node failed to confirm RID:{} is registered; something is wrong", remote_rc.router_id());
             }
         }
 

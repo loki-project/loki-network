@@ -69,16 +69,10 @@ namespace llarp
         router = Router::make(_loop, make_vpn_platform(), std::move(p));
 
         log::debug(logcat, "Making local nodeDB instance...");
-        nodedb = make_nodedb();
+        nodedb = NodeDB::make(nodedb_dirname, router.get());
 
         if (!router->configure(config, nodedb))
             throw std::runtime_error{"Failed to configure router"};
-    }
-
-    std::shared_ptr<NodeDB> Context::make_nodedb()
-    {
-        return std::make_shared<NodeDB>(
-            nodedb_dirname, [r = router.get()](auto call) { r->queue_disk_io(std::move(call)); }, router.get());
     }
 
     std::shared_ptr<Router> Context::make_router(const std::shared_ptr<EventLoop>& loop, std::promise<void> p)

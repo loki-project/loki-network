@@ -78,8 +78,6 @@ namespace llarp
     }
 }  // namespace llarp
 
-struct ManagedBuffer;
-
 /// TODO: replace usage of these with std::span (via a backport until we move to C++20).  That's a
 /// fairly big job, though, as llarp_buffer_t is currently used a bit differently (i.e. maintains
 /// both start and current position, plus has some value reading/writing methods).
@@ -97,9 +95,6 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     llarp_buffer_t() = default;
 
     llarp_buffer_t(uint8_t* b, uint8_t* c, size_t s) : base(b), cur(c), sz(s) {}
-
-    llarp_buffer_t(const ManagedBuffer&) = delete;
-    llarp_buffer_t(ManagedBuffer&&) = delete;
 
     template <typename Byte>
     static constexpr bool is_basic_byte = sizeof(Byte) == 1 and std::is_trivially_copyable_v<Byte>;
@@ -199,7 +194,6 @@ struct /* [[deprecated("this type is stupid, use something else")]] */ llarp_buf
     }
 
   private:
-    friend struct ManagedBuffer;
     llarp_buffer_t(const llarp_buffer_t&) = default;
     llarp_buffer_t(llarp_buffer_t&&) = default;
 };
@@ -228,62 +222,3 @@ bool llarp_buffer_t::write(InputIt begin, InputIt end)
     }
     return false;
 }
-
-/**
- Provide a copyable/moveable wrapper around `llarp_buffer_t`.
- */
-struct ManagedBuffer
-{
-    llarp_buffer_t underlying;
-
-    ManagedBuffer() = delete;
-
-    explicit ManagedBuffer(const llarp_buffer_t& b) : underlying(b) {}
-
-    ManagedBuffer(ManagedBuffer&&) = default;
-    ManagedBuffer(const ManagedBuffer&) = default;
-
-    operator const llarp_buffer_t&() const { return underlying; }
-};
-
-namespace llarp
-{
-    // Wrapper around a std::unique_ptr<uint8_t[]> that owns its own memory and is also implicitly
-    // convertible to a llarp_buffer_t.
-    struct OwnedBuffer
-    {
-        std::unique_ptr<uint8_t[]> buf;
-        size_t sz;
-
-        template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        OwnedBuffer(std::unique_ptr<T[]> buf, size_t sz) : buf{reinterpret_cast<uint8_t*>(buf.release())}, sz{sz}
-        {}
-
-        // Create a new, uninitialized owned buffer of the given size.
-        explicit OwnedBuffer(size_t sz) : OwnedBuffer{std::make_unique<uint8_t[]>(sz), sz} {}
-
-        // copy content from existing memory
-        explicit OwnedBuffer(const uint8_t* ptr, size_t sz) : OwnedBuffer{sz} { std::copy_n(ptr, sz, buf.get()); }
-
-        OwnedBuffer(const OwnedBuffer&) = delete;
-        OwnedBuffer& operator=(const OwnedBuffer&) = delete;
-        OwnedBuffer(OwnedBuffer&&) = default;
-        OwnedBuffer& operator=(OwnedBuffer&&) = delete;
-
-        // Implicit conversion so that this OwnedBuffer can be passed to anything taking a
-        // llarp_buffer_t
-        operator llarp_buffer_t() { return {buf.get(), sz}; }
-
-        // Creates an owned buffer by copying from a llarp_buffer_t.  (Can also be used to copy from
-        // another OwnedBuffer via the implicit conversion operator above).
-        static OwnedBuffer copy_from(const llarp_buffer_t& b);
-
-        // Creates an owned buffer by copying the used portion of a llarp_buffer_t (i.e. from base
-        // to cur), for when a llarp_buffer_t is used in write mode.
-        static OwnedBuffer copy_used(const llarp_buffer_t& b);
-
-        /// copy everything in this owned buffer into a vector
-        std::vector<uint8_t> copy() const;
-    };
-
-}  // namespace llarp

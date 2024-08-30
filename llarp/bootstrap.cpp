@@ -111,7 +111,7 @@ namespace llarp
 
         for (auto itr = begin(); itr != end(); ++itr)
         {
-            if (RouterContact::is_obsolete(*itr))  // TODO: move this into ::read_from_file
+            if (RouterContact::is_obsolete(*itr))
             {
                 log::debug(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
                 itr = erase(itr);
@@ -119,14 +119,17 @@ namespace llarp
             }
         }
 
-        if (empty() and load_fallbacks)
+        // TESTNET: force load fallbacks
+        if (/* empty() and  */ load_fallbacks)
         {
-            log::critical(logcat, "BootstrapRC list empty; loading fallbacks...");
+            // log::critical(logcat, "BootstrapRC list empty; loading fallbacks...");
+            log::critical(logcat, "BootstrapRC list force loading fallbacks...");
             auto fallbacks = llarp::load_bootstrap_fallbacks();
 
             if (auto itr = fallbacks.find(RouterContact::ACTIVE_NETID); itr != fallbacks.end())
             {
                 log::debug(logcat, "Loading {} default fallback bootstrap router(s)!", itr->second.size());
+                log::critical(logcat, "Fallback bootstrap loaded: {}", itr->second.current());
                 merge(itr->second);
             }
 

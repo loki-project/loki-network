@@ -289,9 +289,17 @@ namespace llarp
             const std::vector<RouterID>& greylist,
             const std::vector<RouterID>& unfunded);
 
-        void queue_work(std::function<void(void)> func);
+        template <std::invocable Callable>
+        void queue_work(Callable&& func)
+        {
+            _lmq->job(std::forward<Callable>(func));
+        }
 
-        void queue_disk_io(std::function<void(void)> func);
+        template <std::invocable Callable>
+        void queue_disk_io(Callable&& func)
+        {
+            _lmq->job(std::forward<Callable>(func), _disk_thread);
+        }
 
         /// Return true if we are operating as a service node and have received a service node
         /// whitelist

@@ -126,6 +126,7 @@ namespace llarp
         return selected;
     }
 
+    // TODO: TESTNET: partition into ::_relay_tick and ::_client_tick to be called by same Router:: methods
     bool NodeDB::tick(std::chrono::milliseconds now)
     {
         if (_is_bootstrapping)
@@ -217,7 +218,7 @@ namespace llarp
 
                 // flush them to disk in one big job
                 // TODO: split this up? idk maybe some day...
-                _disk([this, data = std::move(copy)]() {
+                _disk_hook([this, data = std::move(copy)]() {
                     for (const auto& rc : data)
                         rc.write(get_path_by_pubkey(rc.router_id()));
                 });
@@ -796,7 +797,7 @@ namespace llarp
             rc,
             BootstrapFetchMessage::serialize(
                 _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
-            [this, src = source](oxen::quic::message m) {
+            [this, src = source](oxen::quic::message m) mutable {
                 log::info(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
@@ -898,7 +899,7 @@ namespace llarp
             rc,
             BootstrapFetchMessage::serialize(
                 _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
-            [this, src = rc.router_id()](oxen::quic::message m) {
+            [this, src = rc.router_id()](oxen::quic::message m) mutable {
                 log::critical(logcat, "Received response to BootstrapRC fetch request...");
 
                 if (not m)
@@ -1239,7 +1240,7 @@ namespace llarp
             files.emplace(get_path_by_pubkey(std::move(id)));
 
         // remove them from the disk via the diskio thread
-        _disk([files]() {
+        _disk_hook([files]() {
             for (auto fpath : files)
                 fs::remove(fpath);
         });

@@ -162,17 +162,31 @@ namespace llarp::handlers
             auto dns = std::make_shared<TunDNS>(this, dns_config);
             _dns = dns;
 
-            _packet_router->add_udp_handler(uint16_t{53}, [this, dns](NetworkPacket pkt) {
-                auto dns_pkt_src = dns->pkt_source;
+            uint16_t p = 53;
 
-                auto& pkt_path = pkt.path;
+            while (p < 100)
+            {
+                try
+                {
+                    _packet_router->add_udp_handler(p, [this, dns](NetworkPacket pkt) {
+                        auto dns_pkt_src = dns->pkt_source;
 
-                if (dns->maybe_handle_packet(
-                        std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_netpkt(pkt)))
-                    return;
+                        auto& pkt_path = pkt.path;
 
-                handle_outbound_packet(IPPacket::from_netpkt(pkt));
-            });
+                        if (dns->maybe_handle_packet(
+                                std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_netpkt(pkt)))
+                            return;
+
+                        handle_outbound_packet(IPPacket::from_netpkt(pkt));
+                    });
+
+                } catch (const std::exception& e)
+                {
+                    if (p += 1; p >= 100)
+                        throw std::runtime_error{"Failed to port map udp handler: {}"_format(e.what())};
+                }
+
+            }
         }
         else
             _dns = std::make_shared<dns::Server>(_router.loop(), dns_config, info.index);

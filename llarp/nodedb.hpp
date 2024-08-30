@@ -2,12 +2,11 @@
 
 #include "crypto/crypto.hpp"
 #include "dht/key.hpp"
+#include "router/router.hpp"
 #include "router_contact.hpp"
 #include "router_id.hpp"
 #include "util/common.hpp"
 #include "util/thread/threading.hpp"
-
-#include <llarp/router/router.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -89,7 +88,7 @@ namespace llarp
     {
         Router& _router;
         const fs::path _root;
-        const std::function<void(std::function<void()>)> _disk;
+        // const std::function<void(std::function<void()>)> _disk_hook;
 
         bool _is_service_node;
 
@@ -151,6 +150,12 @@ namespace llarp
         // tracks the number of times each rid appears in the above responses
         std::unordered_map<RouterID, int> fetch_counters{};
 
+        template <std::invocable Callable>
+        void _disk_hook(Callable&& f) const
+        {
+            _router.queue_disk_io(std::forward<Callable>(f));
+        }
+
         bool want_rc(const RouterID& rid) const;
 
         /// asynchronously remove the files for a set of rcs on disk given their public ident key
@@ -180,11 +185,13 @@ namespace llarp
         std::shared_ptr<EventTrigger> _fetch_handler;
 
       public:
-        explicit NodeDB(fs::path rootdir, std::function<void(std::function<void()>)> diskCaller, Router* r)
-            : _router{*r},
-              _root{std::move(rootdir)},
-              _disk(std::move(diskCaller)),
-              _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
+        static std::shared_ptr<NodeDB> make(fs::path rootdir, Router* r)
+        {
+            return std::make_shared<NodeDB>(std::move(rootdir), r);
+        }
+
+        explicit NodeDB(fs::path rootdir, Router* r)
+            : _router{*r}, _root{std::move(rootdir)}, _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
         {
             _ensure_skiplist(_root);
             fetch_counters.clear();
