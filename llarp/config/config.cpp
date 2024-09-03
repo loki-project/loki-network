@@ -582,8 +582,10 @@ namespace llarp
             [this](std::string arg) {
                 if (auto maybe_range = IPRange::from_string(arg); maybe_range)
                 {
+                    log::critical(logcat, "Parsed local ip range from config: {}", *maybe_range);
                     _local_ip_range = *maybe_range;
                     _local_addr = _local_ip_range->address();
+                    log::critical(logcat, "Parsed local addr from config: {}", *_local_addr);
                     _local_base_ip = _local_ip_range->base_ip();
                 }
                 else
@@ -1043,27 +1045,33 @@ namespace llarp
                     "PLEASE");
             });
 
-        auto parse_addr_for_link = [net_ptr](const std::string& arg) {
+        auto parse_addr_for_link = [net_ptr](const std::string& arg, bool& given_port_only) {
             std::optional<oxen::quic::Address> maybe = std::nullopt;
             std::string_view arg_v{arg}, host;
-            uint16_t p{DEFAULT_LISTEN_PORT};
+            uint16_t p{};
 
             if (auto pos = arg_v.find(':'); pos != arg_v.npos)
             {
                 // host = arg_v.substr(0, pos);
-                std::tie(host, p) = detail::parse_addr(arg_v.substr(0, pos), DEFAULT_LISTEN_PORT);
-
-                if (not llarp::parse_int<uint16_t>(arg_v.substr(pos + 1), p))
-                    throw std::invalid_argument{"Failed to parse port in arg:{}"_format(arg)};
+                log::critical(logcat, "Parsing input: {}", arg);
+                std::tie(host, p) = detail::parse_addr(arg_v, DEFAULT_LISTEN_PORT);
+                log::critical(logcat, "Parsed input = {}:{}", host, p);
             }
 
             if (host.empty())
+            {
+                log::critical(
+                    logcat, "Host value empty, port:{}{}", p, p == DEFAULT_LISTEN_PORT ? "(DEFAULT PORT)" : "");
+                given_port_only = p != DEFAULT_LISTEN_PORT;
                 maybe = net_ptr->get_best_public_address(true, p);
+            }
             else
                 maybe = oxen::quic::Address{std::string{host}, p};
 
             if (maybe and maybe->is_loopback())
                 throw std::invalid_argument{"{} is a loopback address"_format(arg)};
+
+            log::critical(logcat, "parsed address: ", *maybe);
 
             return maybe;
         };
@@ -1098,13 +1106,12 @@ namespace llarp
                 "router can be reached.",
             },
             [this, parse_addr_for_link](const std::string& arg) {
-                if (auto a = parse_addr_for_link(arg))
+                if (auto a = parse_addr_for_link(arg, only_user_port))
                 {
                     if (not a->is_addressable())
                         throw std::invalid_argument{"Listen address ({}) is not addressible!"_format(a)};
 
                     listen_addr = *a;
-                    using_user_value = true;
                     using_new_api = true;
                 }
                 else
@@ -1116,15 +1123,18 @@ namespace llarp
                 if (using_new_api)
                     throw std::runtime_error{"USE THE NEW API -- SPECIFY LOCAL ADDRESS UNDER [LISTEN]"};
 
-                if (auto a = parse_addr_for_link(arg); a and a->is_addressable())
+                if (auto a = parse_addr_for_link(arg, only_user_port); a)
                 {
-                    log::warning(
-                        logcat,
-                        "Loaded address from deprecated [inbound] options; update your config to "
-                        "use "
-                        "[bind]:listen instead PLEASE");
-                    listen_addr = *a;
-                    using_user_value = true;
+                    if (a->is_addressable() or (!a->is_any_port() and only_user_port))
+                    {
+                        log::warning(
+                            logcat,
+                            "Loaded address {} from deprecated [inbound] options; update your config to "
+                            "use "
+                            "[bind]:listen instead PLEASE",
+                            a);
+                        listen_addr = *a;
+                    }
                 }
             });
 
@@ -1182,7 +1192,7 @@ namespace llarp
             }
 
             listen_addr = std::move(temp);
-            using_user_value = true;
+            only_user_port = true;
         });
     }
 

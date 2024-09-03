@@ -38,9 +38,9 @@ namespace llarp
                         logcat,
                         "*** WARNING: The config option {} {} and has been ignored",
                         opt,
-                        (deprecated  ? " is deprecated"
-                             : relay ? " is not valid in service node configuration files"
-                                     : " is not valid in client configuration files"));
+                        (deprecated  ? "is deprecated"
+                             : relay ? "is not valid in service node configuration files"
+                                     : "is not valid in client configuration files"));
                 });
         }
 

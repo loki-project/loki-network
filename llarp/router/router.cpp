@@ -403,12 +403,14 @@ namespace llarp
         if (conf.links.listen_addr)
         {
             _listen_address = *conf.links.listen_addr;
+            log::critical(logcat, "Using listen address from link config: {}", _listen_address);
         }
         else
         {
             if (paddr or pport)
                 throw std::runtime_error{"Must specify [bind]:listen in config with public ip/addr!"};
 
+            log::critical(logcat, "No value in link config listen_addr, querying net-if...");
             if (auto maybe_addr = net().get_best_public_address(true, DEFAULT_LISTEN_PORT))
                 _listen_address = std::move(*maybe_addr);
             else
@@ -427,14 +429,22 @@ namespace llarp
         IPRange _local_range;
         oxen::quic::Address _local_addr;
         ip_v _local_base_ip;
+        net::if_info if_info;
 
         auto& conf = _config->network;
 
         auto ipv6_enabled = conf.enable_ipv6;
 
+        bool find_if_addr = true;
+
         // If an ip range is set in the config, then the address and ip optionls are as well
-        if (not(conf._local_ip_range and conf._local_addr->is_addressable()))
+        if (not(conf._local_ip_range and !conf._local_addr->is_any_addr()))
         {
+            log::debug(
+                logcat,
+                "Finding free range for config values (range:{}, addr:{})",
+                conf._local_ip_range,
+                conf._local_addr);
             const auto maybe = net().find_free_range(ipv6_enabled);
 
             if (not maybe.has_value())
@@ -448,6 +458,14 @@ namespace llarp
         }
         else
         {
+            log::debug(
+                logcat,
+                "Lokinet provided local if-range/addr from config ('{}', {})",
+                *conf._local_ip_range,
+                *conf._local_addr);
+
+            find_if_addr = !conf._if_name.has_value();
+
             _local_range = *conf._local_ip_range;
             _local_addr = *conf._local_addr;
             _local_base_ip = *conf._local_base_ip;
@@ -457,29 +475,29 @@ namespace llarp
 
         log::critical(logcat, "Lokinet has private {} range: {}", is_v4 ? "ipv4" : "ipv6", _local_range);
 
-        net::if_info if_info;
-
         if (conf._if_name)
         {
             if_info.if_name = *conf._if_name;
 
-            if (auto maybe_addr = net().get_interface_addr(*if_info.if_name, is_v4 ? AF_INET : AF_INET6))
-                if_info.if_addr = *maybe_addr;
-            else
-                throw std::runtime_error{"cannot find address for interface name: {}"_format(*if_info.if_name)};
+            if (find_if_addr)
+            {
+                log::debug(logcat, "Finding if address for if-name {}", if_info.if_name);
+                if (auto maybe_addr = net().get_interface_addr(*if_info.if_name, is_v4 ? AF_INET : AF_INET6))
+                    if_info.if_addr = *maybe_addr;
+                else
+                    throw std::runtime_error{"cannot find address for interface name: {}"_format(*if_info.if_name)};
 
-            ip_v ipv{};
-            if (is_v4)
-                ipv = if_info.if_addr->to_ipv4();
-            else
-                ipv = if_info.if_addr->to_ipv6();
+                ip_v ipv{};
+                if (is_v4)
+                    ipv = if_info.if_addr->to_ipv4();
+                else
+                    ipv = if_info.if_addr->to_ipv6();
 
-            if (auto maybe_index = net().get_interface_index(ipv))
-                if_info.if_index = *maybe_index;
-            else
-                throw std::runtime_error{"cannot find index for interface name: {}"_format(*if_info.if_name)};
-
-            _if_name = *if_info.if_name;
+                if (auto maybe_index = net().get_interface_index(ipv))
+                    if_info.if_index = *maybe_index;
+                else
+                    throw std::runtime_error{"cannot find index for interface name: {}"_format(*if_info.if_name)};
+            }
         }
         else
         {
@@ -1208,11 +1226,6 @@ namespace llarp
     oxen::quic::Address Router::listen_addr() const
     {
         return _listen_address;
-    }
-
-    oxen::quic::Address Router::public_addr() const
-    {
-        return _public_address.value_or(_listen_address);
     }
 
     const llarp::net::Platform& Router::net() const

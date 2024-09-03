@@ -240,7 +240,7 @@ namespace llarp
         for (auto& method : path_requests)
         {
             s->register_handler(
-                std::string{method.first}, [this, func = std::move(method.second)](oxen::quic::message m) {
+                std::string{method.first}, [this, func = std::move(method.second)](oxen::quic::message m) mutable {
                     _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
                         auto body = msg.body_str();
                         auto respond = [&, m = std::move(msg)](std::string response) mutable {
@@ -900,8 +900,10 @@ namespace llarp
                 // node_db->put_rc(*remote);
 
                 auto remote_rc = *remote;
-                if (node_db->verify_store_gossip_rc(remote_rc))
+
+                if (node_db->registered_routers().count(remote_rc.router_id()))
                 {
+                    node_db->put_rc_if_newer(remote_rc);
                     log::critical(
                         logcat,
                         "Bootstrap node confirmed RID:{} is registered; approving fetch request and saving RC!",
@@ -909,7 +911,10 @@ namespace llarp
                     _router.loop()->call_soon([&, remote_rc]() { gossip_rc(_router.local_rid(), remote_rc); });
                 }
                 else
-                    log::critical(logcat, "Bootstrap node failed to confirm RID:{} is registered; something is wrong", remote_rc.router_id());
+                    log::critical(
+                        logcat,
+                        "Bootstrap node failed to confirm RID:{} is registered; something is wrong",
+                        remote_rc.router_id());
             }
         }
 
@@ -1062,7 +1067,7 @@ namespace llarp
                 source,
                 "fetch_rids"s,
                 m.body_str(),
-                [source_rid = std::move(source), original = std::move(m)](oxen::quic::message m) {
+                [source_rid = std::move(source), original = std::move(m)](oxen::quic::message m) mutable {
                     original.respond(m.body_str(), m.is_error());
                 });
             return;
@@ -1237,7 +1242,7 @@ namespace llarp
                     peer_key,
                     "publish_intro",
                     PublishIntroMessage::serialize(enc, relay_order, is_relayed),
-                    [respond = std::move(respond)](oxen::quic::message m) {
+                    [respond = std::move(respond)](oxen::quic::message m) mutable {
                         if (m.timed_out)
                             return;  // drop if timed out; requester will have timed out as well
                         respond(m.body_str());
@@ -1373,7 +1378,7 @@ namespace llarp
                 peer_key,
                 "find_intro",
                 FindIntroMessage::serialize(addr, is_relayed, relay_order),
-                [respond = std::move(respond)](oxen::quic::message relay_response) {
+                [respond = std::move(respond)](oxen::quic::message relay_response) mutable {
                     if (relay_response)
                         log::info(
                             logcat,
@@ -1500,7 +1505,7 @@ namespace llarp
                 hop->upstream(),
                 "path_build",
                 Frames::serialize(payload_list),
-                [hop, this, prev_message = std::move(m)](oxen::quic::message m) {
+                [hop, this, prev_message = std::move(m)](oxen::quic::message m) mutable {
                     if (m)
                     {
                         log::info(
@@ -1908,7 +1913,8 @@ namespace llarp
             next_router,
             "path_control"s,
             std::move(new_payload),
-            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](oxen::quic::message response) {
+            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
+                oxen::quic::message response) mutable {
                 auto hop = hop_weak.lock();
 
                 if (not hop)

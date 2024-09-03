@@ -146,7 +146,7 @@ namespace llarp
         log::debug(logcat, "Handling signal {}", sig);
         if (sig == SIGINT || sig == SIGTERM)
         {
-            sigINT();
+            signal(sig);
         }
 #ifndef _WIN32
         if (sig == SIGHUP)
@@ -158,11 +158,11 @@ namespace llarp
 
     void Context::reload() {}
 
-    void Context::sigINT()
+    void Context::signal(int s)
     {
         if (router)
         {
-            log::error(logcat, "Handling SIGINT");
+            log::error(logcat, "Received signal SIG{}; stopping router...", s == SIGINT ? "INT" : "TERM");
             /// async stop router on sigint
             router->stop();
         }

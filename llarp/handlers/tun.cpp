@@ -179,13 +179,12 @@ namespace llarp::handlers
 
                         handle_outbound_packet(IPPacket::from_netpkt(pkt));
                     });
-
-                } catch (const std::exception& e)
+                }
+                catch (const std::exception& e)
                 {
                     if (p += 1; p >= 100)
                         throw std::runtime_error{"Failed to port map udp handler: {}"_format(e.what())};
                 }
-
             }
         }
         else

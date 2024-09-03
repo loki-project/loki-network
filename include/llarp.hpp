@@ -87,7 +87,7 @@ namespace llarp
         std::shared_ptr<Config> config = nullptr;
 
       private:
-        void sigINT();
+        void signal(int s);
 
         void close();
 

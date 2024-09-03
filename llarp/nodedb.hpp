@@ -404,9 +404,6 @@ namespace llarp
             });
         }
 
-        /// remove an entry via its ident pubkey
-        void remove_router(RouterID pk);
-
         /// remove an entry given a filter that inspects the rc
         template <typename Filter>
         void remove_if(Filter visit)

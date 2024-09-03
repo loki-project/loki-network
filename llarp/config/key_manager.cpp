@@ -30,6 +30,7 @@ namespace llarp
 
     bool KeyManager::initialize(const llarp::Config& config, bool gen_if_absent, bool is_snode)
     {
+        logcat->set_level(log::Level::trace);  // TESTNET:
         if (is_initialized)
             return false;
 
@@ -59,14 +60,19 @@ namespace llarp
         };
 
         rc_path = deriveFile(our_rc_filename, config.router.rc_file);
+        log::trace(logcat, "Derived rc path: {}", rc_path.string());
         idkey_path = deriveFile(our_identity_filename, config.router.idkey_file);
+        log::trace(logcat, "Derived id key path: {}", idkey_path.string());
         enckey_path = deriveFile(our_enc_key_filename, config.router.enckey_file);
+        log::trace(logcat, "Derived enc key path: {}", enckey_path.string());
         transkey_path = deriveFile(our_transport_key_filename, config.router.transkey_file);
+        log::trace(logcat, "Derived transport key path: {}", transkey_path.string());
 
         RemoteRC rc;
 
         if (auto exists = rc.read(rc_path); not exists)
         {
+            log::trace(logcat, "Failed to read RC at path: {}", rc_path.string());
             if (not gen_if_absent)
             {
                 log::error(logcat, "Could not read RC at path {}", rc_path);
@@ -75,6 +81,7 @@ namespace llarp
         }
         else
         {
+            log::trace(logcat, "Successfully read RC at path: {}", rc_path.string());
             if (backup_keys = (is_snode and not rc.verify()); backup_keys)
             {
                 auto err = "RC (path:{}) is invalid or out of date"_format(rc_path);
@@ -122,7 +129,7 @@ namespace llarp
 
     bool KeyManager::copy_backup_keyfile(const fs::path& filepath)
     {
-        auto findFreeBackupFilename = [](const fs::path& filepath) mutable {
+        auto findFreeBackupFilename = [](const fs::path& filepath) {
             for (int i = 0; i < 9; i++)
             {
                 auto ext = ".{}.bak"_format(i);
@@ -186,7 +193,7 @@ namespace llarp
     {
         if (not fs::exists(path))
         {
-            log::info(logcat, "Generating new key (path:{})", path);
+            log::debug(logcat, "Generating new key (path:{})", path);
             keygen(key);
 
             if (!key.write_to_file(path))

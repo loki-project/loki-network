@@ -19,6 +19,7 @@ namespace llarp
 
     bool SecretKey::load_from_file(const fs::path& fname)
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         size_t sz;
         std::string tmp;
         tmp.resize(128);
@@ -33,22 +34,13 @@ namespace llarp
             return false;
         }
 
-        if (sz == size())
-        {
-            // is raw buffer
-            std::copy_n(tmp.begin(), sz, begin());
-            return true;
-        }
-
-        return bt_decode(tmp);
-
-        // oxenc::bt_deserialize(tmp, *data());
-
-        // return true;
+        std::copy_n(tmp.begin(), sz, begin());
+        return true;
     }
 
     bool SecretKey::recalculate()
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         PrivateKey key;
         PubKey pubkey;
         if (!to_privkey(key) || !key.to_pubkey(pubkey))
@@ -59,6 +51,7 @@ namespace llarp
 
     bool SecretKey::to_privkey(PrivateKey& key) const
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         // Ed25519 calculates a 512-bit hash from the seed; the first half (clamped)
         // is the private key; the second half is the hash that gets used in
         // signing.
@@ -79,11 +72,10 @@ namespace llarp
 
     bool SecretKey::write_to_file(const fs::path& fname) const
     {
-        auto bte = bt_encode();
-
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         try
         {
-            util::buffer_to_file(fname, bte);
+            util::buffer_to_file(fname, to_view());
         }
         catch (const std::exception& e)
         {

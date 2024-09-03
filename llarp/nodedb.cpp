@@ -210,18 +210,19 @@ namespace llarp
         {
             _router.loop()->call([this]() {
                 _next_flush_time += FLUSH_INTERVAL;
-                // make copy of all rcs
-                std::vector<RemoteRC> copy;
+                save_to_disk();
+                // // make copy of all rcs
+                // std::vector<RemoteRC> copy;
 
-                for (const auto& item : rc_lookup)
-                    copy.push_back(item.second);
+                // for (const auto& item : rc_lookup)
+                //     copy.push_back(item.second);
 
-                // flush them to disk in one big job
-                // TODO: split this up? idk maybe some day...
-                _disk_hook([this, data = std::move(copy)]() {
-                    for (const auto& rc : data)
-                        rc.write(get_path_by_pubkey(rc.router_id()));
-                });
+                // // flush them to disk in one big job
+                // // TODO: split this up? idk maybe some day...
+                // _disk_hook([this, data = std::move(copy)]() {
+                //     for (const auto& rc : data)
+                //         rc.write(get_path_by_pubkey(rc.router_id()));
+                // });
             });
         }
 
@@ -286,7 +287,7 @@ namespace llarp
 
     fs::path NodeDB::get_path_by_pubkey(const RouterID& pubkey) const
     {
-        return _root / pubkey.to_view() / RC_FILE_EXT;
+        return "{}/{}{}"_format(_root, pubkey.to_string(), RC_FILE_EXT);
     }
 
     bool NodeDB::want_rc(const RouterID& rid) const
@@ -1088,7 +1089,7 @@ namespace llarp
 
             RemoteRC rc{};
 
-            if (not rc.read(f) or rc.is_expired(now))
+            if (true or not rc.read(f) or rc.is_expired(now))  // TESTNET: force bootstrap always
             {
                 // try loading it, purge it if it is junk or expired
                 purge.push_back(f);
@@ -1119,8 +1120,8 @@ namespace llarp
             return;
 
         _router.loop()->call([this]() {
-            for (const auto& rc : rc_lookup)
-                rc.second.write(get_path_by_pubkey(rc.first));
+            for (const auto& rc : known_rcs)
+                rc.write(get_path_by_pubkey(rc.router_id()));
         });
     }
 
@@ -1150,14 +1151,6 @@ namespace llarp
             return itr->second;
 
         return std::nullopt;
-    }
-
-    void NodeDB::remove_router(RouterID pk)
-    {
-        _router.loop()->call([this, pk]() {
-            rc_lookup.erase(pk);
-            remove_many_from_disk_async({pk});
-        });
     }
 
     void NodeDB::remove_stale_rcs()

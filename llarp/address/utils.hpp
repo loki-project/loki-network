@@ -39,6 +39,7 @@ namespace llarp
 
     namespace detail
     {
+        // inline auto utilcat = log::Cat("addrutils");
         inline static std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
         {
             std::optional<std::string> ret = std::nullopt;
@@ -74,6 +75,7 @@ namespace llarp
             }
             else if (default_port)
             {
+                // log::critical(utilcat, "Setting default port for addr parse!");
                 result.second = *default_port;
             }
             else
@@ -98,8 +100,11 @@ namespace llarp
                     throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
             }
 
-            if (addr.empty())
-                addr = "::";
+            // if (addr.empty())
+            // {
+            //     log::critical(utilcat, "addr is empty, tough titties buddy");  //  TESTNET: remove this log please
+            //     // addr = "::";
+            // }
 
             result.first = addr;
             return result;

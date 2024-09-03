@@ -54,7 +54,7 @@ namespace llarp
 
     // TESTNET: these constants are shortened for testing purposes
     inline constexpr std::chrono::milliseconds TESTNET_GOSSIP_INTERVAL{10min};
-    inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{5min};
+    inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{10min};
     inline constexpr std::chrono::milliseconds INITIAL_ATTEMPT_INTERVAL{30s};
     // as we advance towards full mesh, we try to connect to this number per tick
     inline constexpr int FULL_MESH_ITERATION{1};
@@ -275,8 +275,6 @@ namespace llarp
         const LocalRC& rc() const { return router_contact; }
 
         oxen::quic::Address listen_addr() const;
-
-        oxen::quic::Address public_addr() const;
 
         nlohmann::json ExtractStatus() const;
 

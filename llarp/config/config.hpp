@@ -152,6 +152,8 @@ namespace llarp
         net::if_info _if_info;
 
         // If _local_ip_range is set, the following two optionals are also set
+
+        // config mapped as "if-addr"
         std::optional<IPRange> _local_ip_range;
         std::optional<oxen::quic::Address> _local_addr;
         std::optional<ip_v> _local_base_ip;
@@ -211,7 +213,7 @@ namespace llarp
 
         std::optional<oxen::quic::Address> listen_addr;
 
-        bool using_user_value = false;
+        bool only_user_port = false;
         bool using_new_api = false;
 
         void define_config_options(ConfigDefinition& conf, const ConfigGenParameters& params);

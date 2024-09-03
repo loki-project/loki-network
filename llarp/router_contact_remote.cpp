@@ -29,6 +29,7 @@ namespace llarp
 
     bool RemoteRC::read(const fs::path& fname)
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         _payload.resize(MAX_RC_SIZE);
 
         try
