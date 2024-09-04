@@ -268,7 +268,21 @@ target_link_libraries(lokinet-core
 )
 
 # target_link_libraries(lokinet-base INTERFACE oxenc::oxenc oxen::logging)
-target_link_libraries(lokinet-base INTERFACE oxenc::oxenc oxen::logging oxenmq::oxenmq Threads::Threads libunbound)
+target_link_libraries(lokinet-base 
+  INTERFACE 
+  
+  libevent::core
+  libevent::threads
+  libevent::extra
+
+  oxenc::oxenc 
+  oxen::logging 
+  oxenmq::oxenmq 
+  
+  # Threads::Threads 
+  
+  libunbound
+)
 
 
 # target_link_libraries(lokinet-rpc PUBLIC oxenmq::oxenmq)

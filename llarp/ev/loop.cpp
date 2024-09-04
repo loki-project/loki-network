@@ -1,5 +1,7 @@
 #include "loop.hpp"
 
+#include <llarp/vpn/platform.hpp>
+
 namespace llarp
 {
     static auto logcat = log::Cat("EventLoop");
@@ -19,7 +21,7 @@ namespace llarp
 
     bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler)
     {
-        (void)netif;
+        (void)netif->PollFD();
         (void)handler;
 
 #ifdef __linux__

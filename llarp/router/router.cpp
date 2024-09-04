@@ -419,24 +419,25 @@ namespace llarp
 
         if (_is_service_node)
         {
-            _public_address = (not paddr and not pport) ? _listen_address
-                                                        : oxen::quic::Address{*paddr, pport ? *pport : DEFAULT_LISTEN_PORT};
+            _public_address = (not paddr and not pport)
+                ? _listen_address
+                : oxen::quic::Address{*paddr, pport ? *pport : DEFAULT_LISTEN_PORT};
         }
-        else if (_listen_address.is_public())
+        else if (_listen_address.is_addressable())
         {
-            log::info(logcat, "Assigning public listen address {} as public addr", _listen_address);
+            log::info(logcat, "Assigning addressible listen address {} as public addr", _listen_address);
             _public_address = _listen_address;
         }
         else
         {
             log::critical(logcat, "Listen address is non-public, querying net-if for public address...");
-            auto _port = !_listen_address.is_any_port() and conf.links.only_user_port ? _listen_address.port() : DEFAULT_LISTEN_PORT;
+            auto _port = !_listen_address.is_any_port() and conf.links.only_user_port ? _listen_address.port()
+                                                                                      : DEFAULT_LISTEN_PORT;
             if (auto maybe_addr = net().get_best_public_address(true, _port))
                 _public_address = std::move(*maybe_addr);
             else
                 throw std::runtime_error{"Could not find net interface on current platform!"};
         }
-
 
         RouterContact::BLOCK_BOGONS = conf.router.block_bogons;
     }
@@ -1024,9 +1025,9 @@ namespace llarp
             _router_profiling.disable();
             // log::debug(logcat, "Client generating keys and resigning RC...");
             // we are a client, regenerate keys and resign rc before everything else
-            crypto::identity_keygen(_identity);
-            crypto::encryption_keygen(_encryption);
-            router_contact.set_router_id(seckey_to_pubkey(identity()));
+            // crypto::identity_keygen(_identity);
+            // crypto::encryption_keygen(_encryption);
+            // router_contact.set_router_id(seckey_to_pubkey(identity()));
 
             // _path_context = std::make_shared<path::PathContext>(local_rid());
         }

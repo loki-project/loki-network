@@ -1089,7 +1089,7 @@ namespace llarp
 
             RemoteRC rc{};
 
-            if (true or not rc.read(f) or rc.is_expired(now))  // TESTNET: force bootstrap always
+            if (not rc.read(f) or rc.is_expired(now))
             {
                 // try loading it, purge it if it is junk or expired
                 purge.push_back(f);

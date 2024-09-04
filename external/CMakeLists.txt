@@ -26,6 +26,7 @@ if(SUBMODULE_CHECK)
     message(STATUS "Checking submodules")
     check_submodule(CLI11)
     check_submodule(cpr)
+    check_submodule(libevent)
     check_submodule(nlohmann)
     check_submodule(oxen-encoding)
     check_submodule(oxen-libquic)
@@ -56,6 +57,18 @@ macro(system_or_submodule BIGNAME smallname pkgconf subdir)
     add_library(${smallname}::${smallname} ALIAS ${smallname})
   endif()
 endmacro()
+
+# libevent
+set(EVENT__DISABLE_TESTS ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_MBEDTLS ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_BENCHMARK ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "" FORCE)
+add_subdirectory(libevent)
+
+add_library(libevent::core ALIAS event_core)
+add_library(libevent::threads ALIAS event_pthreads)
+add_library(libevent::extra ALIAS event_extra)
+
 
 system_or_submodule(OXENC oxenc liboxenc>=1.0.10 oxen-encoding)
 system_or_submodule(OXENMQ oxenmq liboxenmq>=1.2.14 oxen-mq)
