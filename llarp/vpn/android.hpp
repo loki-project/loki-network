@@ -30,7 +30,7 @@ namespace llarp::vpn
 
         int PollFD() const override { return m_fd; }
 
-        IPPacket ReadNextPacket() override
+        IPPacket read_next_packet() override
         {
             std::vector<uint8_t> pkt;
             pkt.reserve(MAX_PACKET_SIZE);
@@ -39,7 +39,7 @@ namespace llarp::vpn
             return IPPacket{std::move(pkt)};
         }
 
-        bool WritePacket(IPPacket pkt) override
+        bool write_packet(IPPacket pkt) override
         {
             const auto sz = write(m_fd, pkt.data(), pkt.size());
             if (sz <= 0)

@@ -17,33 +17,41 @@ namespace llarp::dns
 
     bool MessageHeader::Encode(llarp_buffer_t* buf) const
     {
-        if (!buf->put_uint16(id))
+        if (!buf->put_uint16(_id))
             return false;
-        if (!buf->put_uint16(fields))
+        if (!buf->put_uint16(_fields))
             return false;
-        if (!buf->put_uint16(qd_count))
+        if (!buf->put_uint16(_qd_count))
             return false;
-        if (!buf->put_uint16(an_count))
+        if (!buf->put_uint16(_an_count))
             return false;
-        if (!buf->put_uint16(ns_count))
+        if (!buf->put_uint16(_ns_count))
             return false;
-        return buf->put_uint16(ar_count);
+        return buf->put_uint16(_ar_count);
     }
 
     bool MessageHeader::Decode(llarp_buffer_t* buf)
     {
-        if (!buf->read_uint16(id))
+        if (!buf->read_uint16(_id))
             return false;
-        if (!buf->read_uint16(fields))
+        if (!buf->read_uint16(_fields))
             return false;
-        if (!buf->read_uint16(qd_count))
+        if (!buf->read_uint16(_qd_count))
             return false;
-        if (!buf->read_uint16(an_count))
+        if (!buf->read_uint16(_an_count))
             return false;
-        if (!buf->read_uint16(ns_count))
+        if (!buf->read_uint16(_ns_count))
             return false;
-        if (!buf->read_uint16(ar_count))
+        if (!buf->read_uint16(_ar_count))
             return false;
+        return true;
+    }
+
+    bool MessageHeader::decode(std::span<unsigned char> b)
+    {
+        std::memcpy(_data.data(), b.data(), sizeof(_data));
+        for (auto& d : _data)
+            oxenc::big_to_host_inplace(d);
         return true;
     }
 
@@ -70,12 +78,12 @@ namespace llarp::dns
           additional(other.additional)
     {}
 
-    Message::Message(const MessageHeader& hdr) : hdr_id(hdr.id), hdr_fields(hdr.fields)
+    Message::Message(const MessageHeader& hdr) : hdr_id(hdr._id), hdr_fields(hdr._fields)
     {
-        questions.resize(size_t(hdr.qd_count));
-        answers.resize(size_t(hdr.an_count));
-        authorities.resize(size_t(hdr.ns_count));
-        additional.resize(size_t(hdr.ar_count));
+        questions.resize(size_t(hdr._qd_count));
+        answers.resize(size_t(hdr._an_count));
+        authorities.resize(size_t(hdr._ns_count));
+        additional.resize(size_t(hdr._ar_count));
     }
 
     Message::Message(const Question& question) : hdr_id{0}, hdr_fields{}
@@ -86,12 +94,12 @@ namespace llarp::dns
     bool Message::Encode(llarp_buffer_t* buf) const
     {
         MessageHeader hdr;
-        hdr.id = hdr_id;
-        hdr.fields = hdr_fields;
-        hdr.qd_count = questions.size();
-        hdr.an_count = answers.size();
-        hdr.ns_count = 0;
-        hdr.ar_count = 0;
+        hdr._id = hdr_id;
+        hdr._fields = hdr_fields;
+        hdr._qd_count = questions.size();
+        hdr._an_count = answers.size();
+        hdr._ns_count = 0;
+        hdr._ar_count = 0;
 
         if (!hdr.Encode(buf))
             return false;
@@ -400,10 +408,10 @@ namespace llarp::dns
             fmt::format("{}", fmt::join(additional, ",")));
     }
 
-    std::optional<Message> maybe_parse_dns_msg(IPPacket m)
+    std::optional<Message> maybe_parse_dns_msg(std::string_view b)
     {
         MessageHeader hdr{};
-        llarp_buffer_t buf{m.uview()};
+        llarp_buffer_t buf{b};
 
         if (not hdr.Decode(&buf))
             return std::nullopt;

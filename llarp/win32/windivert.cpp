@@ -147,7 +147,7 @@ namespace llarp::win32
             WINDIVERT_ADDRESS addr;
         };
 
-        class IO : public llarp::vpn::I_Packet_IO
+        class IO : public llarp::vpn::PacketIO
         {
             std::function<void(void)> m_Wake;
 
@@ -220,9 +220,9 @@ namespace llarp::win32
 
             virtual int PollFD() const { return -1; }
 
-            bool WritePacket(net::IPPacket) override { return false; }
+            bool write_packet(net::IPPacket) override { return false; }
 
-            net::IPPacket ReadNextPacket() override
+            net::IPPacket read_next_packet() override
             {
                 auto w_pkt = m_RecvQueue.tryPopFront();
                 if (not w_pkt)
@@ -282,7 +282,7 @@ namespace llarp::win32
             return buf.data();
         }
 
-        std::shared_ptr<llarp::vpn::I_Packet_IO> make_interceptor(
+        std::shared_ptr<llarp::vpn::PacketIO> make_interceptor(
             const std::string& filter_spec, std::function<void(void)> wake)
         {
             return std::make_shared<wd::IO>(filter_spec, wake);

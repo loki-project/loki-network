@@ -59,11 +59,12 @@ macro(system_or_submodule BIGNAME smallname pkgconf subdir)
 endmacro()
 
 # libevent
+set(EVENT__LIBRARY_TYPE "STATIC" CACHE STRING "" FORCE)
 set(EVENT__DISABLE_TESTS ON CACHE BOOL "" FORCE)
 set(EVENT__DISABLE_MBEDTLS ON CACHE BOOL "" FORCE)
 set(EVENT__DISABLE_BENCHMARK ON CACHE BOOL "" FORCE)
 set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "" FORCE)
-add_subdirectory(libevent)
+add_subdirectory(libevent EXCLUDE_FROM_ALL)
 
 add_library(libevent::core ALIAS event_core)
 add_library(libevent::threads ALIAS event_pthreads)

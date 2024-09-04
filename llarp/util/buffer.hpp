@@ -10,6 +10,7 @@
 #include <cstring>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>

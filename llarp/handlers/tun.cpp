@@ -168,16 +168,14 @@ namespace llarp::handlers
             {
                 try
                 {
-                    _packet_router->add_udp_handler(p, [this, dns](NetworkPacket pkt) {
+                    _packet_router->add_udp_handler(p, [this, dns](IPPacket pkt) {
                         auto dns_pkt_src = dns->pkt_source;
 
-                        auto& pkt_path = pkt.path;
-
                         if (dns->maybe_handle_packet(
-                                std::move(dns_pkt_src), pkt_path.remote, pkt_path.local, IPPacket::from_netpkt(pkt)))
+                                std::move(dns_pkt_src), pkt.destination(), pkt.source(), std::move(pkt)))
                             return;
 
-                        handle_outbound_packet(IPPacket::from_netpkt(pkt));
+                        handle_outbound_packet(std::move(pkt));
                     });
                 }
                 catch (const std::exception& e)
@@ -379,9 +377,19 @@ namespace llarp::handlers
         _if_name = _net_if->interface_info().ifname;
         log::info(logcat, "{} got network interface:{}", name(), _if_name);
 
+        auto if_hook = [netif = _net_if, pktrouter = _packet_router]() mutable {
+            auto pkt = netif->read_next_packet();
+
+            while (not pkt.empty())
+            {
+                pktrouter->handle_ip_packet(std::move(pkt));
+                pkt = netif->read_next_packet();
+            }
+        };
+
         auto handle_packet = [netif = _net_if, pktrouter = _packet_router](IPPacket pkt) {
             // TODO: packets used to have reply hooks
-            // pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
+            // pkt.reply = [netif](auto pkt) { netif->write_packet(std::move(pkt)); };
             pktrouter->handle_ip_packet(std::move(pkt));
         };
 
@@ -1067,7 +1075,7 @@ namespace llarp::handlers
 
     void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
     {
-        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->WritePacket(std::move(pkt)); });
+        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->write_packet(std::move(pkt)); });
     }
 
     void TunEndpoint::rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest)

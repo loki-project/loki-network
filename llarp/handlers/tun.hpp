@@ -25,6 +25,53 @@ namespace llarp::handlers
         TunEndpoint(Router& r);
         ~TunEndpoint() override;
 
+      private:
+        Router& _router;
+
+        /// dns subsystem for this endpoint
+        std::shared_ptr<dns::Server> _dns;
+
+        /// our local ip range (config-mapped as `if-addr`), address, and ip
+        IPRange _local_range;
+        oxen::quic::Address _local_addr;
+        ip_v _local_base_ip;
+
+        IPRangeIterator _local_range_iterator;
+
+        /// Our local Network Address holding our network pubkey
+        NetworkAddress _local_netaddr;
+
+        /// our network interface's ipv6 address
+        oxen::quic::Address _local_ipv6;
+
+        /// list of strict connect addresses for hooks
+        // std::vector<IpAddress> _strict_connect_addrs;
+        /// use v6?
+        bool ipv6_enabled;
+
+        std::string _if_name;
+
+        std::optional<IPRange> _base_ipv6_range = std::nullopt;
+
+        std::shared_ptr<vpn::NetworkInterface> _net_if;
+        std::shared_ptr<EventPoller> _pkt_watcher;
+
+        std::shared_ptr<vpn::PacketRouter> _packet_router;
+
+        std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
+
+        /// a file to load / store the ephemeral address map to
+        std::optional<fs::path> _persisting_addr_file = std::nullopt;
+
+        /// how long to wait for path alignment
+        std::chrono::milliseconds _path_alignment_timeout{30s};
+
+        service::Identity _identity;
+
+        /// for raw packet dns
+        std::shared_ptr<vpn::PacketIO> _raw_DNS;
+
+      public:
         vpn::NetworkInterface* get_vpn_interface() { return _net_if.get(); }
 
         std::string_view name() const { return TUN; }
@@ -64,11 +111,6 @@ namespace llarp::handlers
 
         void setup_dns();
 
-        // std::shared_ptr<dns::Server> DNS() const override
-        // {
-        //   return _dns;
-        // };
-
         // INPROGRESS: new API
         // Handles an outbound packet going out INTO the network
         void handle_outbound_packet(IPPacket pkt);
@@ -105,7 +147,7 @@ namespace llarp::handlers
 
         Router& router() { return _router; }
 
-      protected:
+        //   protected:
         struct WritePacket
         {
             uint64_t seqno;
@@ -144,50 +186,6 @@ namespace llarp::handlers
                 query->add_nx_reply();
             reply(*query);
         }
-
-        Router& _router;
-
-        /// dns subsystem for this endpoint
-        std::shared_ptr<dns::Server> _dns;
-
-        /// our local ip range (config-mapped as `if-addr`), address, and ip
-        IPRange _local_range;
-        oxen::quic::Address _local_addr;
-        ip_v _local_base_ip;
-
-        IPRangeIterator _local_range_iterator;
-
-        /// Our local Network Address holding our network pubkey
-        NetworkAddress _local_netaddr;
-
-        /// our network interface's ipv6 address
-        oxen::quic::Address _local_ipv6;
-
-        /// list of strict connect addresses for hooks
-        // std::vector<IpAddress> _strict_connect_addrs;
-        /// use v6?
-        bool ipv6_enabled;
-
-        std::string _if_name;
-
-        std::optional<IPRange> _base_ipv6_range = std::nullopt;
-
-        std::shared_ptr<vpn::NetworkInterface> _net_if;
-
-        std::shared_ptr<vpn::PacketRouter> _packet_router;
-
-        std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
-
-        /// how long to wait for path alignment
-        std::chrono::milliseconds _path_alignment_timeout{30s};
-
-        /// a file to load / store the ephemeral address map to
-        std::optional<fs::path> _persisting_addr_file = std::nullopt;
-
-        service::Identity _identity;
-
-        /// for raw packet dns
-        std::shared_ptr<vpn::I_Packet_IO> _raw_DNS;
     };
 
 }  // namespace llarp::handlers

@@ -275,11 +275,11 @@ target_link_libraries(lokinet-base
   libevent::threads
   libevent::extra
 
+  Threads::Threads
+
   oxenc::oxenc 
   oxen::logging 
   oxenmq::oxenmq 
-  
-  # Threads::Threads 
   
   libunbound
 )

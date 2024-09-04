@@ -275,7 +275,7 @@ namespace llarp
           quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), 32},
-              {reinterpret_cast<const char*>(_router.local_rid().data()), 32})},
+              {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), 32})},
           ep{std::make_unique<link::Endpoint>(startup_endpoint(), *this)},
           is_stopping{false}
     {}

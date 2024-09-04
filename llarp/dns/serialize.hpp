@@ -19,6 +19,8 @@ namespace llarp::dns
         /// decode entity from buffer
         virtual bool Decode(llarp_buffer_t* buf) = 0;
 
+        virtual bool decode(std::span<unsigned char> b) = 0;
+
         /// convert this whatever into json
         virtual nlohmann::json ToJSON() const = 0;
 

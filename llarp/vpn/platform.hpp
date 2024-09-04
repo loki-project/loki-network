@@ -1,6 +1,6 @@
 #pragma once
 
-#include "i_packet_io.hpp"
+#include "packet_io.hpp"
 
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/address/ip_range.hpp>
@@ -44,12 +44,13 @@ namespace llarp::vpn
     };
 
     /// a vpn network interface
-    class NetworkInterface : public I_Packet_IO
+    class NetworkInterface : public PacketIO
     {
       protected:
         InterfaceInfo _info;
 
       public:
+        NetworkInterface() = default;
         NetworkInterface(InterfaceInfo info) : _info{std::move(info)} {}
         NetworkInterface(const NetworkInterface&) = delete;
         NetworkInterface(NetworkInterface&&) = delete;
@@ -124,7 +125,7 @@ namespace llarp::vpn
         /// the lokinet process does not own
         /// @param index the interface index of the network interface to use or 0 for all
         /// interfaces on the system
-        virtual std::shared_ptr<I_Packet_IO> create_packet_io(
+        virtual std::shared_ptr<PacketIO> create_packet_io(
             [[maybe_unused]] unsigned int ifindex,
             [[maybe_unused]] const std::optional<oxen::quic::Address>& dns_upstream_src)
         {

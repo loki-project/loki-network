@@ -21,7 +21,7 @@ namespace llarp
 
     bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler)
     {
-        (void)netif->PollFD();
+        (void)netif;
         (void)handler;
 
 #ifdef __linux__

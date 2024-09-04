@@ -4,7 +4,7 @@
 
 extern "C"
 {
-#include <event2/visibility.h>
+#include <event2/watch.h>
 }
 
 namespace llarp
@@ -16,6 +16,13 @@ namespace llarp
 
     // shared_ptr containing the actual libev loop
     using loop_ptr = std::shared_ptr<::event_base>;
+
+    inline constexpr auto watch_deleter = [](::evwatch* w) {
+        if (w)
+            ::evwatch_free(w);
+    };
+
+    using watch_ptr = std::unique_ptr<::evwatch, decltype(watch_deleter)>;
 
     /** EventTrigger
             This class is a parallel implementation of libquic Ticker (typedef'ed as 'EventTicker' above). Rather than
@@ -109,13 +116,23 @@ namespace llarp
         friend class oxen::quic::Loop;
 
       private:
-        EventPoller(const loop_ptr& _loop, std::function<void()> task)
-        {
-            evwatch_prepare_new(_loop.get(), nullptr, nullptr);
-        }
+        EventPoller(const loop_ptr& _loop, std::function<void()> task);
 
       public:
-        static std::shared_ptr<EventPoller> make(const loop_ptr& _loop, std::function<void()> task);
+        static std::shared_ptr<EventPoller> make(const std::shared_ptr<EventLoop>& _loop, std::function<void()> task);
+
+        // No move/copy/etc
+        EventPoller() = delete;
+        EventPoller(const EventTrigger&) = delete;
+        EventPoller(EventPoller&&) = delete;
+        EventPoller& operator=(const EventPoller&) = delete;
+        EventPoller& operator=(EventPoller&&) = delete;
+
+        ~EventPoller();
+
+      private:
+        watch_ptr pv;
+        std::function<void()> f;
     };
 
 }  //  namespace llarp

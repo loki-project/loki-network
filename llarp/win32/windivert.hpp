@@ -1,5 +1,5 @@
 #pragma once
-#include <llarp/vpn/i_packet_io.hpp>
+#include <llarp/vpn/packet_io.hpp>
 
 #include <windows.h>
 
@@ -16,7 +16,7 @@ namespace llarp::win32::WinDivert
     /// pass in a callable that wakes up the main event loop.
     /// we hide all implementation details from other compilation units to prevent issues with
     /// linkage that may arrise.
-    std::shared_ptr<llarp::vpn::I_Packet_IO> make_interceptor(
+    std::shared_ptr<llarp::vpn::PacketIO> make_interceptor(
         const std::string& filter_spec, std::function<void(void)> wakeup);
 
 }  // namespace llarp::win32::WinDivert

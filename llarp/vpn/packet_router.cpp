@@ -5,18 +5,18 @@ namespace llarp::vpn
     struct UDPPacketHandler : public Layer4Handler
     {
         ip_pkt_hook _base_handler;
-        std::unordered_map<uint16_t, net_pkt_hook> _port_mapped_handlers;
+        std::unordered_map<uint16_t, ip_pkt_hook> _port_mapped_handlers;
 
         explicit UDPPacketHandler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)} {}
 
-        void add_sub_handler(uint16_t localport, net_pkt_hook handler) override
+        void add_sub_handler(uint16_t localport, ip_pkt_hook handler) override
         {
             _port_mapped_handlers.emplace(localport, std::move(handler));
         }
 
-        void handle_ip_packet(NetworkPacket pkt) override
+        void handle_ip_packet(IPPacket pkt) override
         {
-            auto dstport = pkt.path.remote.port();
+            auto dstport = pkt.dest_port();
 
             if (not dstport)
             {
@@ -38,7 +38,7 @@ namespace llarp::vpn
 
         explicit GenericLayer4Handler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)} {}
 
-        void handle_ip_packet(NetworkPacket) override
+        void handle_ip_packet(IPPacket) override
         {
             // TOFIX:
             // _base_handler(IPPacket::from_udp(std::move(pkt)));
@@ -49,7 +49,11 @@ namespace llarp::vpn
 
     void PacketRouter::handle_ip_packet(IPPacket pkt)
     {
-        (void)pkt;
+        auto dest_port = pkt.dest_port();
+        if (not dest_port)
+            return _handler(std::move(pkt));
+
+        {}
         // const auto proto = pkt.Header()->protocol;
         // if (const auto itr = _ip_proto_handler.find(proto); itr != _ip_proto_handler.end())
         //     itr->second->HandleIPPacket(std::move(pkt));
@@ -57,7 +61,7 @@ namespace llarp::vpn
         //     _handler(std::move(pkt));
     }
 
-    void PacketRouter::add_udp_handler(uint16_t localport, net_pkt_hook func)
+    void PacketRouter::add_udp_handler(uint16_t localport, ip_pkt_hook func)
     {
         constexpr uint8_t udp_proto = 0x11;
 

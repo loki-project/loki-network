@@ -1009,8 +1009,6 @@ namespace llarp
 
             save_rc();
 
-            // _path_context = std::make_shared<path::PathContext>(local_rid());
-
             log::info(logcat, "Router accepting transit traffic...");
             _path_context->allow_transit();
 
@@ -1023,23 +1021,7 @@ namespace llarp
         {
             // TESTNET:
             _router_profiling.disable();
-            // log::debug(logcat, "Client generating keys and resigning RC...");
-            // we are a client, regenerate keys and resign rc before everything else
-            // crypto::identity_keygen(_identity);
-            // crypto::encryption_keygen(_encryption);
-            // router_contact.set_router_id(seckey_to_pubkey(identity()));
-
-            // _path_context = std::make_shared<path::PathContext>(local_rid());
         }
-
-        // _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
-        // _session_endpoint->configure();
-
-        // log::debug(logcat, "Creating QUIC link manager...");
-        // _link_manager = LinkManager::make(*this);
-
-        // log::debug(logcat, "Creating QUIC tunnel...");
-        // _quic_tun = QUICTunnel::make(*this);
 
         // This must be constructed AFTER router creates its LocalRC
         _contacts = std::make_unique<Contacts>(*this);

@@ -35,7 +35,7 @@ namespace llarp::rpc
         /// send packet with src and dst address containing buf on this packet source
         void send_to(const oxen::quic::Address&, const oxen::quic::Address&, IPPacket buf) const override
         {
-            func(dns::maybe_parse_dns_msg(buf));
+            func(dns::maybe_parse_dns_msg(buf.view()));
         }
 
         /// stop reading packets and end operation

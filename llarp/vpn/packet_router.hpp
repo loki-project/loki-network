@@ -25,7 +25,7 @@ namespace llarp::vpn
         void add_ip_proto_handler(uint8_t proto, ip_pkt_hook func);
 
         /// helper that adds a udp packet handler for UDP destined for localport
-        void add_udp_handler(uint16_t port, net_pkt_hook func);
+        void add_udp_handler(uint16_t port, ip_pkt_hook func);
 
         /// remove a udp handler that is already set up by bound port
         void remove_udp_handler(uint16_t port);
@@ -35,9 +35,9 @@ namespace llarp::vpn
     {
         virtual ~Layer4Handler() = default;
 
-        virtual void handle_ip_packet(NetworkPacket pkt) = 0;
+        virtual void handle_ip_packet(IPPacket pkt) = 0;
 
-        virtual void add_sub_handler(uint16_t, net_pkt_hook){};
+        virtual void add_sub_handler(uint16_t, ip_pkt_hook){};
     };
 
 }  // namespace llarp::vpn

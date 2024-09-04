@@ -52,7 +52,7 @@ namespace llarp::win32
 
         std::shared_ptr<NetworkInterface> obtain_interface(InterfaceInfo info, Router* router) override;
 
-        std::shared_ptr<I_Packet_IO> create_packet_io(
+        std::shared_ptr<PacketIO> create_packet_io(
             unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src) override;
 
         AbstractRouteManager& RouteManager() override { return *this; }

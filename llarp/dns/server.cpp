@@ -151,7 +151,7 @@ namespace llarp::dns
                 llarp_buffer_t buf{pkt};
                 MessageHeader hdr;
                 hdr.Decode(&buf);
-                hdr.id = query->underlying().hdr_id;
+                hdr._id = query->underlying().hdr_id;
                 buf.cur = buf.base;
                 hdr.Encode(&buf);
 
@@ -647,7 +647,7 @@ namespace llarp::dns
         std::shared_ptr<PacketSource_Base> ptr,
         const oxen::quic::Address& to,
         const oxen::quic::Address& from,
-        IPPacket buf)
+        IPPacket pkt)
     {
         // dont process to prevent feedback loop
         if (ptr->would_loop(to, from))
@@ -656,7 +656,7 @@ namespace llarp::dns
             return false;
         }
 
-        auto maybe = maybe_parse_dns_msg(buf);
+        auto maybe = maybe_parse_dns_msg(pkt.view());
         if (not maybe)
         {
             log::warning(logcat, "invalid dns message format from {} to dns listener on {}", from, to);

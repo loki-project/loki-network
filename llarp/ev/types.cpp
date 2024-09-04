@@ -169,4 +169,41 @@ namespace llarp
 
         log::info(logcat, "Cooldown {}successfully began after {} attempts!", _is_cooling_down ? "" : "un", _current);
     }
+
+    std::shared_ptr<EventPoller> EventPoller::make(const std::shared_ptr<EventLoop>& _loop, std::function<void()> task)
+    {
+        return _loop->template make_shared<EventPoller>(_loop->loop(), std::move(task));
+    }
+
+    EventPoller::EventPoller(const loop_ptr& _loop, std::function<void()> task) : f{std::move(task)}
+    {
+        pv.reset(evwatch_prepare_new(
+            _loop.get(),
+            [](struct evwatch*, const struct evwatch_prepare_cb_info*, void* w) {
+                try
+                {
+                    auto* self = reinterpret_cast<EventPoller*>(w);
+                    assert(self);
+
+                    if (not self->f)
+                    {
+                        log::critical(logcat, "EventPoller does not have a callback to execute!");
+                        return;
+                    }
+
+                    self->f();
+                }
+                catch (const std::exception& e)
+                {
+                    log::critical(logcat, "EventPoller caugh exception: {}", e.what());
+                }
+            },
+            this));
+    }
+
+    EventPoller::~EventPoller()
+    {
+        pv.reset();
+        f = nullptr;
+    }
 }  //  namespace llarp

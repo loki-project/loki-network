@@ -224,6 +224,8 @@ namespace llarp
 
         int required_num_client_conns() const { return client_router_connections; }
 
+        const uint8_t* raw_pubkey() const { return seckey_to_pubkey(_identity); }
+
         const RouterID& local_rid() const { return router_contact.router_id(); }
 
         bool needs_initial_fetch() const;

@@ -18,27 +18,35 @@ namespace llarp
 
         struct MessageHeader : public Serialize
         {
+          private:
+            static enum { id, fields, qd_count, an_count, ns_count, ar_count } indices;
+
+          public:
             static constexpr size_t Size = 12;
 
             MessageHeader() = default;
 
-            MsgID_t id;
-            Fields_t fields;
-            Count_t qd_count;
-            Count_t an_count;
-            Count_t ns_count;
-            Count_t ar_count;
+            std::array<uint16_t, 6> _data{};
+
+            MsgID_t _id;
+            Fields_t _fields;
+            Count_t _qd_count;
+            Count_t _an_count;
+            Count_t _ns_count;
+            Count_t _ar_count;
 
             bool Encode(llarp_buffer_t* buf) const override;
 
             bool Decode(llarp_buffer_t* buf) override;
 
+            bool decode(std::span<unsigned char> b) override;
+
             nlohmann::json ToJSON() const override;
 
             bool operator==(const MessageHeader& other) const
             {
-                return id == other.id && fields == other.fields && qd_count == other.qd_count
-                    && an_count == other.an_count && ns_count == other.ns_count && ar_count == other.ar_count;
+                return _id == other._id && _fields == other._fields && _qd_count == other._qd_count
+                    && _an_count == other._an_count && _ns_count == other._ns_count && _ar_count == other._ar_count;
             }
         };
 
@@ -74,6 +82,8 @@ namespace llarp
 
             bool Decode(llarp_buffer_t* buf) override;
 
+            bool decode(std::span<unsigned char> /* b */) override { return {}; };  // TODO:
+
             // Wrapper around Encode that encodes into a new buffer and returns it
             std::vector<uint8_t> to_buffer() const;
 
@@ -87,7 +97,7 @@ namespace llarp
             std::vector<ResourceRecord> additional;
         };
 
-        std::optional<Message> maybe_parse_dns_msg(IPPacket msg);
+        std::optional<Message> maybe_parse_dns_msg(std::string_view buf);
     }  // namespace dns
 
 }  // namespace llarp

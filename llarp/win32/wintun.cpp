@@ -327,7 +327,7 @@ namespace llarp::win32
                 _adapter.reset();
             }
 
-            net::IPPacket ReadNextPacket() override
+            net::IPPacket read_next_packet() override
             {
                 net::IPPacket pkt{};
                 if (auto maybe_pkt = _recv_queue.tryPopFront())

@@ -24,9 +24,9 @@ namespace llarp::apple
 
         int PollFD() const override;
 
-        IPPacket ReadNextPacket() override;
+        IPPacket read_next_packet() override;
 
-        bool WritePacket(IPPacket pkt) override;
+        bool write_packet(IPPacket pkt) override;
 
         void MaybeWakeUpperLayers() const override;
 

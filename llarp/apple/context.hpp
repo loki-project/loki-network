@@ -9,7 +9,7 @@ namespace llarp::apple
 {
     struct Context : public llarp::Context
     {
-        std::shared_ptr<vpn::Platform> makeVPNPlatform() override
+        std::shared_ptr<vpn::Platform> make_vpn_platform() override
         {
             return std::make_shared<VPNPlatform>(
                 *this, m_PacketWriter, m_OnReadable, route_callbacks, callback_context);

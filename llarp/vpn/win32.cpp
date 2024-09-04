@@ -110,7 +110,7 @@ namespace llarp::win32
         return wintun::make_interface(std::move(info), router);
     }
 
-    std::shared_ptr<I_Packet_IO> VPNPlatform::create_packet_io(
+    std::shared_ptr<PacketIO> VPNPlatform::create_packet_io(
         unsigned int ifindex, const std::optional<oxen::quic::Address>& dns_upstream_src)
     {
         // we only want do this on all interfaes with windivert

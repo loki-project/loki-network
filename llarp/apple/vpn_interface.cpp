@@ -9,7 +9,7 @@ namespace llarp::apple
 {
     VPNInterface::VPNInterface(
         Context& ctx, packet_write_callback packet_writer, on_readable_callback on_readable, Router* router)
-        : vpn::NetworkInterface{{}},
+        : vpn::NetworkInterface{},
           _pkt_writer{std::move(packet_writer)},
           _on_readable{std::move(on_readable)},
           _router{router}
@@ -36,7 +36,7 @@ namespace llarp::apple
         return -1;
     }
 
-    IPPacket VPNInterface::ReadNextPacket()
+    IPPacket VPNInterface::read_next_packet()
     {
         IPPacket pkt{};
         if (not _read_que.empty())
@@ -44,7 +44,7 @@ namespace llarp::apple
         return pkt;
     }
 
-    bool VPNInterface::WritePacket(IPPacket pkt)
+    bool VPNInterface::write_packet(IPPacket pkt)
     {
         // TODO: replace this with IPPacket::to_udp
         (void)pkt;
