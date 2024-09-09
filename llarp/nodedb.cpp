@@ -287,7 +287,7 @@ namespace llarp
 
     fs::path NodeDB::get_path_by_pubkey(const RouterID& pubkey) const
     {
-        return "{}/{}{}"_format(_root, pubkey.to_string(), RC_FILE_EXT);
+        return "{}/{}{}"_format(_root.c_str(), pubkey.to_string(), RC_FILE_EXT);
     }
 
     bool NodeDB::want_rc(const RouterID& rid) const

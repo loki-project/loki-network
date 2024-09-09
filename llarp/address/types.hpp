@@ -143,7 +143,7 @@ namespace std
         size_t operator()(const llarp::ipv6& obj) const
         {
             auto h = hash<decltype(obj.hi)>{}(obj.hi);
-            h ^= hash<decltype(obj.lo)>{}(obj.lo) + inverse_golden_ratio + (h << 6) + (h >> 2);
+            h ^= hash<decltype(obj.lo)>{}(obj.lo) + oxen::quic::inverse_golden_ratio + (h << 6) + (h >> 2);
             return h;
         }
     };

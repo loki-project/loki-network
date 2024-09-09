@@ -6,7 +6,7 @@ namespace llarp::concepts
 {
     // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
     template <typename T>
-    concept ToStringFormattable = oxen::quic::ToStringFormattable<T>;
+    concept ToStringFormattable = oxen::quic::concepts::ToStringFormattable<T>;
 
 #ifndef __cpp_lib_is_scoped_enum
     template <typename T>

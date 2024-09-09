@@ -221,7 +221,7 @@ namespace std
             else
                 h = hash<llarp::ipv6>{}(std::get<llarp::ipv6>(r.base_ip()));
 
-            h ^= hash<uint8_t>{}(r.mask()) + inverse_golden_ratio + (h << 6) + (h >> 2);
+            h ^= hash<uint8_t>{}(r.mask()) + oxen::quic::inverse_golden_ratio + (h << 6) + (h >> 2);
 
             return h;
         }

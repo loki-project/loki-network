@@ -8,6 +8,7 @@
 #include <llarp/net/ip.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/util/file.hpp>
+#include <llarp/util/formattable.hpp>
 
 #include <stdexcept>
 
@@ -809,7 +810,7 @@ namespace llarp
                                     logcat,
                                     "{}: {}",
                                     addrmap_errorstr,
-                                    "out of range IP! (local range:{}, IP:{})"_format(_local_ip_range, addr.host()));
+                                    "out of range IP! (local range:{}, IP:{})"_format(*_local_ip_range, addr.host()));
                                 continue;
                             }
 
@@ -1109,7 +1110,7 @@ namespace llarp
                 if (auto a = parse_addr_for_link(arg, only_user_port))
                 {
                     if (not a->is_addressable())
-                        throw std::invalid_argument{"Listen address ({}) is not addressible!"_format(a)};
+                        throw std::invalid_argument{"Listen address ({}) is not addressible!"_format(*a)};
 
                     listen_addr = *a;
                     using_new_api = true;
@@ -1132,7 +1133,7 @@ namespace llarp
                             "Loaded address {} from deprecated [inbound] options; update your config to "
                             "use "
                             "[bind]:listen instead PLEASE",
-                            a);
+                            *a);
                         listen_addr = *a;
                     }
                 }

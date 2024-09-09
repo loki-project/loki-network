@@ -4,6 +4,8 @@
 
 #include <oxen/log/format.hpp>
 
+#include <optional>
+
 namespace llarp
 {
     using namespace std::literals;
@@ -48,4 +50,33 @@ namespace fmt
         }
     };
 
+    template <oxenc::string_view_compatible T>
+    struct formatter<std::optional<T>> : fmt::formatter<T>
+    {
+        template <typename FormatContext>
+        auto format(const std::optional<T>& opt, FormatContext& ctx)
+        {
+            if (opt)
+            {
+                fmt::formatter<T>::format(*opt, ctx);
+                return ctx.out();
+            }
+            return fmt::format_to(ctx.out(), "[-nullopt-]");
+        }
+    };
+
+    // template <llarp::concepts::ToStringFormattable T>
+    // struct formatter<std::optional<T>> : fmt::formatter<T>
+    // {
+    //     template <typename FormatContext>
+    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
+    //     {
+    //         if (opt)
+    //         {
+    //             fmt::formatter<T>::format(*opt, ctx);
+    //             return ctx.out();
+    //         }
+    //         return fmt::format_to(ctx.out(), "[-nullopt-]");
+    //     }
+    // };
 }  // namespace fmt

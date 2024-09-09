@@ -74,7 +74,7 @@ namespace llarp::net
                 }
             });
 
-            log::critical(logcat, "get_best_public_address returned: {}", found);
+            log::critical(logcat, "get_best_public_address returned: {}", *found);
 
             return found;
         }

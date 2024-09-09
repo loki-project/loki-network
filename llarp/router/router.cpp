@@ -462,8 +462,8 @@ namespace llarp
             log::debug(
                 logcat,
                 "Finding free range for config values (range:{}, addr:{})",
-                conf._local_ip_range,
-                conf._local_addr);
+                *conf._local_ip_range,
+                *conf._local_addr);
             const auto maybe = net().find_free_range(ipv6_enabled);
 
             if (not maybe.has_value())
@@ -500,7 +500,7 @@ namespace llarp
 
             if (find_if_addr)
             {
-                log::debug(logcat, "Finding if address for if-name {}", if_info.if_name);
+                log::debug(logcat, "Finding if address for if-name {}", *if_info.if_name);
                 if (auto maybe_addr = net().get_interface_addr(*if_info.if_name, is_v4 ? AF_INET : AF_INET6))
                     if_info.if_addr = *maybe_addr;
                 else
@@ -841,7 +841,6 @@ namespace llarp
         if (not node_db()->registered_routers().count(local))
         {
             log::trace(logcat, "We are NOT a registered router, figure it out!");
-            // update tick timestamp
             _last_tick = llarp::time_now_ms();
             return;
         }
