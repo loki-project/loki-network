@@ -18,32 +18,11 @@ namespace llarp
     //
     // or similarly in a log statement.
     //
-    struct buffer_printer
+    struct buffer_printer : public oxen::quic::buffer_printer
     {
         std::basic_string_view<std::byte> buf;
 
-        // Constructed from any type of string_view<T> for a single-byte T (char, std::byte,
-        // uint8_t, etc.)
-        template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        explicit buffer_printer(std::basic_string_view<T> buf)
-            : buf{reinterpret_cast<const std::byte*>(buf.data()), buf.size()}
-        {}
-
-        // Constructed from any type of lvalue string<T> for a single-byte T (char, std::byte,
-        // uint8_t, etc.)
-        template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        explicit buffer_printer(const std::basic_string<T>& buf) : buffer_printer(std::basic_string_view<T>{buf})
-        {}
-
-        // *Not* constructable from a string<T> rvalue (because we only hold a view and do not take
-        // ownership).
-        template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        explicit buffer_printer(std::basic_string<T>&& buf) = delete;
-
-        // Constructable from a (T*, size) argument pair, for byte-sized T's.
-        template <typename T, typename = std::enable_if_t<sizeof(T) == 1>>
-        explicit buffer_printer(const T* data, size_t size) : buffer_printer(std::basic_string_view<T>{data, size})
-        {}
+        using oxen::quic::buffer_printer::buffer_printer;
 
         // llarp_buffer_t printer:
         explicit buffer_printer(const llarp_buffer_t& buf)

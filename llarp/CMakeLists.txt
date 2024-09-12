@@ -267,7 +267,7 @@ target_link_libraries(lokinet-core
   lokinet-wire 
 )
 
-# target_link_libraries(lokinet-base INTERFACE oxenc::oxenc oxen::logging)
+
 target_link_libraries(lokinet-base 
   INTERFACE 
   
@@ -282,6 +282,8 @@ target_link_libraries(lokinet-base
   oxenmq::oxenmq 
   
   libunbound
+
+  sodium
 )
 
 

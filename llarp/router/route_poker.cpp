@@ -67,10 +67,10 @@ namespace llarp
         if (not is_enabled())
             return;
 
-        router.loop()->call_every(100ms, weak_from_this(), [self = weak_from_this()]() {
-            if (auto ptr = self.lock())
-                ptr->update();
-        });
+        // router.loop()->call_every(100ms, weak_from_this(), [self = weak_from_this()]() {
+        //     if (auto ptr = self.lock())
+        //         ptr->update();
+        // });
     }
 
     void RoutePoker::delete_all_routes()

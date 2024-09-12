@@ -1,6 +1,8 @@
 #include "net.hpp"
 #include "net_if.hpp"
 
+#include <llarp/util/formattable.hpp>
+
 #include <stdexcept>
 
 #ifdef ANDROID
@@ -74,7 +76,7 @@ namespace llarp::net
                 }
             });
 
-            log::critical(logcat, "get_best_public_address returned: {}", *found);
+            log::info(logcat, "get_best_public_address returned: {}", found);
 
             return found;
         }

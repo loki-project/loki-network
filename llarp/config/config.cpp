@@ -48,7 +48,7 @@ namespace llarp
             },
             [this](std::string arg) {
                 if (arg.size() > NETID_SIZE)
-                    throw std::invalid_argument{fmt::format("netid is too long, max length is {}", NETID_SIZE)};
+                    throw std::invalid_argument{"netid is too long, max length is {}"_format(NETID_SIZE)};
 
                 net_id = std::move(arg);
             });
@@ -64,7 +64,7 @@ namespace llarp
             [=, this](int arg) {
                 if (arg < CLIENT_ROUTER_CONNECTIONS)
                     throw std::invalid_argument{
-                        fmt::format("Client relay connections must be >= {}", CLIENT_ROUTER_CONNECTIONS)};
+                        "Client relay connections must be >= {}"_format(CLIENT_ROUTER_CONNECTIONS)};
 
                 client_router_connections = arg;
             });
@@ -105,7 +105,7 @@ namespace llarp
                 if (arg.empty())
                     throw std::invalid_argument("[router]:data-dir is empty");
                 if (not fs::exists(arg))
-                    throw std::runtime_error{fmt::format("Specified [router]:data-dir {} does not exist", arg)};
+                    throw std::runtime_error{"Specified [router]:data-dir {} does not exist"_format(arg)};
 
                 data_dir = std::move(arg);
             });
@@ -337,7 +337,7 @@ namespace llarp
             },
             [this](fs::path arg) {
                 if (not fs::exists(arg))
-                    throw std::invalid_argument{fmt::format("cannot load auth file {}: file does not exist", arg)};
+                    throw std::invalid_argument{"cannot load auth file {}: file does not exist"_format(arg)};
                 auth_files.emplace(std::move(arg));
             });
 
@@ -590,7 +590,7 @@ namespace llarp
                     _local_base_ip = _local_ip_range->base_ip();
                 }
                 else
-                    throw std::invalid_argument{fmt::format("[network]:ifaddr invalid value: '{}'", arg)};
+                    throw std::invalid_argument{"[network]:ifaddr invalid value: '{}'"_format(arg)};
             });
 
         conf.define_option<bool>(
@@ -623,7 +623,7 @@ namespace llarp
 
                 if (not _base_ipv6_range->from_string(arg))
                 {
-                    throw std::invalid_argument{fmt::format("[network]:ip6-range invalid value: '{}'", arg)};
+                    throw std::invalid_argument{"[network]:ip6-range invalid value: '{}'"_format(arg)};
                 }
             });
 
@@ -680,11 +680,11 @@ namespace llarp
             [this](std::string arg) {
                 RouterID id;
                 if (not id.from_snode_address(arg))
-                    throw std::invalid_argument{fmt::format("Invalid RouterID: {}", arg)};
+                    throw std::invalid_argument{"Invalid RouterID: {}"_format(arg)};
 
                 auto itr = snode_blacklist.emplace(std::move(id));
                 if (not itr.second)
-                    throw std::invalid_argument{fmt::format("Duplicate blacklist-snode: {}", arg)};
+                    throw std::invalid_argument{"Duplicate blacklist-snode: {}"_format(arg)};
             });
 
         // TODO: support SRV records for routers, but for now client only
@@ -706,7 +706,7 @@ namespace llarp
                 auto maybe_srv = dns::SRVData::from_srv_string(arg);
 
                 if (not maybe_srv)
-                    throw std::invalid_argument{fmt::format("Invalid SRV Record string: {}", arg)};
+                    throw std::invalid_argument{"Invalid SRV Record string: {}"_format(arg)};
 
                 srv_records.push_back(std::move(*maybe_srv));
             });
@@ -970,7 +970,7 @@ namespace llarp
                 if (path.empty())
                     return;
                 if (not fs::exists(path))
-                    throw std::invalid_argument{fmt::format("cannot add hosts file {} as it does not exist", path)};
+                    throw std::invalid_argument{"cannot add hosts file {} as it does not exist"_format(path)};
                 hostfiles.emplace_back(std::move(path));
             });
 
@@ -1174,22 +1174,19 @@ namespace llarp
             }
             catch (const std::exception& e)
             {
-                throw std::runtime_error{fmt::format(
+                throw std::runtime_error{
                     "Could not parse address {}; please update your config to use "
                     "[bind]:listen "
-                    "instead: {}",
-                    key,
-                    e.what())};
+                    "instead: {}"_format(key, e.what())};
             }
 
             if (not temp.is_addressable())
             {
-                throw std::runtime_error{fmt::format(
+                throw std::runtime_error{
                     "Invalid address: {}; stop using this deprecated handler, update your "
                     "config to "
                     "use "
-                    "[bind]:listen instead PLEASE",
-                    temp)};
+                    "[bind]:listen instead PLEASE"_format(temp)};
             }
 
             listen_addr = std::move(temp);
@@ -1599,7 +1596,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            throw std::runtime_error{fmt::format("Failed to write config data to {}: {}", confFile, e.what())};
+            throw std::runtime_error{"Failed to write config data to {}: {}"_format(confFile, e.what())};
         }
 
         log::info(logcat, "Generated new config (path: {})", confFile);

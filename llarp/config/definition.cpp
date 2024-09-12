@@ -1,5 +1,6 @@
 #include "definition.hpp"
 
+#include <llarp/util/formattable.hpp>
 #include <llarp/util/logging.hpp>
 
 #include <cassert>
@@ -17,7 +18,7 @@ namespace llarp
             return false;
         if (input == "true" || input == "on" || input == "1" || input == "yes")
             return true;
-        throw std::invalid_argument{fmt::format("{} is not a valid bool", input)};
+        throw std::invalid_argument{"{} is not a valid bool"_format(input)};
     }
 
     ConfigDefinition& ConfigDefinition::define_option(std::unique_ptr<OptionDefinitionBase> def)
@@ -51,7 +52,7 @@ namespace llarp
 
         auto [it, added] = definitions[section].try_emplace(std::string{def->name}, std::move(def));
         if (!added)
-            throw std::invalid_argument{fmt::format("definition for [{}]:{} already exists", def->section, def->name)};
+            throw std::invalid_argument{"definition for [{}]:{} already exists"_format(def->section, def->name)};
 
         definition_ordering[section].push_back(it->first);
 
@@ -75,7 +76,7 @@ namespace llarp
         {
             // fallback to undeclared handler if available
             if (not haveUndeclaredHandler)
-                throw std::invalid_argument{fmt::format("unrecognized section [{}]", section)};
+                throw std::invalid_argument{"unrecognized section [{}]"_format(section)};
             auto& handler = undItr->second;
             handler(section, name, value);
             return *this;
@@ -93,7 +94,7 @@ namespace llarp
         }
 
         if (not haveUndeclaredHandler)
-            throw std::invalid_argument{fmt::format("unrecognized option [{}]: {}", section, name)};
+            throw std::invalid_argument{"unrecognized option [{}]: {}"_format(section, name)};
 
         auto& handler = undItr->second;
         handler(section, name, value);
@@ -104,7 +105,7 @@ namespace llarp
     {
         auto itr = undeclared_handlers.find(section);
         if (itr != undeclared_handlers.end())
-            throw std::logic_error{fmt::format("section {} already has a handler", section)};
+            throw std::logic_error{"section {} already has a handler"_format(section)};
 
         undeclared_handlers[section] = std::move(handler);
     }
@@ -122,7 +123,7 @@ namespace llarp
             visit_definitions(section, [&](const std::string&, const std::unique_ptr<OptionDefinitionBase>& def) {
                 if (def->required and def->get_number_found() < 1)
                 {
-                    throw std::invalid_argument{fmt::format("[{}]:{} is required but missing", section, def->name)};
+                    throw std::invalid_argument{"[{}]:{} is required but missing"_format(section, def->name)};
                 }
 
                 // should be handled earlier in OptionDefinition::parse_value()
@@ -231,12 +232,12 @@ namespace llarp
     {
         const auto sectionItr = definitions.find(std::string(section));
         if (sectionItr == definitions.end())
-            throw std::invalid_argument{fmt::format("No config section [{}]", section)};
+            throw std::invalid_argument{"No config section [{}]"_format(section)};
 
         auto& sectionDefinitions = sectionItr->second;
         const auto definitionItr = sectionDefinitions.find(std::string(name));
         if (definitionItr == sectionDefinitions.end())
-            throw std::invalid_argument{fmt::format("No config item {} within section {}", name, section)};
+            throw std::invalid_argument{"No config item {} within section {}"_format(name, section)};
 
         return definitionItr->second;
     }

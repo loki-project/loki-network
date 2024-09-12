@@ -62,12 +62,6 @@ namespace llarp
         }
 
         template <typename Callable>
-        void call_every(loop_time interval, std::weak_ptr<void> caller, Callable&& f)
-        {
-            _loop->call_every(interval, std::move(caller), std::forward<Callable>(f));
-        }
-
-        template <typename Callable>
         [[nodiscard]] std::shared_ptr<EventTicker> call_every(
             loop_time interval, Callable&& f, bool start_immediately = true)
         {

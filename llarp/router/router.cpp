@@ -462,8 +462,8 @@ namespace llarp
             log::debug(
                 logcat,
                 "Finding free range for config values (range:{}, addr:{})",
-                *conf._local_ip_range,
-                *conf._local_addr);
+                conf._local_ip_range,
+                conf._local_addr);
             const auto maybe = net().find_free_range(ipv6_enabled);
 
             if (not maybe.has_value())
@@ -480,8 +480,8 @@ namespace llarp
             log::debug(
                 logcat,
                 "Lokinet provided local if-range/addr from config ('{}', {})",
-                *conf._local_ip_range,
-                *conf._local_addr);
+                conf._local_ip_range,
+                conf._local_addr);
 
             find_if_addr = !conf._if_name.has_value();
 
@@ -504,7 +504,7 @@ namespace llarp
                 if (auto maybe_addr = net().get_interface_addr(*if_info.if_name, is_v4 ? AF_INET : AF_INET6))
                     if_info.if_addr = *maybe_addr;
                 else
-                    throw std::runtime_error{"cannot find address for interface name: {}"_format(*if_info.if_name)};
+                    throw std::runtime_error{"cannot find address for interface name: {}"_format(if_info.if_name)};
 
                 ip_v ipv{};
                 if (is_v4)

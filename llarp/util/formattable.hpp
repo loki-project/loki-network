@@ -38,6 +38,54 @@ namespace fmt
 
 #endif
 
+// fmt added optional support in version 10.0.0
+#if FMT_HAS_INCLUDE(<optional>) && FMT_VERSION <= 100000
+namespace fmt
+{
+    template <typename T, typename Char>
+    struct formatter<std::optional<T>, Char, std::enable_if_t<is_formattable<T, Char>::value>>
+    {
+      private:
+        formatter<T, Char> underlying_;
+        static constexpr basic_string_view<Char> optional =
+            detail::string_literal<Char, 'o', 'p', 't', 'i', 'o', 'n', 'a', 'l', '('>{};
+        static constexpr basic_string_view<Char> none = detail::string_literal<Char, 'n', 'o', 'n', 'e'>{};
+
+        template <class U>
+        FMT_CONSTEXPR static auto maybe_set_debug_format(U& u, bool set) -> decltype(u.set_debug_format(set))
+        {
+            u.set_debug_format(set);
+        }
+
+        template <class U>
+        FMT_CONSTEXPR static void maybe_set_debug_format(U&, ...)
+        {}
+
+      public:
+        template <typename ParseContext>
+        FMT_CONSTEXPR auto parse(ParseContext& ctx)
+        {
+            maybe_set_debug_format(underlying_, true);
+            return underlying_.parse(ctx);
+        }
+
+        template <typename FormatContext>
+        auto format(const std::optional<T>& opt, FormatContext& ctx) const -> decltype(ctx.out())
+        {
+            if (!opt)
+                return detail::write<Char>(ctx.out(), none);
+
+            auto out = ctx.out();
+            out = detail::write<Char>(out, optional);
+            ctx.advance_to(out);
+            out = underlying_.format(*opt, ctx);
+            return detail::write(out, ')');
+        }
+    };
+}  //  namespace fmt
+
+#endif
+
 namespace fmt
 {
     template <llarp::concepts::is_scoped_enum T>
@@ -50,33 +98,31 @@ namespace fmt
         }
     };
 
-    template <oxenc::string_view_compatible T>
-    struct formatter<std::optional<T>> : fmt::formatter<T>
-    {
-        template <typename FormatContext>
-        auto format(const std::optional<T>& opt, FormatContext& ctx)
-        {
-            if (opt)
-            {
-                fmt::formatter<T>::format(*opt, ctx);
-                return ctx.out();
-            }
-            return fmt::format_to(ctx.out(), "[-nullopt-]");
-        }
-    };
-
-    // template <llarp::concepts::ToStringFormattable T>
-    // struct formatter<std::optional<T>> : fmt::formatter<T>
+    // template <std::convertible_to<std::string_view> T>
+    // struct formatter<std::optional<T>, char> : formatter<std::string_view>
     // {
     //     template <typename FormatContext>
     //     auto format(const std::optional<T>& opt, FormatContext& ctx)
     //     {
     //         if (opt)
     //         {
-    //             fmt::formatter<T>::format(*opt, ctx);
-    //             return ctx.out();
+    //             return formatter<std::string_view>::format(*opt, ctx);
     //         }
-    //         return fmt::format_to(ctx.out(), "[-nullopt-]");
+    //         return format_to(ctx.out(), "[-nullopt-]");
+    //     }
+    // };
+
+    // template <llarp::concepts::to_string_formattable T>
+    // struct formatter<std::optional<T>, char> : formatter<T>
+    // {
+    //     template <typename FormatContext>
+    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
+    //     {
+    //         if (opt)
+    //         {
+    //             return formatter<std::string_view>::format(opt->to_string(), ctx);
+    //         }
+    //         return format_to(ctx.out(), "[-nullopt-]");
     //     }
     // };
 }  // namespace fmt

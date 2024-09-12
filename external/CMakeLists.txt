@@ -76,15 +76,19 @@ add_library(libevent::extra ALIAS event_extra)
 system_or_submodule(OXENC oxenc liboxenc>=1.0.10 oxen-encoding)
 system_or_submodule(OXENMQ oxenmq liboxenmq>=1.2.14 oxen-mq)
 
+
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 system_or_submodule(NLOHMANN nlohmann_json nlohmann_json>=3.7.0 nlohmann)
+
 
 if(WITH_HIVE)
   add_subdirectory(pybind11 EXCLUDE_FROM_ALL)
 endif()
 
+
 system_or_submodule(CLI11 CLI11 CLI11>=2.2.0 CLI11)
+
 
 if(WITH_PEERSTATS)
   add_library(sqlite_orm INTERFACE)
@@ -97,7 +101,12 @@ if(WITH_PEERSTATS)
   target_link_libraries(sqlite_orm INTERFACE sqlite3)
 endif()
 
+
+set(OXEN_LOGGING_FMT_HEADER_ONLY ON CACHE INTERNAL "")
+set(OXEN_LOGGING_SPDLOG_HEADER_ONLY ON CACHE INTERNAL "")
+set(OXEN_LOGGING_FORCE_SUBMODULES ON CACHE INTERNAL "")
 add_subdirectory(oxen-libquic)
+
 
 # cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires
 # 3.15+, and we target lower than that (and this is fairly simple to build).
