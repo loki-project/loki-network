@@ -14,8 +14,7 @@ namespace llarp
 
     std::shared_ptr<QUICTunnel> QUICTunnel::make(Router& r)
     {
-        std::shared_ptr<QUICTunnel> q{new QUICTunnel(r)};
-        return q;
+        return r.loop()->template make_shared<QUICTunnel>(r);
     }
 
     uint16_t QUICTunnel::listen()

@@ -31,7 +31,7 @@ namespace llarp
             //  - Directly pre-loaded from config
             address_map<IPRange, NetworkAddress> _range_map;
 
-            service::Identity _identity;
+            service::Identity _identity;  // TODO: TESTNET: move responsibilities to KeyManager
             service::IntroSet _local_introset;
 
             std::chrono::milliseconds _last_introset_regen_attempt{0s};

@@ -16,6 +16,26 @@ namespace llarp
 {
     static auto logcat = log::Cat("config");
 
+    static bool check_path_op(std::optional<fs::path>& path)
+    {
+        if (not path.has_value())
+        {
+            log::info(logcat, "Path input failed to parse...");
+        }
+        else if (path->empty())
+        {
+            log::warning(logcat, "Path contents ({}) empty...", path->c_str());
+            path.reset();
+        }
+        else
+        {
+            log::debug(logcat, "Valid path parsed ({})", path->c_str());
+            return true;
+        }
+
+        return false;
+    }
+
     using namespace config;
     namespace
     {
@@ -171,45 +191,26 @@ namespace llarp
             "router",
             "contact-file",
             RelayOnly,
-            Default{llarp::our_rc_filename},
-            assignment_acceptor(rc_file),
+            [this](std::string arg) {
+                if (arg.empty())
+                    return;
+
+                rc_file = arg;
+                if (check_path_op(rc_file))
+                    log::info(logcat, "Relay configured to try RC file path: {}", rc_file->c_str());
+                else
+                    log::warning(logcat, "Bad input for relay RC file path ({}), using default...", arg);
+            },
             Comment{
                 "Filename in which to store the router contact file",
                 relative_to_datadir,
             });
 
-        conf.define_option<std::string>(
-            "router",
-            "encryption-privkey",
-            RelayOnly,
-            Default{llarp::our_enc_key_filename},
-            assignment_acceptor(enckey_file),
-            Comment{
-                "Filename in which to store the encryption private key",
-                relative_to_datadir,
-            });
+        conf.define_option<std::string>("router", "encryption-privkey", Deprecated);
 
-        conf.define_option<std::string>(
-            "router",
-            "ident-privkey",
-            RelayOnly,
-            Default{llarp::our_identity_filename},
-            assignment_acceptor(idkey_file),
-            Comment{
-                "Filename in which to store the identity private key",
-                relative_to_datadir,
-            });
+        conf.define_option<std::string>("router", "ident-privkey", Deprecated);
 
-        conf.define_option<std::string>(
-            "router",
-            "transport-privkey",
-            RelayOnly,
-            Default{llarp::our_transport_key_filename},
-            assignment_acceptor(transkey_file),
-            Comment{
-                "Filename in which to store the transport private key.",
-                relative_to_datadir,
-            });
+        conf.define_option<std::string>("router", "transport-privkey", RelayOnly, Deprecated);
 
         // Deprecated options:
 
@@ -265,10 +266,20 @@ namespace llarp
             "network",
             "keyfile",
             ClientOnly,
-            assignment_acceptor(keyfile),
+            [this](std::string arg) {
+                if (arg.empty())
+                    return;
+
+                keyfile = arg;
+
+                if (check_path_op(keyfile))
+                    log::info(logcat, "Client configured to try private key file at path: {}", keyfile->c_str());
+                else
+                    log::warning(logcat, "Bad input for client private key file ({}); using ephemeral...", arg);
+            },
             Comment{
                 "The private key to persist address with. If not specified the address will be",
-                "ephemeral.",
+                "ephemerally generated.",
             });
 
         conf.define_option<std::string>(

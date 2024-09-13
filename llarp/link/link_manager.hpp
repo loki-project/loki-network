@@ -158,7 +158,7 @@ namespace llarp
         // quic endpoint. These are delegate initialized in the LinkManager constructor sequentially
         std::unique_ptr<oxen::quic::Network> quic;
         std::shared_ptr<oxen::quic::GNUTLSCreds> tls_creds;
-        std::unique_ptr<link::Endpoint> ep;
+        std::shared_ptr<link::Endpoint> ep;
 
         std::atomic<bool> is_stopping;
 
@@ -182,8 +182,6 @@ namespace llarp
 
       public:
         void start_tickers();
-
-        const std::unique_ptr<link::Endpoint>& endpoint() const { return ep; }
 
         const oxen::quic::Address& local() { return addr; }
 

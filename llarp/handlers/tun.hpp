@@ -66,8 +66,6 @@ namespace llarp::handlers
         /// how long to wait for path alignment
         std::chrono::milliseconds _path_alignment_timeout{30s};
 
-        service::Identity _identity;
-
         /// for raw packet dns
         std::shared_ptr<vpn::PacketIO> _raw_DNS;
 

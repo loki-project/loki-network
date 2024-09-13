@@ -13,6 +13,7 @@ endfunction()
 lokinet_add_library(lokinet-cryptography
   crypto/crypto.cpp
   crypto/types.cpp
+  crypto/key_manager.cpp
 )
 
 # Functional objects use by lokinet-core and other libraries
@@ -201,7 +202,6 @@ lokinet_add_library(lokinet-config
   config/config.cpp
   config/definition.cpp
   config/ini.cpp
-  config/key_manager.cpp
 )
 
 # All path objects; link directly to lokinet-core

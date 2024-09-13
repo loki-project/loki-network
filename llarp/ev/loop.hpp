@@ -63,9 +63,9 @@ namespace llarp
 
         template <typename Callable>
         [[nodiscard]] std::shared_ptr<EventTicker> call_every(
-            loop_time interval, Callable&& f, bool start_immediately = true)
+            loop_time interval, Callable&& f, bool start_immediately = true, bool fixed_interval = false)
         {
-            return _loop->call_every(interval, std::forward<Callable>(f), start_immediately);
+            return _loop->call_every(interval, std::forward<Callable>(f), start_immediately, fixed_interval);
         }
 
         // Returns a pointer deleter that defers invocation of a custom deleter to the event loop

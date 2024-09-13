@@ -5,7 +5,7 @@
 #include "vanity.hpp"
 
 #include <llarp/constants/proto.hpp>
-#include <llarp/crypto/types.hpp>
+#include <llarp/crypto/key_manager.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <memory>
@@ -16,8 +16,8 @@ namespace llarp::service
     // private keys
     struct Identity
     {
-        SecretKey enckey;
-        SecretKey signkey;
+        SecretKey _idkey;
+        SecretKey _enckey;
         PrivateKey derivedSignKey;
         PQKeyPair pq;
         uint64_t version = llarp::constants::proto_version;
@@ -33,9 +33,6 @@ namespace llarp::service
 
         void bt_decode(std::string);
 
-        /// @param needBackup determines whether existing keys will be cycled
-        void ensure_keys(fs::path fpath, bool needBackup);
-
         bool KeyExchange(
             path_dh_func dh, SharedSecret& sharedkey, const ServiceInfo& other, const KeyExchangeNonce& N) const;
 
@@ -50,7 +47,7 @@ namespace llarp::service
 
     inline bool operator==(const Identity& lhs, const Identity& rhs)
     {
-        return std::tie(lhs.enckey, lhs.signkey, lhs.pq, lhs.version, lhs.vanity)
-            == std::tie(rhs.enckey, rhs.signkey, rhs.pq, rhs.version, rhs.vanity);
+        return std::tie(lhs._enckey, lhs._idkey, lhs.pq, lhs.version, lhs.vanity)
+            == std::tie(rhs._enckey, rhs._idkey, rhs.pq, rhs.version, rhs.vanity);
     }
 }  // namespace llarp::service

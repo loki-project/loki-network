@@ -70,10 +70,7 @@ namespace llarp
 
         size_t job_que_size = 0;
 
-        std::string rc_file;
-        std::string enckey_file;
-        std::string idkey_file;
-        std::string transkey_file;
+        std::optional<fs::path> rc_file;
 
         bool is_relay = false;
 
@@ -101,7 +98,7 @@ namespace llarp
 
     struct NetworkConfig
     {
-        std::optional<bool> enable_profiling;
+        bool enable_profiling;
         bool save_profiles;
         std::set<RouterID> strict_connect;
 

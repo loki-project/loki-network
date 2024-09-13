@@ -130,22 +130,6 @@ namespace llarp::handlers
 
     TunEndpoint::TunEndpoint(Router& r) : _router{r}
     {
-        auto& keyfile = _router.config()->network.keyfile;
-
-        try
-        {
-            if (keyfile.has_value())
-                _identity.ensure_keys(*keyfile, _router.key_manager()->needs_backup());
-            else
-                _identity.regenerate_keys();
-        }
-        catch (const std::exception& e)
-        {
-            auto err = "API endpoint keyfile failed to load: {}"_format(e.what());
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{err};
-        }
-
         _packet_router =
             std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_outbound_packet(std::move(pkt)); });
     }

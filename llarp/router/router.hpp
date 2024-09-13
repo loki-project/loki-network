@@ -3,10 +3,9 @@
 #include "route_poker.hpp"
 
 #include <llarp/bootstrap.hpp>
-#include <llarp/config/key_manager.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
-#include <llarp/crypto/types.hpp>
+#include <llarp/crypto/key_manager.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/handlers/tun.hpp>
@@ -87,15 +86,12 @@ namespace llarp
         std::shared_ptr<RoutePoker> _route_poker;
         std::chrono::steady_clock::time_point _next_explore_at;
 
-        // transient iwp encryption key
-        fs::path transport_keyfile;
-        // long term identity key
-        fs::path identity_keyfile;
-        fs::path encryption_keyfile;
         // path to write our self signed rc to
         fs::path our_rc_file;
+
         // use file based logging?
         bool use_file_logging{false};
+
         // our router contact
         LocalRC router_contact;
         std::shared_ptr<oxenmq::OxenMQ> _lmq;
@@ -126,7 +122,7 @@ namespace llarp
         std::shared_ptr<QUICTunnel> _quic_tun;
 
         // Only created in full client and relay instances (not embedded clients)
-        std::unique_ptr<handlers::TunEndpoint> _tun;
+        std::shared_ptr<handlers::TunEndpoint> _tun;
 
         std::shared_ptr<EventLoop> _loop;
         std::unique_ptr<std::promise<void>> _close_promise;
@@ -140,15 +136,13 @@ namespace llarp
         std::shared_ptr<EventTicker> _loop_ticker;
         std::shared_ptr<EventTicker> _reachability_ticker;
 
-        SecretKey _identity;
-        SecretKey _encryption;
         const oxenmq::TaggedThreadID _disk_thread;
 
         std::chrono::milliseconds _started_at;
         std::chrono::milliseconds _last_stats_report{0s};
         std::chrono::milliseconds _next_decomm_warning{time_now_ms() + 15s};
 
-        std::shared_ptr<llarp::KeyManager> _key_manager;
+        std::shared_ptr<KeyManager> _key_manager;
 
         std::shared_ptr<Config> _config;
 
@@ -224,17 +218,13 @@ namespace llarp
 
         int required_num_client_conns() const { return client_router_connections; }
 
-        const uint8_t* raw_pubkey() const { return seckey_to_pubkey(_identity); }
-
-        const RouterID& local_rid() const { return router_contact.router_id(); }
-
         bool needs_initial_fetch() const;
 
         bool needs_rebootstrap() const;
 
         void for_each_connection(std::function<void(link::Connection&)> func);
 
-        const std::unique_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
+        const std::shared_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
 
         const std::shared_ptr<handlers::SessionEndpoint>& session_endpoint() const { return _session_endpoint; }
 
@@ -258,9 +248,11 @@ namespace llarp
 
         const std::shared_ptr<KeyManager>& key_manager() const { return _key_manager; }
 
-        const SecretKey& identity() const { return _identity; }
+        const SecretKey& identity() const { return _key_manager->identity_key; }
 
-        const SecretKey& encryption() const { return _encryption; }
+        const RouterID& router_id() const { return _key_manager->public_key; }
+
+        const RouterID& local_rid() const { return router_contact.router_id(); }
 
         Profiling& router_profiling() { return _router_profiling; }
 

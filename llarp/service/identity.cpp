@@ -1,6 +1,5 @@
 #include "identity.hpp"
 
-#include <llarp/config/key_manager.hpp>
 #include <llarp/crypto/crypto.hpp>
 
 namespace llarp::service
@@ -11,7 +10,7 @@ namespace llarp::service
     {
         oxenc::bt_dict_producer btdp;
 
-        btdp.append("s", signkey.to_view());
+        btdp.append("s", _idkey.to_view());
         btdp.append("v", version);
 
         return std::move(btdp).str();
@@ -23,7 +22,7 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{buf};
 
-            signkey.from_string(btdc.require<std::string>("s"));
+            _idkey.from_string(btdc.require<std::string>("s"));
             version = btdc.require<uint64_t>("v");
         }
         catch (...)
@@ -35,8 +34,8 @@ namespace llarp::service
 
     void Identity::Clear()
     {
-        signkey.zero();
-        enckey.zero();
+        _idkey.zero();
+        _enckey.zero();
         pq.zero();
         derivedSignKey.zero();
         vanity.zero();
@@ -44,14 +43,14 @@ namespace llarp::service
 
     void Identity::regenerate_keys()
     {
-        crypto::identity_keygen(signkey);
-        crypto::encryption_keygen(enckey);
+        crypto::identity_keygen(_idkey);
+        crypto::encryption_keygen(_enckey);
 
-        pub.update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey));
+        pub.update(seckey_to_pubkey(_idkey), seckey_to_pubkey(_enckey));
 
         crypto::pqe_keygen(pq);
 
-        if (not crypto::derive_subkey_private(derivedSignKey, signkey, 1))
+        if (not crypto::derive_subkey_private(derivedSignKey, _idkey, 1))
         {
             throw std::runtime_error("failed to derive subkey");
         }
@@ -60,85 +59,12 @@ namespace llarp::service
     bool Identity::KeyExchange(
         path_dh_func dh, SharedSecret& result, const ServiceInfo& other, const KeyExchangeNonce& N) const
     {
-        return dh(result, other.encryption_pubkey(), enckey, N);
+        return dh(result, other.encryption_pubkey(), _enckey, N);
     }
 
     bool Identity::Sign(Signature& sig, uint8_t* buf, size_t size) const
     {
-        return crypto::sign(sig, signkey, buf, size);
-    }
-
-    void Identity::ensure_keys(fs::path fname, bool needBackup)
-    {
-        // make sure we are empty
-        Clear();
-
-        std::string buf;
-
-        // this can throw
-        bool exists = fs::exists(fname);
-
-        if (exists and needBackup)
-        {
-            KeyManager::copy_backup_keyfile(fname);
-            exists = false;
-        }
-
-        // check for file
-        if (!exists)
-        {
-            // regen and encode
-            regenerate_keys();
-
-            buf = bt_encode();
-
-            // write
-            try
-            {
-                llarp::util::buffer_to_file(fname, buf.data(), buf.size());
-            }
-            catch (const std::exception& e)
-            {
-                throw std::runtime_error{fmt::format("failed to write {}: {}", fname, e.what())};
-            }
-            return;
-        }
-
-        if (not fs::is_regular_file(fname))
-        {
-            throw std::invalid_argument{fmt::format("{} is not a regular file", fname)};
-        }
-
-        // read file
-        try
-        {
-            llarp::util::file_to_buffer(fname, buf.data(), buf.size());
-        }
-        catch (const std::length_error&)
-        {
-            throw std::length_error{"service identity too big"};
-        }
-
-        // (don't catch io error exceptions)
-        bt_decode(buf);
-
-        // ensure that the encryption key is set
-        if (enckey.is_zero())
-            crypto::encryption_keygen(enckey);
-
-        // also ensure the ntru key is set
-        if (pq.is_zero())
-            crypto::pqe_keygen(pq);
-
-        std::optional<VanityNonce> van;
-        if (!vanity.is_zero())
-            van = vanity;
-        // update pubkeys
-        pub.update(seckey_to_pubkey(signkey), seckey_to_pubkey(enckey), van);
-        if (not crypto::derive_subkey_private(derivedSignKey, signkey, 1))
-        {
-            throw std::runtime_error("failed to derive subkey");
-        }
+        return crypto::sign(sig, _idkey, buf, size);
     }
 
     std::optional<EncryptedIntroSet> Identity::encrypt_and_sign_introset(

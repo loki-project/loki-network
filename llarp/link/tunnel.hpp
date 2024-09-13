@@ -27,11 +27,11 @@ namespace llarp
     class QUICTunnel
     {
       public:
+        QUICTunnel(Router& r);
+
         static std::shared_ptr<QUICTunnel> make(Router& r);
 
       private:
-        QUICTunnel(Router& r);
-
         Router& _router;
 
         // NOTE: DO NOT CHANGE THE ORDER OF THESE TWO OBJECTS

@@ -275,8 +275,8 @@ namespace llarp
           quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), 32},
-              {reinterpret_cast<const char*>(_router.identity().to_pubkey().data()), 32})},
-          ep{std::make_unique<link::Endpoint>(startup_endpoint(), *this)},
+              {reinterpret_cast<const char*>(_router.router_id().data()), 32})},
+          ep{_router.loop()->template make_shared<link::Endpoint>(startup_endpoint(), *this)},
           is_stopping{false}
     {}
 
@@ -304,7 +304,8 @@ namespace llarp
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
             [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
-            is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND);
+            is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
+            oxen::quic::opt::disable_stateless_reset{});
 
         // While only service nodes accept inbound connections, clients must have this key verify
         // callback set. It will reject any attempted inbound connection to a lokinet client prior
