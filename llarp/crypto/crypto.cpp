@@ -456,10 +456,6 @@ namespace llarp
         assert(result != -1);
         const PubKey sk_pk = keys.to_pubkey();
         assert(pk == sk_pk);
-        (void)result;
-        (void)sk_pk;
-
-        encryption_keygen(keys);
     }
 
     bool crypto::check_identity_privkey(const llarp::SecretKey& keys)

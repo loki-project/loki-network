@@ -286,7 +286,7 @@ namespace llarp::rpc
             return;
         }
 
-        if (not routerID.from_snode_address(lookupsnode.request.routerID))
+        if (not routerID.from_relay_address(lookupsnode.request.routerID))
         {
             SetJSONError("Invalid remote: " + lookupsnode.request.routerID, lookupsnode.response);
             return;

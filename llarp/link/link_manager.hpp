@@ -39,8 +39,8 @@ namespace llarp
     inline const keep_alive RELAY_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 
-    inline constexpr int MIN_CLIENT_ROUTER_CONNS{4};
-    inline constexpr int MAX_CLIENT_ROUTER_CONNS{6};
+    inline constexpr int MIN_CLIENT_ROUTER_CONNS{8};
+    inline constexpr int MAX_CLIENT_ROUTER_CONNS{10};
 
     namespace alpns
     {

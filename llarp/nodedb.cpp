@@ -185,45 +185,31 @@ namespace llarp
                 return false;
             }
 
-            log::critical(
-                logcat,
-                "{} has {} of {} minimum RCs; initiating BootstrapRC fetch...",
-                _is_service_node ? "Relay" : "Client",
-                n_rcs,
-                MIN_ACTIVE_RCS);
-            _bootstrap_handler->begin();
+            if (not _bootstrap_handler->is_iterating())
+            {
+                log::critical(
+                    logcat,
+                    "{} has {} of {} minimum RCs; initiating BootstrapRC fetch...",
+                    _is_service_node ? "Relay" : "Client",
+                    n_rcs,
+                    MIN_ACTIVE_RCS);
+                _bootstrap_handler->begin();
+            }
+
             return false;
         }
 
         if (_needs_initial_fetch)
         {
             assert(not _is_service_node);  // move this to be first in the conditional after testing
-            log::critical(logcat, "NodeDB initiating initial fetch...");
-            _fetch_handler->begin();
+
+            if (not _initial_fetch_handler->is_iterating())
+            {
+                log::critical(logcat, "NodeDB initiating initial fetch...");
+                _initial_fetch_handler->begin();
+            }
+
             return false;
-        }
-
-        if (_next_flush_time == 0s)
-            return true;
-
-        if (now > _next_flush_time)
-        {
-            _router.loop()->call([this]() {
-                _next_flush_time += FLUSH_INTERVAL;
-                save_to_disk();
-                // // make copy of all rcs
-                // std::vector<RemoteRC> copy;
-
-                // for (const auto& item : rc_lookup)
-                //     copy.push_back(item.second);
-
-                // // flush them to disk in one big job
-                // // TODO: split this up? idk maybe some day...
-                // _disk_hook([this, data = std::move(copy)]() {
-                //     for (const auto& rc : data)
-                //         rc.write(get_path_by_pubkey(rc.router_id()));
-                // });
-            });
         }
 
         purge_rcs(now);
@@ -386,7 +372,7 @@ namespace llarp
     {
         std::set<RouterID> union_set, confirmed_set, unconfirmed_set;
 
-        for (const auto& [rid, count] : fetch_counters)
+        for (const auto& [rid, count] : rid_result_counters)
         {
             if (count > MIN_RID_FETCH_FREQ)
                 union_set.insert(rid);
@@ -403,7 +389,7 @@ namespace llarp
             std::inserter(confirmed_set, confirmed_set.begin()));
 
         // the total number of rids received
-        const auto num_received = (double)fetch_counters.size();
+        const auto num_received = (double)rid_result_counters.size();
         // the total number of received AND accepted rids
         const auto union_size = union_set.size();
 
@@ -419,7 +405,6 @@ namespace llarp
         if (success = (fetch_threshold > GOOD_RID_FETCH_THRESHOLD) and (union_size > MIN_GOOD_RID_FETCH_TOTAL); success)
         {
             process_results(std::move(unconfirmed_set), unconfirmed_rids, known_rids);
-
             known_rids.merge(confirmed_set);
         }
 
@@ -430,12 +415,12 @@ namespace llarp
     {
         if (rids.empty())
         {
-            fail_sources.insert(source);
+            _fail_sources_old.insert(source);
             return;
         }
 
         for (const auto& rid : rids)
-            fetch_counters[rid] += 1;
+            rid_result_counters[rid] += 1;
     }
 
     void NodeDB::fetch_initial(bool is_snode)
@@ -539,7 +524,85 @@ namespace llarp
             });
     }
 
-    void NodeDB::fetch_rids(bool initial)
+    void NodeDB::fetch_rids()
+    {
+        if (_router._is_stopping || not _router._is_running)
+        {
+            log::info(logcat, "NodeDB unable to continue RouterID fetch -- router is stopped!");
+            return stop_rid_fetch(false);
+        }
+
+        if (rid_sources.empty())
+        {
+            log::debug(logcat, "Client reselecting RID sources...");
+            reselect_router_id_sources(rid_sources);
+        }
+
+        rid_result_counters.clear();
+        fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
+        auto& src = fetch_source;
+
+        // TESTNET:
+        // rid_sources.emplace(oxenc::from_base32z("55fxrrdt9ggkra9yoi58gbespa13is1sqqrykdzjamgkxrq91tto"));
+        // auto& src = _bootstraps.current().router_id();
+
+        for (const auto& target : rid_sources)
+        {
+            if (target == src)
+                continue;
+
+            log::info(logcat, "Sending FetchRIDs request to {} via {}", target, src);
+            _router.link_manager()->fetch_router_ids(
+                src, FetchRIDMessage::serialize(target), [this, source = src, target](oxen::quic::message m) mutable {
+                    if (not m)
+                    {
+                        log::critical(
+                            logcat,
+                            "RID fetch from {} via {} {}",
+                            target,
+                            source,
+                            m.timed_out ? "timed out" : "failed: {}"_format(m.view()));
+                        ingest_rid_fetch_responses(target);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            oxenc::bt_dict_consumer btdc{m.body()};
+
+                            btdc.required("routers");
+                            auto router_id_strings = btdc.consume_list<std::vector<ustring>>();
+
+                            btdc.require_signature("signature", [&source](ustring_view msg, ustring_view sig) {
+                                if (sig.size() != 64)
+                                    throw std::runtime_error{"Invalid signature: not 64 bytes"};
+                                if (not crypto::verify(source, msg, sig))
+                                    throw std::runtime_error{
+                                        "Failed to verify signature for fetch RouterIDs response."};
+                            });
+
+                            std::set<RouterID> router_ids;
+
+                            for (const auto& s : router_id_strings)
+                            {
+                                router_ids.emplace(s.data());
+                            }
+
+                            ingest_rid_fetch_responses(target, std::move(router_ids));
+                        }
+                        catch (const std::exception& e)
+                        {
+                            log::critical(logcat, "Error handling fetch RouterIDs response: {}", e.what());
+                            ingest_rid_fetch_responses(target);
+                        }
+                    }
+
+                    rid_fetch_result();
+                });
+        }
+    }
+
+    void NodeDB::fetch_rids_old(bool initial)
     {
         // base case; this function is called recursively
         if (fetch_failures > MAX_FETCH_ATTEMPTS)
@@ -550,6 +613,7 @@ namespace llarp
 
         if (rid_sources.empty())
         {
+            log::debug(logcat, "Client reselecting RID sources...");
             reselect_router_id_sources(rid_sources);
         }
 
@@ -560,7 +624,7 @@ namespace llarp
             return;
         }
 
-        fetch_counters.clear();
+        rid_result_counters.clear();
 
         RouterID& src = fetch_source;
         _router.last_rid_fetch = llarp::time_point_now();
@@ -600,14 +664,6 @@ namespace llarp
 
                         for (const auto& s : router_id_strings)
                         {
-                            if (s.size() != RouterID::SIZE)
-                            {
-                                log::critical(logcat, "RID fetch from {} via {} returned bad RouterID", target, source);
-                                ingest_rid_fetch_responses(target);
-                                fetch_rids_result(initial);
-                                return;
-                            }
-
                             router_ids.emplace(s.data());
                         }
 
@@ -660,6 +716,40 @@ namespace llarp
         }
     }
 
+    void NodeDB::rid_fetch_result()
+    {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        auto n_fails = _fail_sources_old.size(), n_responses = RID_SOURCE_COUNT - n_fails;
+
+        if (n_responses < RID_SOURCE_COUNT)
+        {
+            log::info(logcat, "Received {}/{} fetch RID requests", n_responses, RID_SOURCE_COUNT);
+            return;
+        }
+
+        if (n_fails <= MAX_RID_ERRORS)
+        {
+            log::info(logcat, "RID fetching was successful ({}/{} acceptable errors)", n_fails, MAX_RID_ERRORS);
+
+            // this is where the trust model will do verification based on the similarity of the sets
+            if (process_fetched_rids())
+            {
+                log::info(logcat, "Accumulated RID's accepted by trust model");
+                return stop_rid_fetch(true);
+            }
+
+            log::warning(logcat, "Accumulated RID's rejected by trust model, reselecting RID sources...");
+        }
+        else
+        {
+            // we had 4 or more failed requests, so we will need to rotate our rid sources
+            log::critical(logcat, "RID fetching found {} failures; reselecting failed RID sources...", n_fails);
+        }
+
+        reselect_router_id_sources(_fail_sources_old);
+    }
+
     void NodeDB::fetch_rids_result(bool initial)
     {
         if (fetch_failures >= MAX_FETCH_ATTEMPTS)
@@ -674,7 +764,7 @@ namespace llarp
             return;
         }
 
-        auto n_responses = RID_SOURCE_COUNT - fail_sources.size();
+        auto n_responses = RID_SOURCE_COUNT - _fail_sources_old.size();
 
         if (n_responses < RID_SOURCE_COUNT)
         {
@@ -682,7 +772,7 @@ namespace llarp
             return;
         }
 
-        auto n_fails = fail_sources.size();
+        auto n_fails = _fail_sources_old.size();
 
         if (n_fails <= MAX_RID_ERRORS)
         {
@@ -706,10 +796,10 @@ namespace llarp
             // we had 4 or more failed requests, so we will need to rotate our rid sources
             log::critical(logcat, "RID fetching found {} failures; reselecting failed RID sources...", n_fails);
             ++fetch_failures;
-            reselect_router_id_sources(fail_sources);
+            reselect_router_id_sources(_fail_sources_old);
         }
 
-        fetch_rids(initial);
+        fetch_rids_old(initial);
     }
 
     // This function is only called after a successful FetchRC request
@@ -718,18 +808,18 @@ namespace llarp
         _needs_rebootstrap_OLD = false;
         _needs_initial_fetch_OLD = false;
         _using_bootstrap_fallback_OLD = false;
-        fail_sources.clear();
+        _fail_sources_old.clear();
         fetch_failures = 0;
 
         if (initial)
-            fetch_rids(initial);
+            fetch_rids_old(initial);
     }
 
     void NodeDB::post_fetch_rids(bool initial)
     {
-        fail_sources.clear();
+        _fail_sources_old.clear();
         fetch_failures = 0;
-        fetch_counters.clear();
+        rid_result_counters.clear();
         _needs_rebootstrap_OLD = false;
         _using_bootstrap_fallback_OLD = false;
 
@@ -746,6 +836,15 @@ namespace llarp
         return has_bootstraps() ? _bootstraps.contains(rid) : false;
     }
 
+    void NodeDB::start_tickers()
+    {
+        log::debug(logcat, "NodeDB starting flush ticker...");
+        _flush_ticker = _router.loop()->call_every(FLUSH_INTERVAL, [this]() {
+            log::debug(logcat, "Writing NodeDB contents to disk...");
+            save_to_disk();
+        });
+    }
+
     void NodeDB::configure()
     {
         _is_service_node = _router._is_service_node;
@@ -754,6 +853,22 @@ namespace llarp
         load_from_disk();
 
         _needs_bootstrap = num_rcs() < MIN_ACTIVE_RCS;
+    }
+
+    void NodeDB::stop_rid_fetch(bool success)
+    {
+        _fail_sources_old.clear();
+        rid_result_counters.clear();
+        _is_fetching = false;
+        _needs_initial_fetch = false;
+        _initial_fetch_handler->halt();
+
+        if (success)
+        {
+            log::info(logcat, "Client successfully completed initial RouterID fetch!");
+        }
+        else
+            log::warning(logcat, "Client stopped initial RouterID fetch without a sucessful response!");
     }
 
     void NodeDB::stop_bootstrap(bool success)
@@ -874,7 +989,7 @@ namespace llarp
             // bad spot; we are unable to do anything
             if (_using_bootstrap_fallback_OLD)
             {
-                auto err = fmt::format("ERROR: ALL BOOTSTRAPS ARE BAD... REATTEMPTING IN {}...", BOOTSTRAP_COOLDOWN);
+                auto err = fmt::format("ERROR: ALL BOOTSTRAPS ARE BAD... REATTEMPTING IN {}...", FETCH_INTERVAL);
                 log::error(logcat, "{}", err);
 
                 bootstrap_cooldown();
@@ -975,7 +1090,7 @@ namespace llarp
     {
         _needs_rebootstrap_OLD = true;
         _using_bootstrap_fallback_OLD = false;
-        _router.next_bootstrap_attempt = llarp::time_point_now() + BOOTSTRAP_COOLDOWN;
+        _router.next_bootstrap_attempt = llarp::time_point_now() + FETCH_INTERVAL;
     }
 
     void NodeDB::reselect_router_id_sources(std::set<RouterID> specific)
@@ -1067,8 +1182,11 @@ namespace llarp
             log::critical(logcat, "{}", msg);
 
         log::debug(logcat, "NodeDB creating bootstrap event handler...");
+
         _bootstrap_handler = EventTrigger::make(
-            _router.loop(), BOOTSTRAP_COOLDOWN, [this]() { bootstrap(); }, MAX_BOOTSTRAP_FETCH_ATTEMPTS);
+            _router.loop(), FETCH_INTERVAL, [this]() { bootstrap(); }, FETCH_ATTEMPTS);
+        _initial_fetch_handler = EventTrigger::make(
+            _router.loop(), FETCH_INTERVAL, [this]() { fetch_rids(); }, FETCH_ATTEMPTS);
     }
 
     void NodeDB::load_from_disk()
@@ -1132,6 +1250,13 @@ namespace llarp
             log::debug(logcat, "NodeDB clearing bootstrap handler...");
             _bootstrap_handler->halt();
             _bootstrap_handler.reset();
+        }
+
+        if (_initial_fetch_handler)
+        {
+            log::debug(logcat, "NodeDB clearing fetch handler...");
+            _initial_fetch_handler->halt();
+            _initial_fetch_handler.reset();
         }
     }
 

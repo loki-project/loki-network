@@ -52,7 +52,9 @@ namespace llarp
     // the maximum number of fetch requests we make across all bootstraps
     inline constexpr int MAX_BOOTSTRAP_FETCH_ATTEMPTS{5};
     // if all bootstraps fail, router will trigger re-bootstrapping after this cooldown
-    inline constexpr auto BOOTSTRAP_COOLDOWN{30s};
+    inline constexpr auto FETCH_INTERVAL{15s};
+    inline constexpr auto FETCH_ATTEMPTS{1};
+    inline constexpr auto FETCH_COOLDOWN_SHORT{10s};
 
     /*  Other Constants  */
     // the maximum number of RC/RID fetches that can pass w/o an unconfirmed rc/rid appearing
@@ -60,7 +62,7 @@ namespace llarp
     // threshold amount of verifications to promote an unconfirmed rc/rid
     inline constexpr int CONFIRMATION_THRESHOLD{3};
 
-    inline constexpr auto FLUSH_INTERVAL{5min};
+    inline constexpr auto FLUSH_INTERVAL{15min};
 
     template <
         typename ID_t,
@@ -146,9 +148,11 @@ namespace llarp
         // set of 12 randomly selected RID's from the client's set of routers
         std::set<RouterID> rid_sources{};
         // logs the RID's that resulted in an error during RID fetching
-        std::set<RouterID> fail_sources{};
+        std::set<RouterID> _fail_sources_old{};
+        // logs the number of fetch attempts made per fetch source
+        std::unordered_map<RouterID, int> rid_fetch_counters{};
         // tracks the number of times each rid appears in the above responses
-        std::unordered_map<RouterID, int> fetch_counters{};
+        std::unordered_map<RouterID, int> rid_result_counters{};
 
         template <std::invocable Callable>
         void _disk_hook(Callable&& f) const
@@ -181,8 +185,11 @@ namespace llarp
         // TESTNET: NEW MEMBERS FOR BOOTSTRAPPING MANAGED BY EVENTTRIGGER OBJECT
         std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _needs_initial_fetch{false},
             _is_fetching{false}, _has_bstrap_connection{false}, _is_connecting_bstrap{false};
+
         std::shared_ptr<EventTrigger> _bootstrap_handler;
-        std::shared_ptr<EventTrigger> _fetch_handler;
+        std::shared_ptr<EventTrigger> _initial_fetch_handler;
+
+        std::shared_ptr<EventTicker> _flush_ticker;
 
       public:
         static std::shared_ptr<NodeDB> make(fs::path rootdir, Router* r)
@@ -194,8 +201,10 @@ namespace llarp
             : _router{*r}, _root{std::move(rootdir)}, _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
         {
             _ensure_skiplist(_root);
-            fetch_counters.clear();
+            rid_result_counters.clear();
         }
+
+        void start_tickers();
 
         void configure();
 
@@ -234,12 +243,16 @@ namespace llarp
         void fetch_rcs_result(bool initial = false, bool error = false);
 
         //  RouterID fetching
-        void fetch_rids(bool initial = false);
+        void fetch_rids();
+
+        void fetch_rids_old(bool initial = false);
         void post_fetch_rids(bool initial = false);
         void fetch_rids_result(bool initial = false);
 
         // TESTNET: new bootstrap/initial fetch functions
-        void bootstrap();                          //  private
+        void bootstrap();  //  private
+        void stop_rid_fetch(bool success = true);
+        void rid_fetch_result();
         void stop_bootstrap(bool success = true);  //  private
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }

@@ -303,8 +303,6 @@ namespace llarp
         while (dict)
         {
             auto [rid, subdict] = dict.next_dict_consumer();
-            if (rid.size() != RouterID::SIZE)
-                throw std::invalid_argument{"invalid RouterID"};
             _profiles.emplace(reinterpret_cast<const uint8_t*>(rid.data()), subdict);
         }
     }

@@ -104,7 +104,8 @@ namespace llarp
 
             try
             {
-                btdp.append("source", source.to_view());
+                // btdp.append("source", source.to_view());
+                btdp.append("source", source.to_string());
             }
             catch (...)
             {

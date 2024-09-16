@@ -180,6 +180,8 @@ namespace llarp
         else
             log::debug(logcat, "Main event loop ticker already auto-started!");
 
+        _node_db->start_tickers();
+
         if (is_service_node())
         {
             _link_manager->start_tickers();
@@ -330,7 +332,7 @@ namespace llarp
 
         // TESTNET:
         // oxen::log::reset_level(oxen::log::Level::debug);
-        // oxen::log::set_level("quic", oxen::log::Level::info);
+        oxen::log::set_level("quic", oxen::log::Level::info);
         // oxen::log::set_level("quic", oxen::log::Level::debug);
     }
 
@@ -904,7 +906,7 @@ namespace llarp
         if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
         {
             log::critical(logcat, "Client beginning RID fetch from network");
-            node_db()->fetch_rids();
+            node_db()->fetch_rids_old();
         }
 
         _link_manager->check_persisting_conns(now);

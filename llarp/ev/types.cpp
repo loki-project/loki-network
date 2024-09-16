@@ -47,7 +47,7 @@ namespace llarp
                         return;
                     }
 
-                    if (not self->_proceed)
+                    if (not self->_is_iterating)
                     {
                         log::critical(logcat, "EventTrigger attempting to execute finished event!");
                         return;
@@ -85,7 +85,7 @@ namespace llarp
                         return;
                     }
 
-                    if (not self->_proceed)
+                    if (not self->_is_iterating)
                     {
                         log::critical(logcat, "EventTrigger attempting to resume when it is halted!");
                         return;
@@ -164,10 +164,9 @@ namespace llarp
     {
         event_del(ev.get());
 
-        _is_iterating = false;
         _is_cooling_down = event_add(cv.get(), &_cooldown) == 0;
 
-        log::info(logcat, "Cooldown {}successfully began after {} attempts!", _is_cooling_down ? "" : "un", _current);
+        log::trace(logcat, "Cooldown {}successfully began after {} attempts!", _is_cooling_down ? "" : "un", _current);
     }
 
     std::shared_ptr<EventPoller> EventPoller::make(const std::shared_ptr<EventLoop>& _loop, std::function<void()> task)

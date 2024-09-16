@@ -23,7 +23,7 @@ namespace llarp::service
         {
             oxenc::bt_dict_consumer btdc{std::move(buf)};
 
-            pivot_router.from_snode_address(btdc.require<std::string>("k"));
+            pivot_router.from_relay_address(btdc.require<std::string>("k"));
             latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
             pivot_hop_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};

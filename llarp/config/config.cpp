@@ -251,7 +251,7 @@ namespace llarp
             MultiValue,
             [this](std::string value) {
                 RouterID router;
-                if (not router.from_snode_address(value))
+                if (not router.from_relay_address(value))
                     throw std::invalid_argument{"bad snode value: " + value};
                 if (not strict_connect.insert(router).second)
                     throw std::invalid_argument{"duplicate strict connect snode: " + value};
@@ -690,7 +690,7 @@ namespace llarp
             },
             [this](std::string arg) {
                 RouterID id;
-                if (not id.from_snode_address(arg))
+                if (not id.from_relay_address(arg))
                     throw std::invalid_argument{"Invalid RouterID: {}"_format(arg)};
 
                 auto itr = snode_blacklist.emplace(std::move(id));

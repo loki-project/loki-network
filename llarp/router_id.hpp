@@ -29,9 +29,14 @@ namespace llarp
 
         std::string to_string() const;
 
+        std::string to_network_address(bool is_relay = true) const;
+
         std::string ShortString() const;
 
-        bool from_snode_address(std::string_view str);
+        // will throw on failure!
+        void from_network_address(std::string_view str);
+
+        bool from_relay_address(std::string_view str);
 
         RouterID& operator=(const uint8_t* ptr)
         {

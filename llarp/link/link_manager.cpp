@@ -204,36 +204,36 @@ namespace llarp
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) {
+        s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg), rid); });
         });
 
         if (client_only)
         {
-            s->register_handler("session_init", [this](oxen::quic::message m) {
+            s->register_handler("session_init", [this](oxen::quic::message m) mutable {
                 _router.loop()->call([&, msg = std::move(m)]() mutable { handle_initiate_session(std::move(msg)); });
             });
             log::debug(logcat, "Registered all client-only BTStream commands!");
             return;
         }
 
-        s->register_handler("path_build"s, [this, rid = remote_rid](oxen::quic::message m) {
+        s->register_handler("path_build"s, [this, rid = remote_rid](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_build(std::move(msg), rid); });
         });
 
-        s->register_handler("bfetch_rcs"s, [this](oxen::quic::message m) {
+        s->register_handler("bfetch_rcs"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_bootstrap_rcs(std::move(msg)); });
         });
 
-        s->register_handler("fetch_rcs"s, [this](oxen::quic::message m) {
+        s->register_handler("fetch_rcs"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_rcs(std::move(msg)); });
         });
 
-        s->register_handler("fetch_rids"s, [this](oxen::quic::message m) {
+        s->register_handler("fetch_rids"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_fetch_router_ids(std::move(msg)); });
         });
 
-        s->register_handler("gossip_rc"s, [this](oxen::quic::message m) {
+        s->register_handler("gossip_rc"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_gossip_rc(std::move(msg)); });
         });
 
@@ -416,66 +416,53 @@ namespace llarp
         auto control = make_control(ci, rid);
 
         _router.loop()->call([&, ci_ptr = ci.shared_from_this(), bstream = std::move(control), rid]() {
+            bool is_client_conn = false;
             if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
             {
-                log::critical(logcat, "Configuring inbound connection from relay RID:{}", rid);
+                log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
                 it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream));
             }
             else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
             {
-                log::critical(logcat, "Configuring inbound connection from client RID:{}", rid);
+                is_client_conn = true;
+                log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
                 it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream), false);
             }
-            else
-            {
-                log::critical(
-                    logcat,
-                    "ERROR: connection accepted from RID:{} that was not logged in key "
-                    "verification!",
-                    rid);
-            }
 
-            log::critical(logcat, "Successfully configured inbound connection fom {}...", rid);
+            log::critical(
+                logcat,
+                "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
+                _router.local_rid(),
+                rid.to_network_address(!is_client_conn));
         });
     }
 
     void LinkManager::on_outbound_conn(oxen::quic::connection_interface& ci)
     {
         RouterID rid{ci.remote_key()};
+        log::trace(logcat, "Outbound connection to {}", rid);
 
         if (ep->have_service_conn(rid))
         {
-            log::critical(logcat, "Fetched configured outbound connection to relay RID:{}", rid);
+            log::debug(logcat, "Fetched configured outbound connection to relay RID:{}", rid);
         }
-        else
-        {
-            log::critical(
-                logcat,
-                "ERROR: connection established to RID:{} that was not logged in connection "
-                "establishment!",
-                rid);
-        }
-    }
-
-    void LinkManager::on_conn_open(oxen::quic::connection_interface& ci)
-    {
-        const auto rid = RouterID{ci.remote_key()};
 
         log::critical(
             logcat,
             "{} (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
             _is_service_node ? "SERVICE NODE" : "CLIENT",
-            _router.local_rid(),
+            _router.local_rid().to_network_address(_is_service_node),
             rid);
+    }
 
+    void LinkManager::on_conn_open(oxen::quic::connection_interface& ci)
+    {
         if (ci.is_inbound())
         {
-            log::critical(logcat, "Inbound connection from {}", rid);
             on_inbound_conn(ci);
         }
         else
         {
-            log::critical(logcat, "Outbound connection to {}", rid);
             on_outbound_conn(ci);
         }
     }
@@ -514,7 +501,7 @@ namespace llarp
         if (func)
         {
             func = [this, f = std::move(func)](oxen::quic::message m) mutable {
-                _router.loop()->call([&, func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
+                _router.loop()->call([func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
             };
         }
 
@@ -817,7 +804,7 @@ namespace llarp
 
         // RemoteRC constructor wraps deserialization in a try/catch
         RemoteRC rc;
-        RouterID src, sender;
+        RouterID src;
 
         try
         {
@@ -825,7 +812,7 @@ namespace llarp
 
             btdc.required("rc");
             rc = RemoteRC{btdc.consume_dict_data()};
-            src.from_snode_address(btdc.require<std::string>("sender"));
+            src.from_relay_address(btdc.require<std::string>("sender"));
         }
         catch (const std::exception& e)
         {
@@ -884,7 +871,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(logcat, "Exception handling RC Fetch request (body:{}): {}", m.body(), e.what());
+            log::critical(logcat, "Exception handling bootstarp RC Fetch request (body:{}): {}", m.body(), e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1033,6 +1020,8 @@ namespace llarp
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
 
+        log::critical(logcat, "payload: {}", payload);
+
         send_control_message(via, "fetch_rids"s, std::move(payload), std::move(func));
     }
 
@@ -1048,29 +1037,27 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            source = RouterID{btdc.require<ustring_view>("source")};
+            source.from_network_address(btdc.require<std::string_view>("source"));
+            // source = RouterID{btdc.require<std::string_view>("source")};
         }
         catch (const std::exception& e)
         {
-            log::critical(logcat, "Error fulfilling FetchRIDs request: {}", e.what());
+            log::critical(logcat, "Error fulfilling FetchRIDs request: {}; body: {}", e.what(), m.body());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
 
-        // if bad request, silently fail
-        if (source.size() != RouterID::SIZE)
-            return;
-
         if (source != local)
         {
-            log::critical(logcat, "Relaying FetchRID request to intended target RID:{}", source);
+            log::critical(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", buffer_printer{m.body()}, source);
             send_control_message(
-                source,
-                "fetch_rids"s,
-                m.body_str(),
-                [source_rid = std::move(source), original = std::move(m)](oxen::quic::message m) mutable {
-                    original.respond(m.body_str(), m.is_error());
+                source, "fetch_rids"s, FetchRIDMessage::serialize(source), [original = std::move(m)](oxen::quic::message msg) mutable {
+                    original.respond(msg.body_str(), msg.is_error());
                 });
+            // send_control_message(
+            //     source, "fetch_rids"s, m.body_str(), [original = std::move(m)](oxen::quic::message msg) mutable {
+            //         original.respond(msg.body_str(), msg.is_error());
+            //     });
             return;
         }
 

@@ -9,6 +9,8 @@ extern "C"
 
 namespace llarp
 {
+    using namespace std::chrono_literals;
+
     class EventLoop;
 
     using event_ptr = oxen::quic::event_ptr;

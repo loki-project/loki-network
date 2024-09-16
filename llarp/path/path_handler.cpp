@@ -272,7 +272,7 @@ namespace llarp::path
 
     void PathHandler::tick(std::chrono::milliseconds now)
     {
-        log::critical(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         Lock_t l{paths_mutex};
         std::unordered_set<RouterID> endpoints;

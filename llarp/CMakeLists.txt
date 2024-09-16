@@ -84,7 +84,7 @@ add_dependencies(lokinet-utils genversion)
 
 # Addressing and event loop files used by lokinet-core and other libraries
 # needed by rpc/ link/ service/ config/ path/ dht/
-lokinet_add_library(lokinet-time-place
+lokinet_add_library(lokinet-addressing
   address/address.cpp
   address/ip_packet.cpp
   address/ip_range.cpp
@@ -219,23 +219,23 @@ target_link_libraries(lokinet-core PUBLIC lokinet-core-utils)
 # Link lokinet-dns to alternate libraries
 target_link_libraries(lokinet-dns PUBLIC lokinet-dns-platform)
 
-target_link_libraries(lokinet-wire PUBLIC lokinet-time-place)
+target_link_libraries(lokinet-wire PUBLIC lokinet-addressing)
 target_link_libraries(lokinet-dns PUBLIC lokinet-utils lokinet-cryptography lokinet-config)
-target_link_libraries(lokinet-nodedb PUBLIC lokinet-time-place lokinet-cryptography)
+target_link_libraries(lokinet-nodedb PUBLIC lokinet-addressing lokinet-cryptography)
 target_link_libraries(lokinet-platform PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-rpc PUBLIC lokinet-wire)
-target_link_libraries(lokinet-time-place PUBLIC lokinet-utils lokinet-cryptography)
+target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography)
 target_link_libraries(lokinet-wire PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-config PUBLIC lokinet-cryptography)
 
 target_link_libraries(lokinet-dns
   PUBLIC
-  lokinet-time-place
+  lokinet-addressing
 )
 
 target_link_libraries(lokinet-path
   PUBLIC
-  lokinet-time-place
+  lokinet-addressing
 )
 
 target_link_libraries(lokinet-core-utils 
