@@ -112,15 +112,15 @@ namespace llarp
 
         bool write(const fs::path& fname) const;
 
-        bool operator==(const RouterContact& other) const
+        auto operator<=>(const RouterContact& other) const
         {
-            return _router_id == other._router_id and _addr == other._addr and _addr6 == other._addr6
-                and _timestamp == other._timestamp and _router_version == other._router_version;
+            return std::tie(_router_id, _addr, _addr6, _timestamp, _router_version)
+                <=> std::tie(other._router_id, other._addr, other._addr6, other._timestamp, other._router_version);
         }
 
-        bool operator<(const RouterContact& other) const { return _router_id < other._router_id; }
+        bool operator==(const RouterContact& other) const { return (*this <=> other) == 0; }
 
-        bool operator!=(const RouterContact& other) const { return !(*this == other); }
+        bool operator<(const RouterContact& other) const { return _router_id < other._router_id; }
 
         virtual void clear() {}
 
@@ -192,12 +192,20 @@ namespace llarp
             _signature.clear();
         }
 
-        bool operator==(const LocalRC& other) const
+        auto operator<=>(const LocalRC& other) const
         {
-            return _router_id == other._router_id and _addr == other._addr and _addr6 == other._addr6
-                and _timestamp == other._timestamp and _router_version == other._router_version
-                and _signature == other._signature;
+            return std::tie(_router_id, _addr, _addr6, _timestamp, _router_version, _signature) <=> std::tie(
+                       other._router_id,
+                       other._addr,
+                       other._addr6,
+                       other._timestamp,
+                       other._router_version,
+                       other._signature);
         }
+
+        bool operator==(const LocalRC& other) const { return (*this <=> other) == 0; }
+
+        bool operator<(const LocalRC& other) const { return _router_id < other._router_id; }
 
         /// Mutators for the private member attributes. Calling on the mutators
         /// will clear the current signature and re-sign the RC
@@ -261,9 +269,17 @@ namespace llarp
             _timestamp = {};
             _router_version.fill(0);
         }
-    };
 
-    using RouterLookupHandler = std::function<void(const std::vector<RemoteRC>&)>;
+        auto operator<=>(const RemoteRC& other) const
+        {
+            return std::tie(_router_id, _addr, _addr6, _timestamp, _router_version)
+                <=> std::tie(other._router_id, other._addr, other._addr6, other._timestamp, other._router_version);
+        }
+
+        bool operator==(const RemoteRC& other) const { return (*this <=> other) == 0; }
+
+        bool operator<(const RemoteRC& other) const { return _router_id < other._router_id; }
+    };
 }  // namespace llarp
 
 namespace std

@@ -17,9 +17,9 @@ namespace llarp::path
         try
         {
             hop->lifetime = btdc.require<uint64_t>("l") * 1ms;
-            hop->rxid().from_string(btdc.require<std::string_view>("r"));
-            hop->txid().from_string(btdc.require<std::string_view>("t"));
-            hop->upstream().from_string(btdc.require<std::string_view>("u"));
+            hop->_rxid.from_string(btdc.require<std::string_view>("r"));
+            hop->_txid.from_string(btdc.require<std::string_view>("t"));
+            hop->_upstream.from_string(btdc.require<std::string_view>("u"));
         }
         catch (const std::exception& e)
         {

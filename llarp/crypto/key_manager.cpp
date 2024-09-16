@@ -60,10 +60,13 @@ namespace llarp
             if (rc.read(rc_path))
             {
                 log::trace(logcat, "Successfully read RC at path: {}", rc_path.c_str());
-                is_initialized = true;
             }
             else
+            {
                 log::error(logcat, "Could not read RC at path {}", rc_path);
+            }
+
+            is_initialized = true;
         }
 
         return is_initialized;

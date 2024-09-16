@@ -218,10 +218,6 @@ namespace llarp
 
         int required_num_client_conns() const { return client_router_connections; }
 
-        bool needs_initial_fetch() const;
-
-        bool needs_rebootstrap() const;
-
         void for_each_connection(std::function<void(link::Connection&)> func);
 
         const std::shared_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
@@ -329,8 +325,6 @@ namespace llarp
         const std::shared_ptr<RoutePoker>& route_poker() const { return _route_poker; }
 
         std::string status_line();
-
-        std::optional<RouterID> GetRandomGoodRouter();
 
         bool is_running() const;
 

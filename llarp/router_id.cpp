@@ -43,7 +43,7 @@ namespace llarp
             str.remove_suffix(CLIENT_TLD.size());
         else
             throw std::invalid_argument{"RouterID input tld not recognized (input: {})"_format(str)};
-        
+
         if (str.size() != 52 || !oxenc::is_base32z(str) || !(str.back() == 'o' || str.back() == 'y'))
             throw std::invalid_argument{"RouterID input is incorrect (input: {})"_format(str)};
 

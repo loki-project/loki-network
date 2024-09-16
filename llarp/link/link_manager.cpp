@@ -955,18 +955,17 @@ namespace llarp
         assert(_router.is_service_node());
 
         std::set<RouterID> explicit_ids;
-        rc_time since_time;
 
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            auto btlc = btdc.require<oxenc::bt_list_consumer>("explicit_ids");
+            {
+                auto btlc = btdc.require<oxenc::bt_list_consumer>("explicit_ids");
 
-            while (not btlc.is_finished())
-                explicit_ids.emplace(btlc.consume<ustring_view>().data());
-
-            since_time = rc_time{std::chrono::seconds{btdc.require<int64_t>("since")}};
+                while (not btlc.is_finished())
+                    explicit_ids.emplace(btlc.consume<ustring_view>().data());
+            }
         }
         catch (const std::exception& e)
         {
@@ -975,40 +974,22 @@ namespace llarp
             return;
         }
 
-        const auto& rcs = node_db->get_rcs();
-
         oxenc::bt_dict_producer btdp;
-        // const auto& last_time = node_db->get_last_rc_update_times();
 
         {
             auto sublist = btdp.append_list("rcs");
 
-            // if since_time isn't epoch start, subtract a bit for buffer
-            if (since_time != decltype(since_time)::min())
-                since_time -= 5s;
+            int count = 0;
+            for (const auto& rid : explicit_ids)
+            {
+                if (auto maybe_rc = node_db->get_rc_by_rid(rid))
+                {
+                    sublist.append_encoded(maybe_rc->view());
+                    ++count;
+                }
+            }
 
-            // Initial fetch: give me all the RC's
-            if (explicit_ids.empty())
-            {
-                log::critical(logcat, "Returning ALL locally held RCs for initial FetchRC request...");
-                for (const auto& rc : rcs)
-                {
-                    sublist.append_encoded(rc.view());
-                }
-            }
-            else
-            {
-                int count = 0;
-                for (const auto& rid : explicit_ids)
-                {
-                    if (auto maybe_rc = node_db->get_rc_by_rid(rid))
-                    {
-                        sublist.append_encoded(maybe_rc->view());
-                        ++count;
-                    }
-                }
-                log::critical(logcat, "Returning {} RCs for FetchRC request...", count);
-            }
+            log::critical(logcat, "Returning {} RCs for FetchRC request...", count);
         }
 
         m.respond(std::move(btdp).str());
@@ -1038,7 +1019,6 @@ namespace llarp
         {
             oxenc::bt_dict_consumer btdc{m.body()};
             source.from_network_address(btdc.require<std::string_view>("source"));
-            // source = RouterID{btdc.require<std::string_view>("source")};
         }
         catch (const std::exception& e)
         {
@@ -1049,15 +1029,18 @@ namespace llarp
 
         if (source != local)
         {
-            log::critical(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", buffer_printer{m.body()}, source);
+            log::critical(
+                logcat,
+                "Relaying FetchRID request (body: {}) to intended target RID:{}",
+                buffer_printer{m.body()},
+                source);
             send_control_message(
-                source, "fetch_rids"s, FetchRIDMessage::serialize(source), [original = std::move(m)](oxen::quic::message msg) mutable {
+                source,
+                "fetch_rids"s,
+                FetchRIDMessage::serialize(source),
+                [original = std::move(m)](oxen::quic::message msg) mutable {
                     original.respond(msg.body_str(), msg.is_error());
                 });
-            // send_control_message(
-            //     source, "fetch_rids"s, m.body_str(), [original = std::move(m)](oxen::quic::message msg) mutable {
-            //         original.respond(msg.body_str(), msg.is_error());
-            //     });
             return;
         }
 
@@ -1450,10 +1433,16 @@ namespace llarp
                 return;
             }
 
-            oxenc::bt_dict_consumer hop_dict{payload_list.front()};
+            // pop our frame, to be randomized after onion step and appended
+            auto end_frame = std::move(payload_list.front());
+            payload_list.pop_front();
+
+            log::info(logcat, "Popping frame and deserializing: {}", buffer_printer{end_frame});
+            oxenc::bt_dict_consumer hop_dict{end_frame};
 
             auto [nonce, other_pubkey, hop_payload] = PathBuildMessage::deserialize_hop(hop_dict, _router.local_rid());
 
+            log::debug(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
             oxenc::bt_dict_consumer hop_info{hop_payload};
 
             auto hop = path::TransitHop::deserialize_hop(hop_info, from, _router, other_pubkey, nonce);
@@ -1464,15 +1453,13 @@ namespace llarp
             // we are terminal hop and everything is okay
             if (hop->upstream() == _router.local_rid())
             {
+                log::info(logcat, "We are the terminal hop; path build succeeded");
                 hop->terminal_hop = true;
                 _router.path_context()->put_transit_hop(hop);
                 m.respond(messages::OK_RESPONSE, false);
                 return;
             }
 
-            // pop our frame, to be randomized after onion step and appended
-            auto end_frame = std::move(payload_list.front());
-            payload_list.pop_front();
             auto onion_nonce = SymmNonce{nonce.data()} ^ hop->nonceXOR;
 
             // (de-)onion each further frame using the established shared secret and
@@ -1500,18 +1487,19 @@ namespace llarp
                             logcat,
                             "Upstream returned successful path build response; locally storing Hop and relaying");
                         _router.path_context()->put_transit_hop(hop);
+                        return prev_message.respond(messages::OK_RESPONSE, false);
                     }
                     if (m.timed_out)
                         log::info(logcat, "Upstream timed out on path build; relaying timeout");
                     else
                         log::info(logcat, "Upstream returned path build failure; relaying response");
 
-                    prev_message.respond(m.body_str(), m.is_error());
+                    return prev_message.respond(m.body_str(), m.is_error());
                 });
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}: input: {}", e.what(), m.body());
             // We can respond with the exception string, as all exceptions thrown in the parsing functions
             // (ex: `TransitHop::deserialize_hop(...)`) contain the correct response bodies
             m.respond(e.what(), true);

@@ -228,6 +228,8 @@ namespace llarp
                 throw std::runtime_error{BAD_CRYPTO};
             }
 
+            log::debug(logcat, "Hop deserialized...");
+
             return {std::move(nonce), std::move(other_pubkey), std::move(hop_payload)};
         }
     }  // namespace PathBuildMessage

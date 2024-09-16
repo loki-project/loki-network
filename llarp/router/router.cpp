@@ -216,30 +216,9 @@ namespace llarp
         return false;
     }
 
-    bool Router::needs_initial_fetch() const
-    {
-        return _node_db->needs_initial_fetch_OLD();
-    }
-
-    bool Router::needs_rebootstrap() const
-    {
-        return _node_db->needs_rebootstrap_OLD();
-    }
-
     void Router::persist_connection_until(const RouterID& remote, std::chrono::milliseconds until)
     {
         _link_manager->set_conn_persist(remote, until);
-    }
-
-    std::optional<RouterID> Router::GetRandomGoodRouter()
-    {
-        if (is_service_node())
-            return node_db()->get_random_whitelist_router();
-
-        if (auto maybe = node_db()->get_random_rc())
-            return maybe->router_id();
-
-        return std::nullopt;
     }
 
     bool Router::send_data_message(const RouterID& remote, std::string payload)
@@ -881,7 +860,7 @@ namespace llarp
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        auto now_timepoint = std::chrono::system_clock::time_point(now);
+        // auto now_timepoint = std::chrono::system_clock::time_point(now);
         llarp::sys::service_manager->report_periodic_stats();
         _pathbuild_limiter.Decay(now);
         // _router_profiling.tick();
@@ -896,18 +875,18 @@ namespace llarp
         }
 
         // periodically fetch updated RCs
-        if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
-        {
-            log::info(logcat, "Client beginning RC fetch from network");
-            node_db()->fetch_rcs();
-        }
+        // if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
+        // {
+        //     log::info(logcat, "Client beginning RC fetch from network");
+        //     node_db()->fetch_rcs();
+        // }
 
-        // periodically fetch updated RouterID list
-        if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
-        {
-            log::critical(logcat, "Client beginning RID fetch from network");
-            node_db()->fetch_rids_old();
-        }
+        // // periodically fetch updated RouterID list
+        // if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
+        // {
+        //     log::critical(logcat, "Client beginning RID fetch from network");
+        //     node_db()->fetch_rids_old();
+        // }
 
         _link_manager->check_persisting_conns(now);
 
@@ -923,7 +902,12 @@ namespace llarp
         if (_num_router_conns < min_client_conns)
         {
             size_t needed = min_client_conns - _num_router_conns;
-            log::critical(logcat, "Client connecting to {} random routers to keep alive", needed);
+            log::critical(
+                logcat,
+                "Client connecting to {} random routers to keep alive (current:{}, needed:{})",
+                needed,
+                _num_router_conns,
+                min_client_conns);
             _link_manager->connect_to_random(needed);
         }
 

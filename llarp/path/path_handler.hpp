@@ -164,7 +164,7 @@ namespace llarp
 
             nlohmann::json ExtractStatus() const;
 
-            virtual bool should_build_more() const;
+            virtual size_t should_build_more() const;
 
             void expire_paths(std::chrono::milliseconds now);
 

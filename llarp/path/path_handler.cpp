@@ -62,6 +62,7 @@ namespace llarp::path
 
     void PathHandler::add_path(std::shared_ptr<Path> p)
     {
+        log::debug(logcat, "Adding path...");
         Lock_t l(paths_mutex);
 
         _paths.insert_or_assign(p->pivot_rid(), p);
@@ -275,31 +276,14 @@ namespace llarp::path
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         Lock_t l{paths_mutex};
-        std::unordered_set<RouterID> endpoints;
-
-        for (auto& item : _paths)
-        {
-            endpoints.emplace(item.second->pivot_rid());
-        }
-
-        path_cache.clear();
-
-        for (const auto& ep : endpoints)
-        {
-            if (auto path = get_path(ep))
-            {
-                auto p = *path;
-                path_cache[ep] = p->get_weak();
-            }
-        }
 
         now = llarp::time_now_ms();
         _router.pathbuild_limiter().Decay(now);
 
-        expire_paths(now);
+        // expire_paths(now);
 
-        if (should_build_more())
-            build_more();
+        if (auto n = should_build_more(); n > 0)
+            build_more(n);
 
         tick_paths();
 
@@ -393,20 +377,22 @@ namespace llarp::path
         return llarp::time_now_ms() < _last_build + build_interval_limit;
     }
 
-    bool PathHandler::should_build_more() const
+    size_t PathHandler::should_build_more() const
     {
         if (is_stopped())
-            return false;
+            return {};
 
         if (build_cooldown())
-            return false;
+            return {};
 
-        return num_paths() < num_paths_desired;
+        return num_paths_desired - num_paths();
     }
 
     std::optional<std::vector<RemoteRC>> PathHandler::get_hops_to_random()
     {
-        auto filter = [&r = _router](const RemoteRC& rc) -> bool {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        auto filter = [&r = _router](const RemoteRC& rc) mutable {
             return not r.router_profiling().is_bad_for_path(rc.router_id(), 1);
         };
 
@@ -419,6 +405,8 @@ namespace llarp::path
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_to_remote(
         const RouterID& pivot, const std::set<RouterID>& exclude)
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
         const auto& path_config = _router.config()->paths;
 
         // make a copy here to reference rather than creating one in the lambda every iteration
@@ -635,10 +623,12 @@ namespace llarp::path
             auto pivot = new_path->pivot_rid();
 
             if (not build3(
-                    new_path->upstream_rid(), std::move(payload), [this, new_path, pivot](oxen::quic::message m) {
+                    new_path->upstream_rid(),
+                    std::move(payload),
+                    [this, new_path, pivot](oxen::quic::message m) mutable {
                         if (m)
                         {
-                            log::debug(logcat, "Path build returned successfully! Storing locally");
+                            log::critical(logcat, "PATH ESTABLISHED: {}", new_path->HopsString());
                             return path_build_succeeded(new_path);
                         }
 
@@ -660,7 +650,11 @@ namespace llarp::path
                         }
                         catch (const std::exception& e)
                         {
-                            log::warning(logcat, "Exception caught parsing path build response: {}", e.what());
+                            log::warning(
+                                logcat,
+                                "Exception caught parsing path build response: {}; input: {}",
+                                e.what(),
+                                m.body());
                         }
                     }))
             {

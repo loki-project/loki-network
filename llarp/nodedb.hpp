@@ -38,7 +38,7 @@ namespace llarp
     // upper limit on how many rid fetch requests to rid sources can fail
     inline constexpr size_t MAX_RID_ERRORS{2};
     // each returned rid must appear this number of times across all responses
-    inline constexpr int MIN_RID_FETCH_FREQ{RID_SOURCE_COUNT - MAX_RID_ERRORS - 1};
+    inline constexpr int MIN_RID_FETCH_FREQ{4};  //  TESTNET:
     // the total number of accepted returned rids should be above this number
     inline constexpr size_t MIN_GOOD_RID_FETCH_TOTAL{};
     // the ratio of accepted:rejected rids must be above this ratio
@@ -138,21 +138,17 @@ namespace llarp
 
         // All registered relays (service nodes)
         std::set<RouterID> _registered_routers;
-        // timing (note: Router holds the variables for last rc and rid request times)
-        std::unordered_map<RouterID, rc_time> last_rc_update_times;
         // if populated from a config file, lists specific exclusively used as path first-hops
         std::set<RouterID> _pinned_edges;
         // source of "truth" for RC updating. This relay will also mediate requests to the
-        // 12 selected active RID's for RID fetching
+        // 8 selected active RID's for RID fetching
         RouterID fetch_source;
-        // set of 12 randomly selected RID's from the client's set of routers
+        // set of 8 randomly selected RID's from the client's set of routers
         std::set<RouterID> rid_sources{};
         // logs the RID's that resulted in an error during RID fetching
-        std::set<RouterID> _fail_sources_old{};
-        // logs the number of fetch attempts made per fetch source
-        std::unordered_map<RouterID, int> rid_fetch_counters{};
+        std::set<RouterID> fail_sources{};
         // tracks the number of times each rid appears in the above responses
-        std::unordered_map<RouterID, int> rid_result_counters{};
+        std::unordered_map<RouterID, std::atomic<int>> rid_result_counters{};
 
         template <std::invocable Callable>
         void _disk_hook(Callable&& f) const
@@ -170,24 +166,14 @@ namespace llarp
 
         void _ensure_skiplist(fs::path nodedbDir);
 
-        /** Failure counters:
-            - fetch_failures: tracks errors fetching RC's from the RC node and requesting RID's
-              from the 12 RID sources. Errors in the individual RID sets are NOT counted towards
-              this, their performance as a group is evaluated wholistically
-            - bootstrap_failures: tracks errors fetching both RC's from bootstrasps and RID requests
-              they mediate. This is a different counter as we only bootstrap in problematic cases
-        */
-        std::atomic<int> fetch_failures{0}, bootstrap_attempts{0};
-        // TESTNET: OLD MEMBERS
-        std::atomic<bool> _using_bootstrap_fallback_OLD{false}, _needs_rebootstrap_OLD{false},
-            _needs_initial_fetch_OLD{true}, _fetching_initial_OLD{false}, _initial_completed_OLD{false};
-
         // TESTNET: NEW MEMBERS FOR BOOTSTRAPPING MANAGED BY EVENTTRIGGER OBJECT
         std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _needs_initial_fetch{false},
             _is_fetching{false}, _has_bstrap_connection{false}, _is_connecting_bstrap{false};
 
         std::shared_ptr<EventTrigger> _bootstrap_handler;
-        std::shared_ptr<EventTrigger> _initial_fetch_handler;
+        std::shared_ptr<EventTrigger> _rid_fetch_handler;
+
+        std::shared_ptr<EventTrigger> _rc_fetch_handler;
 
         std::shared_ptr<EventTicker> _flush_ticker;
 
@@ -217,42 +203,22 @@ namespace llarp
 
         std::optional<RemoteRC> get_rc_by_rid(const RouterID& rid);
 
-        bool is_initial_fetching_OLD() const { return _fetching_initial_OLD; }
-
-        bool initial_fetch_completed_OLD() const { return _initial_completed_OLD; }
-
-        bool needs_initial_fetch_OLD() const { return _needs_initial_fetch_OLD; }
-
-        bool needs_rebootstrap_OLD() const { return _needs_rebootstrap_OLD; }
-
-        void ingest_bootstrap_seed();
-
-        bool ingest_fetched_rcs(std::set<RemoteRC> rcs);
-
         bool process_fetched_rcs(std::set<RemoteRC>& rcs);
 
-        void ingest_rid_fetch_responses(const RouterID& source, std::set<RouterID> ids = {});
+        void ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> ids = std::nullopt);
 
         bool process_fetched_rids();
 
-        void fetch_initial(bool is_snode = false);
-
-        //  RouterContact fetching
-        void fetch_rcs(bool initial = false);
-        void post_fetch_rcs(bool initial = false);
-        void fetch_rcs_result(bool initial = false, bool error = false);
-
-        //  RouterID fetching
-        void fetch_rids();
-
-        void fetch_rids_old(bool initial = false);
-        void post_fetch_rids(bool initial = false);
-        void fetch_rids_result(bool initial = false);
-
         // TESTNET: new bootstrap/initial fetch functions
+        void fetch_rcs();
+        void fetch_rids();
         void bootstrap();  //  private
+
         void stop_rid_fetch(bool success = true);
+        void stop_rc_fetch(bool success = true);
+
         void rid_fetch_result();
+        void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
         void stop_bootstrap(bool success = true);  //  private
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }
@@ -261,14 +227,14 @@ namespace llarp
         void purge_rcs(std::chrono::milliseconds now);
 
         //  Bootstrap fallback fetching
-        void fallback_to_bootstrap();
-        void post_snode_bootstrap();
-        void bootstrap_cooldown();
+        // void fallback_to_bootstrap();
+        // void post_snode_bootstrap();
+        // void bootstrap_cooldown();
 
         // Populate rid_sources with random sample from known_rids. A set of rids is passed
         // if only specific RID's need to be re-selected; to re-select all, pass the member
         // variable ::known_rids
-        void reselect_router_id_sources(std::set<RouterID> specific);
+        bool reselect_router_id_sources(std::set<RouterID> specific);
 
         void set_router_whitelist(
             const std::vector<RouterID>& whitelist,
@@ -322,14 +288,6 @@ namespace llarp
 
         const std::set<RemoteRC>& get_rcs() const { return known_rcs; }
 
-        // const std::unordered_map<RouterID, RemoteRC>&
-        // get_rcs() const
-        // {
-        //   return known_rcs;
-        // }
-
-        const std::unordered_map<RouterID, rc_time>& get_last_rc_update_times() const { return last_rc_update_times; }
-
         /// load all known_rcs from disk syncrhonously
         void load_from_disk();
 
@@ -361,7 +319,7 @@ namespace llarp
         /// maybe get an rc by its ident pubkey
         std::optional<RemoteRC> get_rc(const RouterID& pk) const;
 
-        std::optional<RemoteRC> get_random_rc() const;
+        std::optional<std::vector<RemoteRC>> get_random_rc() const;
 
         // Get `n` random RCs from all RCs we know about.  If `exact` is true then we require n
         // matches (and otherwise return nullopt); otherwise we return whatever we found, or nullopt
@@ -493,7 +451,7 @@ namespace llarp
         void remove_stale_rcs();
 
         /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
-        bool put_rc(RemoteRC rc, rc_time now = time_point_now());
+        bool put_rc(RemoteRC rc);
 
         /// if we consider it valid (want_rc),
         /// put this rc into the cache if it is not there or is newer than the one there already

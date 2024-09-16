@@ -31,8 +31,7 @@ namespace llarp
         inline const auto INVALID_REQUEST =
             messages::serialize_response({{messages::STATUS_KEY, "Invalid relay ID requested"}});
 
-        inline static std::string serialize(
-            std::chrono::system_clock::time_point since, const std::vector<RouterID>& explicit_ids)
+        inline static std::string serialize(const std::vector<RouterID>& explicit_ids)
         {
             oxenc::bt_dict_producer btdp;
 
@@ -44,8 +43,6 @@ namespace llarp
                     for (const auto& rid : explicit_ids)
                         sublist.append(rid.to_view());
                 }
-
-                btdp.append("since", since.time_since_epoch() / 1s);
             }
             catch (...)
             {
@@ -104,7 +101,6 @@ namespace llarp
 
             try
             {
-                // btdp.append("source", source.to_view());
                 btdp.append("source", source.to_string());
             }
             catch (...)
