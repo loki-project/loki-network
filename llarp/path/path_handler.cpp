@@ -621,15 +621,14 @@ namespace llarp::path
 
             auto payload = build2(new_path);
             auto pivot = new_path->pivot_rid();
+            auto upstream = new_path->upstream_rid();
 
             if (not build3(
-                    new_path->upstream_rid(),
-                    std::move(payload),
-                    [this, new_path, pivot](oxen::quic::message m) mutable {
+                    std::move(upstream), std::move(payload), [this, new_path, pivot](oxen::quic::message m) mutable {
                         if (m)
                         {
                             log::critical(logcat, "PATH ESTABLISHED: {}", new_path->HopsString());
-                            return path_build_succeeded(new_path);
+                            return path_build_succeeded(std::move(new_path));
                         }
 
                         try
@@ -645,8 +644,6 @@ namespace llarp::path
                                 auto status = d.require<std::string_view>(messages::STATUS_KEY);
                                 log::warning(logcat, "Path build returned failure status: {}", status);
                             }
-
-                            path_build_failed(pivot, new_path, m.timed_out);
                         }
                         catch (const std::exception& e)
                         {
@@ -656,6 +653,8 @@ namespace llarp::path
                                 e.what(),
                                 m.body());
                         }
+
+                        path_build_failed(pivot, std::move(new_path), m.timed_out);
                     }))
             {
                 log::warning(logcat, "Error sending path_build control message");

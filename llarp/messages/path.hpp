@@ -37,7 +37,9 @@ namespace llarp
                 std::deque<ustring> ret{};
 
                 while (not btlc.is_finished())
-                    ret.push_back(btlc.consume<ustring>());
+                {
+                    ret.emplace_back(btlc.consume_string<unsigned char>());
+                }
 
                 return ret;
             }

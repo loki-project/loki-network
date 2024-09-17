@@ -849,7 +849,7 @@ namespace llarp
         }
 
         if (num_router_conns < num_rcs)
-        {
+        {   // TODO: change the boolean in ::connect_to_random
             log::critical(
                 logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
             _link_manager->connect_to_random(FULL_MESH_ITERATION);
@@ -1094,13 +1094,6 @@ namespace llarp
         if (_router_close_cb)
             _router_close_cb();
 
-        if (_reachability_ticker)
-        {
-            log::debug(logcat, "clearing reachability ticker...");
-            _reachability_ticker->stop();
-            _reachability_ticker.reset();
-        }
-
         _is_running.store(false);
     }
 
@@ -1137,6 +1130,13 @@ namespace llarp
         auto rv = _loop_ticker->stop();
         log::debug(logcat, "router loop ticker stopped {}successfully!", rv ? "" : "un");
         _loop_ticker.reset();
+
+        if (_reachability_ticker)
+        {
+            log::debug(logcat, "clearing reachability ticker...");
+            _reachability_ticker->stop();
+            _reachability_ticker.reset();
+        }
 
         log::debug(logcat, "stopping nodedb events");
         node_db()->cleanup();

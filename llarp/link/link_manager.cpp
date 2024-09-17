@@ -22,7 +22,7 @@
 
 namespace llarp
 {
-    static auto logcat = llarp::log::Cat("quic");
+    static auto logcat = llarp::log::Cat("lquic");
 
     static constexpr auto static_shared_key = "Lokinet static shared secret key"_usv;
 
@@ -491,10 +491,6 @@ namespace llarp
     bool LinkManager::send_control_message(
         const RouterID& remote, std::string endpoint, std::string body, std::function<void(oxen::quic::message m)> func)
     {
-        // DISCUSS: revisit if this assert makes sense. If so, there's no need to if (func) the
-        // next logic block
-        // assert(func);  // makes no sense to send control message and ignore response (maybe gossip?)
-
         if (is_stopping)
             return false;
 
@@ -1034,22 +1030,20 @@ namespace llarp
                 "Relaying FetchRID request (body: {}) to intended target RID:{}",
                 buffer_printer{m.body()},
                 source);
+
+            auto payload = FetchRIDMessage::serialize(source);
             send_control_message(
-                source,
-                "fetch_rids"s,
-                FetchRIDMessage::serialize(source),
-                [original = std::move(m)](oxen::quic::message msg) mutable {
+                source, "fetch_rids"s, std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
                     original.respond(msg.body_str(), msg.is_error());
                 });
             return;
         }
 
+        const auto& known_rids = node_db->get_known_rids();
         oxenc::bt_dict_producer btdp;
 
         {
             auto btlp = btdp.append_list("routers");
-
-            const auto& known_rids = node_db->get_known_rids();
 
             for (const auto& rid : known_rids)
                 btlp.append(rid.to_view());
@@ -1064,7 +1058,7 @@ namespace llarp
             return sig;
         });
 
-        log::critical(logcat, "Returning ALL locally held RIDs to FetchRIDs request!");
+        log::critical(logcat, "Returning ALL ({}) locally held RIDs to FetchRIDs request!", known_rids.size());
         m.respond(std::move(btdp).str());
     }
 
@@ -1433,12 +1427,8 @@ namespace llarp
                 return;
             }
 
-            // pop our frame, to be randomized after onion step and appended
-            auto end_frame = std::move(payload_list.front());
-            payload_list.pop_front();
-
-            log::info(logcat, "Popping frame and deserializing: {}", buffer_printer{end_frame});
-            oxenc::bt_dict_consumer hop_dict{end_frame};
+            log::debug(logcat, "Deserializing frame: {}", buffer_printer{payload_list.front()});
+            oxenc::bt_dict_consumer hop_dict{payload_list.front()};
 
             auto [nonce, other_pubkey, hop_payload] = PathBuildMessage::deserialize_hop(hop_dict, _router.local_rid());
 
@@ -1455,11 +1445,13 @@ namespace llarp
             {
                 log::info(logcat, "We are the terminal hop; path build succeeded");
                 hop->terminal_hop = true;
-                _router.path_context()->put_transit_hop(hop);
-                m.respond(messages::OK_RESPONSE, false);
-                return;
+                _router.path_context()->put_transit_hop(std::move(hop));
+                return m.respond(messages::OK_RESPONSE, false);
             }
 
+            // pop our frame, to be randomized after onion step and appended
+            auto end_frame = std::move(payload_list.front());
+            payload_list.pop_front();
             auto onion_nonce = SymmNonce{nonce.data()} ^ hop->nonceXOR;
 
             // (de-)onion each further frame using the established shared secret and
@@ -1476,17 +1468,19 @@ namespace llarp
             randombytes(end_frame.data(), end_frame.size());
             payload_list.push_back(std::move(end_frame));
 
+            auto upstream = hop->upstream();
+
             send_control_message(
-                hop->upstream(),
+                std::move(upstream),
                 "path_build",
                 Frames::serialize(payload_list),
-                [hop, this, prev_message = std::move(m)](oxen::quic::message m) mutable {
+                [this, transit_hop = std::move(hop), prev_message = std::move(m)](oxen::quic::message m) mutable {
                     if (m)
                     {
                         log::info(
                             logcat,
                             "Upstream returned successful path build response; locally storing Hop and relaying");
-                        _router.path_context()->put_transit_hop(hop);
+                        _router.path_context()->put_transit_hop(std::move(transit_hop));
                         return prev_message.respond(messages::OK_RESPONSE, false);
                     }
                     if (m.timed_out)
@@ -1494,7 +1488,7 @@ namespace llarp
                     else
                         log::info(logcat, "Upstream returned path build failure; relaying response");
 
-                    return prev_message.respond(m.body_str(), m.is_error());
+                    return prev_message.respond(m.body(), m.is_error());
                 });
         }
         catch (const std::exception& e)

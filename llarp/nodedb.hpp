@@ -38,7 +38,7 @@ namespace llarp
     // upper limit on how many rid fetch requests to rid sources can fail
     inline constexpr size_t MAX_RID_ERRORS{2};
     // each returned rid must appear this number of times across all responses
-    inline constexpr int MIN_RID_FETCH_FREQ{4};  //  TESTNET:
+    inline constexpr int MIN_RID_FETCH_FREQ{6};  //  TESTNET:
     // the total number of accepted returned rids should be above this number
     inline constexpr size_t MIN_GOOD_RID_FETCH_TOTAL{};
     // the ratio of accepted:rejected rids must be above this ratio
@@ -98,6 +98,9 @@ namespace llarp
 
         /******** RouterID/RouterContacts ********/
 
+        using Lock_t = util::NullLock;
+        mutable util::NullMutex nodedb_mutex;
+
         /** RouterID mappings
             Both the following are populated in NodeDB startup with RouterID's stored on disk.
             - known_rids: meant to persist between lokinet sessions, and is only
@@ -149,6 +152,8 @@ namespace llarp
         std::set<RouterID> fail_sources{};
         // tracks the number of times each rid appears in the above responses
         std::unordered_map<RouterID, std::atomic<int>> rid_result_counters{};
+
+        std::atomic<int> fetch_counter{};
 
         template <std::invocable Callable>
         void _disk_hook(Callable&& f) const
@@ -217,7 +222,7 @@ namespace llarp
         void stop_rid_fetch(bool success = true);
         void stop_rc_fetch(bool success = true);
 
-        void rid_fetch_result();
+        void rid_fetch_result(const RouterID& via);
         void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
         void stop_bootstrap(bool success = true);  //  private
         bool is_bootstrapping() const { return _is_bootstrapping; }

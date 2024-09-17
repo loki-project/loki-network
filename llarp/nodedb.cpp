@@ -362,11 +362,16 @@ namespace llarp
     */
     bool NodeDB::process_fetched_rids()
     {
+        Lock_t l{nodedb_mutex};
+
+        assert(_router.loop()->in_event_loop());
+
         std::set<RouterID> union_set, confirmed_set, unconfirmed_set;
 
         for (const auto& [rid, count] : rid_result_counters)
         {
-            if (count > MIN_RID_FETCH_FREQ)
+            log::info(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
+            if (count >= MIN_RID_FETCH_FREQ)
                 union_set.insert(rid);
             else
                 unconfirmed_set.insert(rid);
@@ -381,14 +386,22 @@ namespace llarp
             std::inserter(confirmed_set, confirmed_set.begin()));
 
         // the total number of rids received
-        const auto num_received = (double)rid_result_counters.size();
+        const auto num_received = (double)(rid_result_counters.size() - fetch_counter);
         // the total number of received AND accepted rids
         const auto union_size = union_set.size();
 
         const auto fetch_threshold = (double)union_size / num_received;
 
+        bool success = (fetch_threshold >= GOOD_RID_FETCH_THRESHOLD) and (union_size >= MIN_GOOD_RID_FETCH_TOTAL);
+
         log::info(
-            logcat, "Num received: {}, union size: {}, fetch_threshold: {}", num_received, union_size, fetch_threshold);
+            logcat,
+            "Num received: {}, union size: {}, known rid size: {}, fetch_threshold: {}, status: {}",
+            num_received,
+            union_size,
+            known_rids.size(),
+            fetch_threshold,
+            success ? "SUCCESS" : "FAIL");
 
         /** We are checking 2 things here:
             1) The ratio of received/accepted to total received is above GOOD_RID_FETCH_THRESHOLD.
@@ -396,9 +409,7 @@ namespace llarp
             2) The total number received is above MIN_RID_FETCH_TOTAL. This ensures that we are
                receiving a sufficient amount to make a comparison of any sorts
         */
-        bool success = false;
-        if (success = (fetch_threshold >= GOOD_RID_FETCH_THRESHOLD) and (union_size >= MIN_GOOD_RID_FETCH_TOTAL);
-            success)
+        if (success)
         {
             process_results(std::move(unconfirmed_set), unconfirmed_rids, known_rids);
             known_rids.merge(confirmed_set);
@@ -409,14 +420,13 @@ namespace llarp
 
     void NodeDB::ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> rids)
     {
-        if (not rids)
+        if (rids)
         {
-            fail_sources.insert(source);
-            return;
+            for (const auto& rid : *rids)
+                rid_result_counters[rid] += 1;
         }
-
-        for (const auto& rid : *rids)
-            rid_result_counters[rid] += 1;
+        else
+            fail_sources.insert(source);
     }
 
     void NodeDB::fetch_rcs()
@@ -497,8 +507,13 @@ namespace llarp
             reselect_router_id_sources(rid_sources);
         }
 
+        fetch_counter = 0;
         rid_result_counters.clear();
-        fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
+
+        do
+            fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
+        while (rid_sources.contains(fetch_source));
+
         auto& src = fetch_source;
 
         // TESTNET:
@@ -512,7 +527,9 @@ namespace llarp
 
             log::info(logcat, "Sending FetchRIDs request to {} via {}", target, src);
             _router.link_manager()->fetch_router_ids(
-                src, FetchRIDMessage::serialize(target), [this, source = src, target](oxen::quic::message m) mutable {
+                src,
+                FetchRIDMessage::serialize(target),
+                [this, source = src, target = target](oxen::quic::message m) mutable {
                     if (not m)
                     {
                         log::critical(
@@ -554,22 +571,26 @@ namespace llarp
                         }
                     }
 
-                    rid_fetch_result();
+                    rid_fetch_result(source);
                 });
+            fetch_counter += 1;
         }
     }
 
-    void NodeDB::rid_fetch_result()
+    void NodeDB::rid_fetch_result(const RouterID& via)
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        auto n_fails = fail_sources.size(), n_responses = RID_SOURCE_COUNT - n_fails;
+        size_t n_fails = fail_sources.size();
+        int n_responses = rid_result_counters[via];
 
-        if (n_responses < RID_SOURCE_COUNT)
+        if (n_responses < fetch_counter)
         {
-            log::info(logcat, "Received {}/{} fetch RID requests", n_responses, RID_SOURCE_COUNT);
+            log::info(logcat, "Received {}/{} fetch RID requests", n_responses, fetch_counter);
             return;
         }
+
+        log::info(logcat, "Received {}/{} fetch RID requests! Processing...", n_responses, fetch_counter);
 
         if (n_fails <= MAX_RID_ERRORS)
         {
@@ -634,6 +655,7 @@ namespace llarp
     void NodeDB::stop_rid_fetch(bool success)
     {
         fail_sources.clear();
+        fetch_counter = 0;
         rid_result_counters.clear();
         _is_fetching = false;
         _needs_initial_fetch = false;
@@ -742,6 +764,8 @@ namespace llarp
 
     bool NodeDB::reselect_router_id_sources(std::set<RouterID> specific)
     {
+        Lock_t l{nodedb_mutex};
+
         replace_subset(rid_sources, specific, known_rids, RID_SOURCE_COUNT, csrng);
 
         if (auto sz = rid_sources.size(); sz < RID_SOURCE_COUNT)
@@ -846,6 +870,8 @@ namespace llarp
 
     void NodeDB::load_from_disk()
     {
+        Lock_t l{nodedb_mutex};
+
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_root.empty())
@@ -968,6 +994,8 @@ namespace llarp
 
     bool NodeDB::put_rc(RemoteRC rc)
     {
+        Lock_t l{nodedb_mutex};
+
         bool ret{true};
         const auto& rid = rc.router_id();
 

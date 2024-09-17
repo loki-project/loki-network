@@ -58,13 +58,9 @@ namespace llarp
             RemoteRC rc;
 
             if (rc.read(rc_path))
-            {
-                log::trace(logcat, "Successfully read RC at path: {}", rc_path.c_str());
-            }
+                log::trace(logcat, "Successfully read RC at path: {}", rc_path);
             else
-            {
-                log::error(logcat, "Could not read RC at path {}", rc_path);
-            }
+                log::info(logcat, "Could not read RC at path {}", rc_path);
 
             is_initialized = true;
         }
