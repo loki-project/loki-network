@@ -137,7 +137,7 @@ namespace llarp
 
     bool crypto::xchacha20(uint8_t* buf, size_t size, const SharedSecret& k, const SymmNonce& n)
     {
-        return xchacha20(buf, size, n.data(), k.data());
+        return xchacha20(buf, size, k.data(), n.data());
     }
 
     bool crypto::xchacha20(uint8_t* buf, size_t size, const uint8_t* secret, const uint8_t* nonce)

@@ -10,7 +10,7 @@ namespace llarp::path
     static auto logcat = log::Cat("transit-hop");
 
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
-        oxenc::bt_dict_consumer& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce)
+        oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce)
     {
         std::shared_ptr<TransitHop> hop;
 
@@ -45,6 +45,8 @@ namespace llarp::path
         ShortHash xor_hash;
         crypto::shorthash(xor_hash, hop->shared.data(), hop->shared.size());
         hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+
+        log::debug(logcat, "TransitHop data successfully deserialized");
 
         return hop;
     }

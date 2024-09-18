@@ -20,17 +20,12 @@ namespace llarp
     //
     struct buffer_printer : public oxen::quic::buffer_printer
     {
-        std::basic_string_view<std::byte> buf;
-
         using oxen::quic::buffer_printer::buffer_printer;
 
         // llarp_buffer_t printer:
         explicit buffer_printer(const llarp_buffer_t& buf)
             : buffer_printer(std::basic_string_view<uint8_t>{buf.base, buf.sz})
         {}
-
-        std::string to_string() const;
-        static constexpr bool to_string_formattable = true;
     };
 
 }  // namespace llarp

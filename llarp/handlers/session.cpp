@@ -30,6 +30,19 @@ namespace llarp::handlers
         path::PathHandler::tick(now);
     }
 
+    bool SessionEndpoint::stop(bool send_close)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        _running = false;
+
+        Lock_t l{paths_mutex};
+
+        _sessions.stop_sessions(send_close);
+
+        return path::PathHandler::stop(send_close);
+    }
+
     void SessionEndpoint::configure()
     {
         auto net_config = _router.config()->network;

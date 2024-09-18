@@ -81,6 +81,8 @@ namespace llarp
                 bool is_exit,
                 bool is_outbound);
 
+            virtual ~BaseSession() = default;
+
             bool is_outbound() const { return _is_outbound; }
 
             const NetworkAddress& remote() const { return _remote; }

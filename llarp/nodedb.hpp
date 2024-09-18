@@ -22,6 +22,8 @@ namespace llarp
 
     // TESTNET: the following constants have been shortened for testing purposes
 
+    inline constexpr auto FETCH_INTERVAL{10min};
+
     /*  RC Fetch Constants  */
     // fallback to bootstrap if we have less than this many RCs
     inline constexpr size_t MIN_ACTIVE_RCS{6};
@@ -49,12 +51,10 @@ namespace llarp
     // gimme all dat RCs
     inline constexpr size_t SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT{0};
     inline constexpr size_t CLIENT_BOOTSTRAP_SOURCE_COUNT{10};
-    // the maximum number of fetch requests we make across all bootstraps
-    inline constexpr int MAX_BOOTSTRAP_FETCH_ATTEMPTS{5};
+
     // if all bootstraps fail, router will trigger re-bootstrapping after this cooldown
-    inline constexpr auto FETCH_INTERVAL{15s};
+    inline constexpr auto FETCH_ATTEMPT_INTERVAL{15s};
     inline constexpr auto FETCH_ATTEMPTS{1};
-    inline constexpr auto FETCH_COOLDOWN_SHORT{10s};
 
     /*  Other Constants  */
     // the maximum number of RC/RID fetches that can pass w/o an unconfirmed rc/rid appearing
@@ -172,13 +172,13 @@ namespace llarp
         void _ensure_skiplist(fs::path nodedbDir);
 
         // TESTNET: NEW MEMBERS FOR BOOTSTRAPPING MANAGED BY EVENTTRIGGER OBJECT
-        std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _needs_initial_fetch{false},
-            _is_fetching{false}, _has_bstrap_connection{false}, _is_connecting_bstrap{false};
+        std::atomic<bool> _needs_bootstrap{false}, _is_bootstrapping{false}, _has_bstrap_connection{false},
+            _is_connecting_bstrap{false};
 
         std::shared_ptr<EventTrigger> _bootstrap_handler;
-        std::shared_ptr<EventTrigger> _rid_fetch_handler;
 
-        std::shared_ptr<EventTrigger> _rc_fetch_handler;
+        std::shared_ptr<EventTicker> _rid_fetch_ticker;
+        std::shared_ptr<EventTicker> _rc_fetch_ticker;
 
         std::shared_ptr<EventTicker> _flush_ticker;
 
@@ -213,6 +213,8 @@ namespace llarp
         void ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> ids = std::nullopt);
 
         bool process_fetched_rids();
+
+        std::vector<RouterID> get_expired_rcs();
 
         // TESTNET: new bootstrap/initial fetch functions
         void fetch_rcs();

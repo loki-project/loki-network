@@ -10,44 +10,14 @@ namespace llarp
     {
         static auto logcat = llarp::log::Cat("path-build-frames");
 
-        inline static std::string serialize(std::vector<std::string>& frames)
+        inline static std::string serialize(std::vector<std::string>&& frames)
         {
-            oxenc::bt_list_producer btlp;
-
-            for (auto& f : frames)
-                btlp.append(std::move(f));
-
-            return std::move(btlp).str();
+            return oxenc::bt_serialize(std::move(frames));
         }
 
-        inline static std::string serialize(std::deque<ustring>& frames)
+        inline static std::vector<std::string> deserialize(std::string_view&& buf)
         {
-            oxenc::bt_list_producer btlp;
-
-            for (auto& f : frames)
-                btlp.append(std::move(f));
-
-            return std::move(btlp).str();
-        }
-
-        inline static std::deque<ustring> deserialize(oxenc::bt_list_consumer& btlc)
-        {
-            try
-            {
-                std::deque<ustring> ret{};
-
-                while (not btlc.is_finished())
-                {
-                    ret.emplace_back(btlc.consume_string<unsigned char>());
-                }
-
-                return ret;
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Exception caught deserializing path frames:{}", e.what());
-                throw;
-            }
+            return oxenc::bt_deserialize<std::vector<std::string>>(buf);
         }
     }  // namespace Frames
 
@@ -149,7 +119,7 @@ namespace llarp
             - Generate the XOR nonce by hashing the symmetric key from DH (`hop.shared`) and truncating
 
             Bt-encoded contents:
-            - 'n' : symmetric nonce used for DH ey-exchange
+            - 'n' : symmetric nonce used for DH key-exchange
             - 's' : shared pubkey used to derive symmetric key
             - 'x' : encrypted payload
                 - 'l' : path lifetime
@@ -199,7 +169,7 @@ namespace llarp
         }
 
         inline static std::tuple<ustring, ustring, ustring> deserialize_hop(
-            oxenc::bt_dict_consumer& btdc, const RouterID& local_pubkey)
+            oxenc::bt_dict_consumer&& btdc, const RouterID& local_pubkey)
         {
             ustring nonce, other_pubkey, hop_payload;
 

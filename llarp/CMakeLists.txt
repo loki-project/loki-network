@@ -72,7 +72,7 @@ lokinet_add_library(lokinet-utils
   ${CMAKE_CURRENT_BINARY_DIR}/constants/version.cpp
   util/buffer.cpp
   util/file.cpp
-  util/logging/buffer.cpp
+#   util/logging/buffer.cpp
   util/mem.cpp
   util/str.cpp
   util/thread/threading.cpp

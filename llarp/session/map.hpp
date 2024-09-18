@@ -32,13 +32,34 @@ namespace llarp
         {
             Lock_t l{session_mutex};
 
-            for (auto& s : _sessions)
+            for (auto& [_, s] : _sessions)
             {
-                if constexpr (std::is_same_v<session::OutboundSession, decltype(s)>)
+                if (std::is_same_v<session::OutboundSession, decltype(s)>)
                 {
                     std::dynamic_pointer_cast<session::OutboundSession>(s)->tick(now);
                 }
             }
+        }
+
+        /** Called by owning object to stop all OutboundSessions, then clear the map. InboundSession objects are not
+            PathHandlers, so they have no paths down which to send a close message.
+         */
+        void stop_sessions(bool send_close = false)
+        {
+            Lock_t l{session_mutex};
+
+            if (send_close)
+            {
+                for (auto& [_, s] : _sessions)
+                {
+                    if (std::is_same_v<session::OutboundSession, decltype(s)>)
+                    {
+                        std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(send_close);
+                    }
+                }
+            }
+
+            _sessions.clear();
         }
 
         /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent

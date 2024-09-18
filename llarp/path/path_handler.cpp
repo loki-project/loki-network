@@ -343,16 +343,18 @@ namespace llarp::path
 
     bool PathHandler::stop(bool)
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
         _running = false;
 
         Lock_t l{paths_mutex};
 
-        for (auto itr = _paths.begin(); itr != _paths.end();)
+        for (auto& [_, p] : _paths)
         {
-            auto& p = itr->second;
             dissociate_hop_ids(p);
-            itr = _paths.erase(itr);
         }
+
+        _paths.clear();
 
         return true;
     }
@@ -536,7 +538,7 @@ namespace llarp::path
     {
         std::vector<std::string> frames(path::MAX_LEN);
         auto& path_hops = path->hops;
-        size_t n_hops = path_hops.size();
+        int n_hops = static_cast<int>(path_hops.size());
         size_t last_len{0};
 
         // each hop will be able to read the outer part of its frame and decrypt
@@ -551,61 +553,43 @@ namespace llarp::path
         // (unless they're adjacent in the path; nothing we can do about that obviously).
 
         // i from n_hops downto 0
-        size_t i = n_hops;
-
-        while (i > 0)
+        for (int i = n_hops - 1; i >= 0; --i)
         {
-            i--;
-            bool lastHop = (i == (n_hops - 1));
+            const auto& next_rid = i == n_hops - 1 ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
 
-            const auto& next_hop = lastHop ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
+            frames[i] = PathBuildMessage::serialize_hop(path_hops[i], next_rid);
 
-            frames[i] = PathBuildMessage::serialize_hop(path_hops[i], next_hop);
-
-            // all frames should be the same length...not sure what that is yet
-            // it may vary if path lifetime is non-default, as that is encoded as an
-            // integer in decimal, but it should be constant for a given path
-            if (last_len != 0)
+            if (last_len and frames[i].size() != last_len)
+            {
                 assert(frames[i].size() == last_len);
+                log::critical(logcat, "All frames must be the same length!");
+            }
 
             last_len = frames[i].size();
 
-            // onion each previously-created frame using the established shared secret and
-            // onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR, which the transit hop
-            // will have recovered after decrypting its frame.
-            // Note: final value passed to crypto::onion is xor factor, but that's for *after* the
-            // onion round to compute the return value, so we don't care about it.
-            for (size_t j = n_hops - 1; j > i; j--)
+            for (auto j = i + 1; j < n_hops; ++j)
             {
-                auto onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
+                auto _onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
 
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frames[j].data()),
                     frames[j].size(),
                     path_hops[i].shared,
-                    onion_nonce,
-                    onion_nonce);
+                    _onion_nonce,
+                    _onion_nonce);
             }
         }
 
-        std::string dummy;
-        dummy.reserve(last_len);
         // append dummy frames; path build request must always have MAX_LEN frames
-        for (i = n_hops; i < path::MAX_LEN; i++)
+        for (size_t i = n_hops; i < path::MAX_LEN; ++i)
         {
             frames[i].resize(last_len);
             randombytes(reinterpret_cast<uint8_t*>(frames[i].data()), frames[i].size());
         }
 
-        auto frame_str = Frames::serialize(frames);
-
-        // TODO: move this to success function to avoid repetition
-        // add_path(path);
-        // _router.path_context()->add_path(path);
-
         _build_stats.attempts++;
 
-        return frame_str;
+        return Frames::serialize(std::move(frames));
     }
 
     bool PathHandler::build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler)

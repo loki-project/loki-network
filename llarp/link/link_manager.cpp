@@ -686,11 +686,11 @@ namespace llarp
         return {};
     }
 
-    void LinkManager::connect_to_random(size_t num_conns, bool client_only)
+    void LinkManager::connect_to_random(size_t num_conns)
     {
-        auto filter = [this, client_only](const RemoteRC& rc) -> bool {
+        auto filter = [this](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
-            auto res = client_only ? not ep->have_client_conn(rid) : not ep->have_conn(rid);
+            auto res = not ep->have_service_conn(rid);
 
             log::trace(logcat, "RID:{} {}", rid, res ? "ACCEPTED" : "REJECTED");
 
@@ -1025,16 +1025,12 @@ namespace llarp
 
         if (source != local)
         {
-            log::critical(
-                logcat,
-                "Relaying FetchRID request (body: {}) to intended target RID:{}",
-                buffer_printer{m.body()},
-                source);
+            log::critical(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", m.body(), source);
 
             auto payload = FetchRIDMessage::serialize(source);
             send_control_message(
                 source, "fetch_rids"s, std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
-                    original.respond(msg.body_str(), msg.is_error());
+                    original.respond(msg.body(), msg.is_error());
                 });
             return;
         }
@@ -1417,25 +1413,24 @@ namespace llarp
 
         try
         {
-            oxenc::bt_list_consumer btlc{m.body()};
-            auto payload_list = Frames::deserialize(btlc);
+            auto frames = Frames::deserialize(m.body());
+            auto n_frames = frames.size();
 
-            if (payload_list.size() != path::MAX_LEN)
+            if (n_frames != path::MAX_LEN)
             {
-                log::info(logcat, "Path build message with wrong number of frames");
-                m.respond(PathBuildMessage::BAD_FRAMES, true);
-                return;
+                log::info(logcat, "Path build message with wrong number of frames: {}", frames.size());
+                return m.respond(PathBuildMessage::BAD_FRAMES, true);
             }
 
-            log::debug(logcat, "Deserializing frame: {}", buffer_printer{payload_list.front()});
-            oxenc::bt_dict_consumer hop_dict{payload_list.front()};
+            log::debug(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
-            auto [nonce, other_pubkey, hop_payload] = PathBuildMessage::deserialize_hop(hop_dict, _router.local_rid());
+            auto [nonce, other_pubkey, hop_payload] =
+                PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.local_rid());
 
             log::debug(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
-            oxenc::bt_dict_consumer hop_info{hop_payload};
 
-            auto hop = path::TransitHop::deserialize_hop(hop_info, from, _router, other_pubkey, nonce);
+            auto hop = path::TransitHop::deserialize_hop(
+                oxenc::bt_dict_consumer{hop_payload}, from, _router, other_pubkey, nonce);
 
             hop->started = _router.now();
             set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
@@ -1449,31 +1444,38 @@ namespace llarp
                 return m.respond(messages::OK_RESPONSE, false);
             }
 
-            // pop our frame, to be randomized after onion step and appended
-            auto end_frame = std::move(payload_list.front());
-            payload_list.pop_front();
+            // rotate our frame to the back
+            std::ranges::rotate(frames, frames.begin() + 1);
+
+            // clear our frame, to be randomized after onion step and appended
+            frames.back().clear();
+
             auto onion_nonce = SymmNonce{nonce.data()} ^ hop->nonceXOR;
 
             // (de-)onion each further frame using the established shared secret and
             // onion_nonce = nonce ^ nonceXOR
             // Note: final value passed to crypto::onion is xor factor, but that's for *after* the
             // onion round to compute the return value, so we don't care about it.
-            for (auto& element : payload_list)
+            // for (auto& element : frames)
+            for (size_t i = 0; i < n_frames - 2; ++i)
             {
-                crypto::onion(element.data(), element.size(), hop->shared, onion_nonce, onion_nonce);
+                crypto::onion(
+                    reinterpret_cast<unsigned char*>(frames[i].data()),
+                    frames[i].size(),
+                    hop->shared,
+                    onion_nonce,
+                    onion_nonce);
             }
 
-            // randomize final frame.  could probably paste our frame on the end and onion it with
-            // the rest, but it gains nothing over random.
-            randombytes(end_frame.data(), end_frame.size());
-            payload_list.push_back(std::move(end_frame));
+            // randomize final frame
+            randombytes(reinterpret_cast<unsigned char*>(frames.back().data()), frames.back().size());
 
             auto upstream = hop->upstream();
 
             send_control_message(
                 std::move(upstream),
                 "path_build",
-                Frames::serialize(payload_list),
+                Frames::serialize(std::move(frames)),
                 [this, transit_hop = std::move(hop), prev_message = std::move(m)](oxen::quic::message m) mutable {
                     if (m)
                     {
@@ -1496,8 +1498,7 @@ namespace llarp
             log::warning(logcat, "Exception: {}: input: {}", e.what(), m.body());
             // We can respond with the exception string, as all exceptions thrown in the parsing functions
             // (ex: `TransitHop::deserialize_hop(...)`) contain the correct response bodies
-            m.respond(e.what(), true);
-            return;
+            return m.respond(e.what(), true);
         }
     }
 
@@ -1510,8 +1511,7 @@ namespace llarp
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            return;
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
     }
 

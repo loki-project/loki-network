@@ -130,29 +130,16 @@ namespace llarp
         return selected;
     }
 
-    // TODO: TESTNET: partition into ::_relay_tick and ::_client_tick to be called by same Router:: methods
     bool NodeDB::tick(std::chrono::milliseconds now)
     {
-        if (_is_bootstrapping)
+        if (_is_bootstrapping or _is_connecting_bstrap)
         {
-            assert(not _is_fetching);
-            assert(not _needs_initial_fetch);  // only set after client succeeds at bootstrapping
             log::trace(logcat, "NodeDB deferring ::tick() to bootstrap fetch completion...");
             return false;
         }
 
-        if (_is_fetching)
-        {
-            assert(not _is_service_node);  // relays should never initial fetch
-            assert(not needs_bootstrap());
-            log::debug(logcat, "NodeDB deferring ::tick() to initial RID fetch completion...");
-            return false;
-        }
-
-        auto n_rcs = num_rcs();
-
         // only enter bootstrap process if we have NOT marked initial fetch as needed
-        if (_needs_bootstrap and not _needs_initial_fetch and not _router.is_bootstrap_seed())
+        if (_needs_bootstrap and not _router.is_bootstrap_seed())
         {
             if (not _has_bstrap_connection)
             {
@@ -195,22 +182,9 @@ namespace llarp
                     logcat,
                     "{} has {} of {} minimum RCs; initiating BootstrapRC fetch...",
                     _is_service_node ? "Relay" : "Client",
-                    n_rcs,
+                    num_rcs(),
                     MIN_ACTIVE_RCS);
                 _bootstrap_handler->begin();
-            }
-
-            return false;
-        }
-
-        if (_needs_initial_fetch)
-        {
-            assert(not _is_service_node);  // move this to be first in the conditional after testing
-
-            if (not _rid_fetch_handler->is_iterating())
-            {
-                log::critical(logcat, "NodeDB initiating initial fetch...");
-                _rid_fetch_handler->begin();
             }
 
             return false;
@@ -296,52 +270,54 @@ namespace llarp
 
     bool NodeDB::process_fetched_rcs(std::set<RemoteRC>& rcs)
     {
-        std::set<RemoteRC> confirmed_set, unconfirmed_set;
+        return _router.loop()->call_get([&]() {
+            std::set<RemoteRC> confirmed_set, unconfirmed_set;
 
-        // the intersection of local RC's and received RC's is our confirmed set
-        std::set_intersection(
-            known_rcs.begin(),
-            known_rcs.end(),
-            rcs.begin(),
-            rcs.end(),
-            std::inserter(confirmed_set, confirmed_set.begin()));
+            // the intersection of local RC's and received RC's is our confirmed set
+            std::set_intersection(
+                known_rcs.begin(),
+                known_rcs.end(),
+                rcs.begin(),
+                rcs.end(),
+                std::inserter(confirmed_set, confirmed_set.begin()));
 
-        // the intersection of the confirmed set and received RC's is our unconfirmed set
-        std::set_intersection(
-            rcs.begin(),
-            rcs.end(),
-            confirmed_set.begin(),
-            confirmed_set.end(),
-            std::inserter(unconfirmed_set, unconfirmed_set.begin()));
+            // the intersection of the confirmed set and received RC's is our unconfirmed set
+            std::set_intersection(
+                rcs.begin(),
+                rcs.end(),
+                confirmed_set.begin(),
+                confirmed_set.end(),
+                std::inserter(unconfirmed_set, unconfirmed_set.begin()));
 
-        // the total number of rcs received
-        const auto num_received = static_cast<double>(rcs.size());
-        // the number of returned "good" rcs (that are also found locally)
-        const auto inter_size = confirmed_set.size();
+            // the total number of rcs received
+            const auto num_received = static_cast<double>(rcs.size());
+            // the number of returned "good" rcs (that are also found locally)
+            const auto inter_size = confirmed_set.size();
 
-        const auto fetch_threshold = (double)inter_size / num_received;
+            const auto fetch_threshold = (double)inter_size / num_received;
 
-        log::info(
-            logcat,
-            "Num received: {}, confirmed (intersection) size: {}, fetch_threshold: {}",
-            num_received,
-            inter_size,
-            fetch_threshold);
+            log::info(
+                logcat,
+                "Num received: {}, confirmed (intersection) size: {}, fetch_threshold: {}",
+                num_received,
+                inter_size,
+                fetch_threshold);
 
-        /** We are checking 2 things here:
-            1) The number of "good" rcs is above MIN_GOOD_RC_FETCH_TOTAL
-            2) The ratio of "good" rcs to total received is above MIN_GOOD_RC_FETCH_THRESHOLD
-        */
-        bool success = false;
-        if (success = (inter_size >= MIN_GOOD_RC_FETCH_TOTAL) and (fetch_threshold >= MIN_GOOD_RC_FETCH_THRESHOLD);
-            success)
-        {
-            // set rcs to be intersection set
-            rcs = std::move(confirmed_set);
-            process_results(std::move(unconfirmed_set), unconfirmed_rcs, known_rcs);
-        }
+            /** We are checking 2 things here:
+                1) The number of "good" rcs is above MIN_GOOD_RC_FETCH_TOTAL
+                2) The ratio of "good" rcs to total received is above MIN_GOOD_RC_FETCH_THRESHOLD
+            */
+            bool success = false;
+            if (success = (inter_size >= MIN_GOOD_RC_FETCH_TOTAL) and (fetch_threshold >= MIN_GOOD_RC_FETCH_THRESHOLD);
+                success)
+            {
+                // set rcs to be intersection set
+                rcs = std::move(confirmed_set);
+                process_results(std::move(unconfirmed_set), unconfirmed_rcs, known_rcs);
+            }
 
-        return success;
+            return success;
+        });
     }
 
     /** We only call into this function after ensuring two conditions:
@@ -362,60 +338,58 @@ namespace llarp
     */
     bool NodeDB::process_fetched_rids()
     {
-        Lock_t l{nodedb_mutex};
+        return _router.loop()->call_get([this]() {
+            std::set<RouterID> union_set, confirmed_set, unconfirmed_set;
 
-        assert(_router.loop()->in_event_loop());
+            for (const auto& [rid, count] : rid_result_counters)
+            {
+                log::info(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
+                if (count >= MIN_RID_FETCH_FREQ)
+                    union_set.insert(rid);
+                else
+                    unconfirmed_set.insert(rid);
+            }
 
-        std::set<RouterID> union_set, confirmed_set, unconfirmed_set;
+            // get the intersection of accepted rids and local rids
+            std::set_intersection(
+                known_rids.begin(),
+                known_rids.end(),
+                union_set.begin(),
+                union_set.end(),
+                std::inserter(confirmed_set, confirmed_set.begin()));
 
-        for (const auto& [rid, count] : rid_result_counters)
-        {
-            log::info(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
-            if (count >= MIN_RID_FETCH_FREQ)
-                union_set.insert(rid);
-            else
-                unconfirmed_set.insert(rid);
-        }
+            // the total number of rids received
+            const auto num_received = (double)(rid_result_counters.size() - fetch_counter);
+            // the total number of received AND accepted rids
+            const auto union_size = union_set.size();
 
-        // get the intersection of accepted rids and local rids
-        std::set_intersection(
-            known_rids.begin(),
-            known_rids.end(),
-            union_set.begin(),
-            union_set.end(),
-            std::inserter(confirmed_set, confirmed_set.begin()));
+            const auto fetch_threshold = (double)union_size / num_received;
 
-        // the total number of rids received
-        const auto num_received = (double)(rid_result_counters.size() - fetch_counter);
-        // the total number of received AND accepted rids
-        const auto union_size = union_set.size();
+            bool success = (fetch_threshold >= GOOD_RID_FETCH_THRESHOLD) and (union_size >= MIN_GOOD_RID_FETCH_TOTAL);
 
-        const auto fetch_threshold = (double)union_size / num_received;
+            log::info(
+                logcat,
+                "Num received: {}, union size: {}, known rid size: {}, fetch_threshold: {}, status: {}",
+                num_received,
+                union_size,
+                known_rids.size(),
+                fetch_threshold,
+                success ? "SUCCESS" : "FAIL");
 
-        bool success = (fetch_threshold >= GOOD_RID_FETCH_THRESHOLD) and (union_size >= MIN_GOOD_RID_FETCH_TOTAL);
+            /** We are checking 2 things here:
+                1) The ratio of received/accepted to total received is above GOOD_RID_FETCH_THRESHOLD.
+                This tells us how well the rid source's sets of rids "agree" with one another
+                2) The total number received is above MIN_RID_FETCH_TOTAL. This ensures that we are
+                receiving a sufficient amount to make a comparison of any sorts
+            */
+            if (success)
+            {
+                process_results(std::move(unconfirmed_set), unconfirmed_rids, known_rids);
+                known_rids.merge(confirmed_set);
+            }
 
-        log::info(
-            logcat,
-            "Num received: {}, union size: {}, known rid size: {}, fetch_threshold: {}, status: {}",
-            num_received,
-            union_size,
-            known_rids.size(),
-            fetch_threshold,
-            success ? "SUCCESS" : "FAIL");
-
-        /** We are checking 2 things here:
-            1) The ratio of received/accepted to total received is above GOOD_RID_FETCH_THRESHOLD.
-               This tells us how well the rid source's sets of rids "agree" with one another
-            2) The total number received is above MIN_RID_FETCH_TOTAL. This ensures that we are
-               receiving a sufficient amount to make a comparison of any sorts
-        */
-        if (success)
-        {
-            process_results(std::move(unconfirmed_set), unconfirmed_rids, known_rids);
-            known_rids.merge(confirmed_set);
-        }
-
-        return success;
+            return success;
+        });
     }
 
     void NodeDB::ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> rids)
@@ -429,6 +403,22 @@ namespace llarp
             fail_sources.insert(source);
     }
 
+    std::vector<RouterID> NodeDB::get_expired_rcs()
+    {
+        return _router.loop()->call_get([this]() {
+            std::vector<RouterID> needed;
+            const auto now = time_point_now();
+
+            for (const auto& [rid, rc] : rc_lookup)
+            {
+                if (now - rc.timestamp() > RouterContact::OUTDATED_AGE)
+                    needed.push_back(rid);
+            }
+
+            return needed;
+        });
+    }
+
     void NodeDB::fetch_rcs()
     {
         if (_router._is_stopping || not _router._is_running)
@@ -437,14 +427,7 @@ namespace llarp
             return stop_rc_fetch(false);
         }
 
-        std::vector<RouterID> needed;
-        const auto now = time_point_now();
-
-        for (const auto& [rid, rc] : rc_lookup)
-        {
-            if (now - rc.timestamp() > RouterContact::OUTDATED_AGE)
-                needed.push_back(rid);
-        }
+        std::vector<RouterID> needed = get_expired_rcs();
 
         auto& src = fetch_source;
         log::info(logcat, "Dispatching FetchRC's request to {} for {} RCs!", src, needed.size());
@@ -487,10 +470,26 @@ namespace llarp
 
     void NodeDB::rc_fetch_result(std::optional<std::set<RemoteRC>> result)
     {
-        if (not result)
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (result)
         {
-            //
+            log::info(logcat, "RC fetching was successful; processing {} returned RCs...", result->size());
+
+            if (process_fetched_rcs(*result))
+            {
+                log::info(logcat, "Accumulated RID's accepted by trust model");
+                return stop_rc_fetch(true);
+            }
+
+            log::warning(logcat, "Accumulated RC's rejected by trust model; reselecting RC fetch source...");
         }
+        else
+        {
+            log::warning(logcat, "RC fetching was unsuccessful; reselecting RC fetch source...");
+        }
+
+        fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
     }
 
     void NodeDB::fetch_rids()
@@ -573,6 +572,7 @@ namespace llarp
 
                     rid_fetch_result(source);
                 });
+
             fetch_counter += 1;
         }
     }
@@ -603,12 +603,12 @@ namespace llarp
                 return stop_rid_fetch(true);
             }
 
-            log::warning(logcat, "Accumulated RID's rejected by trust model, reselecting RID sources...");
+            log::warning(logcat, "Accumulated RID's rejected by trust model; reselecting RID fetch sources...");
         }
         else
         {
             // we had 4 or more failed requests, so we will need to rotate our rid sources
-            log::critical(logcat, "RID fetching found {} failures; reselecting failed RID sources...", n_fails);
+            log::critical(logcat, "RID fetching found {} failures; reselecting failed RID fetch sources...", n_fails);
         }
 
         reselect_router_id_sources(fail_sources);
@@ -622,10 +622,17 @@ namespace llarp
     void NodeDB::start_tickers()
     {
         log::debug(logcat, "NodeDB starting flush ticker...");
+
         _flush_ticker = _router.loop()->call_every(FLUSH_INTERVAL, [this]() {
             log::debug(logcat, "Writing NodeDB contents to disk...");
             save_to_disk();
         });
+
+        // start these immediately if we do not need to bootstrap
+        _rid_fetch_ticker = _router.loop()->call_every(
+            FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
+        _rc_fetch_ticker = _router.loop()->call_every(
+            FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
     }
 
     void NodeDB::configure()
@@ -640,31 +647,27 @@ namespace llarp
 
     void NodeDB::stop_rc_fetch(bool success)
     {
-        _is_fetching = false;
-        _needs_initial_fetch = false;
-        _rc_fetch_handler->halt();
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        _rc_fetch_ticker->stop();
 
         if (success)
-        {
             log::info(logcat, "Client successfully completed RouterContact fetch!");
-        }
         else
             log::warning(logcat, "Client stopped RouterContact fetch without a sucessful response!");
     }
 
     void NodeDB::stop_rid_fetch(bool success)
     {
-        fail_sources.clear();
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
         fetch_counter = 0;
+        fail_sources.clear();
         rid_result_counters.clear();
-        _is_fetching = false;
-        _needs_initial_fetch = false;
-        _rid_fetch_handler->halt();
+        _rid_fetch_ticker->stop();
 
         if (success)
-        {
             log::info(logcat, "Client successfully completed RouterID fetch!");
-        }
         else
             log::warning(logcat, "Client stopped RouterID fetch without a sucessful response!");
     }
@@ -678,12 +681,22 @@ namespace llarp
 
         if (success)
         {
-            _needs_initial_fetch = not _is_service_node;
-            log::critical(
-                logcat,
-                "{} completed processing BootstrapRC fetch{}",
-                _is_service_node ? "Relay" : "Client",
-                _is_service_node ? "!" : "; proceeding to initial fetch...");
+            log::info(logcat, "{} completed processing BootstrapRC fetch!", _is_service_node ? "Relay" : "Client");
+
+            if (not _is_service_node)
+            {
+                if (not _rid_fetch_ticker->is_running())
+                {
+                    log::debug(logcat, "Client starting RID fetch ticker");
+                    _rid_fetch_ticker->start();
+                }
+
+                if (not _rc_fetch_ticker->is_running())
+                {
+                    log::debug(logcat, "Client starting RC fetch ticker");
+                    _rc_fetch_ticker->start();
+                }
+            }
         }
         else
             log::critical(
@@ -764,17 +777,17 @@ namespace llarp
 
     bool NodeDB::reselect_router_id_sources(std::set<RouterID> specific)
     {
-        Lock_t l{nodedb_mutex};
+        return _router.loop()->call_get([&]() {
+            replace_subset(rid_sources, specific, known_rids, RID_SOURCE_COUNT, csrng);
 
-        replace_subset(rid_sources, specific, known_rids, RID_SOURCE_COUNT, csrng);
+            if (auto sz = rid_sources.size(); sz < RID_SOURCE_COUNT)
+            {
+                log::warning(logcat, "Insufficient RID's (count: {}) held locally for fetching!", sz);
+                return false;
+            }
 
-        if (auto sz = rid_sources.size(); sz < RID_SOURCE_COUNT)
-        {
-            log::warning(logcat, "Insufficient RID's (count: {}) held locally for fetching!", sz);
-            return false;
-        }
-
-        return true;
+            return true;
+        });
     }
 
     void NodeDB::set_router_whitelist(
@@ -863,9 +876,7 @@ namespace llarp
         log::debug(logcat, "NodeDB creating bootstrap event handler...");
 
         _bootstrap_handler = EventTrigger::make(
-            _router.loop(), FETCH_INTERVAL, [this]() { bootstrap(); }, FETCH_ATTEMPTS);
-        _rid_fetch_handler = EventTrigger::make(
-            _router.loop(), FETCH_INTERVAL, [this]() { fetch_rids(); }, FETCH_ATTEMPTS);
+            _router.loop(), FETCH_ATTEMPT_INTERVAL, [this]() { bootstrap(); }, FETCH_ATTEMPTS);
     }
 
     void NodeDB::load_from_disk()
@@ -933,18 +944,18 @@ namespace llarp
             _bootstrap_handler.reset();
         }
 
-        if (_rid_fetch_handler)
+        if (_rid_fetch_ticker)
         {
-            log::debug(logcat, "NodeDB clearing rid fetch handler...");
-            _rid_fetch_handler->halt();
-            _rid_fetch_handler.reset();
+            log::debug(logcat, "NodeDB clearing rid fetch ticker...");
+            _rid_fetch_ticker->stop();
+            _rid_fetch_ticker.reset();
         }
 
-        if (_rc_fetch_handler)
+        if (_rc_fetch_ticker)
         {
-            log::debug(logcat, "NodeDB clearing rc fetch handler...");
-            _rc_fetch_handler->halt();
-            _rc_fetch_handler.reset();
+            log::debug(logcat, "NodeDB clearing rc fetch ticker...");
+            _rc_fetch_ticker->stop();
+            _rc_fetch_ticker.reset();
         }
 
         if (_flush_ticker)

@@ -242,26 +242,31 @@ namespace llarp::session
 
     bool OutboundSession::stop(bool send_close)
     {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
         _running = false;
 
-        Lock_t l{paths_mutex};
-
-        for (auto itr = _paths.begin(); itr != _paths.end();)
+        if (send_close)
         {
-            auto& p = itr->second;
+            std::promise<void> p;
+            auto f = p.get_future();
 
-            dissociate_hop_ids(p);
+            _router.loop()->call([&]() mutable {
+                Lock_t l{paths_mutex};
 
-            if (send_close)
-            {
-                log::info(logcat, "Sending close_exit on path {}", p->to_string());
-                send_path_close(p);
-            }
+                for (auto& [_, p] : _paths)
+                {
+                    log::debug(logcat, "Sending close message on path {}", p->to_string());
+                    send_path_close(p);
+                }
+            });
 
-            itr = _paths.erase(itr);
+            f.get();
+            log::info(logcat, "All paths dispatched path close message!");
         }
 
-        return true;
+        // base class dtor clears path map
+        return path::PathHandler::stop(send_close);
     }
 
     void OutboundSession::build_more(size_t n)

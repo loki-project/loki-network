@@ -68,6 +68,8 @@ namespace llarp
 
             void configure();
 
+            bool stop(bool send_close = false) override;
+
             void build_more(size_t n = 0) override;
 
             const std::shared_ptr<EventLoop>& loop();

@@ -812,7 +812,7 @@ namespace llarp
         if (should_report_stats(now))
             report_stats();
 
-        if (auto should_proceed = _node_db->tick(now); should_proceed == false)
+        if (not _node_db->tick(now))
         {
             log::trace(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
@@ -849,7 +849,7 @@ namespace llarp
         }
 
         if (num_router_conns < num_rcs)
-        {   // TODO: change the boolean in ::connect_to_random
+        {
             log::critical(
                 logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
             _link_manager->connect_to_random(FULL_MESH_ITERATION);
@@ -860,7 +860,6 @@ namespace llarp
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        // auto now_timepoint = std::chrono::system_clock::time_point(now);
         llarp::sys::service_manager->report_periodic_stats();
         _pathbuild_limiter.Decay(now);
         // _router_profiling.tick();
@@ -873,20 +872,6 @@ namespace llarp
             log::debug(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
-
-        // periodically fetch updated RCs
-        // if (now_timepoint - last_rc_fetch > RC_UPDATE_INTERVAL)
-        // {
-        //     log::info(logcat, "Client beginning RC fetch from network");
-        //     node_db()->fetch_rcs();
-        // }
-
-        // // periodically fetch updated RouterID list
-        // if (now_timepoint - last_rid_fetch > ROUTERID_UPDATE_INTERVAL)
-        // {
-        //     log::critical(logcat, "Client beginning RID fetch from network");
-        //     node_db()->fetch_rids_old();
-        // }
 
         _link_manager->check_persisting_conns(now);
 
@@ -1155,6 +1140,7 @@ namespace llarp
 
         log::warning(logcat, "Hard stopping router");
         llarp::sys::service_manager->stopping();
+        _session_endpoint->stop();
         stop_outbounds();
         close();
     }
@@ -1180,7 +1166,7 @@ namespace llarp
         log::debug(logcat, "stopping service manager...");
         llarp::sys::service_manager->stopping();
 
-        // TESTNET: close all sessions and exit functions here
+        _session_endpoint->stop(true);
 
         _loop->call_later(200ms, [this] { cleanup(); });
     }
