@@ -24,78 +24,59 @@ namespace llarp
     static auto logcat = log::Cat("crypto");
 
     static bool dh(
-        llarp::SharedSecret& out,
+        SharedSecret& out,
         const PubKey& client_pk,
         const PubKey& server_pk,
         const uint8_t* themPub,
         const SecretKey& usSec)
     {
-        llarp::SharedSecret shared;
+        SharedSecret shared;
         crypto_generichash_state h;
 
         if (crypto_scalarmult_curve25519(shared.data(), usSec.data(), themPub))
         {
             return false;
         }
+
+        log::info(
+            logcat,
+            "client-pk: {}, server-pk: {}, shared secret: {}",
+            client_pk.to_string(),
+            server_pk.to_string(),
+            shared.to_string());
+
         crypto_generichash_blake2b_init(&h, nullptr, 0U, shared.size());
-        crypto_generichash_blake2b_update(&h, client_pk.data(), 32);
-        crypto_generichash_blake2b_update(&h, server_pk.data(), 32);
-        crypto_generichash_blake2b_update(&h, shared.data(), 32);
-        crypto_generichash_blake2b_final(&h, out.data(), shared.size());
+        crypto_generichash_blake2b_update(&h, client_pk.data(), client_pk.size());
+        crypto_generichash_blake2b_update(&h, server_pk.data(), server_pk.size());
+        crypto_generichash_blake2b_update(&h, shared.data(), shared.size());
+        crypto_generichash_blake2b_final(&h, out.data(), out.size());
         return true;
     }
 
-    static bool dh(
-        uint8_t* out, const uint8_t* client_pk, const uint8_t* server_pk, const uint8_t* themPub, const uint8_t* usSec)
+    static bool dh_client_priv(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
     {
-        llarp::SharedSecret shared;
-        crypto_generichash_state h;
-
-        if (crypto_scalarmult_curve25519(shared.data(), usSec, themPub))
-        {
-            return false;
-        }
-        crypto_generichash_blake2b_init(&h, nullptr, 0U, shared.size());
-        crypto_generichash_blake2b_update(&h, client_pk, 32);
-        crypto_generichash_blake2b_update(&h, server_pk, 32);
-        crypto_generichash_blake2b_update(&h, shared.data(), 32);
-        crypto_generichash_blake2b_final(&h, out, shared.size());
-        return true;
-    }
-
-    static bool dh_client_priv(llarp::SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
-    {
-        llarp::SharedSecret dh_result;
+        SharedSecret dh_result;
 
         if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk))
         {
-            return crypto_generichash_blake2b(shared.data(), 32, n.data(), 32, dh_result.data(), 32) != -1;
+            return crypto_generichash_blake2b(
+                       shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
+                != -1;
         }
 
         log::warning(logcat, "crypto::dh_client - dh failed");
         return false;
     }
 
-    static bool dh_server_priv(llarp::SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    static bool dh_server_priv(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
     {
-        llarp::SharedSecret dh_result;
+        SharedSecret dh_result;
 
         if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk))
         {
-            return crypto_generichash_blake2b(shared.data(), 32, n.data(), n.size(), dh_result.data(), 32) != -1;
-        }
-
-        log::warning(logcat, "crypto::dh_server - dh failed");
-        return false;
-    }
-
-    static bool dh_server_priv(uint8_t* shared, const uint8_t* pk, const uint8_t* sk, const uint8_t* nonce)
-    {
-        llarp::SharedSecret dh_result;
-
-        if (dh(dh_result.data(), pk, sk, pk, sk))
-        {
-            return crypto_generichash_blake2b(shared, 32, nonce, 24, dh_result.data(), 32) != -1;
+            return crypto_generichash_blake2b(
+                       shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
+                != -1;
         }
 
         log::warning(logcat, "crypto::dh_server - dh failed");
@@ -155,20 +136,15 @@ namespace llarp
         return nonce ^ xor_factor;
     }
 
-    bool crypto::dh_client(llarp::SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    bool crypto::dh_client(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
     {
         return dh_client_priv(shared, pk, sk, n);
     }
+
     /// path dh relay side
-    bool crypto::dh_server(llarp::SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    bool crypto::dh_server(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
     {
         return dh_server_priv(shared, pk, sk, n);
-    }
-
-    bool crypto::dh_server(
-        uint8_t* shared_secret, const uint8_t* other_pk, const uint8_t* local_pk, const uint8_t* nonce)
-    {
-        return dh_server_priv(shared_secret, other_pk, local_pk, nonce);
     }
 
     bool crypto::shorthash(ShortHash& result, uint8_t* buf, size_t size)
@@ -269,11 +245,11 @@ namespace llarp
     }
 
     void crypto::derive_encrypt_outer_wrapping(
-        SecretKey& shared_key,
+        const SecretKey& shared_key,
         SharedSecret& secret,
         const SymmNonce& nonce,
         const RouterID& remote,
-        ustring_view payload)
+        uspan payload)
     {
         // derive shared key
         if (!crypto::dh_client(secret, remote, shared_key, nonce))
@@ -284,7 +260,7 @@ namespace llarp
         }
 
         // encrypt hop_info (mutates in-place)
-        if (!crypto::xchacha20(const_cast<unsigned char*>(payload.data()), payload.size(), secret, nonce))
+        if (!crypto::xchacha20(payload.data(), payload.size(), secret, nonce))
         {
             auto err = "Payload symmetric encryption failed!"s;
             log::warning(logcat, "{}", err);
@@ -293,11 +269,11 @@ namespace llarp
     }
 
     void crypto::derive_decrypt_outer_wrapping(
-        const RouterID& local, const RouterID& remote, const SymmNonce& nonce, ustring_view encrypted)
+        const SecretKey& local_sk, const PubKey& remote, const SymmNonce& nonce, uspan encrypted)
     {
         SharedSecret shared;
         // derive shared secret using ephemeral pubkey and our secret key (and nonce)
-        if (!crypto::dh_server(shared.data(), remote.data(), local.data(), nonce.data()))
+        if (!crypto::dh_server(shared, remote, local_sk, nonce))
         {
             auto err = "DH server failed during shared key derivation!"s;
             log::warning(logcat, "{}", err);
@@ -305,12 +281,14 @@ namespace llarp
         }
 
         // decrypt hop_info (mutates in-place)
-        if (!crypto::xchacha20(const_cast<unsigned char*>(encrypted.data()), encrypted.size(), shared, nonce))
+        if (!crypto::xchacha20(encrypted.data(), encrypted.size(), shared, nonce))
         {
             auto err = "Payload symmetric decryption failed!"s;
             log::warning(logcat, "{}", err);
             throw std::runtime_error{err};
         }
+
+        log::debug(logcat, "Shared secret: {}", shared.to_string());
     }
 
     /// clamp a 32 byte ec point
@@ -449,7 +427,7 @@ namespace llarp
         randombytes((unsigned char*)ptr, sz);
     }
 
-    void crypto::identity_keygen(llarp::SecretKey& keys)
+    void crypto::identity_keygen(SecretKey& keys)
     {
         PubKey pk;
         int result = crypto_sign_keypair(pk.data(), keys.data());
@@ -458,11 +436,11 @@ namespace llarp
         assert(pk == sk_pk);
     }
 
-    bool crypto::check_identity_privkey(const llarp::SecretKey& keys)
+    bool crypto::check_identity_privkey(const SecretKey& keys)
     {
         AlignedBuffer<crypto_sign_SEEDBYTES> seed;
-        llarp::PubKey pk;
-        llarp::SecretKey sk;
+        PubKey pk;
+        SecretKey sk;
         if (crypto_sign_ed25519_sk_to_seed(seed.data(), keys.data()) == -1)
             return false;
         if (crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data()) == -1)
@@ -470,7 +448,7 @@ namespace llarp
         return keys.to_pubkey() == pk && sk == keys;
     }
 
-    void crypto::encryption_keygen(llarp::SecretKey& keys)
+    void crypto::encryption_keygen(SecretKey& keys)
     {
         auto d = keys.data();
         randbytes(d, 32);
@@ -531,7 +509,7 @@ namespace llarp
     }
 
     // Called during static initialization to initialize libsodium and ntru.  (The CSRNG return is
-    // not useful, but just here to get this called during static initialization of `llarp::csrng`).
+    // not useful, but just here to get this called during static initialization of `csrng`).
     static CSRNG _initialize_crypto()
     {
         if (sodium_init() == -1)

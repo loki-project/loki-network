@@ -10,7 +10,7 @@ namespace llarp::path
     static auto logcat = log::Cat("transit-hop");
 
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
-        oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, ustring symmkey, ustring symmnonce)
+        oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, const PubKey& remote_pk, const SymmNonce& nonce)
     {
         std::shared_ptr<TransitHop> hop;
 
@@ -38,7 +38,7 @@ namespace llarp::path
         if (r.path_context()->has_transit_hop(hop))
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
-        if (!crypto::dh_server(hop->shared.data(), symmkey.data(), r.local_rid().data(), symmnonce.data()))
+        if (!crypto::dh_server(hop->shared, remote_pk, r.identity(), nonce))
             throw std::runtime_error{PathBuildMessage::BAD_CRYPTO};
 
         // generate hash of hop key for nonce mutation

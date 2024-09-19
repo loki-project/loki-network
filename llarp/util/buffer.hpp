@@ -3,6 +3,8 @@
 #include "common.hpp"
 #include "mem.h"
 
+#include <oxenc/common.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -19,8 +21,10 @@
 
 namespace llarp
 {
+    using uspan = std::span<uint8_t>;
     using ustring = std::basic_string<uint8_t>;
     using ustring_view = std::basic_string_view<uint8_t>;
+    using bspan = std::span<std::byte>;
     using bstring = std::basic_string<std::byte>;
     using bstring_view = std::basic_string_view<std::byte>;
 
@@ -76,6 +80,12 @@ namespace llarp
     inline ustring_view to_usv(std::string_view v)
     {
         return {reinterpret_cast<const uint8_t*>(v.data()), v.size()};
+    }
+
+    template <oxenc::basic_char T>
+    inline uspan to_uspan(std::basic_string<T>& v)
+    {
+        return uspan{reinterpret_cast<uint8_t*>(v.data()), v.size()};
     }
 }  // namespace llarp
 

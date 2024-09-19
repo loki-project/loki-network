@@ -59,7 +59,7 @@ namespace llarp
                 SharedSecret shared;
                 auto nonce = SymmNonce::make_random();
 
-                crypto::derive_encrypt_outer_wrapping(shared_key, shared, nonce, remote, to_usv(payload));
+                crypto::derive_encrypt_outer_wrapping(shared_key, shared, nonce, remote, to_uspan(payload));
 
                 oxenc::bt_dict_producer btdp;
 
@@ -77,7 +77,7 @@ namespace llarp
         };
 
         inline static std::tuple<NetworkAddress, HopID, service::SessionTag, bool, std::optional<std::string>>
-        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const RouterID& local)
+        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const SecretKey& local)
         {
             SymmNonce nonce;
             RouterID shared_pubkey;
@@ -89,7 +89,7 @@ namespace llarp
                 shared_pubkey = RouterID{btdc.require<std::string>("s")};
                 payload = btdc.require<ustring>("x");
 
-                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, payload);
+                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, to_uspan(payload));
 
                 {
                     RouterID remote;

@@ -36,7 +36,7 @@ namespace llarp
 
         /// path dh relay side
         bool dh_server(SharedSecret&, const PubKey&, const SecretKey&, const SymmNonce&);
-        bool dh_server(uint8_t* shared_secret, const uint8_t* other_pk, const uint8_t* local_pk, const uint8_t* nonce);
+        bool dh_server(uint8_t* shared_secret, const uint8_t* other_pk, const uint8_t* local_sk, const uint8_t* nonce);
 
         /// blake2b 256 bit
         bool shorthash(ShortHash&, uint8_t*, size_t size);
@@ -64,17 +64,17 @@ namespace llarp
         /// the given payload in-place. Will throw on failure of either the client DH derivation or the xchacha20
         /// payload mutation
         void derive_encrypt_outer_wrapping(
-            SecretKey& shared_key,
+            const SecretKey& shared_key,
             SharedSecret& secret,
             const SymmNonce& nonce,
             const RouterID& remote,
-            ustring_view payload);
+            uspan payload);
 
         /// Used in receiving path-build and session initiation messages. Derives a shared secret key using an ephemeral
         /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
         /// the server DH derivation or the xchacha20 payload mutation
         void derive_decrypt_outer_wrapping(
-            const RouterID& local, const RouterID& remote, const SymmNonce& nonce, ustring_view encrypted);
+            const SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.

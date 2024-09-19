@@ -628,11 +628,14 @@ namespace llarp
             save_to_disk();
         });
 
-        // start these immediately if we do not need to bootstrap
-        _rid_fetch_ticker = _router.loop()->call_every(
-            FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
-        _rc_fetch_ticker = _router.loop()->call_every(
-            FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
+        if (not _is_service_node)
+        {
+            // start these immediately if we do not need to bootstrap
+            _rid_fetch_ticker = _router.loop()->call_every(
+                FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
+            _rc_fetch_ticker = _router.loop()->call_every(
+                FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
+        }
     }
 
     void NodeDB::configure()

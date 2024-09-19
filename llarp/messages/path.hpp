@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/util/logging/buffer.hpp>
 
 namespace llarp
 {
@@ -131,6 +132,17 @@ namespace llarp
         */
         inline static std::string serialize_hop(path::PathHopConfig& hop, const RouterID& nextHop)
         {
+            SecretKey a, b;
+            crypto::encryption_keygen(a);
+            crypto::encryption_keygen(b);
+            auto test_nonce = SymmNonce::make_random();
+
+            SharedSecret client_shared, server_shared;
+            crypto::dh_client(client_shared, b.to_pubkey(), a, test_nonce);
+            crypto::dh_server(server_shared, a.to_pubkey(), b, test_nonce);
+            log::critical(
+                logcat, "Client shared: {}, server shared: {}", client_shared.to_string(), server_shared.to_string());
+
             std::string hop_payload;
 
             {
@@ -150,14 +162,23 @@ namespace llarp
             hop.nonce = SymmNonce::make_random();
 
             crypto::derive_encrypt_outer_wrapping(
-                shared_key, hop.shared, hop.nonce, hop.rc.router_id(), to_usv(hop_payload));
+                shared_key, hop.shared, hop.nonce, hop.rc.router_id(), to_uspan(hop_payload));
 
             // generate nonceXOR value self->hop->pathKey
-            ShortHash hash;
-            crypto::shorthash(hash, hop.shared.data(), hop.shared.size());
+            ShortHash xor_hash;
+            crypto::shorthash(xor_hash, hop.shared.data(), hop.shared.size());
 
-            hop.nonceXOR = hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+            hop.nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
             hop.upstream = nextHop;
+
+            log::debug(
+                logcat,
+                "Hop serialized; nonce: {}, remote router_id: {}, shared pk: {}, shared secret: {}, payload: {}",
+                hop.nonce.to_string(),
+                hop.rc.router_id().to_string(),
+                shared_key.to_pubkey().to_string(),
+                hop.shared.to_string(),
+                buffer_printer{hop_payload});
 
             oxenc::bt_dict_producer btdp;
 
@@ -168,15 +189,17 @@ namespace llarp
             return std::move(btdp).str();
         }
 
-        inline static std::tuple<ustring, ustring, ustring> deserialize_hop(
-            oxenc::bt_dict_consumer&& btdc, const RouterID& local_pubkey)
+        inline static std::tuple<SymmNonce, PubKey, ustring> deserialize_hop(
+            oxenc::bt_dict_consumer&& btdc, const SecretKey& local_sk)
         {
-            ustring nonce, other_pubkey, hop_payload;
+            SymmNonce nonce;
+            PubKey remote_pk;
+            ustring hop_payload;
 
             try
             {
-                nonce = btdc.require<ustring>("n");
-                other_pubkey = btdc.require<ustring>("s");
+                nonce.from_string(btdc.require<std::string_view>("n"));
+                remote_pk.from_string(btdc.require<std::string_view>("s"));
                 hop_payload = btdc.require<ustring>("x");
             }
             catch (const std::exception& e)
@@ -185,24 +208,31 @@ namespace llarp
                 throw;
             }
 
-            SharedSecret shared;
-            // derive shared secret using ephemeral pubkey and our secret key (and nonce)
-            if (!crypto::dh_server(shared.data(), other_pubkey.data(), local_pubkey.data(), nonce.data()))
+            log::debug(
+                logcat,
+                "Hop deserialized; nonce: {}, remote pk: {}, payload: {}",
+                nonce.to_string(),
+                remote_pk.to_string(),
+                buffer_printer{hop_payload});
+
+            try
             {
-                log::info(logcat, "DH server initialization failed during path build");
+                crypto::derive_decrypt_outer_wrapping(local_sk, remote_pk, nonce, to_uspan(hop_payload));
+            }
+            catch (...)
+            {
+                log::info(logcat, "Failed to derive and decrypt outer wrapping!");
                 throw std::runtime_error{BAD_CRYPTO};
             }
 
-            // decrypt frame with our hop info
-            if (!crypto::xchacha20(hop_payload.data(), hop_payload.size(), shared.data(), nonce.data()))
-            {
-                log::info(logcat, "Decrypt failed on path build request");
-                throw std::runtime_error{BAD_CRYPTO};
-            }
+            log::debug(
+                logcat,
+                "Hop decrypted; nonce: {}, remote pk: {}, payload: {}",
+                nonce.to_string(),
+                remote_pk.to_string(),
+                buffer_printer{hop_payload});
 
-            log::debug(logcat, "Hop deserialized...");
-
-            return {std::move(nonce), std::move(other_pubkey), std::move(hop_payload)};
+            return {std::move(nonce), std::move(remote_pk), std::move(hop_payload)};
         }
     }  // namespace PathBuildMessage
 }  // namespace llarp

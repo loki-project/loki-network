@@ -1424,13 +1424,17 @@ namespace llarp
 
             log::debug(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
-            auto [nonce, other_pubkey, hop_payload] =
-                PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.local_rid());
+            SymmNonce nonce;
+            PubKey remote_pk;
+            ustring hop_payload;
+
+            std::tie(nonce, remote_pk, hop_payload) =
+                PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
 
             log::debug(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
 
             auto hop = path::TransitHop::deserialize_hop(
-                oxenc::bt_dict_consumer{hop_payload}, from, _router, other_pubkey, nonce);
+                oxenc::bt_dict_consumer{hop_payload}, from, _router, remote_pk, nonce);
 
             hop->started = _router.now();
             set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
@@ -1450,14 +1454,14 @@ namespace llarp
             // clear our frame, to be randomized after onion step and appended
             frames.back().clear();
 
-            auto onion_nonce = SymmNonce{nonce.data()} ^ hop->nonceXOR;
+            auto onion_nonce = nonce ^ hop->nonceXOR;
 
             // (de-)onion each further frame using the established shared secret and
             // onion_nonce = nonce ^ nonceXOR
             // Note: final value passed to crypto::onion is xor factor, but that's for *after* the
             // onion round to compute the return value, so we don't care about it.
             // for (auto& element : frames)
-            for (size_t i = 0; i < n_frames - 2; ++i)
+            for (size_t i = 0; i < n_frames - 1; ++i)
             {
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frames[i].data()),
@@ -1965,7 +1969,7 @@ namespace llarp
             oxenc::bt_dict_consumer btdc{m.body()};
 
             std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
-                InitiateSession::decrypt_deserialize(btdc, _router.local_rid());
+                InitiateSession::decrypt_deserialize(btdc, _router.identity());
 
             if (not _router.session_endpoint()->validate(initiator, maybe_auth))
             {

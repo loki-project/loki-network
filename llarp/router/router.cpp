@@ -180,6 +180,16 @@ namespace llarp
         else
             log::debug(logcat, "Main event loop ticker already auto-started!");
 
+        if (not _systemd_ticker->is_running())
+        {
+            if (not _systemd_ticker->start())
+                throw std::runtime_error{"Failed to start system service report ticker!"};
+
+            log::debug(logcat, "Successfully started system service report ticker");
+        }
+        else
+            log::debug(logcat, "System service report ticker already auto-started!");
+
         _node_db->start_tickers();
 
         if (is_service_node())
@@ -807,7 +817,7 @@ namespace llarp
             return;
         }
 
-        llarp::sys::service_manager->report_periodic_stats();
+        sys::service_manager->report_periodic_stats();
 
         if (should_report_stats(now))
             report_stats();
@@ -980,6 +990,9 @@ namespace llarp
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, false, true);
+
+        _systemd_ticker = _loop->call_every(
+            SERVICE_MANAGER_REPORT_INTERVAL, []() { sys::service_manager->report_periodic_stats(); }, false, true);
 
         _is_running.store(true);
 

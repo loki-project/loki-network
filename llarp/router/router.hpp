@@ -67,6 +67,8 @@ namespace llarp
 
     inline constexpr std::chrono::milliseconds DECOMM_WARNING_INTERVAL{5min};
 
+    inline constexpr auto SERVICE_MANAGER_REPORT_INTERVAL{5s};
+
     struct Contacts;
 
     struct Router : std::enable_shared_from_this<Router>
@@ -134,6 +136,7 @@ namespace llarp
         std::shared_ptr<NodeDB> _node_db;
 
         std::shared_ptr<EventTicker> _loop_ticker;
+        std::shared_ptr<EventTicker> _systemd_ticker;
         std::shared_ptr<EventTicker> _reachability_ticker;
 
         const oxenmq::TaggedThreadID _disk_thread;
@@ -189,13 +192,6 @@ namespace llarp
 
         std::chrono::milliseconds _gossip_interval;
 
-        std::chrono::system_clock::time_point last_rc_gossip{std::chrono::system_clock::time_point::min()};
-        std::chrono::system_clock::time_point next_rc_gossip{last_rc_gossip};
-        std::chrono::system_clock::time_point next_initial_fetch_attempt{last_rc_gossip};
-        std::chrono::system_clock::time_point last_rc_fetch{last_rc_gossip};
-        std::chrono::system_clock::time_point last_rid_fetch{last_rc_gossip};
-        std::chrono::system_clock::time_point next_bootstrap_attempt{last_rc_gossip};
-
         void _relay_tick(std::chrono::milliseconds now);
 
         void _client_tick(std::chrono::milliseconds now);
@@ -203,9 +199,6 @@ namespace llarp
         void tick();
 
       public:
-        /// call internal router ticker
-        // void tick_old();
-
         void start();
 
         bool fully_meshed() const;
@@ -352,21 +345,6 @@ namespace llarp
         void persist_connection_until(const RouterID& remote, std::chrono::milliseconds until);
 
         bool ensure_identity();
-
-        bool ensure_encryption_key();
-
-        // const uint8_t* pubkey() const
-        // {
-        //     return seckey_to_pubkey(_identity);
-        // }
-
-        /// send to remote router or queue for sending
-        /// returns false on overflow
-        /// returns true on successful queue
-        /// NOT threadsafe
-        /// MUST be called in the logic thread
-        // bool // SendToOrQueue(
-        //     const RouterID& remote, const AbstractLinkMessage& msg, SendStatusHandler handler);
 
         bool send_data_message(const RouterID& remote, std::string payload);
 
