@@ -237,7 +237,7 @@ namespace llarp
 
         const std::shared_ptr<KeyManager>& key_manager() const { return _key_manager; }
 
-        const SecretKey& identity() const { return _key_manager->identity_key; }
+        const Ed25519SecretKey& identity() const { return _key_manager->identity_key; }
 
         const RouterID& router_id() const { return _key_manager->public_key; }
 

@@ -24,7 +24,7 @@ namespace llarp
 
             /// blocking request identity key from lokid
             /// throws on failure
-            SecretKey obtain_identity_key();
+            Ed25519SecretKey obtain_identity_key();
 
             /// get what the current block height is according to oxend
             uint64_t block_height() const { return _block_height; }

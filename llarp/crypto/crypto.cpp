@@ -28,17 +28,17 @@ namespace llarp
         const PubKey& client_pk,
         const PubKey& server_pk,
         const uint8_t* themPub,
-        const SecretKey& usSec)
+        const Ed25519Hash& local_edhash)
     {
         SharedSecret shared;
         crypto_generichash_state h;
 
-        if (crypto_scalarmult_curve25519(shared.data(), usSec.data(), themPub))
+        if (crypto_scalarmult_ed25519(shared.data(), local_edhash.scalar().data(), themPub))
         {
             return false;
         }
 
-        log::info(
+        log::trace(
             logcat,
             "client-pk: {}, server-pk: {}, shared secret: {}",
             client_pk.to_string(),
@@ -53,11 +53,11 @@ namespace llarp
         return true;
     }
 
-    static bool dh_client_priv(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    static bool dh_client_priv(SharedSecret& shared, const PubKey& pk, const Ed25519SecretKey& sk, const SymmNonce& n)
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk))
+        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk.to_edhash()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -68,11 +68,11 @@ namespace llarp
         return false;
     }
 
-    static bool dh_server_priv(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    static bool dh_server_priv(SharedSecret& shared, const PubKey& pk, const Ed25519SecretKey& sk, const SymmNonce& n)
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk))
+        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk.to_edhash()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -136,13 +136,13 @@ namespace llarp
         return nonce ^ xor_factor;
     }
 
-    bool crypto::dh_client(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    bool crypto::dh_client(SharedSecret& shared, const PubKey& pk, const Ed25519SecretKey& sk, const SymmNonce& n)
     {
         return dh_client_priv(shared, pk, sk, n);
     }
 
     /// path dh relay side
-    bool crypto::dh_server(SharedSecret& shared, const PubKey& pk, const SecretKey& sk, const SymmNonce& n)
+    bool crypto::dh_server(SharedSecret& shared, const PubKey& pk, const Ed25519SecretKey& sk, const SymmNonce& n)
     {
         return dh_server_priv(shared, pk, sk, n);
     }
@@ -162,7 +162,7 @@ namespace llarp
         return crypto_generichash_blake2b(result, HASHSIZE, buff.base, buff.sz, nullptr, 0) != -1;
     }
 
-    bool crypto::sign(Signature& sig, const SecretKey& secret, uint8_t* buf, size_t size)
+    bool crypto::sign(Signature& sig, const Ed25519SecretKey& secret, uint8_t* buf, size_t size)
     {
         return crypto_sign_detached(sig.data(), nullptr, buf, size, secret.data()) != -1;
     }
@@ -172,16 +172,14 @@ namespace llarp
         return crypto_sign_detached(sig, nullptr, buf, size, sk) != -1;
     }
 
-    bool crypto::sign(uint8_t* sig, const SecretKey& sk, ustring_view buf)
+    bool crypto::sign(uint8_t* sig, const Ed25519SecretKey& sk, ustring_view buf)
     {
         return crypto_sign_detached(sig, nullptr, buf.data(), buf.size(), sk.data()) != -1;
     }
 
-    bool crypto::sign(Signature& sig, const PrivateKey& privkey, uint8_t* buf, size_t size)
+    bool crypto::sign(Signature& sig, const Ed25519Hash& privkey, uint8_t* buf, size_t size)
     {
-        PubKey pubkey;
-
-        privkey.to_pubkey(pubkey);
+        PubKey pubkey = privkey.to_pubkey();
 
         crypto_hash_sha512_state hs;
         unsigned char nonce[64];
@@ -193,7 +191,7 @@ namespace llarp
         // PrivateKeys will come from a hash of the root key's s concatenated with
         // the derivation hash.
         crypto_hash_sha512_init(&hs);
-        crypto_hash_sha512_update(&hs, privkey.signing_hash(), 32);
+        crypto_hash_sha512_update(&hs, privkey.signing_hash().data(), 32);
         crypto_hash_sha512_update(&hs, buf, size);
         crypto_hash_sha512_final(&hs, nonce);
         crypto_core_ed25519_scalar_reduce(nonce, nonce);
@@ -245,7 +243,7 @@ namespace llarp
     }
 
     void crypto::derive_encrypt_outer_wrapping(
-        const SecretKey& shared_key,
+        const Ed25519SecretKey& shared_key,
         SharedSecret& secret,
         const SymmNonce& nonce,
         const RouterID& remote,
@@ -269,7 +267,7 @@ namespace llarp
     }
 
     void crypto::derive_decrypt_outer_wrapping(
-        const SecretKey& local_sk, const PubKey& remote, const SymmNonce& nonce, uspan encrypted)
+        const Ed25519SecretKey& local_sk, const PubKey& remote, const SymmNonce& nonce, uspan encrypted)
     {
         SharedSecret shared;
         // derive shared secret using ephemeral pubkey and our secret key (and nonce)
@@ -288,7 +286,7 @@ namespace llarp
             throw std::runtime_error{err};
         }
 
-        log::debug(logcat, "Shared secret: {}", shared.to_string());
+        log::trace(logcat, "Shared secret: {}", shared.to_string());
     }
 
     /// clamp a 32 byte ec point
@@ -354,7 +352,7 @@ namespace llarp
     }
 
     bool crypto::derive_subkey_private(
-        PrivateKey& out_key, const SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
+        Ed25519Hash& out_key, const Ed25519SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
     {
         // Derives a private subkey from a root key.
         //
@@ -401,9 +399,7 @@ namespace llarp
         h[31] &= 63;
         h[31] |= 64;
 
-        PrivateKey a;
-        if (!root_key.to_privkey(a))
-            return false;
+        Ed25519Hash a = root_key.to_edhash();
 
         // a' = ha
         crypto_core_ed25519_scalar_mul(out_key.data(), h.data(), a.data());
@@ -411,8 +407,8 @@ namespace llarp
         // s' = H(h || s)
         std::array<uint8_t, 64> buf;
         std::copy(h.begin(), h.end(), buf.begin());
-        std::copy(a.signing_hash(), a.signing_hash() + 32, buf.begin() + 32);
-        return -1 != crypto_generichash_blake2b(out_key.signing_hash(), 32, buf.data(), buf.size(), nullptr, 0);
+        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
+        return -1 != crypto_generichash_blake2b(out_key.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0);
 
         return true;
     }
@@ -427,20 +423,20 @@ namespace llarp
         randombytes((unsigned char*)ptr, sz);
     }
 
-    void crypto::identity_keygen(SecretKey& keys)
+    void crypto::identity_keygen(Ed25519SecretKey& keys)
     {
         PubKey pk;
-        int result = crypto_sign_keypair(pk.data(), keys.data());
+        int result = crypto_sign_ed25519_keypair(pk.data(), keys.data());
         assert(result != -1);
         const PubKey sk_pk = keys.to_pubkey();
         assert(pk == sk_pk);
     }
 
-    bool crypto::check_identity_privkey(const SecretKey& keys)
+    bool crypto::check_identity_privkey(const Ed25519SecretKey& keys)
     {
         AlignedBuffer<crypto_sign_SEEDBYTES> seed;
         PubKey pk;
-        SecretKey sk;
+        Ed25519SecretKey sk;
         if (crypto_sign_ed25519_sk_to_seed(seed.data(), keys.data()) == -1)
             return false;
         if (crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data()) == -1)
@@ -448,11 +444,11 @@ namespace llarp
         return keys.to_pubkey() == pk && sk == keys;
     }
 
-    void crypto::encryption_keygen(SecretKey& keys)
+    void crypto::encryption_keygen(Ed25519SecretKey& keys)
     {
         auto d = keys.data();
         randbytes(d, 32);
-        crypto_scalarmult_curve25519_base(d + 32, d);
+        crypto_scalarmult_curve25519_base(d + 32, d);  //  expects xkey
     }
 
     bool crypto::pqe_encrypt(PQCipherBlock& ciphertext, SharedSecret& sharedkey, const PQPubKey& pubkey)
@@ -486,7 +482,7 @@ namespace llarp
     }
 #endif
 
-    const uint8_t* seckey_to_pubkey(const SecretKey& sec)
+    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& sec)
     {
         return sec.data() + 32;
     }

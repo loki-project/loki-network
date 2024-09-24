@@ -32,10 +32,10 @@ namespace llarp
             const SymmNonce& xor_factor);
 
         /// path dh creator's side
-        bool dh_client(SharedSecret&, const PubKey&, const SecretKey&, const SymmNonce&);
+        bool dh_client(SharedSecret&, const PubKey&, const Ed25519SecretKey&, const SymmNonce&);
 
         /// path dh relay side
-        bool dh_server(SharedSecret&, const PubKey&, const SecretKey&, const SymmNonce&);
+        bool dh_server(SharedSecret&, const PubKey&, const Ed25519SecretKey&, const SymmNonce&);
         bool dh_server(uint8_t* shared_secret, const uint8_t* other_pk, const uint8_t* local_sk, const uint8_t* nonce);
 
         /// blake2b 256 bit
@@ -45,14 +45,14 @@ namespace llarp
         bool hmac(uint8_t*, uint8_t*, size_t, const SharedSecret&);
 
         /// ed25519 sign
-        bool sign(Signature&, const SecretKey&, uint8_t* buf, size_t size);
+        bool sign(Signature&, const Ed25519SecretKey&, uint8_t* buf, size_t size);
 
         /// ed25519 sign, using pointers
         bool sign(uint8_t* sig, uint8_t* sk, uint8_t* buf, size_t size);
-        bool sign(uint8_t* sig, const SecretKey& sk, ustring_view buf);
+        bool sign(uint8_t* sig, const Ed25519SecretKey& sk, ustring_view buf);
 
         /// ed25519 sign (custom with derived keys)
-        bool sign(Signature&, const PrivateKey&, uint8_t* buf, size_t size);
+        bool sign(Signature&, const Ed25519Hash&, uint8_t* buf, size_t size);
 
         /// ed25519 verify
         bool verify(const PubKey&, ustring_view, ustring_view);
@@ -64,7 +64,7 @@ namespace llarp
         /// the given payload in-place. Will throw on failure of either the client DH derivation or the xchacha20
         /// payload mutation
         void derive_encrypt_outer_wrapping(
-            const SecretKey& shared_key,
+            const Ed25519SecretKey& shared_key,
             SharedSecret& secret,
             const SymmNonce& nonce,
             const RouterID& remote,
@@ -74,7 +74,7 @@ namespace llarp
         /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
         /// the server DH derivation or the xchacha20 payload mutation
         void derive_decrypt_outer_wrapping(
-            const SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
+            const Ed25519SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
@@ -84,7 +84,10 @@ namespace llarp
         /// derive sub keys for private keys.  hash is really only intended for
         /// testing ands key_n if given.
         bool derive_subkey_private(
-            PrivateKey& derived, const SecretKey& root, uint64_t key_n, const AlignedBuffer<32>* hash = nullptr);
+            Ed25519Hash& derived,
+            const Ed25519SecretKey& root,
+            uint64_t key_n,
+            const AlignedBuffer<32>* hash = nullptr);
 
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);
@@ -93,10 +96,10 @@ namespace llarp
         void randbytes(uint8_t*, size_t);
 
         /// generate signing keypair
-        void identity_keygen(SecretKey&);
+        void identity_keygen(Ed25519SecretKey&);
 
         /// generate encryption keypair
-        void encryption_keygen(SecretKey&);
+        void encryption_keygen(Ed25519SecretKey&);
 
         /// generate post quantum encrytion key
         void pqe_keygen(PQKeyPair&);
@@ -107,7 +110,7 @@ namespace llarp
         /// post quantum encrypt (buffer, sharedkey_dst,  pub)
         bool pqe_encrypt(PQCipherBlock&, SharedSecret&, const PQPubKey&);
 
-        bool check_identity_privkey(const SecretKey&);
+        bool check_identity_privkey(const Ed25519SecretKey&);
 
         bool check_passwd_hash(std::string pwhash, std::string challenge);
     };  // namespace crypto
@@ -115,7 +118,7 @@ namespace llarp
     /// return random 64bit unsigned interger
     uint64_t randint();
 
-    const uint8_t* seckey_to_pubkey(const SecretKey& secret);
+    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& secret);
 
     const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& keypair);
 

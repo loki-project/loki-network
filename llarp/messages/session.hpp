@@ -53,7 +53,7 @@ namespace llarp
                     payload = std::move(btdp).str();
                 }
 
-                SecretKey shared_key;
+                Ed25519SecretKey shared_key;
                 crypto::encryption_keygen(shared_key);
 
                 SharedSecret shared;
@@ -77,7 +77,7 @@ namespace llarp
         };
 
         inline static std::tuple<NetworkAddress, HopID, service::SessionTag, bool, std::optional<std::string>>
-        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const SecretKey& local)
+        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
             RouterID shared_pubkey;

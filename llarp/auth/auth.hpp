@@ -51,7 +51,7 @@ namespace llarp
             const bool _is_snode_service{false};
             const bool _is_exit_service{false};
 
-            SecretKey _session_key;
+            Ed25519SecretKey _session_key;
             NetworkAddress _remote;
 
           public:
@@ -61,7 +61,7 @@ namespace llarp
 
             std::optional<std::string_view> fetch_auth_token();
 
-            const SecretKey& session_key() const { return _session_key; }
+            const Ed25519SecretKey& session_key() const { return _session_key; }
 
             bool is_snode_service() const { return _is_snode_service; }
 

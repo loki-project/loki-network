@@ -111,10 +111,14 @@ namespace llarp
                 uint64_t order = 0,
                 std::function<void(std::string)> func = nullptr);
 
-            bool close_exit(const SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
+            bool close_exit(
+                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
 
             bool obtain_exit(
-                const SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func = nullptr);
+                const Ed25519SecretKey& sk,
+                uint64_t flag,
+                std::string tx_id,
+                std::function<void(std::string)> func = nullptr);
 
             /// sends a control request along a path
             ///

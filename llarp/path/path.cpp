@@ -101,13 +101,14 @@ namespace llarp::path
         return not(*this == other);
     }
 
-    bool Path::obtain_exit(const SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::obtain_exit(
+        const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
     {
         return send_path_control_message(
             "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
     }
 
-    bool Path::close_exit(const SecretKey& sk, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func)
     {
         return send_path_control_message(
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
@@ -311,7 +312,7 @@ namespace llarp::path
         {
             if (!hops.empty())
                 hops_str += " -> ";
-            hops_str += hop.rc.router_id().to_view();
+            hops_str += hop.rc.router_id().ShortString();
         }
         return hops_str;
     }

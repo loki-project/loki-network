@@ -162,17 +162,17 @@ namespace llarp
     /// parameters and outputs a bt-serialized string
     struct LocalRC final : public RouterContact
     {
-        static LocalRC make(SecretKey secret, oxen::quic::Address local);
+        static LocalRC make(Ed25519SecretKey secret, oxen::quic::Address local);
 
       private:
         ustring _signature;
-        SecretKey _secret_key;
+        Ed25519SecretKey _secret_key;
 
         void bt_sign(oxenc::bt_dict_producer& btdp);
 
         void bt_encode(oxenc::bt_dict_producer& btdp);
 
-        LocalRC(SecretKey secret, oxen::quic::Address local);
+        LocalRC(Ed25519SecretKey secret, oxen::quic::Address local);
 
       public:
         LocalRC() = default;

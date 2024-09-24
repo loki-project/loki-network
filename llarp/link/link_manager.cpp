@@ -26,7 +26,7 @@ namespace llarp
 
     static constexpr auto static_shared_key = "Lokinet static shared secret key"_usv;
 
-    static static_secret make_static_secret(const SecretKey& sk)
+    static static_secret make_static_secret(const Ed25519SecretKey& sk)
     {
         ustring secret;
         secret.resize(32);
@@ -1422,7 +1422,7 @@ namespace llarp
                 return m.respond(PathBuildMessage::BAD_FRAMES, true);
             }
 
-            log::debug(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
+            log::trace(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
             SymmNonce nonce;
             PubKey remote_pk;
@@ -1431,7 +1431,7 @@ namespace llarp
             std::tie(nonce, remote_pk, hop_payload) =
                 PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
 
-            log::debug(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
+            log::trace(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
 
             auto hop = path::TransitHop::deserialize_hop(
                 oxenc::bt_dict_consumer{hop_payload}, from, _router, remote_pk, nonce);

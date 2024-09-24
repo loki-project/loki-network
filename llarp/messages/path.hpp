@@ -7,6 +7,8 @@
 
 namespace llarp
 {
+    using namespace oxenc::literals;
+
     namespace Frames
     {
         static auto logcat = llarp::log::Cat("path-build-frames");
@@ -130,19 +132,8 @@ namespace llarp
 
             All of these 'frames' are inserted sequentially into the list and padded with any needed dummy frames
         */
-        inline static std::string serialize_hop(path::PathHopConfig& hop, const RouterID& nextHop)
+        inline static std::string serialize_hop(path::PathHopConfig& hop)
         {
-            SecretKey a, b;
-            crypto::encryption_keygen(a);
-            crypto::encryption_keygen(b);
-            auto test_nonce = SymmNonce::make_random();
-
-            SharedSecret client_shared, server_shared;
-            crypto::dh_client(client_shared, b.to_pubkey(), a, test_nonce);
-            crypto::dh_server(server_shared, a.to_pubkey(), b, test_nonce);
-            log::critical(
-                logcat, "Client shared: {}, server shared: {}", client_shared.to_string(), server_shared.to_string());
-
             std::string hop_payload;
 
             {
@@ -156,41 +147,40 @@ namespace llarp
                 hop_payload = std::move(btdp).str();
             }
 
-            SecretKey shared_key;
-            crypto::encryption_keygen(shared_key);
+            Ed25519SecretKey ephemeral_key;
+            crypto::identity_keygen(ephemeral_key);
 
             hop.nonce = SymmNonce::make_random();
 
             crypto::derive_encrypt_outer_wrapping(
-                shared_key, hop.shared, hop.nonce, hop.rc.router_id(), to_uspan(hop_payload));
+                ephemeral_key, hop.shared, hop.nonce, hop.rc.router_id(), to_uspan(hop_payload));
 
             // generate nonceXOR value self->hop->pathKey
             ShortHash xor_hash;
             crypto::shorthash(xor_hash, hop.shared.data(), hop.shared.size());
 
             hop.nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
-            hop.upstream = nextHop;
 
-            log::debug(
+            log::trace(
                 logcat,
                 "Hop serialized; nonce: {}, remote router_id: {}, shared pk: {}, shared secret: {}, payload: {}",
                 hop.nonce.to_string(),
                 hop.rc.router_id().to_string(),
-                shared_key.to_pubkey().to_string(),
+                ephemeral_key.to_pubkey().to_string(),
                 hop.shared.to_string(),
                 buffer_printer{hop_payload});
 
             oxenc::bt_dict_producer btdp;
 
             btdp.append("n", hop.nonce.to_view());
-            btdp.append("s", shared_key.to_pubkey().to_view());
+            btdp.append("s", ephemeral_key.to_pubkey().to_view());
             btdp.append("x", hop_payload);
 
             return std::move(btdp).str();
         }
 
         inline static std::tuple<SymmNonce, PubKey, ustring> deserialize_hop(
-            oxenc::bt_dict_consumer&& btdc, const SecretKey& local_sk)
+            oxenc::bt_dict_consumer&& btdc, const Ed25519SecretKey& local_sk)
         {
             SymmNonce nonce;
             PubKey remote_pk;
@@ -208,7 +198,7 @@ namespace llarp
                 throw;
             }
 
-            log::debug(
+            log::trace(
                 logcat,
                 "Hop deserialized; nonce: {}, remote pk: {}, payload: {}",
                 nonce.to_string(),
@@ -225,7 +215,7 @@ namespace llarp
                 throw std::runtime_error{BAD_CRYPTO};
             }
 
-            log::debug(
+            log::trace(
                 logcat,
                 "Hop decrypted; nonce: {}, remote pk: {}, payload: {}",
                 nonce.to_string(),

@@ -36,12 +36,12 @@ namespace llarp
       protected:
         static std::shared_ptr<KeyManager> make(const Config& config, bool is_relay);
 
-        SecretKey identity_key;
+        Ed25519SecretKey identity_key;
         RouterID public_key;
 
         fs::path rc_path;
 
-        void update_idkey(SecretKey&& newkey);
+        void update_idkey(Ed25519SecretKey&& newkey);
 
       public:
         const RouterID& router_id() const { return public_key; }

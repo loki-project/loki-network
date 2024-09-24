@@ -24,7 +24,7 @@ namespace llarp::handlers
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        log::debug(logcat, "SessionEndpoint ticking outbound sessions...");
+        log::trace(logcat, "SessionEndpoint ticking outbound sessions...");
         _sessions.tick_outbounds(now);
 
         path::PathHandler::tick(now);

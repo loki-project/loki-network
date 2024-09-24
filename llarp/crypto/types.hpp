@@ -4,6 +4,7 @@
 
 #include <llarp/constants/files.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/buffer.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -14,22 +15,22 @@ namespace llarp
     using KeyExchangeNonce = AlignedBuffer<32>;
 
     struct PubKey;
-    struct PrivateKey;
+    struct Ed25519Hash;
 
     /// Stores a sodium "secret key" value, which is actually the seed
     /// concatenated with the public key.  Note that the seed is *not* the private
     /// key value itself, but rather the seed from which it can be calculated.
-    struct SecretKey final : public AlignedBuffer<SECKEYSIZE>
+    struct Ed25519SecretKey final : public AlignedBuffer<SECKEYSIZE>
     {
-        SecretKey() = default;
+        Ed25519SecretKey() = default;
 
-        explicit SecretKey(const uint8_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr) {}
+        explicit Ed25519SecretKey(const uint8_t* ptr) : AlignedBuffer<SECKEYSIZE>(ptr) {}
 
         // The full data
-        explicit SecretKey(const AlignedBuffer<SECKEYSIZE>& seed) : AlignedBuffer<SECKEYSIZE>(seed) {}
+        explicit Ed25519SecretKey(const AlignedBuffer<SECKEYSIZE>& seed) : AlignedBuffer<SECKEYSIZE>(seed) {}
 
         // Just the seed, we recalculate the pubkey
-        explicit SecretKey(const AlignedBuffer<32>& seed)
+        explicit Ed25519SecretKey(const AlignedBuffer<32>& seed)
         {
             std::copy(seed.begin(), seed.end(), begin());
             recalculate();
@@ -42,9 +43,7 @@ namespace llarp
 
         PubKey to_pubkey() const;
 
-        /// Computes the private key from the secret key (which is actually the
-        /// seed)
-        bool to_privkey(PrivateKey& key) const;
+        Ed25519Hash to_edhash() const;
 
         bool load_from_file(const fs::path& fname);
 
@@ -56,26 +55,26 @@ namespace llarp
     /// the private key and hash value are generated.  This is primarily intended
     /// for use with derived keys, where we can derive the private key but not the
     /// seed.
-    struct PrivateKey final : public AlignedBuffer<64>
+    struct Ed25519Hash final : public AlignedBuffer<64>
     {
-        PrivateKey() = default;
+        Ed25519Hash() = default;
 
-        explicit PrivateKey(const uint8_t* ptr) : AlignedBuffer<64>(ptr) {}
+        explicit Ed25519Hash(const uint8_t* ptr) : AlignedBuffer<64>(ptr) {}
 
-        explicit PrivateKey(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash) {}
+        explicit Ed25519Hash(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash) {}
 
-        /// Returns a pointer to the beginning of the 32-byte hash which is used for
-        /// pseudorandomness when signing with this private key.
-        const uint8_t* signing_hash() const { return data() + 32; }
-
-        /// Returns a pointer to the beginning of the 32-byte hash which is used for
-        /// pseudorandomness when signing with this private key.
-        uint8_t* signing_hash() { return data() + 32; }
+        // Returns writeable access to the 32-byte Ed25519 Private Scalar
+        uspan scalar() { return {data(), 32}; }
+        // Returns readable access to the 32-byte Ed25519 Private Scalar
+        ustring_view scalar() const { return {data(), 32}; }
+        // Returns writeable access to the 32-byte Ed25519 Signing Hash
+        uspan signing_hash() { return {data() + 32, 32}; }
+        // Returns readable access to the 32-byte Ed25519 Signing Hash
+        ustring_view signing_hash() const { return {data() + 32, 32}; }
 
         std::string_view to_string() const { return "[privatekey]"; }
 
-        /// Computes the public key
-        bool to_pubkey(PubKey& pubkey) const;
+        PubKey to_pubkey() const;
     };
 
     using ShortHash = AlignedBuffer<SHORTHASHSIZE>;
@@ -110,5 +109,5 @@ namespace llarp
     using PQKeyPair = AlignedBuffer<PQ_KEYPAIRSIZE>;
 
     /// PKE(result, publickey, secretkey, nonce)
-    using path_dh_func = bool (*)(SharedSecret&, const PubKey&, const SecretKey&, const TunnelNonce&);
+    using path_dh_func = bool (*)(SharedSecret&, const PubKey&, const Ed25519SecretKey&, const TunnelNonce&);
 }  // namespace llarp

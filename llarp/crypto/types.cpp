@@ -12,12 +12,12 @@ namespace llarp
 {
     static auto logcat = log::Cat("cryptoutils");
 
-    PubKey SecretKey::to_pubkey() const
+    PubKey Ed25519SecretKey::to_pubkey() const
     {
         return PubKey(data() + 32);
     }
 
-    bool SecretKey::load_from_file(const fs::path& fname)
+    bool Ed25519SecretKey::load_from_file(const fs::path& fname)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         size_t sz;
@@ -38,39 +38,35 @@ namespace llarp
         return true;
     }
 
-    bool SecretKey::recalculate()
+    bool Ed25519SecretKey::recalculate()
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-        PrivateKey key;
-        PubKey pubkey;
-        if (!to_privkey(key) || !key.to_pubkey(pubkey))
-            return false;
+        Ed25519Hash key = to_edhash();
+        PubKey pubkey = key.to_pubkey();
         std::memcpy(data() + 32, pubkey.data(), 32);
         return true;
     }
 
-    bool SecretKey::to_privkey(PrivateKey& key) const
+    Ed25519Hash Ed25519SecretKey::to_edhash() const
     {
-        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-        // Ed25519 calculates a 512-bit hash from the seed; the first half (clamped)
-        // is the private key; the second half is the hash that gets used in
-        // signing.
+        Ed25519Hash k;
         unsigned char h[crypto_hash_sha512_BYTES];
-        if (crypto_hash_sha512(h, data(), 32) < 0)
-            return false;
+        crypto_hash_sha512(h, data(), 32);
         h[0] &= 248;
         h[31] &= 63;
         h[31] |= 64;
-        std::memcpy(key.data(), h, 64);
-        return true;
+        std::memcpy(k.data(), h, 64);
+        return k;
     }
 
-    bool PrivateKey::to_pubkey(PubKey& pubkey) const
+    PubKey Ed25519Hash::to_pubkey() const
     {
-        return crypto_scalarmult_ed25519_base_noclamp(pubkey.data(), data()) != -1;
+        PubKey p;
+        crypto_scalarmult_ed25519_base_noclamp(p.data(), data());
+        return p;
     }
 
-    bool SecretKey::write_to_file(const fs::path& fname) const
+    bool Ed25519SecretKey::write_to_file(const fs::path& fname) const
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
         try

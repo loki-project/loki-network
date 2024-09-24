@@ -68,7 +68,7 @@ namespace llarp
         return is_initialized;
     }
 
-    void KeyManager::update_idkey(SecretKey&& newkey)
+    void KeyManager::update_idkey(Ed25519SecretKey&& newkey)
     {
         identity_key = std::move(newkey);
         public_key = seckey_to_pubkey(identity_key);

@@ -139,11 +139,10 @@ namespace llarp::service
         return now >= signed_at + path::DEFAULT_LIFETIME;
     }
 
-    bool EncryptedIntroSet::sign(const PrivateKey& k)
+    bool EncryptedIntroSet::sign(const Ed25519Hash& k)
     {
         signed_at = llarp::time_now_ms();
-        if (not k.to_pubkey(derived_signing_key))
-            return false;
+        derived_signing_key = k.to_pubkey();
         sig.zero();
         auto bte = bt_encode();
 

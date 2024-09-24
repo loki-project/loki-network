@@ -299,9 +299,9 @@ namespace llarp::rpc
         }
     }
 
-    SecretKey RPCClient::obtain_identity_key()
+    Ed25519SecretKey RPCClient::obtain_identity_key()
     {
-        std::promise<SecretKey> promise;
+        std::promise<Ed25519SecretKey> promise;
         request(
             "admin.get_service_privkeys",
             [self = shared_from_this(), &promise](bool success, std::vector<std::string> data) {
@@ -314,7 +314,7 @@ namespace llarp::rpc
                         throw std::runtime_error("Failed to get private key request: data empty");
 
                     const auto j = nlohmann::json::parse(data[1]);
-                    SecretKey k;
+                    Ed25519SecretKey k;
 
                     if (not k.FromHex(j.at("service_node_ed25519_privkey").get<std::string>()))
                         throw std::runtime_error("failed to parse private key");

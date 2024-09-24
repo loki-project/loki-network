@@ -34,7 +34,7 @@ namespace llarp
         inline constexpr size_t MAX_PATHS{32};
 
         // default number of paths per PathHandler
-        inline constexpr size_t DEFAULT_PATHS_HELD{3};
+        inline constexpr size_t DEFAULT_PATHS_HELD{1};
 
         // forward declare
         struct Path;
@@ -98,10 +98,10 @@ namespace llarp
 
             void path_build_backoff();
 
-            void associate_hop_ids(std::shared_ptr<Path> p);
+            void associate_hop_ids(std::shared_ptr<Path>& p);
 
           protected:
-            void dissociate_hop_ids(std::shared_ptr<Path> p);
+            void dissociate_hop_ids(std::shared_ptr<Path>& p);
 
             /// flag for ::Stop()
             std::atomic<bool> _running;

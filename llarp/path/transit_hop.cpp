@@ -12,7 +12,7 @@ namespace llarp::path
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
         oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, const PubKey& remote_pk, const SymmNonce& nonce)
     {
-        std::shared_ptr<TransitHop> hop;
+        auto hop = std::make_shared<TransitHop>();
 
         try
         {
@@ -30,7 +30,7 @@ namespace llarp::path
         if (hop->rxid().is_zero() || hop->txid().is_zero())
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
-        if (hop->lifetime >= path::DEFAULT_LIFETIME)
+        if (hop->lifetime > path::DEFAULT_LIFETIME)
             throw std::runtime_error{PathBuildMessage::BAD_LIFETIME};
 
         hop->downstream() = src;
@@ -38,6 +38,7 @@ namespace llarp::path
         if (r.path_context()->has_transit_hop(hop))
             throw std::runtime_error{PathBuildMessage::BAD_PATHID};
 
+        // TODO: get this from the first dh
         if (!crypto::dh_server(hop->shared, remote_pk, r.identity(), nonce))
             throw std::runtime_error{PathBuildMessage::BAD_CRYPTO};
 

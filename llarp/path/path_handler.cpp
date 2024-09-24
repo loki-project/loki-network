@@ -75,7 +75,7 @@ namespace llarp::path
     {
         std::optional<std::pair<RouterID, std::shared_ptr<path::Path>>> t = std::nullopt;
 
-        std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);
+        std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);  // TOFIX: TESTNET:
 
         return t.has_value() ? std::make_optional(t->second) : std::nullopt;
     }
@@ -120,7 +120,7 @@ namespace llarp::path
         {
             std::pair<RouterID, std::shared_ptr<path::Path>> t;
 
-            std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);
+            std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);  // TOFIX: TESTNET:
 
             selected->insert(selected->end(), t.second);
         }
@@ -556,8 +556,9 @@ namespace llarp::path
         for (int i = n_hops - 1; i >= 0; --i)
         {
             const auto& next_rid = i == n_hops - 1 ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
+            path_hops[i].upstream = next_rid;
 
-            frames[i] = PathBuildMessage::serialize_hop(path_hops[i], next_rid);
+            frames[i] = PathBuildMessage::serialize_hop(path_hops[i]);
 
             if (last_len and frames[i].size() != last_len)
             {
@@ -652,14 +653,14 @@ namespace llarp::path
         Lock_t l{paths_mutex};
 
         if (auto itr = _paths.find(remote); itr != _paths.end())
-        {
-            dissociate_hop_ids(itr->second);
             _paths.erase(itr);
-        }
     }
 
     void PathHandler::path_build_failed(const RouterID& remote, std::shared_ptr<Path> p, bool timeout)
     {
+        if (not timeout)
+            dissociate_hop_ids(p);
+
         drop_path(remote);
 
         if (timeout)
@@ -696,9 +697,9 @@ namespace llarp::path
         _build_stats.path_fails++;
     }
 
-    void PathHandler::associate_hop_ids(std::shared_ptr<Path> p)
+    void PathHandler::associate_hop_ids(std::shared_ptr<Path>& p)
     {
-        for (const auto& h : p->hops)
+        for (auto& h : p->hops)
         {
             auto rid = p->pivot_rid();
             _path_lookup.emplace(h.rxID, rid);
@@ -706,9 +707,9 @@ namespace llarp::path
         }
     }
 
-    void PathHandler::dissociate_hop_ids(std::shared_ptr<Path> p)
+    void PathHandler::dissociate_hop_ids(std::shared_ptr<Path>& p)
     {
-        for (const auto& h : p->hops)
+        for (auto& h : p->hops)
         {
             _path_lookup.erase(h.txID);
             _path_lookup.erase(h.rxID);

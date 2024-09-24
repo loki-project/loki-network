@@ -126,7 +126,7 @@ namespace llarp
             ~OutboundSession() override;
 
           private:
-            SecretKey _session_key;  // DISCUSS: is this useful?
+            Ed25519SecretKey _session_key;  // DISCUSS: is this useful?
 
             std::chrono::milliseconds _last_use;
 

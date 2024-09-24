@@ -15,7 +15,7 @@ namespace llarp
     namespace ObtainExitMessage
     {
         // flag: 0 = Exit, 1 = Snode
-        inline std::string sign_and_serialize(SecretKey sk, uint64_t flag, std::string tx_id)
+        inline std::string sign_and_serialize(Ed25519SecretKey sk, uint64_t flag, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -34,7 +34,7 @@ namespace llarp
             return std::move(btlp).str();
         }
 
-        inline std::string sign_and_serialize_response(SecretKey sk, HopID& txid)
+        inline std::string sign_and_serialize_response(Ed25519SecretKey sk, HopID& txid)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -61,7 +61,7 @@ namespace llarp
     {
         inline auto UPDATE_FAILED = "EXIT UPDATE FAILED"sv;
 
-        inline std::string sign_and_serialize(SecretKey sk, std::string path_id, std::string tx_id)
+        inline std::string sign_and_serialize(Ed25519SecretKey sk, std::string path_id, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -80,7 +80,7 @@ namespace llarp
             return std::move(btlp).str();
         }
 
-        inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
+        inline std::string sign_and_serialize_response(Ed25519SecretKey sk, std::string_view tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -107,7 +107,7 @@ namespace llarp
     {
         inline auto UPDATE_FAILED = "CLOSE EXIT FAILED"sv;
 
-        inline std::string sign_and_serialize(const SecretKey& sk, std::string tx_id)
+        inline std::string sign_and_serialize(const Ed25519SecretKey& sk, std::string tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;
@@ -128,7 +128,7 @@ namespace llarp
             return std::move(btlp).str();
         }
 
-        inline std::string sign_and_serialize_response(SecretKey sk, std::string_view tx_id)
+        inline std::string sign_and_serialize_response(Ed25519SecretKey sk, std::string_view tx_id)
         {
             oxenc::bt_list_producer btlp;
             std::array<unsigned char, 64> sig;

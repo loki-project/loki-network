@@ -16,9 +16,9 @@ namespace llarp::service
     // private keys
     struct Identity
     {
-        SecretKey _idkey;
-        SecretKey _enckey;
-        PrivateKey derivedSignKey;
+        Ed25519SecretKey _idkey;
+        Ed25519SecretKey _enckey;
+        Ed25519Hash derivedSignKey;
         PQKeyPair pq;
         uint64_t version = llarp::constants::proto_version;
         VanityNonce vanity;

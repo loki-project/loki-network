@@ -115,7 +115,7 @@ namespace llarp::service
             std::string nonce,
             std::string sig);
 
-        bool sign(const PrivateKey& k);
+        bool sign(const Ed25519Hash& k);
 
         bool is_expired(std::chrono::milliseconds now = time_now_ms()) const;
 
