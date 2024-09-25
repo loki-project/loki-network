@@ -1,81 +1,118 @@
 #include "intro.hpp"
+
 #include <llarp/util/time.hpp>
 
-namespace llarp
+namespace llarp::service
 {
-  namespace service
-  {
-    util::StatusObject
-    Introduction::ExtractStatus() const
+    static auto logcat = log::Cat("introduction");
+
+    nlohmann::json Introduction::ExtractStatus() const
     {
-      util::StatusObject obj{
-          {"router", router.ToHex()},
-          {"path", pathID.ToHex()},
-          {"expiresAt", to_json(expiresAt)},
-          {"latency", to_json(latency)},
-          {"version", uint64_t(version)}};
-      return obj;
+        nlohmann::json obj{
+            {"router", pivot_router.ToHex()},
+            {"path", pivot_hop_id.ToHex()},
+            {"expiresAt", to_json(expiry)},
+            {"latency", to_json(latency)},
+            {"version", uint64_t(version)}};
+        return obj;
     }
 
-    bool
-    Introduction::DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf)
+    Introduction::Introduction(std::string buf)
     {
-      bool read = false;
-      if (!BEncodeMaybeReadDictEntry("k", router, read, key, buf))
-        return false;
-      if (!BEncodeMaybeReadDictInt("l", latency, read, key, buf))
-        return false;
-      if (!BEncodeMaybeReadDictEntry("p", pathID, read, key, buf))
-        return false;
-      if (!BEncodeMaybeReadDictInt("v", version, read, key, buf))
-        return false;
-      if (!BEncodeMaybeReadDictInt("x", expiresAt, read, key, buf))
-        return false;
-      return read;
+        try
+        {
+            oxenc::bt_dict_consumer btdc{std::move(buf)};
+
+            pivot_router.from_relay_address(btdc.require<std::string>("k"));
+            latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
+            pivot_hop_id.from_string(btdc.require<std::string>("p"));
+            expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: Introduction failed to populate with bt encoded contents");
+        }
     }
 
-    bool
-    Introduction::BEncode(llarp_buffer_t* buf) const
+    void Introduction::bt_encode(oxenc::bt_list_producer& btlp) const
     {
-      if (!bencode_start_dict(buf))
-        return false;
-
-      if (!BEncodeWriteDictEntry("k", router, buf))
-        return false;
-      if (latency > 0s)
-      {
-        if (!BEncodeWriteDictInt("l", latency.count(), buf))
-          return false;
-      }
-      if (!BEncodeWriteDictEntry("p", pathID, buf))
-        return false;
-      if (!BEncodeWriteDictInt("v", version, buf))
-        return false;
-      if (!BEncodeWriteDictInt("x", expiresAt.count(), buf))
-        return false;
-      return bencode_end(buf);
+        try
+        {
+            auto subdict = btlp.append_dict();
+            bt_encode(subdict);
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: Introduction failed to bt encode contents!");
+        }
     }
 
-    void
-    Introduction::Clear()
+    void Introduction::bt_encode(oxenc::bt_dict_producer& subdict) const
     {
-      router.Zero();
-      pathID.Zero();
-      latency = 0s;
-      expiresAt = 0s;
+        try
+        {
+            subdict.append("k", pivot_router.to_view());
+            subdict.append("l", latency.count());
+            subdict.append("p", pivot_hop_id.to_view());
+            subdict.append("x", expiry.count());
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: Introduction failed to bt encode contents!");
+        }
     }
 
-    std::string
-    Introduction::ToString() const
+    bool Introduction::bt_decode(std::string_view buf)
     {
-      return fmt::format(
-          "[Intro k={} l={} p={} v={} x={}]",
-          RouterID{router},
-          latency.count(),
-          pathID,
-          version,
-          expiresAt.count());
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "Introduction parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
-  }  // namespace service
-}  // namespace llarp
+    void Introduction::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            pivot_router.from_string(btdc.require<std::string>("k"));
+            latency = std::chrono::milliseconds{btdc.require<int64_t>("l")};
+            pivot_hop_id.from_string(btdc.require<std::string>("p"));
+            expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Introcuction failed to populate with bt encoded contents");
+            throw;
+        }
+    }
+
+    void Introduction::clear()
+    {
+        pivot_router.zero();
+        pivot_hop_id.zero();
+        latency = 0s;
+        expiry = 0s;
+    }
+
+    std::string Introduction::to_string() const
+    {
+        return fmt::format(
+            "[Intro k={} l={} p={} v={} x={}]",
+            RouterID{pivot_router},
+            latency.count(),
+            pivot_hop_id,
+            version,
+            expiry.count());
+    }
+
+}  // namespace llarp::service

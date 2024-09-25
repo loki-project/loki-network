@@ -4,12 +4,11 @@
 namespace llarp
 {
   // clang-format off
-  const std::array<uint16_t, 3> VERSION{{@lokinet_VERSION_MAJOR@, @lokinet_VERSION_MINOR@, @lokinet_VERSION_PATCH@}};
-  const std::array<uint64_t, 4> ROUTER_VERSION{{llarp::constants::proto_version, @lokinet_VERSION_MAJOR@, @lokinet_VERSION_MINOR@, @lokinet_VERSION_PATCH@}};
-  const char* const VERSION_TAG   = "@VERSIONTAG@";
-  const char* const VERSION_FULL  = "lokinet-@lokinet_VERSION_MAJOR@.@lokinet_VERSION_MINOR@.@lokinet_VERSION_PATCH@-@VERSIONTAG@";
+  const std::array<uint8_t, 3> LOKINET_VERSION{{@lokinet_VERSION_MAJOR@, @lokinet_VERSION_MINOR@, @lokinet_VERSION_PATCH@}};
+  const char* const LOKINET_VERSION_TAG   = "@VERSIONTAG@";
+  const char* const LOKINET_VERSION_FULL  = "lokinet-@lokinet_VERSION_MAJOR@.@lokinet_VERSION_MINOR@.@lokinet_VERSION_PATCH@-@LOKINET_VERSION_TAG@";
 
-  const char* const RELEASE_MOTTO = "@RELEASE_MOTTO@";
-  const char* const DEFAULT_NETID = "lokinet";
+  const char* const LOKINET_DEFAULT_NETID = "lokinet";
+  const char* const LOKINET_TESTNET_NETID = "testnet";
   // clang-format on
 }  // namespace llarp

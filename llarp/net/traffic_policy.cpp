@@ -1,213 +1,269 @@
 #include "traffic_policy.hpp"
-#include "llarp/util/str.hpp"
+
+#include <llarp/util/logging.hpp>
+#include <llarp/util/str.hpp>
 
 namespace llarp::net
 {
-  ProtocolInfo::ProtocolInfo(std::string_view data)
-  {
-    const auto parts = split(data, "/");
-    protocol = ParseIPProtocol(std::string{parts[0]});
-    if (parts.size() == 2)
+    static auto logcat = log::Cat("TrafficPolicy");
+
+    // Two functions copied over from llarp/net/ip_packet_old.hpp
+    std::string IPProtocolName(IPProtocol proto)
     {
-      huint16_t portHost{};
-      std::string portStr{parts[1]};
-      std::string protoName = IPProtocolName(protocol);
-      if (const auto* serv = ::getservbyname(portStr.c_str(), protoName.c_str()))
-      {
-        portHost.h = serv->s_port;
-      }
-      else if (const auto portInt = std::stoi(portStr); portInt > 0)
-      {
-        portHost.h = portInt;
-      }
-      else
-        throw std::invalid_argument{"invalid port in protocol info: " + portStr};
-      port = ToNet(portHost);
-    }
-    else
-      port = std::nullopt;
-  }
+        if (const auto* ent = ::getprotobynumber(static_cast<uint8_t>(proto)))
+        {
+            return ent->p_name;
+        }
 
-  bool
-  ProtocolInfo::MatchesPacket(const IPPacket& pkt) const
-  {
-    if (pkt.Header()->protocol != static_cast<std::underlying_type_t<IPProtocol>>(protocol))
-      return false;
-
-    if (not port)
-      return true;
-    if (const auto maybe = pkt.DstPort())
-    {
-      return *port == *maybe;
-    }
-    // we can't tell what the port is but the protocol matches and that's good enough
-    return true;
-  }
-
-  bool
-  TrafficPolicy::AllowsTraffic(const IPPacket& pkt) const
-  {
-    if (protocols.empty() and ranges.empty())
-      return true;
-
-    for (const auto& proto : protocols)
-    {
-      if (proto.MatchesPacket(pkt))
-        return true;
-    }
-    for (const auto& range : ranges)
-    {
-      huint128_t dst;
-      if (pkt.IsV6())
-        dst = pkt.dstv6();
-      else if (pkt.IsV4())
-        dst = pkt.dst4to6();
-      else
-        return false;
-      if (range.Contains(dst))
-        return true;
-    }
-    return false;
-  }
-
-  bool
-  ProtocolInfo::BDecode(llarp_buffer_t* buf)
-  {
-    port = std::nullopt;
-    std::vector<uint64_t> vals;
-    if (not bencode_read_list(
-            [&vals](llarp_buffer_t* buf, bool more) {
-              if (more)
-              {
-                uint64_t intval;
-                if (not bencode_read_integer(buf, &intval))
-                  return false;
-                vals.push_back(intval);
-              }
-              return true;
-            },
-            buf))
-      return false;
-    if (vals.empty())
-      return false;
-    if (vals.size() >= 1)
-    {
-      if (vals[0] > 255)
-        return false;
-      protocol = static_cast<IPProtocol>(vals[0]);
-    }
-    if (vals.size() >= 2)
-    {
-      if (vals[1] > 65536)
-        return false;
-      port = ToNet(huint16_t{static_cast<uint16_t>(vals[1])});
-    }
-    return true;
-  }
-
-  bool
-  ProtocolInfo::BEncode(llarp_buffer_t* buf) const
-  {
-    if (not bencode_start_list(buf))
-      return false;
-    if (not bencode_write_uint64(buf, static_cast<std::underlying_type_t<IPProtocol>>(protocol)))
-      return false;
-    if (port)
-    {
-      const auto hostint = ToHost(*port);
-      if (not bencode_write_uint64(buf, hostint.h))
-        return false;
-    }
-    return bencode_end(buf);
-  }
-
-  bool
-  TrafficPolicy::BEncode(llarp_buffer_t* buf) const
-  {
-    if (not bencode_start_dict(buf))
-      return false;
-
-    if (not bencode_write_bytestring(buf, "p", 1))
-      return false;
-
-    if (not bencode_start_list(buf))
-      return false;
-
-    for (const auto& item : protocols)
-    {
-      if (not item.BEncode(buf))
-        return false;
+        throw std::invalid_argument{
+            "cannot determine protocol name for ip proto '" + std::to_string(static_cast<int>(proto)) + "'"};
     }
 
-    if (not bencode_end(buf))
-      return false;
-
-    if (not bencode_write_bytestring(buf, "r", 1))
-      return false;
-
-    if (not bencode_start_list(buf))
-      return false;
-
-    for (const auto& item : ranges)
+    IPProtocol ParseIPProtocol(std::string data)
     {
-      if (not item.BEncode(buf))
-        return false;
+        if (const auto* ent = ::getprotobyname(data.c_str()))
+        {
+            return static_cast<IPProtocol>(ent->p_proto);
+        }
+
+        if (starts_with(data, "0x"))
+        {
+            if (const int intVal = std::stoi(data.substr(2), nullptr, 16); intVal > 0)
+                return static_cast<IPProtocol>(intVal);
+        }
+
+        throw std::invalid_argument{"no such ip protocol: '" + data + "'"};
     }
 
-    if (not bencode_end(buf))
-      return false;
+    ProtocolInfo::ProtocolInfo(std::string_view data)
+    {
+        const auto parts = split(data, "/");
+        protocol = ParseIPProtocol(std::string{parts[0]});
+        if (parts.size() == 2)
+        {
+            uint16_t port_host{};
 
-    return bencode_end(buf);
-  }
+            std::string portStr{parts[1]};
+            std::string protoName = IPProtocolName(protocol);
 
-  bool
-  TrafficPolicy::BDecode(llarp_buffer_t* buf)
-  {
-    return bencode_read_dict(
-        [&](llarp_buffer_t* buffer, llarp_buffer_t* key) -> bool {
-          if (key == nullptr)
+            if (const auto* serv = ::getservbyname(portStr.c_str(), protoName.c_str()))
+            {
+                port_host = serv->s_port;
+            }
+            else if (const auto port_int = std::stoi(portStr); port_int > 0)
+            {
+                port_host = port_int;
+            }
+            else
+                throw std::invalid_argument{"invalid port in protocol info: " + portStr};
+            port = port_host;
+        }
+        else
+            port = std::nullopt;
+    }
+
+    bool ProtocolInfo::matches_packet_proto(const IPPacket& pkt) const
+    {
+        return pkt.header()->protocol == static_cast<std::underlying_type_t<IPProtocol>>(protocol);
+    }
+
+    bool TrafficPolicy::allow_ip_traffic(const IPPacket& pkt)
+    {
+        if (protocols.empty() and ranges.empty())
             return true;
-          if (key->startswith("p"))
-          {
-            return BEncodeReadSet(protocols, buffer);
-          }
-          if (key->startswith("r"))
-          {
-            return BEncodeReadSet(ranges, buffer);
-          }
-          return bencode_discard(buffer);
-        },
-        buf);
-  }
 
-  util::StatusObject
-  ProtocolInfo::ExtractStatus() const
-  {
-    util::StatusObject status{
-        {"protocol", static_cast<uint32_t>(protocol)},
-    };
-    if (port)
-      status["port"] = ToHost(*port).h;
-    return status;
-  }
+        for (const auto& proto : protocols)
+        {
+            if (proto.matches_packet_proto(pkt))
+                return true;
+        }
 
-  util::StatusObject
-  TrafficPolicy::ExtractStatus() const
-  {
-    std::vector<util::StatusObject> rangesStatus;
-    std::transform(
-        ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
-          return range.ToString();
+        ipv4 v4 = pkt.dest_ipv4();
+        ipv6 v6 = pkt.dest_ipv6();
+        auto is_ipv4 = pkt.is_ipv4();
+
+        for (const auto& range : ranges)
+        {
+            if (is_ipv4)
+            {
+                if (range.contains(v4))
+                    return true;
+            }
+            else
+            {
+                if (range.contains(v6))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    void ProtocolInfo::bt_decode(oxenc::bt_list_consumer& btlc)
+    {
+        try
+        {
+            protocol = IPProtocol{btlc.consume_integer<uint8_t>()};
+
+            if (not btlc.is_finished())
+                port = btlc.consume_integer<uint16_t>();
+        }
+        catch (...)
+        {
+            log::critical(logcat, "ProtocolInfo parsing exception");
+            throw;
+        }
+    }
+
+    bool ProtocolInfo::bt_decode(std::string_view buf)
+    {
+        port = std::nullopt;
+
+        std::vector<uint64_t> vals;
+
+        try
+        {
+            oxenc::bt_list_consumer btlc{buf};
+
+            bt_decode(btlc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "ProtocolInfo parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
+    }
+
+    void ProtocolInfo::bt_encode(oxenc::bt_list_producer& btlp) const
+    {
+        try
+        {
+            btlp.append(static_cast<uint8_t>(protocol));
+            btlp.append(port.value_or(0));
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: ProtocolInfo failed to bt encode contents!");
+        }
+    }
+
+    ProtocolInfo::ProtocolInfo(std::string buf)
+    {
+        try
+        {
+            oxenc::bt_list_consumer btlc{std::move(buf)};
+            protocol = static_cast<IPProtocol>(btlc.consume_integer<uint8_t>());
+            port = btlc.consume_integer<uint16_t>();
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: ProtocolInfo failed to bt encode contents!");
+        }
+    }
+
+    void TrafficPolicy::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            {
+                auto [key, sublist] = btdc.next_list_consumer();
+
+                if (key != "p")
+                    throw std::invalid_argument{"Unexpected key (expected:'p', actual:'{}')"_format(key)};
+
+                while (not sublist.is_finished())
+                {
+                    protocols.emplace(sublist.consume_string());
+                }
+            }
+
+            {
+                auto [key, sublist] = btdc.next_list_consumer();
+
+                if (key != "r")
+                    throw std::invalid_argument{"Unexpected key (expected:'r', actual:'{}')"_format(key)};
+
+                while (not sublist.is_finished())
+                {
+                    ranges.emplace(sublist.consume_string());
+                }
+            }
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: TrafficPolicy failed to populate with bt encoded contents");
+            throw;
+        }
+    }
+
+    void TrafficPolicy::bt_encode(oxenc::bt_dict_producer& btdp) const
+    {
+        try
+        {
+            {
+                auto sublist = btdp.append_list("p");
+                for (auto& p : protocols)
+                    p.bt_encode(sublist);
+            }
+
+            {
+                auto sublist = btdp.append_list("r");
+                for (auto& r : ranges)
+                    r.bt_encode(sublist);
+            }
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: TrafficPolicy failed to bt encode contents!");
+        }
+    }
+
+    bool TrafficPolicy::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "TrafficPolicy parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
+    }
+
+    nlohmann::json ProtocolInfo::ExtractStatus() const
+    {
+        nlohmann::json status{
+            {"protocol", static_cast<uint32_t>(protocol)},
+        };
+        if (port)
+            status["port"] = *port;
+        return status;
+    }
+
+    nlohmann::json TrafficPolicy::ExtractStatus() const
+    {
+        std::vector<nlohmann::json> rangesStatus;
+        std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
+            return range.to_string();
         });
 
-    std::vector<util::StatusObject> protosStatus;
-    std::transform(
-        protocols.begin(),
-        protocols.end(),
-        std::back_inserter(protosStatus),
-        [](const auto& proto) { return proto.ExtractStatus(); });
+        std::vector<nlohmann::json> protosStatus;
+        std::transform(protocols.begin(), protocols.end(), std::back_inserter(protosStatus), [](const auto& proto) {
+            return proto.ExtractStatus();
+        });
 
-    return util::StatusObject{{"ranges", rangesStatus}, {"protocols", protosStatus}};
-  }
+        return nlohmann::json{{"ranges", rangesStatus}, {"protocols", protosStatus}};
+    }
 
 }  // namespace llarp::net

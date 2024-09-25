@@ -24,17 +24,15 @@ if(SUBMODULE_CHECK)
     endfunction ()
 
     message(STATUS "Checking submodules")
+    check_submodule(CLI11)
+    check_submodule(cpr)
+    check_submodule(libevent)
     check_submodule(nlohmann)
-    check_submodule(ghc-filesystem)
-    check_submodule(oxen-logging fmt spdlog)
+    check_submodule(oxen-encoding)
+    check_submodule(oxen-libquic)
+    check_submodule(oxen-mq)
     check_submodule(pybind11)
     check_submodule(sqlite_orm)
-    check_submodule(oxen-mq)
-    check_submodule(oxen-encoding)
-    check_submodule(uvw)
-    check_submodule(cpr)
-    check_submodule(ngtcp2)
-    check_submodule(CLI11)
   endif()
 endif()
 
@@ -60,24 +58,37 @@ macro(system_or_submodule BIGNAME smallname pkgconf subdir)
   endif()
 endmacro()
 
-system_or_submodule(OXENC oxenc liboxenc>=1.0.4 oxen-encoding)
+# libevent
+set(EVENT__LIBRARY_TYPE "STATIC" CACHE STRING "" FORCE)
+set(EVENT__DISABLE_MBEDTLS ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_MBEDTLS ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_OPENSSL ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_BENCHMARK ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "" FORCE)
+set(EVENT__DISABLE_TESTS ON CACHE BOOL "" FORCE)
+add_subdirectory(libevent EXCLUDE_FROM_ALL)
+
+add_library(libevent::core ALIAS event_core)
+add_library(libevent::threads ALIAS event_pthreads)
+add_library(libevent::extra ALIAS event_extra)
+
+
+system_or_submodule(OXENC oxenc liboxenc>=1.0.10 oxen-encoding)
 system_or_submodule(OXENMQ oxenmq liboxenmq>=1.2.14 oxen-mq)
+
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 system_or_submodule(NLOHMANN nlohmann_json nlohmann_json>=3.7.0 nlohmann)
 
-if (STATIC OR FORCE_SPDLOG_SUBMODULE OR FORCE_FMT_SUBMODULE)
-    set(OXEN_LOGGING_FORCE_SUBMODULES ON CACHE INTERNAL "")
-endif()
-set(OXEN_LOGGING_SOURCE_ROOT "${PROJECT_SOURCE_DIR}" CACHE INTERNAL "")
-add_subdirectory(oxen-logging)
 
 if(WITH_HIVE)
   add_subdirectory(pybind11 EXCLUDE_FROM_ALL)
 endif()
 
+
 system_or_submodule(CLI11 CLI11 CLI11>=2.2.0 CLI11)
+
 
 if(WITH_PEERSTATS)
   add_library(sqlite_orm INTERFACE)
@@ -90,29 +101,52 @@ if(WITH_PEERSTATS)
   target_link_libraries(sqlite_orm INTERFACE sqlite3)
 endif()
 
-add_library(uvw INTERFACE)
-target_include_directories(uvw INTERFACE uvw/src)
-target_link_libraries(uvw INTERFACE libuv)
 
-# ngtcp2 needs some massaging to build nicely:
-include(ngtcp2_lib)
-add_ngtcp2_lib()
+# we get oxen-logging from libquic; forcing submodule ensures fmt>10.0.0
+#set(OXEN_LOGGING_FMT_HEADER_ONLY ON CACHE INTERNAL "")
+#set(OXEN_LOGGING_SPDLOG_HEADER_ONLY ON CACHE INTERNAL "")
+set(OXEN_LOGGING_FORCE_SUBMODULES ON CACHE INTERNAL "")
+add_subdirectory(oxen-libquic)
+
 
 # cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires
 # 3.15+, and we target lower than that (and this is fairly simple to build).
 if(WITH_BOOTSTRAP)
   if(NOT BUILD_STATIC_DEPS)
-    find_package(CURL REQUIRED COMPONENTS HTTP HTTPS SSL)
+    find_package(CURL "7.71.0" COMPONENTS HTTP HTTPS SSL)
 
-    # CURL::libcurl wasn't added to FindCURL until cmake 3.12, so add it if necessary
-    if (CMAKE_VERSION VERSION_LESS 3.12 AND NOT TARGET CURL::libcurl)
-      add_library(libcurl UNKNOWN IMPORTED GLOBAL)
-      set_target_properties(libcurl PROPERTIES
-        IMPORTED_LOCATION ${CURL_LIBRARIES}
-        INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}")
-      add_library(CURL_libcurl INTERFACE)
-      target_link_libraries(CURL_libcurl INTERFACE libcurl)
-      add_library(CURL::libcurl ALIAS CURL_libcurl)
+    if(CURL_FOUND)
+      if(NOT (CURL_VERSION_STRING VERSION_GREATER_EQUAL "7.71.0"))
+        message(STATUS "System curl version (${CURL_VERSION_STRING}) is too old; using submodule...")
+        set(USE_CURL_SUBMODULE TRUE)
+      else()
+        set(USE_CURL_SUBMODULE FALSE)
+      endif()
+    else()
+      message(STATUS "Could not find system curl; using submodule...")
+      set(USE_CURL_SUBMODULE TRUE)
+    endif()
+
+    if(USE_CURL_SUBMODULE)
+
+      SET(CURL_ZLIB OFF CACHE STRING "" FORCE)
+      set(HTTP_ONLY ON CACHE INTERNAL "" FORCE)
+      set(BUILD_CURL_EXE OFF CACHE INTERNAL "" FORCE)
+      set(BUILD_TESTING OFF)
+      set(CURL_ENABLE_SSL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_CA_PATH "none" CACHE INTERNAL "" FORCE)
+      set(CURL_USE_SCHANNEL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_WINDOWS_SSPI OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_OPENSSL OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_SECTRANSP OFF CACHE INTERNAL "" FORCE)
+      set(CURL_USE_MBEDTLS OFF CACHE INTERNAL "" FORCE)
+      
+      FetchContent_Declare(curl
+                           URL                    https://github.com/curl/curl/releases/download/curl-8_4_0/curl-8.4.0.tar.xz
+                           URL_HASH               SHA256=16c62a9c4af0f703d28bda6d7bbf37ba47055ad3414d70dec63e2e6336f2a82d # the file hash for curl-8.4.0.tar.xz
+                           USES_TERMINAL_DOWNLOAD TRUE)   # <---- This is needed only for Ninja to show download progress
+      FetchContent_MakeAvailable(curl)
+
     endif()
   endif()
 
@@ -145,7 +179,10 @@ endif()
 set(default_libcrypt OFF)
 
 if(LINUX AND NOT STATIC_LINK)
-  set(default_libcrypt ON)
+  pkg_check_modules(LIBCRYPT libcrypt IMPORTED_TARGET)
+  if(LIBCRYPTO_FOUND)
+      set(default_libcrypt ON)
+  endif()
 endif()
 if(MACOS)
   set(default_libcrypt ON)
@@ -156,7 +193,7 @@ option(WITH_LIBCRYPT "enable fast password hash with libcrypt" ${default_libcryp
 add_library(lokinet-libcrypt INTERFACE)
 if(WITH_LIBCRYPT)
   pkg_check_modules(LIBCRYPT libcrypt IMPORTED_TARGET REQUIRED)
-  add_definitions(-DHAVE_CRYPT)
+  target_compile_definitions(lokinet-libcrypt INTERFACE -DHAVE_CRYPT)
   target_link_libraries(lokinet-libcrypt INTERFACE PkgConfig::LIBCRYPT)
   message(STATUS "using libcrypt ${LIBCRYPT_VERSION}")
 else()

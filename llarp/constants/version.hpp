@@ -1,16 +1,15 @@
 #pragma once
 
-#include <cstdint>
 #include <array>
+#include <cstdint>
 
 namespace llarp
 {
-  // Given a full lokinet version of: lokinet-1.2.3-abc these are:
-  extern const std::array<uint16_t, 3> VERSION;         // [1, 2, 3]
-  extern const std::array<uint64_t, 4> ROUTER_VERSION;  // [proto, 1, 2, 3]
-  extern const char* const VERSION_TAG;                 // "abc"
-  extern const char* const VERSION_FULL;                // "lokinet-1.2.3-abc"
+    // Given a full lokinet version of: lokinet-1.2.3-abc these are:
+    extern const std::array<uint8_t, 3> LOKINET_VERSION;
+    extern const char* const LOKINET_VERSION_TAG;
+    extern const char* const LOKINET_VERSION_FULL;
 
-  extern const char* const RELEASE_MOTTO;
-  extern const char* const DEFAULT_NETID;
+    extern const char* const LOKINET_DEFAULT_NETID;
+    extern const char* const LOKINET_TESTNET_NETID;
 }  // namespace llarp

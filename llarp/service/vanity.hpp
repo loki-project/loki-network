@@ -6,11 +6,11 @@
 
 namespace llarp
 {
-  namespace service
-  {
-    /// hidden service address
+    namespace service
+    {
+        /// hidden service address
 
-    using VanityNonce = AlignedBuffer<16>;
-  }  // namespace service
+        using VanityNonce = AlignedBuffer<16>;
+    }  // namespace service
 }  // namespace llarp
 #endif

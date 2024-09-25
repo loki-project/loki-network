@@ -43,7 +43,7 @@ testnet_tmp
 vsproject/
 .vs
 
-daemon.ini
+*.ini
 
 
 .gradle/
@@ -67,3 +67,4 @@ regdbhelper.dll
 # xcode
 xcuserdata/
 
+scc.py

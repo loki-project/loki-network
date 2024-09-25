@@ -41,25 +41,18 @@ set(SODIUM_SOURCE libsodium-${SODIUM_VERSION}.tar.gz)
 set(SODIUM_HASH SHA512=17e8638e46d8f6f7d024fe5559eccf2b8baf23e143fadd472a7d29d228b186d86686a5e6920385fe2020729119a5f12f989c3a782afbd05a8db4819bb18666ef
   CACHE STRING "libsodium source hash")
 
-set(ZMQ_VERSION 4.3.4 CACHE STRING "libzmq version")
+set(ZMQ_VERSION 4.3.5 CACHE STRING "libzmq version")
 set(ZMQ_MIRROR ${LOCAL_MIRROR} https://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}
     CACHE STRING "libzmq mirror(s)")
 set(ZMQ_SOURCE zeromq-${ZMQ_VERSION}.tar.gz)
-set(ZMQ_HASH SHA512=e198ef9f82d392754caadd547537666d4fba0afd7d027749b3adae450516bcf284d241d4616cad3cb4ad9af8c10373d456de92dc6d115b037941659f141e7c0e
+set(ZMQ_HASH SHA512=a71d48aa977ad8941c1609947d8db2679fc7a951e4cd0c3a1127ae026d883c11bd4203cf315de87f95f5031aec459a731aec34e5ce5b667b8d0559b157952541
     CACHE STRING "libzmq source hash")
 
-set(LIBUV_VERSION 1.44.2 CACHE STRING "libuv version")
-set(LIBUV_MIRROR ${LOCAL_MIRROR} https://dist.libuv.org/dist/v${LIBUV_VERSION}
-    CACHE STRING "libuv mirror(s)")
-set(LIBUV_SOURCE libuv-v${LIBUV_VERSION}.tar.gz)
-set(LIBUV_HASH SHA512=91197ff9303112567bbb915bbb88058050e2ad1c048815a3b57c054635d5dc7df458b956089d785475290132236cb0edcfae830f5d749de29a9a3213eeaf0b20
-    CACHE STRING "libuv source hash")
-
-set(ZLIB_VERSION 1.2.13 CACHE STRING "zlib version")
+set(ZLIB_VERSION 1.3 CACHE STRING "zlib version")
 set(ZLIB_MIRROR ${LOCAL_MIRROR} https://zlib.net
     CACHE STRING "zlib mirror(s)")
 set(ZLIB_SOURCE zlib-${ZLIB_VERSION}.tar.xz)
-set(ZLIB_HASH SHA256=d14c38e313afc35a9a8760dadf26042f51ea0f5d154b0630a31da0540107fb98
+set(ZLIB_HASH SHA256=8a9ba2898e1d0d774eca6ba5b4627a11e5588ba85c8851336eb38de4683050a7
   CACHE STRING "zlib source hash")
 
 set(CURL_VERSION 7.86.0 CACHE STRING "curl version")
@@ -219,16 +212,6 @@ function(build_external target)
   )
 endfunction()
 
-build_external(libuv
-  CONFIGURE_COMMAND ./autogen.sh && ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --with-pic --disable-shared --enable-static "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}"
-  BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libuv.a
-    ${DEPS_DESTDIR}/include/uv.h
-  )
-add_static_target(libuv libuv_external libuv.a)
-target_link_libraries(libuv INTERFACE ${CMAKE_DL_LIBS})
-
-
 build_external(zlib
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS} -fPIC" ${cross_extra} ./configure --prefix=${DEPS_DESTDIR} --static
   BUILD_BYPRODUCTS
@@ -236,7 +219,6 @@ build_external(zlib
     ${DEPS_DESTDIR}/include/zlib.h
 )
 add_static_target(zlib zlib_external libz.a)
-
 
 set(openssl_system_env "")
 set(openssl_arch "")
@@ -352,16 +334,9 @@ if(ARCH_TRIPLET MATCHES mingw)
   endif()
 endif()
 
-if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)
-  set(zmq_patch
-    PATCH_COMMAND ${PROJECT_SOURCE_DIR}/contrib/apply-patches.sh
-        ${PROJECT_SOURCE_DIR}/contrib/patches/libzmq-mingw-wepoll.patch
-        ${PROJECT_SOURCE_DIR}/contrib/patches/libzmq-mingw-unistd.patch)
-endif()
 
 build_external(zmq
   DEPENDS sodium_external
-  ${zmq_patch}
   CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --enable-static --disable-shared
     --disable-curve-keygen --enable-curve --disable-drafts --disable-libunwind --with-libsodium
     --without-pgm --without-norm --without-vmci --without-docs --with-pic --disable-Werror --disable-libbsd ${zmq_extra}
@@ -369,6 +344,7 @@ build_external(zmq
     "sodium_CFLAGS=-I${DEPS_DESTDIR}/include" "sodium_LIBS=-L${DEPS_DESTDIR}/lib -lsodium"
 )
 add_static_target(libzmq zmq_external libzmq.a)
+
 
 set(libzmq_link_libs "sodium")
 if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)

@@ -1,210 +1,165 @@
 #pragma once
 
-#include <llarp/crypto/types.hpp>
-#include <llarp/pow.hpp>
 #include "info.hpp"
 #include "intro.hpp"
-#include "tag.hpp"
-#include "protocol_type.hpp"
-#include <llarp/util/bencode.hpp>
-#include <llarp/util/time.hpp>
-#include <llarp/util/status.hpp>
+#include "types.hpp"
+
+#include <llarp/address/ip_range.hpp>
+#include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
-
-#include <llarp/net/ip_range.hpp>
 #include <llarp/net/traffic_policy.hpp>
+#include <llarp/util/time.hpp>
 
-#include <optional>
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <vector>
 
-namespace llarp
+namespace llarp::service
 {
-  namespace service
-  {
     constexpr std::size_t MAX_INTROSET_SIZE = 4096;
     // 10 seconds clock skew permitted for introset expiration
-    constexpr llarp_time_t MAX_INTROSET_TIME_DELTA = 10s;
+    constexpr std::chrono::milliseconds MAX_INTROSET_TIME_DELTA = 10s;
 
     struct IntroSet
     {
-      ServiceInfo addressKeys;
-      std::vector<Introduction> intros;
-      PQPubKey sntrupKey;
-      Tag topic;
-      std::vector<llarp::dns::SRVTuple> SRVs;
-      llarp_time_t timestampSignedAt = 0s;
+        ServiceInfo address_keys;
+        IntroductionSet intros;
+        PQPubKey sntru_pubkey;
+        std::vector<dns::SRVData> SRVs;
+        std::chrono::milliseconds time_signed = 0s;
 
-      /// ethertypes we advertise that we speak
-      std::vector<ProtocolType> supportedProtocols;
-      /// aonnuce that these ranges are reachable via our endpoint
-      /// only set when we support exit traffic ethertype is supported
-      std::set<IPRange> ownedRanges;
+        IntroSet() = default;
 
-      /// policies about traffic that we are willing to carry
-      /// a protocol/range whitelist or blacklist
-      /// only set when we support exit traffic ethertype
-      std::optional<net::TrafficPolicy> exitTrafficPolicy;
+        explicit IntroSet(std::string bt_payload);
 
-      Signature signature;
-      uint64_t version = llarp::constants::proto_version;
+        /// ethertypes we advertise that we speak
+        std::vector<ProtocolType> supported_protocols;
+        /// aonnuce that these ranges are reachable via our endpoint
+        /// only set when we support exit traffic ethertype is supported
+        std::set<IPRange> _routed_ranges;
 
-      bool
-      OtherIsNewer(const IntroSet& other) const
-      {
-        return timestampSignedAt < other.timestampSignedAt;
-      }
+        /// policies about traffic that we are willing to carry
+        /// a protocol/range whitelist or blacklist
+        /// only set when we support exit traffic ethertype
+        std::optional<net::TrafficPolicy> exit_policy = std::nullopt;
 
-      std::string
-      ToString() const;
+        Signature signature;
+        uint64_t version = llarp::constants::proto_version;
 
-      llarp_time_t
-      GetNewestIntroExpiration() const;
+        bool OtherIsNewer(const IntroSet& other) const { return time_signed < other.time_signed; }
 
-      bool
-      GetNewestIntro(Introduction& intro) const;
+        std::string to_string() const;
 
-      bool
-      HasExpiredIntros(llarp_time_t now) const;
+        std::chrono::milliseconds GetNewestIntroExpiration() const;
 
-      /// return true if any of our intros expires soon given a delta
-      bool
-      HasStaleIntros(llarp_time_t now, llarp_time_t delta) const;
+        bool HasExpiredIntros(std::chrono::milliseconds now) const;
 
-      bool
-      IsExpired(llarp_time_t now) const;
+        /// return true if any of our intros expires soon given a delta
+        bool HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const;
 
-      std::vector<llarp::dns::SRVData>
-      GetMatchingSRVRecords(std::string_view service_proto) const;
+        bool IsExpired(std::chrono::milliseconds now) const;
 
-      bool
-      BEncode(llarp_buffer_t* buf) const;
+        std::vector<llarp::dns::SRVData> GetMatchingSRVRecords(std::string_view service_proto) const;
 
-      bool
-      BDecode(llarp_buffer_t* buf)
-      {
-        return bencode_decode_dict(*this, buf);
-      }
+        std::string bt_encode() const;
 
-      bool
-      DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        bool bt_decode(std::string_view buf);
 
-      bool
-      Verify(llarp_time_t now) const;
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
-      util::StatusObject
-      ExtractStatus() const;
+        bool verify(std::chrono::milliseconds now) const;
+
+        nlohmann::json ExtractStatus() const;
+
+        static constexpr bool to_string_formattable = true;
     };
 
-    inline bool
-    operator<(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator<(const IntroSet& lhs, const IntroSet& rhs)
     {
-      return lhs.addressKeys < rhs.addressKeys;
+        return lhs.address_keys < rhs.address_keys;
     }
 
-    inline bool
-    operator==(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator==(const IntroSet& lhs, const IntroSet& rhs)
     {
-      return std::tie(
-                 lhs.addressKeys,
-                 lhs.intros,
-                 lhs.sntrupKey,
-                 lhs.timestampSignedAt,
-                 lhs.version,
-                 lhs.topic,
-                 lhs.signature)
-          == std::tie(
-                 rhs.addressKeys,
-                 rhs.intros,
-                 rhs.sntrupKey,
-                 rhs.timestampSignedAt,
-                 rhs.version,
-                 rhs.topic,
-                 rhs.signature);
+        return std::tie(lhs.address_keys, lhs.intros, lhs.sntru_pubkey, lhs.time_signed, lhs.version, lhs.signature)
+            == std::tie(rhs.address_keys, rhs.intros, rhs.sntru_pubkey, rhs.time_signed, rhs.version, rhs.signature);
     }
 
-    inline bool
-    operator!=(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator!=(const IntroSet& lhs, const IntroSet& rhs)
     {
-      return !(lhs == rhs);
+        return !(lhs == rhs);
     }
 
     /// public version of the introset that is encrypted
     struct EncryptedIntroSet
     {
-      using Payload_t = std::vector<byte_t>;
+      private:
+        explicit EncryptedIntroSet(std::string bt_payload);
+        bool bt_decode(oxenc::bt_dict_consumer& btdc);
 
-      PubKey derivedSigningKey;
-      llarp_time_t signedAt = 0s;
-      Payload_t introsetPayload;
-      TunnelNonce nounce;
-      std::optional<Tag> topic;
-      Signature sig;
+      public:
+        PubKey derived_signing_key;
+        std::chrono::milliseconds signed_at = 0s;
+        ustring introset_payload;
+        SymmNonce nonce;
+        Signature sig;
 
-      bool
-      Sign(const PrivateKey& k);
+        EncryptedIntroSet() = default;
 
-      bool
-      IsExpired(llarp_time_t now) const;
+        explicit EncryptedIntroSet(
+            std::string signing_key,
+            std::chrono::milliseconds signed_at,
+            std::string enc_payload,
+            std::string nonce,
+            std::string sig);
 
-      bool
-      BEncode(llarp_buffer_t* buf) const;
+        bool sign(const Ed25519Hash& k);
 
-      bool
-      BDecode(llarp_buffer_t* buf)
-      {
-        return bencode_decode_dict(*this, buf);
-      }
+        bool is_expired(std::chrono::milliseconds now = time_now_ms()) const;
 
-      bool
-      DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        std::string bt_encode() const;
 
-      bool
-      OtherIsNewer(const EncryptedIntroSet& other) const;
+        bool bt_decode(std::string_view buf);
 
-      /// verify signature and timestamp
-      bool
-      Verify(llarp_time_t now) const;
+        bool other_is_newer(const EncryptedIntroSet& other) const;
 
-      std::string
-      ToString() const;
+        /// verify signature and timestamp
+        bool verify() const;
 
-      util::StatusObject
-      ExtractStatus() const;
+        static bool verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig);
 
-      std::optional<IntroSet>
-      MaybeDecrypt(const PubKey& rootKey) const;
+        static bool verify(std::string introset, std::string key, std::string sig);
+
+        // this constructor will throw if ::bt_decode fails
+        static std::optional<EncryptedIntroSet> construct(std::string bt);
+
+        std::string to_string() const;
+
+        nlohmann::json ExtractStatus() const;
+
+        std::optional<IntroSet> decrypt(const PubKey& root) const;
+        static constexpr bool to_string_formattable = true;
     };
 
-    inline bool
-    operator<(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
+    inline bool operator<(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
     {
-      return lhs.derivedSigningKey < rhs.derivedSigningKey;
+        return lhs.derived_signing_key < rhs.derived_signing_key;
     }
 
-    inline bool
-    operator==(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
+    inline bool operator==(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
     {
-      return std::tie(lhs.signedAt, lhs.derivedSigningKey, lhs.nounce, lhs.sig)
-          == std::tie(rhs.signedAt, rhs.derivedSigningKey, rhs.nounce, rhs.sig);
+        return std::tie(lhs.signed_at, lhs.derived_signing_key, lhs.nonce, lhs.sig)
+            == std::tie(rhs.signed_at, rhs.derived_signing_key, rhs.nonce, rhs.sig);
     }
 
-    inline bool
-    operator!=(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
+    inline bool operator!=(const EncryptedIntroSet& lhs, const EncryptedIntroSet& rhs)
     {
-      return !(lhs == rhs);
+        return !(lhs == rhs);
     }
 
-    using EncryptedIntroSetLookupHandler =
-        std::function<void(const std::vector<EncryptedIntroSet>&)>;
+    using EncryptedIntroSetLookupHandler = std::function<void(const std::vector<EncryptedIntroSet>&)>;
     using IntroSetLookupHandler = std::function<void(const std::vector<IntroSet>&)>;
 
-  }  // namespace service
-}  // namespace llarp
-
-template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::IntroSet> = true;
-template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::EncryptedIntroSet> = true;
+}  // namespace llarp::service

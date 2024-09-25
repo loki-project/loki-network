@@ -1,5 +1,4 @@
 #pragma once
-#include <llarp/util/types.hpp>
 #include <llarp/util/time.hpp>
 
 #include <cstdlib>
@@ -11,5 +10,5 @@ static constexpr auto LinkLayerConnectTimeout = 5s;
 
 namespace llarp::constants
 {
-  static constexpr auto DefaultInboundIWPPort = uint16_t{1090};
+    static constexpr auto DefaultInboundIWPPort = uint16_t{1090};
 }

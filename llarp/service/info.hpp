@@ -1,108 +1,74 @@
 #pragma once
 
-#include <llarp/crypto/types.hpp>
-#include "address.hpp"
 #include "vanity.hpp"
-#include <llarp/util/bencode.hpp>
+
+#include <llarp/address/address.hpp>
+#include <llarp/constants/proto.hpp>
+#include <llarp/crypto/types.hpp>
+
+#include <oxenc/bt.h>
 
 #include <optional>
 
-namespace llarp
+namespace llarp::service
 {
-  namespace service
-  {
     struct ServiceInfo
     {
-     private:
-      PubKey enckey;
-      PubKey signkey;
-      mutable Address m_CachedAddr;
+      private:
+        PubKey enckey;
+        PubKey signkey;
+        mutable NetworkAddress _cached_addr;
 
-     public:
-      VanityNonce vanity;
-      uint64_t version = llarp::constants::proto_version;
+      public:
+        VanityNonce vanity;
+        uint64_t version = llarp::constants::proto_version;
 
-      void
-      RandomizeVanity()
-      {
-        vanity.Randomize();
-      }
+        void randomize_vanity() { vanity.Randomize(); }
 
-      bool
-      Verify(const llarp_buffer_t& payload, const Signature& sig) const;
+        bool verify(uint8_t* buf, size_t size, const Signature& sig) const;
 
-      const PubKey&
-      EncryptionPublicKey() const
-      {
-        if (m_CachedAddr.IsZero())
+        const PubKey& encryption_pubkey() const
         {
-          CalculateAddress(m_CachedAddr.as_array());
+            if (_cached_addr.is_empty())
+                calculate_address(_cached_addr.pubkey());
+
+            return enckey;
         }
-        return enckey;
-      }
 
-      bool
-      Update(const byte_t* sign, const byte_t* enc, const std::optional<VanityNonce>& nonce = {});
+        bool update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce = {});
 
-      bool
-      operator==(const ServiceInfo& other) const
-      {
-        return enckey == other.enckey && signkey == other.signkey && version == other.version
-            && vanity == other.vanity;
-      }
-
-      bool
-      operator!=(const ServiceInfo& other) const
-      {
-        return !(*this == other);
-      }
-
-      bool
-      operator<(const ServiceInfo& other) const
-      {
-        return Addr() < other.Addr();
-      }
-
-      std::string
-      ToString() const;
-
-      /// .loki address
-      std::string
-      Name() const;
-
-      bool
-      UpdateAddr();
-
-      const Address&
-      Addr() const
-      {
-        if (m_CachedAddr.IsZero())
+        bool operator==(const ServiceInfo& other) const
         {
-          CalculateAddress(m_CachedAddr.as_array());
+            return enckey == other.enckey && signkey == other.signkey && version == other.version
+                && vanity == other.vanity;
         }
-        return m_CachedAddr;
-      }
 
-      /// calculate our address
-      bool
-      CalculateAddress(std::array<byte_t, 32>& data) const;
+        bool operator!=(const ServiceInfo& other) const { return !(*this == other); }
 
-      bool
-      BDecode(llarp_buffer_t* buf)
-      {
-        if (not bencode_decode_dict(*this, buf))
-          return false;
-        return UpdateAddr();
-      }
+        bool operator<(const ServiceInfo& other) const { return address() < other.address(); }
 
-      bool
-      BEncode(llarp_buffer_t* buf) const;
+        std::string to_string() const;
 
-      bool
-      DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        /// .loki address
+        std::string name() const;
+
+        bool update_address();
+
+        const NetworkAddress& address() const
+        {
+            if (_cached_addr.is_empty())
+                calculate_address(_cached_addr.pubkey());
+
+            return _cached_addr;
+        }
+
+        /// calculate our address
+        bool calculate_address(PubKey& data) const;
+
+        bool bt_decode(std::string_view buf);
+
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
+
+        void bt_encode(oxenc::bt_dict_producer& btdp) const;
     };
-  }  // namespace service
-}  // namespace llarp
-
-template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::ServiceInfo> = true;
+}  // namespace llarp::service

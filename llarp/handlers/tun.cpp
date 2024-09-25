@@ -1,1547 +1,1176 @@
+#include "tun.hpp"
+
 #include <algorithm>
 #include <iterator>
 #include <variant>
-#include "tun.hpp"
-#include <sys/types.h>
 #ifndef _WIN32
 #include <sys/socket.h>
-#include <netdb.h>
 #endif
 
-#include <llarp/dns/dns.hpp>
-#include <llarp/ev/ev.hpp>
-#include <llarp/net/net.hpp>
-#include <llarp/router/abstractrouter.hpp>
-#include <llarp/router/route_poker.hpp>
-#include <llarp/service/context.hpp>
-#include <llarp/service/outbound_context.hpp>
-#include <llarp/service/endpoint_state.hpp>
-#include <llarp/service/outbound_context.hpp>
-#include <llarp/service/name.hpp>
-#include <llarp/service/protocol_type.hpp>
-#include <llarp/util/meta/memfn.hpp>
-#include <llarp/nodedb.hpp>
-#include <llarp/quic/tunnel.hpp>
-#include <llarp/rpc/endpoint_rpc.hpp>
-#include <llarp/util/str.hpp>
-#include <llarp/util/logging/buffer.hpp>
-#include <llarp/dns/srv_data.hpp>
-#include <llarp/constants/net.hpp>
+#include <llarp/auth/auth.hpp>
 #include <llarp/constants/platform.hpp>
+#include <llarp/dns/dns.hpp>
+#include <llarp/net/net.hpp>
+#include <llarp/nodedb.hpp>
+#include <llarp/router/route_poker.hpp>
+#include <llarp/router/router.hpp>
+#include <llarp/service/name.hpp>
+#include <llarp/service/types.hpp>
+#include <llarp/util/str.hpp>
 
-#include <oxenc/bt.h>
-
-namespace llarp
+namespace llarp::handlers
 {
-  namespace handlers
-  {
     static auto logcat = log::Cat("tun");
 
-    bool
-    TunEndpoint::MaybeHookDNS(
+    bool TunEndpoint::maybe_hook_dns(
         std::shared_ptr<dns::PacketSource_Base> source,
         const dns::Message& query,
-        const SockAddr& to,
-        const SockAddr& from)
+        const oxen::quic::Address& to,
+        const oxen::quic::Address& from)
     {
-      if (not ShouldHookDNSMessage(query))
-        return false;
+        if (not should_hook_dns_message(query))
+            return false;
 
-      auto job = std::make_shared<dns::QueryJob>(source, query, to, from);
-      if (HandleHookedDNSMessage(query, [job](auto msg) { job->SendReply(msg.ToBuffer()); }))
-        Router()->TriggerPump();
-      else
-        job->Cancel();
-      return true;
+        auto job = std::make_shared<dns::QueryJob>(source, query, to, from);
+        // if (HandleHookedDNSMessage(query, [job](auto msg) { job->SendReply(msg.ToBuffer()); }))
+        //   router().TriggerPump();
+        // else
+        //   job->Cancel();
+        return true;
     }
 
     /// Intercepts DNS IP packets on platforms where binding to a low port isn't viable.
     /// (windows/macos/ios/android ... aka everything that is not linux... funny that)
     class DnsInterceptor : public dns::PacketSource_Base
     {
-      std::function<void(net::IPPacket)> m_Reply;
-      net::ipaddr_t m_OurIP;
-      llarp::DnsConfig m_Config;
+        ip_pkt_hook _hook;
+        oxen::quic::Address _our_ip;  // maybe should be an IP type...?
+        llarp::DnsConfig _config;
 
-     public:
-      explicit DnsInterceptor(
-          std::function<void(net::IPPacket)> reply, net::ipaddr_t our_ip, llarp::DnsConfig conf)
-          : m_Reply{std::move(reply)}, m_OurIP{std::move(our_ip)}, m_Config{std::move(conf)}
-      {}
+      public:
+        explicit DnsInterceptor(ip_pkt_hook reply, oxen::quic::Address our_ip, llarp::DnsConfig conf)
+            : _hook{std::move(reply)}, _our_ip{std::move(our_ip)}, _config{std::move(conf)}
+        {}
 
-      ~DnsInterceptor() override = default;
+        ~DnsInterceptor() override = default;
 
-      void
-      SendTo(const SockAddr& to, const SockAddr& from, OwnedBuffer buf) const override
-      {
-        auto pkt = net::IPPacket::make_udp(from, to, std::move(buf));
-
-        if (pkt.empty())
-          return;
-        m_Reply(std::move(pkt));
-      }
-
-      void
-      Stop() override{};
-
-      std::optional<SockAddr>
-      BoundOn() const override
-      {
-        return std::nullopt;
-      }
-
-      bool
-      WouldLoop(const SockAddr& to, const SockAddr& from) const override
-      {
-        if constexpr (platform::is_apple)
+        void send_to(const oxen::quic::Address& to, const oxen::quic::Address& from, IPPacket data) const override
         {
-          // DNS on Apple is a bit weird because in order for the NetworkExtension itself to send
-          // data through the tunnel we have to proxy DNS requests through Apple APIs (and so our
-          // actual upstream DNS won't be set in our resolvers, which is why the vanilla WouldLoop
-          // won't work for us).  However when active the mac also only queries the main tunnel IP
-          // for DNS, so we consider anything else to be upstream-bound DNS to let it through the
-          // tunnel.
-          return to.getIP() != m_OurIP;
+            if (data.empty())
+                return;
+            // TOFIX: this
+            (void)to;
+            (void)from;
+            (void)data;
+            // _hook(data.make_udp(to, from));
         }
-        else if (auto maybe_addr = m_Config.m_QueryBind)
+
+        void stop() override{};
+
+        std::optional<oxen::quic::Address> bound_on() const override { return std::nullopt; }
+
+        bool would_loop(const oxen::quic::Address& to, const oxen::quic::Address& from) const override
         {
-          const auto& addr = *maybe_addr;
-          // omit traffic to and from our dns socket
-          return addr == to or addr == from;
+            if constexpr (platform::is_apple)
+            {
+                // DNS on Apple is a bit weird because in order for the NetworkExtension itself to
+                // send data through the tunnel we have to proxy DNS requests through Apple APIs
+                // (and so our actual upstream DNS won't be set in our resolvers, which is why the
+                // vanilla WouldLoop won't work for us).  However when active the mac also only
+                // queries the main tunnel IP for DNS, so we consider anything else to be
+                // upstream-bound DNS to let it through the tunnel.
+                return to != _our_ip;
+            }
+            else if (auto maybe_addr = _config._query_bind)
+            {
+                const auto& addr = *maybe_addr;
+                // omit traffic to and from our dns socket
+                return addr == to or addr == from;
+            }
+            return false;
         }
-        return false;
-      }
     };
 
     class TunDNS : public dns::Server
     {
-      std::optional<SockAddr> m_QueryBind;
-      net::ipaddr_t m_OurIP;
-      TunEndpoint* const m_Endpoint;
+        const TunEndpoint* _tun;
+        std::optional<oxen::quic::Address> _query_bind;
+        oxen::quic::Address _our_ip;
 
-     public:
-      std::shared_ptr<dns::PacketSource_Base> PacketSource;
+      public:
+        std::shared_ptr<dns::PacketSource_Base> pkt_source;
 
-      virtual ~TunDNS() = default;
+        ~TunDNS() override = default;
 
-      explicit TunDNS(TunEndpoint* ep, const llarp::DnsConfig& conf)
-          : dns::Server{ep->Router()->loop(), conf, 0}
-          , m_QueryBind{conf.m_QueryBind}
-          , m_OurIP{ToNet(ep->GetIfAddr())}
-          , m_Endpoint{ep}
-      {}
+        explicit TunDNS(TunEndpoint* ep, const llarp::DnsConfig& conf)
+            : dns::Server{ep->router().loop(), conf, 0},
+              _tun{ep},
+              _query_bind{conf._query_bind},
+              _our_ip{ep->get_if_addr()}
+        {
+            if (_query_bind)
+                _our_ip.set_port(_query_bind->port());
+        }
 
-      std::shared_ptr<dns::PacketSource_Base>
-      MakePacketSourceOn(const SockAddr&, const llarp::DnsConfig& conf) override
-      {
-        auto ptr = std::make_shared<DnsInterceptor>(
-            [ep = m_Endpoint](auto pkt) {
-              ep->HandleWriteIPPacket(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0);
-            },
-            m_OurIP,
-            conf);
-        PacketSource = ptr;
-        return ptr;
-      }
+        std::shared_ptr<dns::PacketSource_Base> make_packet_source_on(
+            const oxen::quic::Address&, const llarp::DnsConfig& conf) override
+        {
+            (void)_tun;
+            auto ptr = std::make_shared<DnsInterceptor>(
+                [](IPPacket pkt) {
+                    (void)pkt;
+                    // ep->handle_write_ip_packet(pkt.ConstBuffer(), pkt.srcv6(), pkt.dstv6(), 0);
+                },
+                _our_ip,
+                conf);
+            pkt_source = ptr;
+            return ptr;
+        }
     };
 
-    TunEndpoint::TunEndpoint(AbstractRouter* r, service::Context* parent)
-        : service::Endpoint{r, parent}
+    TunEndpoint::TunEndpoint(Router& r) : _router{r}
     {
-      m_PacketRouter = std::make_shared<vpn::PacketRouter>(
-          [this](net::IPPacket pkt) { HandleGotUserPacket(std::move(pkt)); });
+        _packet_router =
+            std::make_shared<vpn::PacketRouter>([this](IPPacket pkt) { handle_outbound_packet(std::move(pkt)); });
     }
 
-    void
-    TunEndpoint::SetupDNS()
+    void TunEndpoint::setup_dns()
     {
-      const auto& info = GetVPNInterface()->Info();
-      if (m_DnsConfig.m_raw_dns)
-      {
-        auto dns = std::make_shared<TunDNS>(this, m_DnsConfig);
-        m_DNS = dns;
+        log::debug(logcat, "{} setting up DNS...", name());
 
-        m_PacketRouter->AddUDPHandler(huint16_t{53}, [this, dns](net::IPPacket pkt) {
-          auto dns_pkt_src = dns->PacketSource;
-          if (const auto& reply = pkt.reply)
-            dns_pkt_src = std::make_shared<dns::PacketSource_Wrapper>(dns_pkt_src, reply);
-          if (dns->MaybeHandlePacket(
-                  std::move(dns_pkt_src), pkt.dst(), pkt.src(), *pkt.L4OwnedBuffer()))
-            return;
+        auto& dns_config = _router.config()->dns;
+        const auto& info = get_vpn_interface()->interface_info();
 
-          HandleGotUserPacket(std::move(pkt));
-        });
-      }
-      else
-        m_DNS = std::make_shared<dns::Server>(Loop(), m_DnsConfig, info.index);
-
-      m_DNS->AddResolver(weak_from_this());
-      m_DNS->Start();
-
-      if (m_DnsConfig.m_raw_dns)
-      {
-        if (auto vpn = Router()->GetVPNPlatform())
+        if (dns_config.l3_intercept)
         {
-          // get the first local address we know of
-          std::optional<SockAddr> localaddr;
-          for (auto res : m_DNS->GetAllResolvers())
-          {
-            if (auto ptr = res.lock())
+            auto dns = std::make_shared<TunDNS>(this, dns_config);
+            _dns = dns;
+
+            uint16_t p = 53;
+
+            while (p < 100)
             {
-              localaddr = ptr->GetLocalAddr();
-              if (localaddr)
-                break;
-            }
-          }
-          if (platform::is_windows)
-          {
-            auto dns_io = vpn->create_packet_io(0, localaddr);
-            Router()->loop()->add_ticker([r = Router(), dns_io, handler = m_PacketRouter]() {
-              net::IPPacket pkt = dns_io->ReadNextPacket();
-              while (not pkt.empty())
-              {
-                handler->HandleIPPacket(std::move(pkt));
-                pkt = dns_io->ReadNextPacket();
-              }
-            });
-            m_RawDNS = dns_io;
-          }
-        }
-
-        if (m_RawDNS)
-          m_RawDNS->Start();
-      }
-    }
-
-    util::StatusObject
-    TunEndpoint::ExtractStatus() const
-    {
-      auto obj = service::Endpoint::ExtractStatus();
-      obj["ifaddr"] = m_OurRange.ToString();
-      obj["ifname"] = m_IfName;
-
-      std::vector<std::string> upstreamRes;
-      for (const auto& ent : m_DnsConfig.m_upstreamDNS)
-        upstreamRes.emplace_back(ent.ToString());
-      obj["ustreamResolvers"] = upstreamRes;
-
-      std::vector<std::string> localRes;
-      for (const auto& ent : m_DnsConfig.m_bind)
-        localRes.emplace_back(ent.ToString());
-      obj["localResolvers"] = localRes;
-
-      // for backwards compat
-      if (not m_DnsConfig.m_bind.empty())
-        obj["localResolver"] = localRes[0];
-
-      util::StatusObject ips{};
-      for (const auto& item : m_IPActivity)
-      {
-        util::StatusObject ipObj{{"lastActive", to_json(item.second)}};
-        std::string remoteStr;
-        AlignedBuffer<32> addr = m_IPToAddr.at(item.first);
-        if (m_SNodes.at(addr))
-          remoteStr = RouterID(addr.as_array()).ToString();
-        else
-          remoteStr = service::Address(addr.as_array()).ToString();
-        ipObj["remote"] = remoteStr;
-        std::string ipaddr = item.first.ToString();
-        ips[ipaddr] = ipObj;
-      }
-      obj["addrs"] = ips;
-      obj["ourIP"] = m_OurIP.ToString();
-      obj["nextIP"] = m_NextIP.ToString();
-      obj["maxIP"] = m_MaxIP.ToString();
-      return obj;
-    }
-
-    void
-    TunEndpoint::Thaw()
-    {
-      if (m_DNS)
-        m_DNS->Reset();
-    }
-
-    void
-    TunEndpoint::ReconfigureDNS(std::vector<SockAddr> servers)
-    {
-      if (m_DNS)
-      {
-        for (auto weak : m_DNS->GetAllResolvers())
-        {
-          if (auto ptr = weak.lock())
-            ptr->ResetResolver(servers);
-        }
-      }
-    }
-
-    bool
-    TunEndpoint::Configure(const NetworkConfig& conf, const DnsConfig& dnsConf)
-    {
-      if (conf.m_reachable)
-      {
-        m_PublishIntroSet = true;
-        LogInfo(Name(), " setting to be reachable by default");
-      }
-      else
-      {
-        m_PublishIntroSet = false;
-        LogInfo(Name(), " setting to be not reachable by default");
-      }
-
-      if (conf.m_AuthType == service::AuthType::eAuthTypeFile)
-      {
-        m_AuthPolicy = service::MakeFileAuthPolicy(m_router, conf.m_AuthFiles, conf.m_AuthFileType);
-      }
-      else if (conf.m_AuthType != service::AuthType::eAuthTypeNone)
-      {
-        std::string url, method;
-        if (conf.m_AuthUrl.has_value() and conf.m_AuthMethod.has_value())
-        {
-          url = *conf.m_AuthUrl;
-          method = *conf.m_AuthMethod;
-        }
-        auto auth = std::make_shared<rpc::EndpointAuthRPC>(
-            url,
-            method,
-            conf.m_AuthWhitelist,
-            conf.m_AuthStaticTokens,
-            Router()->lmq(),
-            shared_from_this());
-        auth->Start();
-        m_AuthPolicy = std::move(auth);
-      }
-
-      m_DnsConfig = dnsConf;
-      m_TrafficPolicy = conf.m_TrafficPolicy;
-      m_OwnedRanges = conf.m_OwnedRanges;
-
-      m_BaseV6Address = conf.m_baseV6Address;
-
-      if (conf.m_PathAlignmentTimeout)
-      {
-        m_PathAlignmentTimeout = *conf.m_PathAlignmentTimeout;
-      }
-      else
-        m_PathAlignmentTimeout = service::Endpoint::PathAlignmentTimeout();
-
-      for (const auto& item : conf.m_mapAddrs)
-      {
-        if (not MapAddress(item.second, item.first, false))
-          return false;
-      }
-
-      m_IfName = conf.m_ifname;
-      if (m_IfName.empty())
-      {
-        const auto maybe = m_router->Net().FindFreeTun();
-        if (not maybe.has_value())
-          throw std::runtime_error("cannot find free interface name");
-        m_IfName = *maybe;
-      }
-
-      m_OurRange = conf.m_ifaddr;
-      if (!m_OurRange.addr.h)
-      {
-        const auto maybe = m_router->Net().FindFreeRange();
-        if (not maybe.has_value())
-        {
-          throw std::runtime_error("cannot find free address range");
-        }
-        m_OurRange = *maybe;
-      }
-
-      m_OurIP = m_OurRange.addr;
-      m_UseV6 = false;
-
-      m_PersistAddrMapFile = conf.m_AddrMapPersistFile;
-      if (m_PersistAddrMapFile)
-      {
-        const auto& file = *m_PersistAddrMapFile;
-        if (fs::exists(file))
-        {
-          bool shouldLoadFile = true;
-          {
-            constexpr auto LastModifiedWindow = 1min;
-            const auto lastmodified = fs::last_write_time(file);
-            const auto now = decltype(lastmodified)::clock::now();
-            if (now < lastmodified or now - lastmodified > LastModifiedWindow)
-            {
-              shouldLoadFile = false;
-            }
-          }
-          std::vector<char> data;
-          if (auto maybe = util::OpenFileStream<fs::ifstream>(file, std::ios_base::binary);
-              maybe and shouldLoadFile)
-          {
-            LogInfo(Name(), " loading address map file from ", file);
-            maybe->seekg(0, std::ios_base::end);
-            const size_t len = maybe->tellg();
-            maybe->seekg(0, std::ios_base::beg);
-            data.resize(len);
-            LogInfo(Name(), " reading ", len, " bytes");
-            maybe->read(data.data(), data.size());
-          }
-          else
-          {
-            if (shouldLoadFile)
-            {
-              LogInfo(Name(), " address map file ", file, " does not exist, so we won't load it");
-            }
-            else
-              LogInfo(Name(), " address map file ", file, " not loaded because it's stale");
-          }
-          if (not data.empty())
-          {
-            std::string_view bdata{data.data(), data.size()};
-            LogDebug(Name(), " parsing address map data: ", bdata);
-            const auto parsed = oxenc::bt_deserialize<oxenc::bt_dict>(bdata);
-            for (const auto& [key, value] : parsed)
-            {
-              huint128_t ip{};
-              if (not ip.FromString(key))
-              {
-                LogWarn(Name(), " malformed IP in addr map data: ", key);
-                continue;
-              }
-              if (m_OurIP == ip)
-                continue;
-              if (not m_OurRange.Contains(ip))
-              {
-                LogWarn(Name(), " out of range IP in addr map data: ", ip);
-                continue;
-              }
-              EndpointBase::AddressVariant_t addr;
-
-              if (const auto* str = std::get_if<std::string>(&value))
-              {
-                if (auto maybe = service::ParseAddress(*str))
+                try
                 {
-                  addr = *maybe;
+                    _packet_router->add_udp_handler(p, [this, dns](IPPacket pkt) {
+                        auto dns_pkt_src = dns->pkt_source;
+
+                        if (dns->maybe_handle_packet(
+                                std::move(dns_pkt_src), pkt.destination(), pkt.source(), std::move(pkt)))
+                            return;
+
+                        handle_outbound_packet(std::move(pkt));
+                    });
                 }
-                else
+                catch (const std::exception& e)
                 {
-                  LogWarn(Name(), " invalid address in addr map: ", *str);
-                  continue;
+                    if (p += 1; p >= 100)
+                        throw std::runtime_error{"Failed to port map udp handler: {}"_format(e.what())};
                 }
-              }
-              else
-              {
-                LogWarn(Name(), " invalid first entry in addr map, not a string");
-                continue;
-              }
-              if (const auto* loki = std::get_if<service::Address>(&addr))
-              {
-                m_IPToAddr.emplace(ip, loki->data());
-                m_AddrToIP.emplace(loki->data(), ip);
-                m_SNodes[*loki] = false;
-                LogInfo(Name(), " remapped ", ip, " to ", *loki);
-              }
-              if (const auto* snode = std::get_if<RouterID>(&addr))
-              {
-                m_IPToAddr.emplace(ip, snode->data());
-                m_AddrToIP.emplace(snode->data(), ip);
-                m_SNodes[*snode] = true;
-                LogInfo(Name(), " remapped ", ip, " to ", *snode);
-              }
-              if (m_NextIP < ip)
-                m_NextIP = ip;
-              // make sure we dont unmap this guy
-              MarkIPActive(ip);
             }
-          }
         }
         else
+            _dns = std::make_shared<dns::Server>(_router.loop(), dns_config, info.index);
+
+        _dns->add_resolver(weak_from_this());
+        _dns->start();
+
+        if (dns_config.l3_intercept)
         {
-          LogInfo(
-              Name(), " skipping loading addr map at ", file, " as it does not currently exist");
-        }
-      }
-
-      if (auto* quic = GetQUICTunnel())
-      {
-        quic->listen([this](std::string_view, uint16_t port) {
-          return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
-        });
-      }
-      return Endpoint::Configure(conf, dnsConf);
-    }
-
-    bool
-    TunEndpoint::HasLocalIP(const huint128_t& ip) const
-    {
-      return m_IPToAddr.find(ip) != m_IPToAddr.end();
-    }
-
-    void
-    TunEndpoint::Pump(llarp_time_t now)
-    {
-      // flush network to user
-      while (not m_NetworkToUserPktQueue.empty())
-      {
-        m_NetIf->WritePacket(m_NetworkToUserPktQueue.top().pkt);
-        m_NetworkToUserPktQueue.pop();
-      }
-
-      service::Endpoint::Pump(now);
-    }
-
-    static bool
-    is_random_snode(const dns::Message& msg)
-    {
-      return msg.questions[0].IsName("random.snode");
-    }
-
-    static bool
-    is_localhost_loki(const dns::Message& msg)
-    {
-      return msg.questions[0].IsLocalhost();
-    }
-
-    static dns::Message&
-    clear_dns_message(dns::Message& msg)
-    {
-      msg.authorities.resize(0);
-      msg.additional.resize(0);
-      msg.answers.resize(0);
-      msg.hdr_fields &= ~dns::flags_RCODENameError;
-      return msg;
-    }
-
-    std::optional<std::variant<service::Address, RouterID>>
-    TunEndpoint::ObtainAddrForIP(huint128_t ip) const
-    {
-      auto itr = m_IPToAddr.find(ip);
-      if (itr == m_IPToAddr.end())
-        return std::nullopt;
-      if (m_SNodes.at(itr->second))
-        return RouterID{itr->second.as_array()};
-      else
-        return service::Address{itr->second.as_array()};
-    }
-
-    bool
-    TunEndpoint::HandleHookedDNSMessage(dns::Message msg, std::function<void(dns::Message)> reply)
-    {
-      auto ReplyToSNodeDNSWhenReady = [this, reply](RouterID snode, auto msg, bool isV6) -> bool {
-        return EnsurePathToSNode(
-            snode,
-            [this, snode, msg, reply, isV6](
-                const RouterID&, exit::BaseSession_ptr s, [[maybe_unused]] service::ConvoTag tag) {
-              SendDNSReply(snode, s, msg, reply, isV6);
-            });
-      };
-      auto ReplyToLokiDNSWhenReady = [this, reply, timeout = PathAlignmentTimeout()](
-                                         service::Address addr, auto msg, bool isV6) -> bool {
-        using service::Address;
-        using service::OutboundContext;
-        if (HasInboundConvo(addr))
-        {
-          // if we have an inbound convo to this address don't mark as outbound so we don't have a
-          // state race this codepath is hit when an application verifies that reverse and forward
-          // dns records match for an inbound session
-          SendDNSReply(addr, this, msg, reply, isV6);
-          return true;
-        }
-        MarkAddressOutbound(addr);
-        return EnsurePathToService(
-            addr,
-            [this, addr, msg, reply, isV6](const Address&, OutboundContext* ctx) {
-              SendDNSReply(addr, ctx, msg, reply, isV6);
-            },
-            timeout);
-      };
-
-      auto ReplyToDNSWhenReady = [ReplyToLokiDNSWhenReady, ReplyToSNodeDNSWhenReady](
-                                     auto addr, auto msg, bool isV6) {
-        if (auto ptr = std::get_if<RouterID>(&addr))
-        {
-          ReplyToSNodeDNSWhenReady(*ptr, msg, isV6);
-          return;
-        }
-        if (auto ptr = std::get_if<service::Address>(&addr))
-        {
-          ReplyToLokiDNSWhenReady(*ptr, msg, isV6);
-          return;
-        }
-      };
-
-      auto ReplyToLokiSRVWhenReady = [this, reply, timeout = PathAlignmentTimeout()](
-                                         service::Address addr, auto msg) -> bool {
-        using service::Address;
-        using service::OutboundContext;
-        // TODO: how do we handle SRV record lookups for inbound sessions?
-        MarkAddressOutbound(addr);
-        return EnsurePathToService(
-            addr,
-            [msg, addr, reply](const Address&, OutboundContext* ctx) {
-              if (ctx == nullptr)
-                return;
-
-              const auto& introset = ctx->GetCurrentIntroSet();
-              msg->AddSRVReply(introset.GetMatchingSRVRecords(addr.subdomain));
-              reply(*msg);
-            },
-            timeout);
-      };
-
-      if (msg.answers.size() > 0)
-      {
-        const auto& answer = msg.answers[0];
-        if (answer.HasCNameForTLD(".snode"))
-        {
-          llarp_buffer_t buf(answer.rData);
-          auto qname = dns::DecodeName(&buf, true);
-          if (not qname)
-            return false;
-          RouterID addr;
-          if (not addr.FromString(*qname))
-            return false;
-          auto replyMsg = std::make_shared<dns::Message>(clear_dns_message(msg));
-          return ReplyToSNodeDNSWhenReady(addr, std::move(replyMsg), false);
-        }
-        else if (answer.HasCNameForTLD(".loki"))
-        {
-          llarp_buffer_t buf(answer.rData);
-          auto qname = dns::DecodeName(&buf, true);
-          if (not qname)
-            return false;
-
-          service::Address addr;
-          if (not addr.FromString(*qname))
-            return false;
-
-          auto replyMsg = std::make_shared<dns::Message>(clear_dns_message(msg));
-          return ReplyToLokiDNSWhenReady(addr, replyMsg, false);
-        }
-      }
-      if (msg.questions.size() != 1)
-      {
-        llarp::LogWarn("bad number of dns questions: ", msg.questions.size());
-        return false;
-      }
-      std::string qname = msg.questions[0].Name();
-      const auto nameparts = split(qname, ".");
-      std::string lnsName;
-      if (nameparts.size() >= 2 and ends_with(qname, ".loki"))
-      {
-        lnsName = nameparts[nameparts.size() - 2];
-        lnsName += ".loki"sv;
-      }
-      if (msg.questions[0].qtype == dns::qTypeTXT)
-      {
-        RouterID snode;
-        if (snode.FromString(qname))
-        {
-          m_router->LookupRouter(snode, [reply, msg = std::move(msg)](const auto& found) mutable {
-            if (found.empty())
+            if (auto vpn = _router.vpn_platform())
             {
-              msg.AddNXReply();
-            }
-            else
-            {
-              std::string recs;
-              for (const auto& rc : found)
-                recs += rc.ToTXTRecord();
-              msg.AddTXTReply(std::move(recs));
-            }
-            reply(msg);
-          });
-          return true;
-        }
-        else if (msg.questions[0].IsLocalhost() and msg.questions[0].HasSubdomains())
-        {
-          const auto subdomain = msg.questions[0].Subdomains();
-          if (subdomain == "exit")
-          {
-            if (HasExit())
-            {
-              std::string s;
-              m_ExitMap.ForEachEntry([&s](const auto& range, const auto& exit) {
-                fmt::format_to(std::back_inserter(s), "{}={}; ", range, exit);
-              });
-              msg.AddTXTReply(std::move(s));
-            }
-            else
-            {
-              msg.AddNXReply();
-            }
-          }
-          else if (subdomain == "netid")
-          {
-            msg.AddTXTReply(fmt::format("netid={};", m_router->rc().netID));
-          }
-          else
-          {
-            msg.AddNXReply();
-          }
-        }
-        else
-        {
-          msg.AddNXReply();
-        }
+                // get the first local address we know of
+                std::optional<oxen::quic::Address> localaddr;
 
-        reply(msg);
-      }
-      else if (msg.questions[0].qtype == dns::qTypeMX)
-      {
-        // mx record
-        service::Address addr;
-        if (addr.FromString(qname, ".loki") || addr.FromString(qname, ".snode")
-            || is_random_snode(msg) || is_localhost_loki(msg))
-        {
-          msg.AddMXReply(qname, 1);
-        }
-        else if (service::NameIsValid(lnsName))
-        {
-          LookupNameAsync(lnsName, [msg, lnsName, reply](auto maybe) mutable {
-            if (maybe.has_value())
-            {
-              var::visit([&](auto&& value) { msg.AddMXReply(value.ToString(), 1); }, *maybe);
-            }
-            else
-            {
-              msg.AddNXReply();
-            }
-            reply(msg);
-          });
-          return true;
-        }
-        else
-          msg.AddNXReply();
-        reply(msg);
-      }
-      else if (msg.questions[0].qtype == dns::qTypeCNAME)
-      {
-        if (is_random_snode(msg))
-        {
-          RouterID random;
-          if (Router()->GetRandomGoodRouter(random))
-          {
-            msg.AddCNAMEReply(random.ToString(), 1);
-          }
-          else
-            msg.AddNXReply();
-        }
-        else if (msg.questions[0].IsLocalhost() and msg.questions[0].HasSubdomains())
-        {
-          const auto subdomain = msg.questions[0].Subdomains();
-          if (subdomain == "exit" and HasExit())
-          {
-            m_ExitMap.ForEachEntry(
-                [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.ToString(), 1); });
-          }
-          else
-          {
-            msg.AddNXReply();
-          }
-        }
-        else if (is_localhost_loki(msg))
-        {
-          size_t counter = 0;
-          context->ForEachService(
-              [&](const std::string&, const std::shared_ptr<service::Endpoint>& service) -> bool {
-                const service::Address addr = service->GetIdentity().pub.Addr();
-                msg.AddCNAMEReply(addr.ToString(), 1);
-                ++counter;
-                return true;
-              });
-          if (counter == 0)
-            msg.AddNXReply();
-        }
-        else
-          msg.AddNXReply();
-        reply(msg);
-      }
-      else if (msg.questions[0].qtype == dns::qTypeA || msg.questions[0].qtype == dns::qTypeAAAA)
-      {
-        const bool isV6 = msg.questions[0].qtype == dns::qTypeAAAA;
-        const bool isV4 = msg.questions[0].qtype == dns::qTypeA;
-        llarp::service::Address addr;
-        if (isV6 && !SupportsV6())
-        {  // empty reply but not a NXDOMAIN so that client can retry IPv4
-          msg.AddNSReply("localhost.loki.");
-        }
-        // on MacOS this is a typeA query
-        else if (is_random_snode(msg))
-        {
-          RouterID random;
-          if (Router()->GetRandomGoodRouter(random))
-          {
-            msg.AddCNAMEReply(random.ToString(), 1);
-            return ReplyToSNodeDNSWhenReady(random, std::make_shared<dns::Message>(msg), isV6);
-          }
-          else
-            msg.AddNXReply();
-        }
-        else if (is_localhost_loki(msg))
-        {
-          const bool lookingForExit = msg.questions[0].Subdomains() == "exit";
-          huint128_t ip = GetIfAddr();
-          if (ip.h)
-          {
-            if (lookingForExit)
-            {
-              if (HasExit())
-              {
-                m_ExitMap.ForEachEntry(
-                    [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.ToString()); });
-                msg.AddINReply(ip, isV6);
-              }
-              else
-              {
-                msg.AddNXReply();
-              }
-            }
-            else
-            {
-              msg.AddCNAMEReply(m_Identity.pub.Name(), 1);
-              msg.AddINReply(ip, isV6);
-            }
-          }
-          else
-          {
-            msg.AddNXReply();
-          }
-        }
-        else if (addr.FromString(qname, ".loki"))
-        {
-          if (isV4 && SupportsV6())
-          {
-            msg.hdr_fields |= dns::flags_QR | dns::flags_AA | dns::flags_RA;
-          }
-          else
-          {
-            return ReplyToLokiDNSWhenReady(addr, std::make_shared<dns::Message>(msg), isV6);
-          }
-        }
-        else if (addr.FromString(qname, ".snode"))
-        {
-          if (isV4 && SupportsV6())
-          {
-            msg.hdr_fields |= dns::flags_QR | dns::flags_AA | dns::flags_RA;
-          }
-          else
-          {
-            return ReplyToSNodeDNSWhenReady(
-                addr.as_array(), std::make_shared<dns::Message>(msg), isV6);
-          }
-        }
-        else if (service::NameIsValid(lnsName))
-        {
-          LookupNameAsync(
-              lnsName,
-              [msg = std::make_shared<dns::Message>(msg),
-               name = Name(),
-               lnsName,
-               isV6,
-               reply,
-               ReplyToDNSWhenReady](auto maybe) {
-                if (not maybe.has_value())
+                for (auto res : _dns->get_all_resolvers())
                 {
-                  LogWarn(name, " lns name ", lnsName, " not resolved");
-                  msg->AddNXReply();
-                  reply(*msg);
-                  return;
+                    if (auto ptr = res.lock())
+                    {
+                        localaddr = ptr->get_local_addr();
+
+                        if (localaddr)
+                            break;
+                    }
                 }
-                ReplyToDNSWhenReady(*maybe, msg, isV6);
-              });
-          return true;
-        }
-        else
-          msg.AddNXReply();
+                if (platform::is_windows)
+                {
+                    // auto dns_io = vpn->create_packet_io(0, localaddr);
+                    // router().loop()->add_ticker([dns_io, handler = m_PacketRouter]() {
+                    //   net::IPPacket pkt = dns_io->ReadNextPacket();
+                    //   while (not pkt.empty())
+                    //   {
+                    //     handler->HandleIPPacket(std::move(pkt));
+                    //     pkt = dns_io->ReadNextPacket();
+                    //   }
+                    // });
+                    // m_RawDNS = dns_io;
+                }
 
-        reply(msg);
-      }
-      else if (msg.questions[0].qtype == dns::qTypePTR)
-      {
-        // reverse dns
-        if (auto ip = dns::DecodePTR(msg.questions[0].qname))
+                (void)vpn;
+            }
+
+            if (_raw_DNS)
+                _raw_DNS->Start();
+        }
+    }
+
+    nlohmann::json TunEndpoint::ExtractStatus() const
+    {
+        // auto obj = service::Endpoint::ExtractStatus();
+        // obj["ifaddr"] = m_OurRange.to_string();
+        // obj["ifname"] = m_IfName;
+
+        // std::vector<std::string> upstreamRes;
+        // for (const auto& ent : m_DnsConfig.upstream_dns)
+        //   upstreamRes.emplace_back(ent.to_string());
+        // obj["ustreamResolvers"] = upstreamRes;
+
+        // std::vector<std::string> localRes;
+        // for (const auto& ent : m_DnsConfig.bind_addr)
+        //   localRes.emplace_back(ent.to_string());
+        // obj["localResolvers"] = localRes;
+
+        // // for backwards compat
+        // if (not m_DnsConfig.bind_addr.empty())
+        //   obj["localResolver"] = localRes[0];
+
+        // nlohmann::json ips{};
+        // for (const auto& item : m_IPActivity)
+        // {
+        //   nlohmann::json ipObj{{"lastActive", to_json(item.second)}};
+        //   std::string remoteStr;
+        //   AlignedBuffer<32> addr = m_IPToAddr.at(item.first);
+        //   if (m_SNodes.at(addr))
+        //     remoteStr = RouterID(addr.as_array()).to_string();
+        //   else
+        //     remoteStr = service::Address(addr.as_array()).to_string();
+        //   ipObj["remote"] = remoteStr;
+        //   std::string ipaddr = item.first.to_string();
+        //   ips[ipaddr] = ipObj;
+        // }
+        // obj["addrs"] = ips;
+        // obj["ourIP"] = m_OurIP.to_string();
+        // obj["nextIP"] = m_NextIP.to_string();
+        // obj["maxIP"] = m_MaxIP.to_string();
+        // return obj;
+        return {};
+    }
+
+    void TunEndpoint::reconfigure_dns(std::vector<oxen::quic::Address> servers)
+    {
+        if (_dns)
         {
-          if (auto maybe = ObtainAddrForIP(*ip))
-          {
-            var::visit([&msg](auto&& result) { msg.AddAReply(result.ToString()); }, *maybe);
-            reply(msg);
-            return true;
-          }
+            for (auto weak : _dns->get_all_resolvers())
+            {
+                if (auto ptr = weak.lock())
+                    ptr->reset_resolver(servers);
+            }
+        }
+    }
+
+    void TunEndpoint::configure()
+    {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        auto& net_conf = _router.config()->network;
+
+        /** DISCUSS: Can the auth objects be further simplified?
+            - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
+                request to execute its aynchronous logic and queue the authentication job
+
+            Static Token Auth:
+            - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
+                operator
+            - The session initiator will automatically include any static tokens that are either (A) loaded into the
+                config mapping or (B) passed to the lokinet-vpn cli utility
+                - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+
+            RPC Auth:
+            - Why can't the functionality of this be entirely subsumed by the RPCClient?
+                - If the config specifies the auth_type as RPC plus
+
+        */
+        // switch (net_conf.auth_type)
+        // {
+        //     case auth::AuthType::WHITELIST:
+        //     case auth::AuthType::OMQ:
+        //         // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
+        //         _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
+        //             router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
+
+        //         std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
+        //         break;
+
+        //     case auth::AuthType::FILE:
+        //         _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
+        //             router(), net_conf.auth_files, net_conf.auth_file_type);
+        //         break;
+
+        //     case auth::AuthType::NONE:
+        //     default:
+        //         break;
+        // }
+
+        _traffic_policy = net_conf.traffic_policy;
+        _base_ipv6_range = net_conf._base_ipv6_range;
+
+        if (net_conf.path_alignment_timeout)
+        {
+            if (is_service_node())
+                throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
+
+            _path_alignment_timeout = *net_conf.path_alignment_timeout;
         }
 
-        msg.AddNXReply();
-        reply(msg);
+        _if_name = *net_conf._if_name;
+        _local_range = *net_conf._local_ip_range;
+        _local_addr = *net_conf._local_addr;
+        _local_base_ip = *net_conf._local_base_ip;
+
+        ipv6_enabled = not _local_range.is_ipv4();
+        if (ipv6_enabled and not net_conf.enable_ipv6)
+            throw std::runtime_error{"Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
+
+        _persisting_addr_file = net_conf.addr_map_persist_file;
+
+        if (not net_conf._reserved_local_ips.empty())
+        {
+            for (auto& [remote, local] : net_conf._reserved_local_ips)
+            {
+                _local_ip_mapping.insert_or_assign(local, remote);
+            }
+        }
+
+        log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
+        _local_range_iterator = IPRangeIterator(_local_range);
+
+        _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
+        _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
+
+        vpn::InterfaceInfo info;
+        info.ifname = _if_name;
+        info.if_info = net_conf._if_info;
+        info.addrs.emplace_back(_local_range);
+
+        if (net_conf.enable_ipv6 and _base_ipv6_range)
+        {
+            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+            info.addrs.emplace_back(*_base_ipv6_range);
+        }
+
+        log::debug(logcat, "{} setting up network...", name());
+
+        _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
+
+        if (ipv6_enabled)
+        {
+            if constexpr (not llarp::platform::is_apple)
+            {
+                if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                {
+                    _local_ipv6 = *maybe;
+                }
+            }
+        }
+
+        log::info(
+            logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+
+        _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
+        _if_name = _net_if->interface_info().ifname;
+
+        log::info(logcat, "{} got network interface:{}", name(), _if_name);
+
+        auto pkt_hook = [this]() {
+            for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+            {
+                log::debug(logcat, "packet router receiving {}", pkt.info_line());
+                _packet_router->handle_ip_packet(std::move(pkt));
+            }
+        };
+
+        if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
+        {
+            auto err = "{} failed to add network interface!"_format(name());
+            log::error(logcat, "{}", err);
+            throw std::runtime_error{std::move(err)};
+        }
+
+        // if (auto* quic = GetQUICTunnel())
+        // {
+        // TODO:
+        // quic->listen([this](std::string_view, uint16_t port) {
+        //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
+        // });
+        // }
+
+        setup_dns();
+    }
+
+    static bool is_random_snode(const dns::Message& msg)
+    {
+        return msg.questions[0].IsName("random.snode");
+    }
+
+    static bool is_localhost_loki(const dns::Message& msg)
+    {
+        return msg.questions[0].IsLocalhost();
+    }
+
+    static dns::Message& clear_dns_message(dns::Message& msg)
+    {
+        msg.authorities.resize(0);
+        msg.additional.resize(0);
+        msg.answers.resize(0);
+        msg.hdr_fields &= ~dns::flags_RCODENameError;
+        return msg;
+    }
+
+    bool TunEndpoint::handle_hooked_dns_message(dns::Message msg, std::function<void(dns::Message)> reply)
+    {
+        (void)msg;
+        (void)reply;
+        // auto ReplyToSNodeDNSWhenReady = [this, reply](RouterID snode, auto msg, bool isV6) ->
+        // bool {
+        //   return EnsurePathToSNode(
+        //       snode,
+        //       [this, snode, msg, reply, isV6](
+        //           const RouterID&,
+        //           std::shared_ptr<session::BaseSession> s,
+        //           [[maybe_unused]] service::SessionTag tag) {
+        //         SendDNSReply(snode, s, msg, reply, isV6);
+        //       });
+        // };
+        // auto ReplyToLokiDNSWhenReady = [this, reply, timeout = PathAlignmentTimeout()](
+        //                                    service::Address addr, auto msg, bool isV6) -> bool {
+        //   using service::Address;
+        //   using service::OutboundContext;
+        //   if (HasInboundConvo(addr))
+        //   {
+        //     // if we have an inbound convo to this address don't mark as outbound so we don't
+        //     have a
+        //     // state race this codepath is hit when an application verifies that reverse and
+        //     forward
+        //     // dns records match for an inbound session
+        //     SendDNSReply(addr, this, msg, reply, isV6);
+        //     return true;
+        //   }
+        //   MarkAddressOutbound(addr);
+        //   return EnsurePathToService(
+        //       addr,
+        //       [this, addr, msg, reply, isV6](const Address&, OutboundContext* ctx) {
+        //         SendDNSReply(addr, ctx, msg, reply, isV6);
+        //       },
+        //       timeout);
+        // };
+
+        // auto ReplyToDNSWhenReady = [ReplyToLokiDNSWhenReady, ReplyToSNodeDNSWhenReady](
+        //                                std::string name, auto msg, bool isV6) {
+        //   if (auto saddr = service::Address(); saddr.FromString(name))
+        //     ReplyToLokiDNSWhenReady(saddr, msg, isV6);
+
+        //   if (auto rid = RouterID(); rid.from_snode_address(name))
+        //     ReplyToSNodeDNSWhenReady(rid, msg, isV6);
+        // };
+
+        // auto ReplyToLokiSRVWhenReady = [this, reply, timeout = PathAlignmentTimeout()](
+        //                                    service::Address addr, auto msg) -> bool {
+        //   using service::Address;
+        //   using service::OutboundContext;
+        //   // TODO: how do we handle SRV record lookups for inbound sessions?
+        //   MarkAddressOutbound(addr);
+        //   return EnsurePathToService(
+        //       addr,
+        //       [msg, addr, reply](const Address&, OutboundContext* ctx) {
+        //         if (ctx == nullptr)
+        //           return;
+
+        //         const auto& introset = ctx->GetCurrentIntroSet();
+        //         msg->AddSRVReply(introset.GetMatchingSRVRecords(addr.subdomain));
+        //         reply(*msg);
+        //       },
+        //       timeout);
+        // };
+
+        // if (msg.answers.size() > 0)
+        // {
+        //   const auto& answer = msg.answers[0];
+        //   if (answer.HasCNameForTLD(".snode"))
+        //   {
+        //     llarp_buffer_t buf(answer.rData);
+        //     auto qname = dns::DecodeName(&buf, true);
+        //     if (not qname)
+        //       return false;
+        //     RouterID addr;
+        //     if (not addr.from_snode_address(*qname))
+        //       return false;
+        //     auto replyMsg = std::make_shared<dns::Message>(clear_dns_message(msg));
+        //     return ReplyToSNodeDNSWhenReady(addr, std::move(replyMsg), false);
+        //   }
+        //   else if (answer.HasCNameForTLD(".loki"))
+        //   {
+        //     llarp_buffer_t buf(answer.rData);
+        //     auto qname = dns::DecodeName(&buf, true);
+        //     if (not qname)
+        //       return false;
+
+        //     service::Address addr;
+        //     if (not addr.FromString(*qname))
+        //       return false;
+
+        //     auto replyMsg = std::make_shared<dns::Message>(clear_dns_message(msg));
+        //     return ReplyToLokiDNSWhenReady(addr, replyMsg, false);
+        //   }
+        // }
+        // if (msg.questions.size() != 1)
+        // {
+        //   log::warning(logcat, "bad number of dns questions: {}", msg.questions.size());
+        //   return false;
+        // }
+        // std::string qname = msg.questions[0].Name();
+        // const auto nameparts = split(qname, ".");
+        // std::string ons_name;
+        // if (nameparts.size() >= 2 and ends_with(qname, ".loki"))
+        // {
+        //   ons_name = nameparts[nameparts.size() - 2];
+        //   ons_name += ".loki"sv;
+        // }
+        // if (msg.questions[0].qtype == dns::qTypeTXT)
+        // {
+        //   RouterID snode;
+        //   if (snode.from_snode_address(qname))
+        //   {
+        //     if (auto rc = router().node_db()->get_rc(snode))
+        //       msg.AddTXTReply(std::string{rc->view()});
+        //     else
+        //       msg.AddNXReply();
+        //     reply(msg);
+
+        //     return true;
+        //   }
+
+        //   if (msg.questions[0].IsLocalhost() and msg.questions[0].HasSubdomains())
+        //   {
+        //     const auto subdomain = msg.questions[0].Subdomains();
+        //     if (subdomain == "exit")
+        //     {
+        //       if (HasExit())
+        //       {
+        //         std::string s;
+        //         _exit_map.ForEachEntry([&s](const auto& range, const auto& exit) {
+        //           fmt::format_to(std::back_inserter(s), "{}={}; ", range, exit);
+        //         });
+        //         msg.AddTXTReply(std::move(s));
+        //       }
+        //       else
+        //       {
+        //         msg.AddNXReply();
+        //       }
+        //     }
+        //     else if (subdomain == "netid")
+        //     {
+        //       msg.AddTXTReply(fmt::format("netid={};", RouterContact::ACTIVE_NETID));
+        //     }
+        //     else
+        //     {
+        //       msg.AddNXReply();
+        //     }
+        //   }
+        //   else
+        //   {
+        //     msg.AddNXReply();
+        //   }
+
+        //   reply(msg);
+        // }
+        // else if (msg.questions[0].qtype == dns::qTypeMX)
+        // {
+        //   // mx record
+        //   service::Address addr;
+        //   if (addr.FromString(qname, ".loki") || addr.FromString(qname, ".snode")
+        //       || is_random_snode(msg) || is_localhost_loki(msg))
+        //   {
+        //     msg.AddMXReply(qname, 1);
+        //   }
+        //   else if (service::is_valid_name(ons_name))
+        //   {
+        //     lookup_name(
+        //         ons_name, [msg, ons_name, reply](std::string name_result, bool success) mutable {
+        //           if (success)
+        //           {
+        //             msg.AddMXReply(name_result, 1);
+        //           }
+        //           else
+        //             msg.AddNXReply();
+
+        //           reply(msg);
+        //         });
+
+        //     return true;
+        //   }
+        //   else
+        //     msg.AddNXReply();
+        //   reply(msg);
+        // }
+        // else if (msg.questions[0].qtype == dns::qTypeCNAME)
+        // {
+        //   if (is_random_snode(msg))
+        //   {
+        //     if (auto random = router().GetRandomGoodRouter())
+        //     {
+        //       msg.AddCNAMEReply(random->to_string(), 1);
+        //     }
+        //     else
+        //       msg.AddNXReply();
+        //   }
+        //   else if (msg.questions[0].IsLocalhost() and msg.questions[0].HasSubdomains())
+        //   {
+        //     const auto subdomain = msg.questions[0].Subdomains();
+        //     if (subdomain == "exit" and HasExit())
+        //     {
+        //       _exit_map.ForEachEntry(
+        //           [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.to_string(), 1);
+        //           });
+        //     }
+        //     else
+        //     {
+        //       msg.AddNXReply();
+        //     }
+        //   }
+        //   else if (is_localhost_loki(msg))
+        //   {
+        //     size_t counter = 0;
+        //     context->ForEachService(
+        //         [&](const std::string&, const std::shared_ptr<service::Endpoint>& service) ->
+        //         bool {
+        //           const service::Address addr = service->GetIdentity().pub.Addr();
+        //           msg.AddCNAMEReply(addr.to_string(), 1);
+        //           ++counter;
+        //           return true;
+        //         });
+        //     if (counter == 0)
+        //       msg.AddNXReply();
+        //   }
+        //   else
+        //     msg.AddNXReply();
+        //   reply(msg);
+        // }
+        // else if (msg.questions[0].qtype == dns::qTypeA || msg.questions[0].qtype ==
+        // dns::qTypeAAAA)
+        // {
+        //   const bool isV6 = msg.questions[0].qtype == dns::qTypeAAAA;
+        //   const bool isV4 = msg.questions[0].qtype == dns::qTypeA;
+        //   llarp::service::Address addr;
+        //   if (isV6 && !SupportsV6())
+        //   {  // empty reply but not a NXDOMAIN so that client can retry IPv4
+        //     msg.AddNSReply("localhost.loki.");
+        //   }
+        //   // on MacOS this is a typeA query
+        //   else if (is_random_snode(msg))
+        //   {
+        //     if (auto random = router().GetRandomGoodRouter())
+        //     {
+        //       msg.AddCNAMEReply(random->to_string(), 1);
+        //       return ReplyToSNodeDNSWhenReady(*random, std::make_shared<dns::Message>(msg),
+        //       isV6);
+        //     }
+
+        //     msg.AddNXReply();
+        //   }
+        //   else if (is_localhost_loki(msg))
+        //   {
+        //     const bool lookingForExit = msg.questions[0].Subdomains() == "exit";
+        //     huint128_t ip = GetIfAddr();
+        //     if (ip.h)
+        //     {
+        //       if (lookingForExit)
+        //       {
+        //         if (HasExit())
+        //         {
+        //           _exit_map.ForEachEntry(
+        //               [&msg](const auto&, const auto& exit) { msg.AddCNAMEReply(exit.to_string());
+        //               });
+        //           msg.AddINReply(ip, isV6);
+        //         }
+        //         else
+        //         {
+        //           msg.AddNXReply();
+        //         }
+        //       }
+        //       else
+        //       {
+        //         msg.AddCNAMEReply(_identity.pub.Name(), 1);
+        //         msg.AddINReply(ip, isV6);
+        //       }
+        //     }
+        //     else
+        //     {
+        //       msg.AddNXReply();
+        //     }
+        //   }
+        //   else if (addr.FromString(qname, ".loki"))
+        //   {
+        //     if (isV4 && SupportsV6())
+        //     {
+        //       msg.hdr_fields |= dns::flags_QR | dns::flags_AA | dns::flags_RA;
+        //     }
+        //     else
+        //     {
+        //       return ReplyToLokiDNSWhenReady(addr, std::make_shared<dns::Message>(msg), isV6);
+        //     }
+        //   }
+        //   else if (addr.FromString(qname, ".snode"))
+        //   {
+        //     if (isV4 && SupportsV6())
+        //     {
+        //       msg.hdr_fields |= dns::flags_QR | dns::flags_AA | dns::flags_RA;
+        //     }
+        //     else
+        //     {
+        //       return ReplyToSNodeDNSWhenReady(
+        //           addr.as_array(), std::make_shared<dns::Message>(msg), isV6);
+        //     }
+        //   }
+        //   else if (service::is_valid_name(ons_name))
+        //   {
+        //     lookup_name(
+        //         ons_name,
+        //         [msg = std::make_shared<dns::Message>(msg),
+        //          name = Name(),
+        //          ons_name,
+        //          isV6,
+        //          reply,
+        //          ReplyToDNSWhenReady](std::string name_result, bool success) mutable {
+        //           if (not success)
+        //           {
+        //             log::warning(logcat, "{} (ONS name: {}) not resolved", name, ons_name);
+        //             msg->AddNXReply();
+        //             reply(*msg);
+        //           }
+
+        //           ReplyToDNSWhenReady(name_result, msg, isV6);
+        //         });
+        //     return true;
+        //   }
+        //   else
+        //     msg.AddNXReply();
+
+        //   reply(msg);
+        // }
+        // else if (msg.questions[0].qtype == dns::qTypePTR)
+        // {
+        //   // reverse dns
+        //   if (auto ip = dns::DecodePTR(msg.questions[0].qname))
+        //   {
+        //     if (auto maybe = ObtainAddrForIP(*ip))
+        //     {
+        //       var::visit([&msg](auto&& result) { msg.AddAReply(result.to_string()); }, *maybe);
+        //       reply(msg);
+        //       return true;
+        //     }
+        //   }
+
+        //   msg.AddNXReply();
+        //   reply(msg);
+        //   return true;
+        // }
+        // else if (msg.questions[0].qtype == dns::qTypeSRV)
+        // {
+        //   auto srv_for = msg.questions[0].Subdomains();
+        //   auto name = msg.questions[0].qname;
+        //   if (is_localhost_loki(msg))
+        //   {
+        //     msg.AddSRVReply(intro_set().GetMatchingSRVRecords(srv_for));
+        //     reply(msg);
+        //     return true;
+        //   }
+        //   LookupServiceAsync(
+        //       name,
+        //       srv_for,
+        //       [reply, msg = std::make_shared<dns::Message>(std::move(msg))](auto records) {
+        //         if (records.empty())
+        //         {
+        //           msg->AddNXReply();
+        //         }
+        //         else
+        //         {
+        //           msg->AddSRVReply(records);
+        //         }
+        //         reply(*msg);
+        //       });
+        //   return true;
+        // }
+        // else
+        // {
+        //   msg.AddNXReply();
+        //   reply(msg);
+        // }
         return true;
-      }
-      else if (msg.questions[0].qtype == dns::qTypeSRV)
-      {
-        auto srv_for = msg.questions[0].Subdomains();
-        auto name = msg.questions[0].qname;
-        if (is_localhost_loki(msg))
-        {
-          msg.AddSRVReply(introSet().GetMatchingSRVRecords(srv_for));
-          reply(msg);
-          return true;
-        }
-        LookupServiceAsync(
-            name,
-            srv_for,
-            [reply, msg = std::make_shared<dns::Message>(std::move(msg))](auto records) {
-              if (records.empty())
-              {
-                msg->AddNXReply();
-              }
-              else
-              {
-                msg->AddSRVReply(records);
-              }
-              reply(*msg);
-            });
-        return true;
-      }
-      else
-      {
-        msg.AddNXReply();
-        reply(msg);
-      }
-      return true;
     }
 
-    void
-    TunEndpoint::ResetInternalState()
+    bool TunEndpoint::supports_ipv6() const
     {
-      service::Endpoint::ResetInternalState();
-    }
-
-    bool
-    TunEndpoint::SupportsV6() const
-    {
-      return m_UseV6;
+        return ipv6_enabled;
     }
 
     // FIXME: pass in which question it should be addressing
-    bool
-    TunEndpoint::ShouldHookDNSMessage(const dns::Message& msg) const
+    bool TunEndpoint::should_hook_dns_message(const dns::Message& msg) const
     {
-      llarp::service::Address addr;
-      if (msg.questions.size() == 1)
-      {
-        /// hook every .loki
-        if (msg.questions[0].HasTLD(".loki"))
-          return true;
-        /// hook every .snode
-        if (msg.questions[0].HasTLD(".snode"))
-          return true;
-        // hook any ranges we own
-        if (msg.questions[0].qtype == llarp::dns::qTypePTR)
+        // llarp::service::Address addr;
+        if (msg.questions.size() == 1)
         {
-          if (auto ip = dns::DecodePTR(msg.questions[0].qname))
-            return m_OurRange.Contains(*ip);
-          return false;
-        }
-      }
-      for (const auto& answer : msg.answers)
-      {
-        if (answer.HasCNameForTLD(".loki"))
-          return true;
-        if (answer.HasCNameForTLD(".snode"))
-          return true;
-      }
-      return false;
-    }
-
-    bool
-    TunEndpoint::MapAddress(const service::Address& addr, huint128_t ip, bool SNode)
-    {
-      auto itr = m_IPToAddr.find(ip);
-      if (itr != m_IPToAddr.end())
-      {
-        llarp::LogWarn(
-            ip, " already mapped to ", service::Address(itr->second.as_array()).ToString());
-        return false;
-      }
-      llarp::LogInfo(Name() + " map ", addr.ToString(), " to ", ip);
-
-      m_IPToAddr[ip] = addr;
-      m_AddrToIP[addr] = ip;
-      m_SNodes[addr] = SNode;
-      MarkIPActiveForever(ip);
-      MarkAddressOutbound(addr);
-      return true;
-    }
-
-    std::string
-    TunEndpoint::GetIfName() const
-    {
-#ifdef _WIN32
-      return net::TruncateV6(GetIfAddr()).ToString();
-#else
-      return m_IfName;
-#endif
-    }
-
-    bool
-    TunEndpoint::Start()
-    {
-      if (not Endpoint::Start())
-        return false;
-      return SetupNetworking();
-    }
-
-    bool
-    TunEndpoint::IsSNode() const
-    {
-      // TODO : implement me
-      return false;
-    }
-
-    bool
-    TunEndpoint::SetupTun()
-    {
-      m_NextIP = m_OurIP;
-      m_MaxIP = m_OurRange.HighestAddr();
-      llarp::LogInfo(Name(), " set ", m_IfName, " to have address ", m_OurIP);
-      llarp::LogInfo(Name(), " allocated up to ", m_MaxIP, " on range ", m_OurRange);
-
-      const service::Address ourAddr = m_Identity.pub.Addr();
-
-      if (not MapAddress(ourAddr, GetIfAddr(), false))
-      {
-        return false;
-      }
-
-      vpn::InterfaceInfo info;
-      info.addrs.emplace_back(m_OurRange);
-
-      if (m_BaseV6Address)
-      {
-        IPRange v6range = m_OurRange;
-        v6range.addr = (*m_BaseV6Address) | m_OurRange.addr;
-        LogInfo(Name(), " using v6 range: ", v6range);
-        info.addrs.emplace_back(v6range, AF_INET6);
-      }
-
-      info.ifname = m_IfName;
-
-      LogInfo(Name(), " setting up network...");
-
-      try
-      {
-        m_NetIf = Router()->GetVPNPlatform()->CreateInterface(std::move(info), Router());
-      }
-      catch (std::exception& ex)
-      {
-        LogError(Name(), " failed to set up network interface: ", ex.what());
-        return false;
-      }
-
-      m_IfName = m_NetIf->Info().ifname;
-      LogInfo(Name(), " got network interface ", m_IfName);
-
-      auto handle_packet = [netif = m_NetIf, pkt_router = m_PacketRouter](auto pkt) {
-        pkt.reply = [netif](auto pkt) { netif->WritePacket(std::move(pkt)); };
-        pkt_router->HandleIPPacket(std::move(pkt));
-      };
-
-      if (not Router()->loop()->add_network_interface(m_NetIf, std::move(handle_packet)))
-      {
-        LogError(Name(), " failed to add network interface");
-        return false;
-      }
-
-      m_OurIPv6 = llarp::huint128_t{
-          llarp::uint128_t{0xfd2e'6c6f'6b69'0000, llarp::net::TruncateV6(m_OurRange.addr).h}};
-
-      if constexpr (not llarp::platform::is_apple)
-      {
-        if (auto maybe = m_router->Net().GetInterfaceIPv6Address(m_IfName))
-        {
-          m_OurIPv6 = *maybe;
-          LogInfo(Name(), " has ipv6 address ", m_OurIPv6);
-        }
-      }
-
-      LogInfo(Name(), " setting up dns...");
-      SetupDNS();
-      Loop()->call_soon([this]() { m_router->routePoker()->SetDNSMode(false); });
-      return HasAddress(ourAddr);
-    }
-
-    std::unordered_map<std::string, std::string>
-    TunEndpoint::NotifyParams() const
-    {
-      auto env = Endpoint::NotifyParams();
-      env.emplace("IP_ADDR", m_OurIP.ToString());
-      env.emplace("IF_ADDR", m_OurRange.ToString());
-      env.emplace("IF_NAME", m_IfName);
-      std::string strictConnect;
-      for (const auto& addr : m_StrictConnectAddrs)
-        strictConnect += addr.ToString() + " ";
-      env.emplace("STRICT_CONNECT_ADDRS", strictConnect);
-      return env;
-    }
-
-    bool
-    TunEndpoint::SetupNetworking()
-    {
-      llarp::LogInfo("Set Up networking for ", Name());
-      return SetupTun();
-    }
-
-    void
-    TunEndpoint::Tick(llarp_time_t now)
-    {
-      Endpoint::Tick(now);
-    }
-
-    bool
-    TunEndpoint::Stop()
-    {
-      // stop vpn tunnel
-      if (m_NetIf)
-        m_NetIf->Stop();
-      if (m_RawDNS)
-        m_RawDNS->Stop();
-      // save address map if applicable
-      if (m_PersistAddrMapFile and not platform::is_android)
-      {
-        const auto& file = *m_PersistAddrMapFile;
-        LogInfo(Name(), " saving address map to ", file);
-        if (auto maybe = util::OpenFileStream<fs::ofstream>(file, std::ios_base::binary))
-        {
-          std::map<std::string, std::string> addrmap;
-          for (const auto& [ip, addr] : m_IPToAddr)
-          {
-            if (not m_SNodes.at(addr))
+            /// hook every .loki
+            if (msg.questions[0].HasTLD(".loki"))
+                return true;
+            /// hook every .snode
+            if (msg.questions[0].HasTLD(".snode"))
+                return true;
+            // hook any ranges we own
+            if (msg.questions[0].qtype == llarp::dns::qTypePTR)
             {
-              const service::Address a{addr.as_array()};
-              if (HasInboundConvo(a))
-                addrmap[ip.ToString()] = a.ToString();
+                if (auto ip = dns::DecodePTR(msg.questions[0].qname))
+                    return _local_range.contains(*ip);
+                return false;
             }
-          }
-          const auto data = oxenc::bt_serialize(addrmap);
-          maybe->write(data.data(), data.size());
         }
-      }
-      if (m_DNS)
-        m_DNS->Stop();
-      return llarp::service::Endpoint::Stop();
+        for (const auto& answer : msg.answers)
+        {
+            if (answer.HasCNameForTLD(".loki"))
+                return true;
+            if (answer.HasCNameForTLD(".snode"))
+                return true;
+        }
+        return false;
     }
 
-    std::optional<service::Address>
-    TunEndpoint::ObtainExitAddressFor(
-        huint128_t ip,
-        std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat)
+    std::string TunEndpoint::get_if_name() const
     {
-      // is it already mapped? return the mapping
-      if (auto itr = m_ExitIPToExitAddress.find(ip); itr != m_ExitIPToExitAddress.end())
-        return itr->second;
+        return _if_name;
+    }
 
-      const auto& net = m_router->Net();
-      const bool is_bogon = net.IsBogonIP(ip);
-      // build up our candidates to choose
+    bool TunEndpoint::is_service_node() const
+    {
+        return _router.is_service_node();
+    }
 
-      std::unordered_set<service::Address> candidates;
-      for (const auto& entry : m_ExitMap.FindAllEntries(ip))
-      {
-        // in the event the exit's range is a bogon range, make sure the ip is located in that range
-        // to allow it
-        if ((is_bogon and net.IsBogonRange(entry.first) and entry.first.Contains(ip))
-            or entry.first.Contains(ip))
-          candidates.emplace(entry.second);
-      }
-      // no candidates? bail.
-      if (candidates.empty())
+    bool TunEndpoint::is_exit_node() const
+    {
+        return _router.is_exit_node();
+    }
+
+    bool TunEndpoint::stop()
+    {
+        // stop vpn tunnel
+        if (_net_if)
+            _net_if->Stop();
+        if (_raw_DNS)
+            _raw_DNS->Stop();
+
+        // save address map if applicable
+        if (_persisting_addr_file and not platform::is_android)
+        {
+            const auto& file = *_persisting_addr_file;
+            log::debug(logcat, "{} saving address map to {}", name(), file);
+            // if (auto maybe = util::OpenFileStream<fs::ofstream>(file, std::ios_base::binary))
+            // {
+            //   std::map<std::string, std::string> addrmap;
+            //   for (const auto& [ip, addr] : m_IPToAddr)
+            //   {
+            //     if (not m_SNodes.at(addr))
+            //     {
+            //       const service::Address a{addr.as_array()};
+            //       if (HasInboundConvo(a))
+            //         addrmap[ip.to_string()] = a.to_string();
+            //     }
+            //   }
+            //   const auto data = oxenc::bt_serialize(addrmap);
+            //   maybe->write(data.data(), data.size());
+            // }
+        }
+
+        if (_dns)
+            _dns->stop();
+
+        return true;
+    }
+
+    std::optional<ip_v> TunEndpoint::get_next_local_ip()
+    {
+        // if our IP range is exhausted, we loop back around to see if any have been unmapped from terminated sessions;
+        // we only want to reset the iterator and loop back through once though
+        bool has_reset = false;
+
+        do
+        {
+            // this will be std::nullopt if IP range is exhausted OR the IP incrementing overflowed (basically equal)
+            if (auto maybe_next_ip = _local_range_iterator.next_ip(); maybe_next_ip)
+            {
+                if (not _local_ip_mapping.has_local(*maybe_next_ip))
+                    return maybe_next_ip;
+                // local IP is already assigned; try again
+                continue;
+            }
+
+            if (not has_reset)
+            {
+                log::debug(logcat, "Resetting IP range iterator for range: {}...", _local_range);
+                _local_range_iterator.reset();
+                has_reset = true;
+            }
+            else
+                break;
+        } while (true);
+
         return std::nullopt;
-      if (not exitSelectionStrat)
-      {
-        // default strat to random choice
-        exitSelectionStrat = [](auto candidates) {
-          auto itr = candidates.begin();
-          std::advance(itr, llarp::randint() % candidates.size());
-          return *itr;
-        };
-      }
-      // map the exit and return the endpoint we mapped it to
-      return m_ExitIPToExitAddress.emplace(ip, exitSelectionStrat(candidates)).first->second;
     }
 
-    void
-    TunEndpoint::HandleGotUserPacket(net::IPPacket pkt)
+    std::optional<ip_v> TunEndpoint::map_session_to_local_ip(const NetworkAddress& remote)
     {
-      huint128_t dst, src;
-      if (pkt.IsV4())
-      {
-        dst = pkt.dst4to6();
-        src = pkt.src4to6();
-      }
-      else
-      {
-        dst = pkt.dstv6();
-        src = pkt.srcv6();
-      }
+        std::optional<ip_v> ret = std::nullopt;
 
-      if constexpr (llarp::platform::is_apple)
-      {
-        if (dst == m_OurIP)
+        // first: check if we have a config value for this remote
+        if (auto maybe_ip = _local_ip_mapping.get_local_from_remote(remote); maybe_ip)
         {
-          HandleWriteIPPacket(pkt.ConstBuffer(), src, dst, 0);
-          return;
+            ret = maybe_ip;
+            log::debug(
+                logcat,
+                "Local IP for session to remote ({}) pre-loaded from config: {}",
+                remote,
+                std::holds_alternative<ipv4>(*maybe_ip) ? std::get<ipv4>(*maybe_ip).to_string()
+                                                        : std::get<ipv6>(*maybe_ip).to_string());
         }
-      }
-
-      if (m_state->m_ExitEnabled)
-      {
-        dst = net::ExpandV4(net::TruncateV6(dst));
-      }
-      auto itr = m_IPToAddr.find(dst);
-      if (itr == m_IPToAddr.end())
-      {
-        service::Address addr{};
-
-        if (auto maybe = ObtainExitAddressFor(dst))
-          addr = *maybe;
         else
         {
-          // send icmp unreachable as we dont have any exits for this ip
-          if (const auto icmp = pkt.MakeICMPUnreachable())
-            HandleWriteIPPacket(icmp->ConstBuffer(), dst, src, 0);
-
-          return;
-        }
-        std::function<void(void)> extra_cb;
-        if (not HasFlowToService(addr))
-        {
-          extra_cb = [poker = Router()->routePoker()]() { poker->Up(); };
-        }
-        pkt.ZeroSourceAddress();
-        MarkAddressOutbound(addr);
-        EnsurePathToService(
-            addr,
-            [pkt, extra_cb, this](service::Address addr, service::OutboundContext* ctx) {
-              if (ctx)
-              {
-                if (extra_cb)
-                  extra_cb();
-                ctx->SendPacketToRemote(pkt.ConstBuffer(), service::ProtocolType::Exit);
-                Router()->TriggerPump();
-                return;
-              }
-              LogWarn("cannot ensure path to exit ", addr, " so we drop some packets");
-            },
-            PathAlignmentTimeout());
-        return;
-      }
-      std::variant<service::Address, RouterID> to;
-      service::ProtocolType type;
-      if (m_SNodes.at(itr->second))
-      {
-        to = RouterID{itr->second.as_array()};
-        type = service::ProtocolType::TrafficV4;
-      }
-      else
-      {
-        to = service::Address{itr->second.as_array()};
-        type = m_state->m_ExitEnabled and src != m_OurIP ? service::ProtocolType::Exit
-                                                         : pkt.ServiceProtocol();
-      }
-
-      // prepare packet for insertion into network
-      // this includes clearing IP addresses, recalculating checksums, etc
-      // this does not happen for exits because the point is they don't rewrite addresses
-      if (type != service::ProtocolType::Exit)
-      {
-        if (pkt.IsV4())
-          pkt.UpdateIPv4Address({0}, {0});
-        else
-          pkt.UpdateIPv6Address({0}, {0});
-      }
-      // try sending it on an existing convotag
-      // this succeds for inbound convos, probably.
-      if (auto maybe = GetBestConvoTagFor(to))
-      {
-        if (SendToOrQueue(*maybe, pkt.ConstBuffer(), type))
-        {
-          MarkIPActive(dst);
-          Router()->TriggerPump();
-          return;
-        }
-      }
-      // try establishing a path to this guy
-      // will fail if it's an inbound convo
-      EnsurePathTo(
-          to,
-          [pkt, type, dst, to, this](auto maybe) {
-            if (not maybe)
+            // We need to check that we both have a valid IP in our local range and that it is not already pre-assigned
+            // to a remote from the config
+            if (auto maybe_next_ip = get_next_local_ip(); maybe_next_ip)
             {
-              var::visit(
-                  [this](auto&& addr) {
-                    LogWarn(Name(), " failed to ensure path to ", addr, " no convo tag found");
-                  },
-                  to);
+                ret = maybe_next_ip;
+                _local_ip_mapping.insert_or_assign(*maybe_next_ip, remote);
+
+                log::debug(
+                    logcat,
+                    "Local IP for session to remote ({}) assigned: {}",
+                    remote,
+                    std::holds_alternative<ipv4>(*maybe_next_ip) ? std::get<ipv4>(*maybe_next_ip).to_string()
+                                                                 : std::get<ipv6>(*maybe_next_ip).to_string());
             }
-            if (SendToOrQueue(*maybe, pkt.ConstBuffer(), type))
+            else
+                log::critical(logcat, "TUN device failed to assign local private IP for session to remote: {}", remote);
+        }
+
+        return ret;
+    }
+
+    void TunEndpoint::unmap_session_to_local_ip(const NetworkAddress& remote)
+    {
+        if (_local_ip_mapping.has_remote(remote))
+        {
+            _local_ip_mapping.unmap(remote);
+            log::debug(logcat, "TUN device unmapped session to remote: {}", remote);
+        }
+        else
+        {
+            log::debug(logcat, "TUN device could not unmap session (remote: {})", remote);
+        }
+    }
+
+    void TunEndpoint::handle_outbound_packet(IPPacket pkt)
+    {
+        ip_v src, dest;
+
+        auto pkt_is_ipv4 = pkt.is_ipv4();
+
+        if (pkt_is_ipv4)
+        {
+            src = pkt.source_ipv4();
+            dest = pkt.dest_ipv4();
+        }
+        else
+        {
+            src = pkt.source_ipv6();
+            dest = pkt.dest_ipv6();
+        }
+
+        if constexpr (llarp::platform::is_apple)
+        {
+            if (ip_equals_address(dest, _local_addr, pkt_is_ipv4))
             {
-              MarkIPActive(dst);
-              Router()->TriggerPump();
+                rewrite_and_send_packet(std::move(pkt), src, dest);
+                return;
+            }
+        }
+
+        // we pass `dest` because that is our local private IP on the outgoing IPPacket
+        if (auto maybe_remote = _local_ip_mapping.get_remote_from_local(dest))
+        {
+            auto& remote = *maybe_remote;
+            pkt.clear_addresses();
+
+            if (auto session = _router.session_endpoint()->get_session(remote))
+            {
+                log::debug(logcat, "Dispatching outbound packet for session (remote: {})", remote);
+                session->send_path_data_message(std::move(pkt).steal_payload());
+            }
+            else
+                log::warning(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
+        }
+        else
+            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
+    }
+
+    bool TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4)
+    {
+        // we are receiving traffic from a session to a local exit node
+        if (auto maybe_src = _local_ip_mapping.get_local_from_remote(remote))
+        {
+            if (std::holds_alternative<ipv4>(*maybe_src))
+            {
+                if (use_ipv4)
+                    src = *maybe_src;
+                else
+                {
+                    auto quicaddr = oxen::quic::Address{std::get<ipv4>(*maybe_src)};
+                    src = quicaddr.to_ipv6();
+                }
             }
             else
             {
-              var::visit(
-                  [this](auto&& addr) {
-                    LogWarn(Name(), " failed to send to ", addr, ", SendToOrQueue failed");
-                  },
-                  to);
+                if (use_ipv4)
+                {
+                    auto quicaddr = oxen::quic::Address{std::get<ipv6>(*maybe_src)};
+                    src = quicaddr.to_ipv4();
+                }
+                else
+                    src = *maybe_src;
             }
-          },
-          PathAlignmentTimeout());
-    }
-
-    bool
-    TunEndpoint::ShouldAllowTraffic(const net::IPPacket& pkt) const
-    {
-      if (const auto exitPolicy = GetExitPolicy())
-      {
-        if (not exitPolicy->AllowsTraffic(pkt))
-          return false;
-      }
-
-      return true;
-    }
-
-    bool
-    TunEndpoint::HandleInboundPacket(
-        const service::ConvoTag tag,
-        const llarp_buffer_t& buf,
-        service::ProtocolType t,
-        uint64_t seqno)
-    {
-      LogTrace("Inbound ", t, " packet (", buf.sz, "B) on convo ", tag);
-      if (t == service::ProtocolType::QUIC)
-      {
-        auto* quic = GetQUICTunnel();
-        if (!quic)
-        {
-          LogWarn("incoming quic packet but this endpoint is not quic capable; dropping");
-          return false;
-        }
-        if (buf.sz < 4)
-        {
-          LogWarn("invalid incoming quic packet, dropping");
-          return false;
-        }
-        LogInfo("tag active T=", tag);
-        quic->receive_packet(tag, buf);
-        return true;
-      }
-
-      if (t != service::ProtocolType::TrafficV4 && t != service::ProtocolType::TrafficV6
-          && t != service::ProtocolType::Exit)
-        return false;
-      std::variant<service::Address, RouterID> addr;
-      if (auto maybe = GetEndpointWithConvoTag(tag))
-      {
-        addr = *maybe;
-      }
-      else
-        return false;
-      huint128_t src, dst;
-
-      net::IPPacket pkt;
-      if (not pkt.Load(buf))
-        return false;
-
-      if (m_state->m_ExitEnabled)
-      {
-        // exit side from exit
-
-        // check packet against exit policy and if as needed
-        if (not ShouldAllowTraffic(pkt))
-          return false;
-
-        src = ObtainIPForAddr(addr);
-        if (t == service::ProtocolType::Exit)
-        {
-          if (pkt.IsV4())
-            dst = pkt.dst4to6();
-          else if (pkt.IsV6())
-          {
-            dst = pkt.dstv6();
-            src = net::ExpandV4Lan(net::TruncateV6(src));
-          }
         }
         else
         {
-          // non exit traffic on exit
-          dst = m_OurIP;
-        }
-      }
-      else if (t == service::ProtocolType::Exit)
-      {
-        // client side exit traffic from exit
-        if (pkt.IsV4())
-        {
-          dst = m_OurIP;
-          src = pkt.src4to6();
-        }
-        else if (pkt.IsV6())
-        {
-          dst = m_OurIPv6;
-          src = pkt.srcv6();
-        }
-        // find what exit we think this should be for
-        service::Address fromAddr{};
-        if (const auto* ptr = std::get_if<service::Address>(&addr))
-        {
-          fromAddr = *ptr;
-        }
-        else  // don't allow snode
-          return false;
-        // make sure the mapping matches
-        if (auto itr = m_ExitIPToExitAddress.find(src); itr != m_ExitIPToExitAddress.end())
-        {
-          if (itr->second != fromAddr)
+            log::critical(logcat, "Unable to find local IP for inbound packet from remote: {}", remote);
             return false;
         }
+
+        return true;
+    }
+
+    void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
+    {
+        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->write_packet(std::move(pkt)); });
+    }
+
+    void TunEndpoint::rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest)
+    {
+        if (pkt.is_ipv4())
+            pkt.update_ipv4_address(std::get<ipv4>(src), std::get<ipv4>(dest));
         else
-          return false;
-      }
-      else
-      {
-        // snapp traffic
-        src = ObtainIPForAddr(addr);
-        dst = m_OurIP;
-      }
-      HandleWriteIPPacket(buf, src, dst, seqno);
-      return true;
+            pkt.update_ipv6_address(std::get<ipv6>(src), std::get<ipv6>(dest));
+
+        send_packet_to_net_if(std::move(pkt));
     }
 
-    bool
-    TunEndpoint::HandleWriteIPPacket(
-        const llarp_buffer_t& b, huint128_t src, huint128_t dst, uint64_t seqno)
+    bool TunEndpoint::handle_inbound_packet(
+        IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
     {
-      ManagedBuffer buf(b);
-      WritePacket write;
-      write.seqno = seqno;
-      auto& pkt = write.pkt;
-      // load
-      if (!pkt.Load(buf))
-      {
-        return false;
-      }
-      if (pkt.IsV4())
-      {
-        pkt.UpdateIPv4Address(xhtonl(net::TruncateV6(src)), xhtonl(net::TruncateV6(dst)));
-      }
-      else if (pkt.IsV6())
-      {
-        pkt.UpdateIPv6Address(src, dst);
-      }
-      m_NetworkToUserPktQueue.push(std::move(write));
-      // wake up so we ensure that all packets are written to user
-      Router()->TriggerPump();
-      return true;
-    }
+        ip_v src, dest;
 
-    huint128_t
-    TunEndpoint::GetIfAddr() const
-    {
-      return m_OurIP;
-    }
+        auto pkt_is_ipv4 = pkt.is_ipv4();
 
-    huint128_t
-    TunEndpoint::ObtainIPForAddr(std::variant<service::Address, RouterID> addr)
-    {
-      llarp_time_t now = Now();
-      huint128_t nextIP = {0};
-      AlignedBuffer<32> ident{};
-      bool snode = false;
-
-      var::visit([&ident](auto&& val) { ident = val.data(); }, addr);
-
-      if (std::get_if<RouterID>(&addr))
-      {
-        snode = true;
-      }
-
-      {
-        // previously allocated address
-        auto itr = m_AddrToIP.find(ident);
-        if (itr != m_AddrToIP.end())
+        if (is_exit_session and is_outbound_session)
         {
-          // mark ip active
-          MarkIPActive(itr->second);
-          return itr->second;
+            // we are receiving traffic from a session to a remote exit node
+            if (pkt_is_ipv4)
+            {
+                src = pkt.source_ipv4();
+                dest = _local_addr.to_ipv4();
+            }
+            else
+            {
+                src = pkt.source_ipv6();
+                dest = _local_ipv6.to_ipv6();
+            }
+
+            assert(remote.is_client());
+
+            auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
+
+            if (not maybe_remote)
+            {
+                log::critical(
+                    logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
+                return false;
+            }
+            if (*maybe_remote != remote)
+            {
+                log::critical(
+                    logcat,
+                    "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
+                    src,
+                    *maybe_remote,
+                    remote);
+                return false;
+            }
         }
-      }
-      // allocate new address
-      if (m_NextIP < m_MaxIP)
-      {
-        do
+        else
         {
-          nextIP = ++m_NextIP;
-        } while (m_IPToAddr.find(nextIP) != m_IPToAddr.end() && m_NextIP < m_MaxIP);
-        if (nextIP < m_MaxIP)
-        {
-          m_AddrToIP[ident] = nextIP;
-          m_IPToAddr[nextIP] = ident;
-          m_SNodes[ident] = snode;
-          var::visit(
-              [&](auto&& remote) { llarp::LogInfo(Name(), " mapped ", remote, " to ", nextIP); },
-              addr);
-          MarkIPActive(nextIP);
-          return nextIP;
+            if (is_exit_session and not is_outbound_session)
+            {
+                // we are receiving traffic from a session to a local exit node
+                if (not is_allowing_traffic(pkt))
+                    return false;
+
+                if (pkt_is_ipv4)
+                    dest = pkt.dest_ipv4();
+                else
+                    dest = pkt.dest_ipv6();
+            }
+            else
+            {
+                // we are receiving hidden service traffic
+                if (pkt_is_ipv4)
+                    dest = _local_addr.to_ipv4();
+                else
+                    dest = _local_ipv6.to_ipv6();
+            }
+
+            if (not obtain_src_for_remote(remote, src, pkt_is_ipv4))
+                return false;
         }
-      }
 
-      // we are full
-      // expire least active ip
-      // TODO: prevent DoS
-      std::pair<huint128_t, llarp_time_t> oldest = {huint128_t{0}, 0s};
+        rewrite_and_send_packet(std::move(pkt), src, dest);
 
-      // find oldest entry
-      auto itr = m_IPActivity.begin();
-      while (itr != m_IPActivity.end())
-      {
-        if (itr->second <= now)
-        {
-          if ((now - itr->second) > oldest.second)
-          {
-            oldest.first = itr->first;
-            oldest.second = itr->second;
-          }
-        }
-        ++itr;
-      }
-      // remap address
-      m_IPToAddr[oldest.first] = ident;
-      m_AddrToIP[ident] = oldest.first;
-      m_SNodes[ident] = snode;
-      nextIP = oldest.first;
-
-      // mark ip active
-      m_IPActivity[nextIP] = std::max(m_IPActivity[nextIP], now);
-
-      return nextIP;
+        return true;
     }
 
-    bool
-    TunEndpoint::HasRemoteForIP(huint128_t ip) const
+    void TunEndpoint::start_poller()
     {
-      return m_IPToAddr.find(ip) != m_IPToAddr.end();
+        if (not _poller->start())
+            throw std::runtime_error{"TUN failed to start FD poller!"};
+        log::debug(logcat, "TUN successfully started FD poller!");
     }
 
-    void
-    TunEndpoint::MarkIPActive(huint128_t ip)
+    bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
-      llarp::LogDebug(Name(), " address ", ip, " is active");
-      m_IPActivity[ip] = std::max(Now(), m_IPActivity[ip]);
+        if (auto exitPolicy = get_traffic_policy())
+            return exitPolicy->allow_ip_traffic(pkt);
+
+        return true;
     }
 
-    void
-    TunEndpoint::MarkIPActiveForever(huint128_t ip)
+    bool TunEndpoint::has_mapping_to_remote(const NetworkAddress& addr) const
     {
-      m_IPActivity[ip] = std::numeric_limits<llarp_time_t>::max();
+        return _local_ip_mapping.has_remote(addr);
+    }
+
+    std::optional<ip_v> TunEndpoint::get_mapped_ip(const NetworkAddress& addr)
+    {
+        return _local_ip_mapping.get_local_from_remote(addr);
+    }
+
+    oxen::quic::Address TunEndpoint::get_if_addr() const
+    {
+        return _local_addr;
     }
 
     TunEndpoint::~TunEndpoint() = default;
 
-  }  // namespace handlers
-}  // namespace llarp
+}  // namespace llarp::handlers

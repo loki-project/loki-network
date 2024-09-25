@@ -1,19 +1,19 @@
 BasedOnStyle: Google
+
+# alignment
 AlignAfterOpenBracket: AlwaysBreak
 AlignConsecutiveAssignments: 'false'
 AlignConsecutiveDeclarations: 'false'
 AlignEscapedNewlinesLeft: 'true'
 AlignOperands: 'false'
 AlignTrailingComments: 'true'
-AllowShortBlocksOnASingleLine: 'false'
-AllowShortCaseLabelsOnASingleLine: 'false'
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: 'false'
-AllowShortLoopsOnASingleLine: 'false'
-AlwaysBreakAfterDefinitionReturnType: All
-AlwaysBreakAfterReturnType: All
-AlwaysBreakTemplateDeclarations: 'true'
-BreakBeforeBinaryOperators: NonAssignment
+ColumnLimit: 120
+PointerAlignment: Left
+QualifierAlignment: Custom
+QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'type']
+ReferenceAlignment: Left
+
+# bracing
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterCaseLabel: true
@@ -31,11 +31,31 @@ BraceWrapping:
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
+
+# breaking
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: 'true'
+BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeTernaryOperators: 'true'
-BreakConstructorInitializersBeforeComma: 'true'
-Cpp11BracedListStyle: 'true'
-KeepEmptyLinesAtTheStartOfBlocks: 'false'
+BreakConstructorInitializers: BeforeColon
+
+# indentation
+AccessModifierOffset: -2
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+IndentWidth: 4
 NamespaceIndentation: All
+
+# shorties
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortCaseLabelsOnASingleLine: 'false'
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: 'false'
+AllowShortLoopsOnASingleLine: 'false'
+
+# spacing
+KeepEmptyLinesAtTheStartOfBlocks: 'false'
 PenaltyBreakString: '3'
 SpaceBeforeParens: ControlStatements
 SpacesInAngles: 'false'
@@ -44,18 +64,30 @@ SpacesInParentheses: 'false'
 SpacesInSquareBrackets: 'false'
 Standard: Cpp11
 UseTab: Never
-SortIncludes: false
-ColumnLimit: 100
 
-# treat pointers and reference declarations as if part of the type
-DerivePointerAlignment: false
-PointerAlignment: Left
-
-# when wrapping function calls/declarations, force each parameter to have its own line
+# wrapping
+PackConstructorInitializers: NextLine
 BinPackParameters: 'false'
 BinPackArguments: 'false'
 
-# TODO: uncomment me when we are reading to rearrange the header includes
-# IncludeBlocks: Regroup
-# IncludeCategories: 'llarp/'
-
+# Include block sorting in the following order:
+#   - Main header for source file (clang-format default prioritizes this first)
+#   - Relative path includes in quotation marks
+#   - Absolute path includes in angle brackets
+#   - External dependencies
+#   - System dependencies
+SortIncludes: CaseInsensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '".+\.h'
+    Priority: 2
+  - Regex: '^<llarp'
+    Priority: 3
+  - Regex: '<winsock2\.h>'
+    Priority: 4
+  - Regex: '<windows\.h>'
+    Priority: 5
+  - Regex: '^<.*\.h(pp)?>$'
+    Priority: 6
+  - Regex: '(<)(.)+(>)'
+    Priority: 7

@@ -2,33 +2,25 @@
 
 This is where Lokinet documentation lives.
 
-[How Do I install Lokinet?](install.md)
+## Contents:
 
-[How Do I use Lokinet?](ideal-ux.md)
-
-## High level
-
-[How is Lokinet different to \[insert network technology name here\] ?](net-comparisons.md)
-
-<!-- [How does Lokinet work?](high-level-overview.md) -->
-
-[Lokinet and DNS](dns-overview.md)
-
-[What Lokinet can't do](we-cannot-make-sandwiches.md)
-
-## Lokinet Internals
-
-[High level layout of the git repo](project-structure.md)
+### Local Environment Set-Up
+  - [Installing Lokinet](install.md)
+  - [Using Lokinet](ideal-ux.md)
 
 
-[Build Doxygen Docs for internals](doxygen.md)
-
-## Lokinet (SN)Application Developer Portal
-
-
-[What are "SNApps" and how to develop them.](snapps-dev-guide.md)
-
-[How do I embed lokinet into my application?](liblokinet-dev-guide.md)
+### High Level Overview
+  - [Lokinet versus \[insert network technology name here\]](net-comparisons.md)
+  - [Lokinet architecture](architecture.md)
+  - [Lokinet and DNS](dns-overview.md)
+  - [Limitations of Lokinet](we-cannot-make-sandwiches.md)
 
 
+### Lokinet Internals
+  - [Git repo layout and project structure](project-structure.md)
+  - [Building Doxygen Docs for internals](doxygen.md)
 
+
+### Lokinet (SN)Application Developer Portal
+  - [SNapps development overview](snapps-dev-guide.md)
+  - [Embedded Lokinet](liblokinet-dev-guide.md)

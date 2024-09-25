@@ -1,4 +1,3 @@
-#include "llarp_test.hpp"
 #include <llarp/exit/exit_messages.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/crypto/crypto_libsodium.hpp>
@@ -16,10 +15,10 @@ fill(Signature& s)
   s.Fill(0xFF);
 }
 
-TEST_CASE_METHOD(LlarpTest<>, "Sign-verify")
+TEST_CASE("Sign-verify")
 {
   SecretKey alice{};
-  CryptoManager::instance()->identity_keygen(alice);
+  crypto::identity_keygen(alice);
   REQUIRE(not alice.IsZero());
   ObtainExitMessage msg{};
   msg.S = randint();

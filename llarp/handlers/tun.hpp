@@ -1,12 +1,11 @@
 #pragma once
 
+#include <llarp/address/ip_packet.hpp>
+#include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/ev/ev.hpp>
 #include <llarp/net/ip.hpp>
-#include <llarp/net/ip_packet.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/endpoint.hpp>
-#include <llarp/service/protocol_type.hpp>
+#include <llarp/service/identity.hpp>
 #include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
@@ -16,313 +15,177 @@
 #include <type_traits>
 #include <variant>
 
-namespace llarp
+namespace llarp::handlers
 {
-  namespace handlers
-  {
-    struct TunEndpoint : public service::Endpoint,
-                         public dns::Resolver_Base,
-                         public std::enable_shared_from_this<TunEndpoint>
+    inline constexpr auto TUN = "tun"sv;
+    inline constexpr auto LOKI_RESOLVER = "lokinet"sv;
+
+    struct TunEndpoint : public dns::Resolver_Base, public std::enable_shared_from_this<TunEndpoint>
     {
-      TunEndpoint(AbstractRouter* r, llarp::service::Context* parent);
-      ~TunEndpoint() override;
+        TunEndpoint(Router& r);
+        ~TunEndpoint() override;
 
-      vpn::NetworkInterface*
-      GetVPNInterface() override
-      {
-        return m_NetIf.get();
-      }
+      private:
+        Router& _router;
 
-      int
-      Rank() const override
-      {
-        return 0;
-      }
+        /// dns subsystem for this endpoint
+        std::shared_ptr<dns::Server> _dns;
 
-      std::string_view
-      ResolverName() const override
-      {
-        return "lokinet";
-      }
+        /// our local ip range (config-mapped as `if-addr`), address, and ip
+        IPRange _local_range;
+        oxen::quic::Address _local_addr;
+        ip_v _local_base_ip;
 
-      bool
-      MaybeHookDNS(
-          std::shared_ptr<dns::PacketSource_Base> source,
-          const dns::Message& query,
-          const SockAddr& to,
-          const SockAddr& from) override;
+        IPRangeIterator _local_range_iterator;
 
-      path::PathSet_ptr
-      GetSelf() override
-      {
-        return shared_from_this();
-      }
+        /// Our local Network Address holding our network pubkey
+        NetworkAddress _local_netaddr;
 
-      std::weak_ptr<path::PathSet>
-      GetWeak() override
-      {
-        return weak_from_this();
-      }
+        /// our network interface's ipv6 address
+        oxen::quic::Address _local_ipv6;
 
-      void
-      Thaw() override;
+        /// list of strict connect addresses for hooks
+        // std::vector<IpAddress> _strict_connect_addrs;
+        /// use v6?
+        bool ipv6_enabled;
 
-      // Reconfigures DNS servers and restarts libunbound with the new servers.
-      void
-      ReconfigureDNS(std::vector<SockAddr> servers);
+        std::string _if_name;
 
-      bool
-      Configure(const NetworkConfig& conf, const DnsConfig& dnsConf) override;
+        std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
-      void
-      SendPacketToRemote(const llarp_buffer_t&, service::ProtocolType) override{};
+        std::shared_ptr<vpn::NetworkInterface> _net_if;
+        std::shared_ptr<FDPoller> _poller;
 
-      std::string
-      GetIfName() const override;
+        std::shared_ptr<vpn::PacketRouter> _packet_router;
 
-      void
-      Tick(llarp_time_t now) override;
+        std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
 
-      util::StatusObject
-      ExtractStatus() const override;
+        /// a file to load / store the ephemeral address map to
+        std::optional<fs::path> _persisting_addr_file = std::nullopt;
 
-      std::unordered_map<std::string, std::string>
-      NotifyParams() const override;
+        /// how long to wait for path alignment
+        std::chrono::milliseconds _path_alignment_timeout{30s};
 
-      bool
-      SupportsV6() const override;
+        /// for raw packet dns
+        std::shared_ptr<vpn::PacketIO> _raw_DNS;
 
-      bool
-      ShouldHookDNSMessage(const dns::Message& msg) const;
+      public:
+        vpn::NetworkInterface* get_vpn_interface() { return _net_if.get(); }
 
-      bool
-      HandleHookedDNSMessage(dns::Message query, std::function<void(dns::Message)> sendreply);
+        std::string_view name() const { return TUN; }
 
-      void
-      TickTun(llarp_time_t now);
+        int rank() const override { return 0; }
 
-      bool
-      MapAddress(const service::Address& remote, huint128_t ip, bool SNode);
+        std::string_view resolver_name() const override { return LOKI_RESOLVER; }
 
-      bool
-      Start() override;
+        bool maybe_hook_dns(
+            std::shared_ptr<dns::PacketSource_Base> source,
+            const dns::Message& query,
+            const oxen::quic::Address& to,
+            const oxen::quic::Address& from) override;
 
-      bool
-      Stop() override;
+        // Reconfigures DNS servers and restarts libunbound with the new servers.
+        void reconfigure_dns(std::vector<oxen::quic::Address> servers);
 
-      bool
-      IsSNode() const;
+        void configure();
 
-      /// set up tun interface, blocking
-      bool
-      SetupTun();
+        std::string get_if_name() const;
 
-      void
-      SetupDNS();
+        nlohmann::json ExtractStatus() const;
 
-      /// overrides Endpoint
-      std::shared_ptr<dns::Server>
-      DNS() const override
-      {
-        return m_DNS;
-      };
+        bool supports_ipv6() const;
 
-      /// overrides Endpoint
-      bool
-      SetupNetworking() override;
+        bool should_hook_dns_message(const dns::Message& msg) const;
 
-      /// overrides Endpoint
-      bool
-      HandleInboundPacket(
-          const service::ConvoTag tag,
-          const llarp_buffer_t& pkt,
-          service::ProtocolType t,
-          uint64_t seqno) override;
+        bool handle_hooked_dns_message(dns::Message query, std::function<void(dns::Message)> sendreply);
 
-      /// handle inbound traffic
-      bool
-      HandleWriteIPPacket(
-          const llarp_buffer_t& buf, huint128_t src, huint128_t dst, uint64_t seqno);
+        void tick_tun(std::chrono::milliseconds now);
 
-      /// we got a packet from the user
-      void
-      HandleGotUserPacket(llarp::net::IPPacket pkt);
+        bool stop();
 
-      /// get the local interface's address
-      huint128_t
-      GetIfAddr() const override;
+        bool is_service_node() const;
 
-      /// we have an interface addr
-      bool
-      HasIfAddr() const override
-      {
-        return true;
-      }
+        bool is_exit_node() const;
 
-      bool
-      HasLocalIP(const huint128_t& ip) const;
+        void setup_dns();
 
-      std::optional<net::TrafficPolicy>
-      GetExitPolicy() const override
-      {
-        return m_TrafficPolicy;
-      }
+        // INPROGRESS: new API
+        // Handles an outbound packet going out INTO the network
+        void handle_outbound_packet(IPPacket pkt);
 
-      std::set<IPRange>
-      GetOwnedRanges() const override
-      {
-        return m_OwnedRanges;
-      }
+        void rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest);
 
-      llarp_time_t
-      PathAlignmentTimeout() const override
-      {
-        return m_PathAlignmentTimeout;
-      }
+        // Handle an inbound packet coming in FROM the network
+        bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session);
 
-      /// ip packet against any exit policies we have
-      /// returns false if this traffic is disallowed by any of those policies
-      /// returns true otherwise
-      bool
-      ShouldAllowTraffic(const net::IPPacket& pkt) const;
+        // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
+        // route session traffic
+        std::optional<ip_v> map_session_to_local_ip(const NetworkAddress& remote);
 
-      /// get a key for ip address
-      std::optional<std::variant<service::Address, RouterID>>
-      ObtainAddrForIP(huint128_t ip) const override;
+        void unmap_session_to_local_ip(const NetworkAddress& remote);
 
-      bool
-      HasAddress(const AlignedBuffer<32>& addr) const
-      {
-        return m_AddrToIP.find(addr) != m_AddrToIP.end();
-      }
+        oxen::quic::Address get_if_addr() const;
 
-      /// get ip address for key unconditionally
-      huint128_t
-      ObtainIPForAddr(std::variant<service::Address, RouterID> addr) override;
+        bool has_if_addr() const { return true; }
 
-      void
-      ResetInternalState() override;
+        std::optional<net::TrafficPolicy> get_traffic_policy() const { return _traffic_policy; }
 
-     protected:
-      struct WritePacket
-      {
-        uint64_t seqno;
-        net::IPPacket pkt;
+        std::chrono::milliseconds get_path_alignment_timeout() const { return _path_alignment_timeout; }
 
-        bool
-        operator>(const WritePacket& other) const
+        /// ip packet against any exit policies we have
+        /// returns false if this traffic is disallowed by any of those policies
+        /// returns true otherwise
+        bool is_allowing_traffic(const IPPacket& pkt) const;
+
+        bool has_mapping_to_remote(const NetworkAddress& addr) const;
+
+        std::optional<ip_v> get_mapped_ip(const NetworkAddress& addr);
+
+        const Router& router() const { return _router; }
+
+        Router& router() { return _router; }
+
+        void start_poller();
+
+        //   protected:
+        struct WritePacket
         {
-          return seqno > other.seqno;
-        }
-      };
+            uint64_t seqno;
+            IPPacket pkt;
 
-      /// queue for sending packets to user from network
-      util::ascending_priority_queue<WritePacket> m_NetworkToUserPktQueue;
+            bool operator>(const WritePacket& other) const { return seqno > other.seqno; }
+        };
 
-      void
-      Pump(llarp_time_t now) override;
+        // Stores assigned IP's for each session in/out of this lokinet instance
+        //  - Reserved local addresses is directly pre-loaded from config
+        //  - Persisting address map is directly pre-loaded from config
+        address_map<ip_v, NetworkAddress> _local_ip_mapping;
 
-      /// return true if we have a remote loki address for this ip address
-      bool
-      HasRemoteForIP(huint128_t ipv4) const;
+      private:
+        std::optional<ip_v> get_next_local_ip();
 
-      /// mark this address as active
-      void
-      MarkIPActive(huint128_t ip);
+        bool obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4);
 
-      /// mark this address as active forever
-      void
-      MarkIPActiveForever(huint128_t ip);
+        void send_packet_to_net_if(IPPacket&& pkt);
 
-      /// flush writing ip packets to interface
-      void
-      FlushWrite();
-
-      /// maps ip to key (host byte order)
-      std::unordered_map<huint128_t, AlignedBuffer<32>> m_IPToAddr;
-      /// maps key to ip (host byte order)
-      std::unordered_map<AlignedBuffer<32>, huint128_t> m_AddrToIP;
-
-      /// maps key to true if key is a service node, maps key to false if key is
-      /// a hidden service
-      std::unordered_map<AlignedBuffer<32>, bool> m_SNodes;
-
-      /// maps ip address to an exit endpoint, useful when we have multiple exits on a range
-      std::unordered_map<huint128_t, service::Address> m_ExitIPToExitAddress;
-
-     private:
-      /// given an ip address that is not mapped locally find the address it shall be forwarded to
-      /// optionally provide a custom selection strategy, if none is provided it will choose a
-      /// random entry from the available choices
-      /// return std::nullopt if we cannot route this address to an exit
-      std::optional<service::Address>
-      ObtainExitAddressFor(
-          huint128_t ip,
-          std::function<service::Address(std::unordered_set<service::Address>)> exitSelectionStrat =
-              nullptr);
-
-      template <typename Addr_t, typename Endpoint_t>
-      void
-      SendDNSReply(
-          Addr_t addr,
-          Endpoint_t ctx,
-          std::shared_ptr<dns::Message> query,
-          std::function<void(dns::Message)> reply,
-          bool sendIPv6)
-      {
-        if (ctx)
+        template <typename Addr_t, typename Endpoint_t>
+        void send_dns_reply(
+            Addr_t addr,
+            Endpoint_t ctx,
+            std::shared_ptr<dns::Message> query,
+            std::function<void(dns::Message)> reply,
+            bool sendIPv6)
         {
-          huint128_t ip = ObtainIPForAddr(addr);
-          query->answers.clear();
-          query->AddINReply(ip, sendIPv6);
+            if (ctx)
+            {
+                huint128_t ip = get_ip_for_addr(addr);
+                query->answers.clear();
+                query->add_IN_reply(ip, sendIPv6);
+            }
+            else
+                query->add_nx_reply();
+            reply(*query);
         }
-        else
-          query->AddNXReply();
-        reply(*query);
-      }
-
-      /// dns subsystem for this endpoint
-      std::shared_ptr<dns::Server> m_DNS;
-
-      DnsConfig m_DnsConfig;
-
-      /// maps ip address to timestamp last active
-      std::unordered_map<huint128_t, llarp_time_t> m_IPActivity;
-      /// our ip address (host byte order)
-      huint128_t m_OurIP;
-      /// our network interface's ipv6 address
-      huint128_t m_OurIPv6;
-
-      /// next ip address to allocate (host byte order)
-      huint128_t m_NextIP;
-      /// highest ip address to allocate (host byte order)
-      huint128_t m_MaxIP;
-      /// our ip range we are using
-      llarp::IPRange m_OurRange;
-      /// list of strict connect addresses for hooks
-      std::vector<IpAddress> m_StrictConnectAddrs;
-      /// use v6?
-      bool m_UseV6;
-      std::string m_IfName;
-
-      std::optional<huint128_t> m_BaseV6Address;
-
-      std::shared_ptr<vpn::NetworkInterface> m_NetIf;
-
-      std::shared_ptr<vpn::PacketRouter> m_PacketRouter;
-
-      std::optional<net::TrafficPolicy> m_TrafficPolicy;
-      /// ranges we advetise as reachable
-      std::set<IPRange> m_OwnedRanges;
-      /// how long to wait for path alignment
-      llarp_time_t m_PathAlignmentTimeout;
-
-      /// a file to load / store the ephemeral address map to
-      std::optional<fs::path> m_PersistAddrMapFile;
-
-      /// for raw packet dns
-      std::shared_ptr<vpn::I_Packet_IO> m_RawDNS;
     };
 
-  }  // namespace handlers
-}  // namespace llarp
+}  // namespace llarp::handlers

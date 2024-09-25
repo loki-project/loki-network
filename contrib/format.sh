@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
 
+# set -x
+set -e
+
 . $(dirname $0)/format-version.sh
 
 cd "$(dirname $0)/../"
 
+sources=($(find jni daemon llarp include pybind | grep -E '\.([hc](pp)?|m(m)?)$' | grep -v '#'))
+
+incl_pat='^(#include +)"(llarp|libntrup|oxen|oxenc|oxenmq|quic|CLI|cpr|nlohmann|ghc|fmt|spdlog|uvw?)([/.][^"]*)"'
+
 if [ "$1" = "verify" ] ; then
-    if [ $($CLANG_FORMAT --output-replacements-xml $(find jni daemon llarp include pybind | grep -E '\.([hc](pp)?|m(m)?)$' | grep -v '#') | grep '</replacement>' | wc -l) -ne 0 ] ; then
+    if [ $($CLANG_FORMAT --output-replacements-xml "${sources[@]}" | grep '</replacement>' | wc -l) -ne 0 ] ; then
         exit 2
     fi
+
+    if grep --color -E "$incl_pat" "${sources[@]}"; then
+        exit 5
+    fi
 else
-    $CLANG_FORMAT -i $(find jni daemon llarp include pybind | grep -E '\.([hc](pp)?|m(m)?)$' | grep -v '#') &> /dev/null
+    $CLANG_FORMAT -i "${sources[@]}" &> /dev/null
+
+    perl -pi -e "s{$incl_pat}"'{$1<$2$3>}' "${sources[@]}" &> /dev/null
+fi
+
+# Some includes just shouldn't exist anywhere, but need to be fixed manually:
+if grep --color -E '^#include ([<"]external/|<bits/|<.*/impl)' "${sources[@]}"; then
+    echo "Format failed: bad includes detected that can't be auto-corrected"
+    exit 5
 fi
 
 swift_format=$(command -v swiftformat 2>/dev/null)

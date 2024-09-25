@@ -8,7 +8,7 @@ The `.snode` gtld refers to a router on the network by its public ed25519 key.
 
 The `.loki` gtld refers to clients that publish the existence anonymously to the network by their ed25519 public key. (`.loki` also has the ability to use short names resolved via external consensus method, like a blockchain).
 
-# How Do I use Lokinet?
+# How do I use Lokinet?
 
 set system dns resolver to use the dns resolver provided by lokinet, make sure the upstream dns provider that lokinet uses for non lokinet gtlds is set as desired (see lokinet.ini `[dns]` section)
 
@@ -16,7 +16,7 @@ configure exit traffic provider if you want to tunnel ip traffic via lokinet, by
 
 note: per flow (ip+proto/port) isolation is trivial on a technical level but currently not implemented at this time.
 
-# Can I run lokinet on a soho router
+# Can I run lokinet on a soho router?
 
 Yes and that is the best way to run it in practice. 
 

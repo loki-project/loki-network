@@ -17,10 +17,10 @@ namespace mocks
       loop = std::shared_ptr<llarp::EventLoop>{const_cast<Network*>(&_net), [](Network*) {}};
     }
 
-    std::shared_ptr<llarp::AbstractRouter>
+    std::shared_ptr<llarp::Router>
     makeRouter(const std::shared_ptr<llarp::EventLoop>&) override
     {
-      return std::static_pointer_cast<llarp::AbstractRouter>(
+      return std::static_pointer_cast<llarp::Router>(
           std::make_shared<MockRouter>(_net, makeVPNPlatform()));
     }
 

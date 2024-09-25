@@ -1,11 +1,11 @@
 #pragma once
 
+#include <llarp/util/logging.hpp>
+
 #include <cstdint>
 
-namespace llarp
+namespace llarp::dns
 {
-  namespace dns
-  {
     constexpr uint16_t qTypeSRV = 33;
     constexpr uint16_t qTypeAAAA = 28;
     constexpr uint16_t qTypeTXT = 16;
@@ -26,5 +26,4 @@ namespace llarp
     constexpr uint16_t flags_RCODEServFail = (2);
     constexpr uint16_t flags_RCODENoError = (0);
 
-  }  // namespace dns
-}  // namespace llarp
+}  // namespace llarp::dns

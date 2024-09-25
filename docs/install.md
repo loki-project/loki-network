@@ -30,7 +30,7 @@ You can get the latest stable release for lokinet on windows or macos from https
 
 You do not have to build from source if you do not wish to, we provide [apt](#deb-install) and [rpm](#rpm-install) repos.
 
-#### APT repository <span id="deb-install" />
+#### APT Repository <span id="deb-install" />
 
 You can install debian packages from `deb.oxen.io` by adding the apt repo to your system.
 

@@ -1,36 +1,34 @@
 #pragma once
 
 #include <llarp/util/buffer.hpp>
-#include <llarp/util/status.hpp>
+
+#include <nlohmann/json.hpp>
+
 #include <vector>
 
-namespace llarp
+namespace llarp::dns
 {
-  namespace dns
-  {
     /// base type for serializable dns entities
     struct Serialize
     {
-      virtual ~Serialize() = 0;
+        virtual ~Serialize() = 0;
 
-      /// encode entity to buffer
-      virtual bool
-      Encode(llarp_buffer_t* buf) const = 0;
+        /// encode entity to buffer
+        virtual bool Encode(llarp_buffer_t* buf) const = 0;
 
-      /// decode entity from buffer
-      virtual bool
-      Decode(llarp_buffer_t* buf) = 0;
+        /// decode entity from buffer
+        virtual bool Decode(llarp_buffer_t* buf) = 0;
 
-      /// convert this whatever into json
-      virtual util::StatusObject
-      ToJSON() const = 0;
+        virtual bool decode(std::span<unsigned char> b) = 0;
+
+        /// convert this whatever into json
+        virtual nlohmann::json ToJSON() const = 0;
+
+        static constexpr bool to_string_formattable = true;
     };
 
-    bool
-    EncodeRData(llarp_buffer_t* buf, const std::vector<byte_t>& rdata);
+    bool EncodeRData(llarp_buffer_t* buf, const std::vector<uint8_t>& rdata);
 
-    bool
-    DecodeRData(llarp_buffer_t* buf, std::vector<byte_t>& rdata);
+    bool DecodeRData(llarp_buffer_t* buf, std::vector<uint8_t>& rdata);
 
-  }  // namespace dns
-}  // namespace llarp
+}  // namespace llarp::dns

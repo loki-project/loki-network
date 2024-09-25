@@ -8,61 +8,54 @@
 extern "C"
 {
 #endif
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    PacketSize
-   * Signature: ()I
-   */
-  JNIEXPORT jint JNICALL
-  Java_network_loki_lokinet_LokinetVPN_PacketSize(JNIEnv*, jclass);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    PacketSize
+     * Signature: ()I
+     */
+    JNIEXPORT jint JNICALL Java_network_loki_lokinet_LokinetVPN_PacketSize(JNIEnv*, jclass);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    Alloc
-   * Signature: ()Ljava/nio/Buffer;
-   */
-  JNIEXPORT jobject JNICALL
-  Java_network_loki_lokinet_LokinetVPN_Alloc(JNIEnv*, jclass);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    Alloc
+     * Signature: ()Ljava/nio/Buffer;
+     */
+    JNIEXPORT jobject JNICALL Java_network_loki_lokinet_LokinetVPN_Alloc(JNIEnv*, jclass);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    Free
-   * Signature: (Ljava/nio/Buffer;)V
-   */
-  JNIEXPORT void JNICALL
-  Java_network_loki_lokinet_LokinetVPN_Free(JNIEnv*, jclass, jobject);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    Free
+     * Signature: (Ljava/nio/Buffer;)V
+     */
+    JNIEXPORT void JNICALL Java_network_loki_lokinet_LokinetVPN_Free(JNIEnv*, jclass, jobject);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    Stop
-   * Signature: ()V
-   */
-  JNIEXPORT void JNICALL
-  Java_network_loki_lokinet_LokinetVPN_Stop(JNIEnv*, jobject);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    Stop
+     * Signature: ()V
+     */
+    JNIEXPORT void JNICALL Java_network_loki_lokinet_LokinetVPN_Stop(JNIEnv*, jobject);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    ReadPkt
-   * Signature: (Ljava/nio/ByteBuffer;)I
-   */
-  JNIEXPORT jint JNICALL
-  Java_network_loki_lokinet_LokinetVPN_ReadPkt(JNIEnv*, jobject, jobject);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    ReadPkt
+     * Signature: (Ljava/nio/ByteBuffer;)I
+     */
+    JNIEXPORT jint JNICALL Java_network_loki_lokinet_LokinetVPN_ReadPkt(JNIEnv*, jobject, jobject);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    WritePkt
-   * Signature: (Ljava/nio/ByteBuffer;)Z
-   */
-  JNIEXPORT jboolean JNICALL
-  Java_network_loki_lokinet_LokinetVPN_WritePkt(JNIEnv*, jobject, jobject);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    WritePkt
+     * Signature: (Ljava/nio/ByteBuffer;)Z
+     */
+    JNIEXPORT jboolean JNICALL Java_network_loki_lokinet_LokinetVPN_WritePkt(JNIEnv*, jobject, jobject);
 
-  /*
-   * Class:     network_loki_lokinet_LokinetVPN
-   * Method:    SetInfo
-   * Signature: (Lnetwork/loki/lokinet/LokinetVPN/VPNInfo;)V
-   */
-  JNIEXPORT void JNICALL
-  Java_network_loki_lokinet_LokinetVPN_SetInfo(JNIEnv*, jobject, jobject);
+    /*
+     * Class:     network_loki_lokinet_LokinetVPN
+     * Method:    SetInfo
+     * Signature: (Lnetwork/loki/lokinet/LokinetVPN/VPNInfo;)V
+     */
+    JNIEXPORT void JNICALL Java_network_loki_lokinet_LokinetVPN_SetInfo(JNIEnv*, jobject, jobject);
 #ifdef __cplusplus
 }
 #endif

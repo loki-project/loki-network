@@ -1,68 +1,60 @@
 #pragma once
 
-#include <unordered_map>
-#include <string>
+#include <llarp/net/net_int.hpp>
+
+#include <oxen/quic.hpp>
+
 #include <memory>
 #include <optional>
-#include <llarp/net/net_int.hpp>
+#include <string>
+#include <unordered_map>
 
 namespace llarp
 {
-  struct AbstractRouter;
+    struct Router;
 
-  struct RoutePoker : public std::enable_shared_from_this<RoutePoker>
-  {
-    void
-    AddRoute(net::ipv4addr_t ip);
+    struct RoutePoker : public std::enable_shared_from_this<RoutePoker>
+    {
+        RoutePoker(Router& r) : router{r} {}
 
-    void
-    DelRoute(net::ipv4addr_t ip);
+        void add_route(oxen::quic::Address ip);
 
-    void
-    Start(AbstractRouter* router);
+        void delete_route(oxen::quic::Address ip);
 
-    ~RoutePoker();
+        void start();
 
-    /// explicitly put routes up
-    void
-    Up();
+        ~RoutePoker();
 
-    /// explicitly put routes down
-    void
-    Down();
+        /// explicitly put routes up
+        void put_up();
 
-    /// set dns resolver
-    /// pass in if we are using exit node mode right now  as a bool
-    void
-    SetDNSMode(bool using_exit_mode) const;
+        /// explicitly put routes down
+        void put_down();
 
-   private:
-    void
-    Update();
+        /// set dns resolver
+        /// pass in if we are using exit node mode right now  as a bool void set_dns_mode(bool
+        /// using_exit_mode) const;
 
-    bool
-    IsEnabled() const;
+      private:
+        void update();
 
-    void
-    DeleteAllRoutes();
+        bool is_enabled() const;
 
-    void
-    DisableAllRoutes();
+        void delete_all_routes();
 
-    void
-    RefreshAllRoutes();
+        void disable_all_routes();
 
-    void
-    EnableRoute(net::ipv4addr_t ip, net::ipv4addr_t gateway);
+        void refresh_all_routes();
 
-    void
-    DisableRoute(net::ipv4addr_t ip, net::ipv4addr_t gateway);
+        void enable_route(oxen::quic::Address ip, oxen::quic::Address gateway);
 
-    std::unordered_map<net::ipv4addr_t, net::ipv4addr_t> m_PokedRoutes;
+        void disable_route(oxen::quic::Address ip, oxen::quic::Address gateway);
 
-    std::optional<net::ipv4addr_t> m_CurrentGateway;
+        std::unordered_map<oxen::quic::Address, oxen::quic::Address> poked_routes;
 
-    AbstractRouter* m_Router = nullptr;
-    bool m_up{false};
-  };
+        std::optional<oxen::quic::Address> current_gateway;
+
+        Router& router;
+        bool is_up{false};
+    };
 }  // namespace llarp

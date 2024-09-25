@@ -1,4 +1,5 @@
 #include <libntrup/ntru.h>
+#include <libntrup/ntru_api.h>
 
 #ifdef __x86_64__
 #include <cpuid.h>

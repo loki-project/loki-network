@@ -1,113 +1,103 @@
 #pragma once
 
-#include "serialize.hpp"
-#include "rr.hpp"
 #include "question.hpp"
+#include "rr.hpp"
+#include "serialize.hpp"
 
 namespace llarp
 {
-  namespace dns
-  {
-    struct SRVData;
+    struct IPPacket;
 
-    using MsgID_t = uint16_t;
-    using Fields_t = uint16_t;
-    using Count_t = uint16_t;
-
-    struct MessageHeader : public Serialize
+    namespace dns
     {
-      static constexpr size_t Size = 12;
+        struct SRVData;
 
-      MessageHeader() = default;
+        using MsgID_t = uint16_t;
+        using Fields_t = uint16_t;
+        using Count_t = uint16_t;
 
-      MsgID_t id;
-      Fields_t fields;
-      Count_t qd_count;
-      Count_t an_count;
-      Count_t ns_count;
-      Count_t ar_count;
+        struct MessageHeader : public Serialize
+        {
+          private:
+            static enum { id, fields, qd_count, an_count, ns_count, ar_count } indices;
 
-      bool
-      Encode(llarp_buffer_t* buf) const override;
+          public:
+            static constexpr size_t Size = 12;
 
-      bool
-      Decode(llarp_buffer_t* buf) override;
+            MessageHeader() = default;
 
-      util::StatusObject
-      ToJSON() const override;
+            std::array<uint16_t, 6> _data{};
 
-      bool
-      operator==(const MessageHeader& other) const
-      {
-        return id == other.id && fields == other.fields && qd_count == other.qd_count
-            && an_count == other.an_count && ns_count == other.ns_count
-            && ar_count == other.ar_count;
-      }
-    };
+            MsgID_t _id;
+            Fields_t _fields;
+            Count_t _qd_count;
+            Count_t _an_count;
+            Count_t _ns_count;
+            Count_t _ar_count;
 
-    struct Message : public Serialize
-    {
-      explicit Message(const MessageHeader& hdr);
-      explicit Message(const Question& question);
+            bool Encode(llarp_buffer_t* buf) const override;
 
-      Message(Message&& other);
-      Message(const Message& other);
+            bool Decode(llarp_buffer_t* buf) override;
 
-      util::StatusObject
-      ToJSON() const override;
+            bool decode(std::span<unsigned char> b) override;
 
-      void
-      AddNXReply(RR_TTL_t ttl = 1);
+            nlohmann::json ToJSON() const override;
 
-      void
-      AddServFail(RR_TTL_t ttl = 30);
+            bool operator==(const MessageHeader& other) const
+            {
+                return _id == other._id && _fields == other._fields && _qd_count == other._qd_count
+                    && _an_count == other._an_count && _ns_count == other._ns_count && _ar_count == other._ar_count;
+            }
+        };
 
-      void
-      AddMXReply(std::string name, uint16_t priority, RR_TTL_t ttl = 1);
+        struct Message : public Serialize
+        {
+            explicit Message(const MessageHeader& hdr);
+            explicit Message(const Question& question);
 
-      void
-      AddCNAMEReply(std::string name, RR_TTL_t ttl = 1);
+            Message(Message&& other);
+            Message(const Message& other);
 
-      void
-      AddINReply(llarp::huint128_t addr, bool isV6, RR_TTL_t ttl = 1);
+            nlohmann::json ToJSON() const override;
 
-      void
-      AddAReply(std::string name, RR_TTL_t ttl = 1);
+            void add_nx_reply(RR_TTL_t ttl = 1);
 
-      void
-      AddSRVReply(std::vector<SRVData> records, RR_TTL_t ttl = 1);
+            void add_srv_fail(RR_TTL_t ttl = 30);
 
-      void
-      AddNSReply(std::string name, RR_TTL_t ttl = 1);
+            void add_mx_reply(std::string name, uint16_t priority, RR_TTL_t ttl = 1);
 
-      void
-      AddTXTReply(std::string value, RR_TTL_t ttl = 1);
+            void add_CNAME_reply(std::string name, RR_TTL_t ttl = 1);
 
-      bool
-      Encode(llarp_buffer_t* buf) const override;
+            void add_IN_reply(llarp::huint128_t addr, bool isV6, RR_TTL_t ttl = 1);
 
-      bool
-      Decode(llarp_buffer_t* buf) override;
+            void add_reply(std::string name, RR_TTL_t ttl = 1);
 
-      // Wrapper around Encode that encodes into a new buffer and returns it
-      [[nodiscard]] OwnedBuffer
-      ToBuffer() const;
+            void add_srv_reply(std::vector<SRVData> records, RR_TTL_t ttl = 1);
 
-      std::string
-      ToString() const;
+            void add_ns_reply(std::string name, RR_TTL_t ttl = 1);
 
-      MsgID_t hdr_id;
-      Fields_t hdr_fields;
-      std::vector<Question> questions;
-      std::vector<ResourceRecord> answers;
-      std::vector<ResourceRecord> authorities;
-      std::vector<ResourceRecord> additional;
-    };
+            void add_txt_reply(std::string value, RR_TTL_t ttl = 1);
 
-    std::optional<Message>
-    MaybeParseDNSMessage(llarp_buffer_t buf);
-  }  // namespace dns
+            bool Encode(llarp_buffer_t* buf) const override;
 
-  template <>
-  constexpr inline bool IsToStringFormattable<llarp::dns::Message> = true;
+            bool Decode(llarp_buffer_t* buf) override;
+
+            bool decode(std::span<unsigned char> /* b */) override { return {}; };  // TODO:
+
+            // Wrapper around Encode that encodes into a new buffer and returns it
+            std::vector<uint8_t> to_buffer() const;
+
+            std::string to_string() const;
+
+            MsgID_t hdr_id;
+            Fields_t hdr_fields;
+            std::vector<Question> questions;
+            std::vector<ResourceRecord> answers;
+            std::vector<ResourceRecord> authorities;
+            std::vector<ResourceRecord> additional;
+        };
+
+        std::optional<Message> maybe_parse_dns_msg(std::string_view buf);
+    }  // namespace dns
+
 }  // namespace llarp

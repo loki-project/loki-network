@@ -1,188 +1,66 @@
 #pragma once
 
-#include <llarp/crypto/encrypted_frame.hpp>
-#include <llarp/net/ip_address.hpp>
-#include "ihophandler.hpp"
+#include "path_handler.hpp"
 #include "path_types.hpp"
-#include "pathset.hpp"
 #include "transit_hop.hpp"
-#include <llarp/routing/handler.hpp>
-#include <llarp/router/i_outbound_message_handler.hpp>
+
+#include <llarp/ev/loop.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
-#include <llarp/util/types.hpp>
 
 #include <memory>
 #include <unordered_map>
 
-namespace llarp
+namespace llarp::path
 {
-  struct AbstractRouter;
-  struct LR_CommitMessage;
-  struct RelayDownstreamMessage;
-  struct RelayUpstreamMessage;
-  struct RouterID;
-
-  namespace path
-  {
-    struct TransitHop;
-    struct TransitHopInfo;
-
-    using TransitHop_ptr = std::shared_ptr<TransitHop>;
-
     struct PathContext
     {
-      explicit PathContext(AbstractRouter* router);
+        explicit PathContext(RouterID local_rid);
 
-      /// called from router tick function
-      void
-      ExpirePaths(llarp_time_t now);
+        void allow_transit();
 
-      void
-      PumpUpstream();
+        void reject_transit();
 
-      void
-      PumpDownstream();
+        bool is_transit_allowed() const;
 
-      void
-      AllowTransit();
+        bool has_transit_hop(const std::shared_ptr<TransitHop>& hop);
 
-      void
-      RejectTransit();
+        void put_transit_hop(std::shared_ptr<TransitHop> hop);
 
-      bool
-      CheckPathLimitHitByIP(const IpAddress& ip);
+        std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop);
 
-      bool
-      AllowingTransit() const;
+        std::shared_ptr<Path> get_path(const HopID& hop_id);
 
-      bool
-      HasTransitHop(const TransitHopInfo& info);
+        std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
-      bool
-      HandleRelayCommit(const LR_CommitMessage& msg);
+        std::shared_ptr<TransitHop> get_transit_hop(const HopID&);
 
-      void
-      PutTransitHop(std::shared_ptr<TransitHop> hop);
+        std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
-      HopHandler_ptr
-      GetByUpstream(const RouterID& id, const PathID_t& path);
+        /// get a set of all paths that we own who's endpoint is r
+        std::vector<std::shared_ptr<Path>> get_local_paths_to_remote(const RouterID& r);
 
-      bool
-      TransitHopPreviousIsRouter(const PathID_t& path, const RouterID& r);
+        void add_path(std::shared_ptr<Path> p);
 
-      TransitHop_ptr
-      GetPathForTransfer(const PathID_t& topath);
+        void drop_path(const std::shared_ptr<Path>& p);
 
-      HopHandler_ptr
-      GetByDownstream(const RouterID& id, const PathID_t& path);
+        void drop_paths(std::vector<std::shared_ptr<Path>> droplist);
 
-      std::optional<std::weak_ptr<TransitHop>>
-      TransitHopByInfo(const TransitHopInfo&);
+      private:
+        const RouterID _local_rid;
 
-      std::optional<std::weak_ptr<TransitHop>>
-      TransitHopByUpstream(const RouterID&, const PathID_t&);
-
-      PathSet_ptr
-      GetLocalPathSet(const PathID_t& id);
-
-      routing::MessageHandler_ptr
-      GetHandler(const PathID_t& id);
-
-      using EndpointPathPtrSet = std::set<Path_ptr, ComparePtr<Path_ptr>>;
-      /// get a set of all paths that we own who's endpoint is r
-      EndpointPathPtrSet
-      FindOwnedPathsWithEndpoint(const RouterID& r);
-
-      bool
-      ForwardLRCM(
-          const RouterID& nextHop,
-          const std::array<EncryptedFrame, 8>& frames,
-          SendStatusHandler handler);
-
-      bool
-      HopIsUs(const RouterID& k) const;
-
-      bool
-      HandleLRUM(const RelayUpstreamMessage& msg);
-
-      bool
-      HandleLRDM(const RelayDownstreamMessage& msg);
-
-      void
-      AddOwnPath(PathSet_ptr set, Path_ptr p);
-
-      void
-      RemovePathSet(PathSet_ptr set);
-
-      using TransitHopsMap_t = std::unordered_multimap<PathID_t, TransitHop_ptr>;
-
-      struct SyncTransitMap_t
-      {
-        using Mutex_t = util::NullMutex;
         using Lock_t = util::NullLock;
+        mutable util::NullMutex paths_mutex;
 
-        Mutex_t first;  // protects second
-        TransitHopsMap_t second GUARDED_BY(first);
+        std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
 
-        /// Invokes a callback for each transit path; visit must be invokable with a `const
-        /// TransitHop_ptr&` argument.
-        template <typename TransitHopVisitor>
-        void
-        ForEach(TransitHopVisitor&& visit) EXCLUDES(first)
-        {
-          Lock_t lock(first);
-          for (const auto& item : second)
-            visit(item.second);
-        }
-      };
+        /** TODO:
+            - paths are not 1:1 with upstream RID
+            - paths are 1:1 with txid's
+        */
 
-      // maps path id -> pathset owner of path
-      using OwnedPathsMap_t = std::unordered_map<PathID_t, Path_ptr>;
+        std::unordered_map<HopID, std::shared_ptr<Path>> _path_map;
 
-      struct SyncOwnedPathsMap_t
-      {
-        util::Mutex first;  // protects second
-        OwnedPathsMap_t second GUARDED_BY(first);
-
-        /// Invokes a callback for each owned path; visit must be invokable with a `const Path_ptr&`
-        /// argument.
-        template <typename OwnedHopVisitor>
-        void
-        ForEach(OwnedHopVisitor&& visit)
-        {
-          util::Lock lock(first);
-          for (const auto& item : second)
-            visit(item.second);
-        }
-      };
-
-      const EventLoop_ptr&
-      loop();
-
-      AbstractRouter*
-      Router();
-
-      const SecretKey&
-      EncryptionSecretKey();
-
-      const byte_t*
-      OurRouterID() const;
-
-      /// current number of transit paths we have
-      uint64_t
-      CurrentTransitPaths();
-
-      /// current number of paths we created in status
-      uint64_t
-      CurrentOwnedPaths(path::PathStatus status = path::PathStatus::ePathEstablished);
-
-     private:
-      AbstractRouter* m_Router;
-      SyncTransitMap_t m_TransitPaths;
-      SyncOwnedPathsMap_t m_OurPaths;
-      bool m_AllowTransit;
-      util::DecayingHashSet<IpAddress> m_PathLimits;
+        bool _allow_transit{false};
     };
-  }  // namespace path
-}  // namespace llarp
+}  // namespace llarp::path

@@ -1,6 +1,7 @@
 #pragma once
 #if defined(_WIN32) || defined(__MINGW32__)
 #include <winsock2.h>
+
 #include <ws2tcpip.h>
 #include <wspiapi.h>
 // because this shit is not defined for Windows NT reeeee
@@ -9,10 +10,8 @@ extern "C"
 {
 #endif
 #if _WIN32_WINNT < 0x600
-  const char*
-  inet_ntop(int af, const void* src, char* dst, size_t size);
-  int
-  inet_pton(int af, const char* src, void* dst);
+    const char* inet_ntop(int af, const void* src, char* dst, size_t size);
+    int inet_pton(int af, const char* src, void* dst);
 #endif
 #ifdef __cplusplus
 }
@@ -31,5 +30,4 @@ typedef unsigned int in_addr_t;
 
 #include <sys/types.h>
 
-bool
-llarp_getifaddr(const char* ifname, int af, struct sockaddr* addr);
+bool llarp_getifaddr(const char* ifname, int af, struct sockaddr* addr);

@@ -1,5 +1,5 @@
 
-CLANG_FORMAT_DESIRED_VERSION=15
+CLANG_FORMAT_DESIRED_VERSION=16
 
 CLANG_FORMAT=$(command -v clang-format-$CLANG_FORMAT_DESIRED_VERSION 2>/dev/null)
 if [ $? -ne 0 ]; then

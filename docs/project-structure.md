@@ -1,8 +1,8 @@
-# Lokinet project structure 
+# Lokinet Project Structure 
 
 this codebase is a bit large. this is a high level map of the current code structure.
 
-## lokinet executable main functions `(/daemon)`
+## Lokinet executable main functions `(/daemon)`
 
 * `lokinet.cpp`: lokinet daemon executable
 * `lokinet.swift`: macos sysex/appex executable
@@ -10,14 +10,14 @@ this codebase is a bit large. this is a high level map of the current code struc
 * `lokinet-bootstrap.cpp`: legacy util for windows, downloads a bootstrap file via https
 
 
-## lokinet public headers `(/include)`
+## Lokinet public headers `(/include)`
 
 `lokinet.h and lokinet/*.h`: C headers for embedded lokinet 
 
 `llarp.hpp`: semi-internal C++ header for lokinet executables
 
 
-## lokinet core library `(/llarp)` 
+## Lokinet core library `(/llarp)` 
 
 * `/llarp`: contains a few straggling compilation units
 * `/llarp/android`: android platform compat shims
@@ -49,7 +49,7 @@ this codebase is a bit large. this is a high level map of the current code struc
 * `/llarp/win32`: windows specific code
 
 
-## component relations
+## Component relations
 
 ### `/llarp/service` / `/llarp/handlers` / `/llarp/exit`
 
@@ -82,7 +82,7 @@ node to node traffic logic and wire protocol dialects
 * `//TODO: separte implementation details from interfaces`
 
 
-## platform contrib code `(/contrib)`
+## Platform contrib code `(/contrib)`
 
 grab bag directory for non core related platform specific non source code
 

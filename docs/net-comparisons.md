@@ -1,6 +1,5 @@
 # How is lokinet different than ...
 
-
 ## Tor Browser
 
 Tor browser is a hardened Firefox Web Browser meant exclusively to surf http(s) sites via Tor. It is meant to be a complete self contained browser you open and run to surf the Web (not the internet) anonymously.

@@ -1,103 +1,101 @@
 #include "route_manager.hpp"
-#include <llarp/handlers/tun.hpp>
-#include <llarp/service/context.hpp>
+
 #include <llarp.hpp>
+#include <llarp/handlers/tun.hpp>
+
 #include <memory>
 
 namespace llarp::apple
 {
-  void
-  RouteManager::check_trampoline(bool enable)
-  {
-    if (trampoline_active == enable)
-      return;
-    auto router = context.router;
-    if (!router)
+    static auto logcat = log::Cat("apple.route_manager");
+
+    void RouteManager::check_trampoline(bool enable)
     {
-      LogError("Cannot reconfigure to use DNS trampoline: no router");
-      return;
+        if (trampoline_active == enable)
+            return;
+        auto router = context.router;
+        if (!router)
+        {
+            log::error(logcat, "Cannot reconfigure to use DNS trampoline: no router");
+            return;
+        }
+
+        std::shared_ptr<llarp::handlers::TunEndpoint> tun;
+        router->hidden_service_context().ForEachService([&tun](const auto& /*name*/, const auto ep) {
+            tun = std::dynamic_pointer_cast<llarp::handlers::TunEndpoint>(ep);
+            return !tun;
+        });
+
+        if (!tun)
+        {
+            log::error(logcat, "Cannot reconfigure to use DNS trampoline: no tun endpoint found (!?)");
+            return;
+        }
+
+        if (enable)
+            tun->ReconfigureDNS({SockAddr{127, 0, 0, 1, {dns_trampoline_port}}});
+        else
+            tun->ReconfigureDNS(router->config()->dns.upstream_dns);
+
+        trampoline_active = enable;
     }
 
-    std::shared_ptr<llarp::handlers::TunEndpoint> tun;
-    router->hiddenServiceContext().ForEachService([&tun](const auto& /*name*/, const auto ep) {
-      tun = std::dynamic_pointer_cast<llarp::handlers::TunEndpoint>(ep);
-      return !tun;
-    });
-
-    if (!tun)
+    void RouteManager::add_default_route_via_interface(vpn::NetworkInterface&)
     {
-      LogError("Cannot reconfigure to use DNS trampoline: no tun endpoint found (!?)");
-      return;
+        check_trampoline(true);
+        if (callback_context and route_callbacks.add_default_route)
+            route_callbacks.add_default_route(callback_context);
     }
 
-    if (enable)
-      tun->ReconfigureDNS({SockAddr{127, 0, 0, 1, {dns_trampoline_port}}});
-    else
-      tun->ReconfigureDNS(router->GetConfig()->dns.m_upstreamDNS);
-
-    trampoline_active = enable;
-  }
-
-  void
-  RouteManager::AddDefaultRouteViaInterface(vpn::NetworkInterface&)
-  {
-    check_trampoline(true);
-    if (callback_context and route_callbacks.add_default_route)
-      route_callbacks.add_default_route(callback_context);
-  }
-
-  void
-  RouteManager::DelDefaultRouteViaInterface(vpn::NetworkInterface&)
-  {
-    check_trampoline(false);
-    if (callback_context and route_callbacks.del_default_route)
-      route_callbacks.del_default_route(callback_context);
-  }
-
-  void
-  RouteManager::AddRouteViaInterface(vpn::NetworkInterface&, IPRange range)
-  {
-    check_trampoline(true);
-    if (callback_context)
+    void RouteManager::delete_default_route_via_interface(vpn::NetworkInterface&)
     {
-      if (range.IsV4())
-      {
-        if (route_callbacks.add_ipv4_route)
-          route_callbacks.add_ipv4_route(
-              range.BaseAddressString().c_str(),
-              net::TruncateV6(range.netmask_bits).ToString().c_str(),
-              callback_context);
-      }
-      else
-      {
-        if (route_callbacks.add_ipv6_route)
-          route_callbacks.add_ipv6_route(
-              range.BaseAddressString().c_str(), range.HostmaskBits(), callback_context);
-      }
+        check_trampoline(false);
+        if (callback_context and route_callbacks.del_default_route)
+            route_callbacks.del_default_route(callback_context);
     }
-  }
 
-  void
-  RouteManager::DelRouteViaInterface(vpn::NetworkInterface&, IPRange range)
-  {
-    check_trampoline(false);
-    if (callback_context)
+    void RouteManager::add_route_via_interface(vpn::NetworkInterface&, IPRange range)
     {
-      if (range.IsV4())
-      {
-        if (route_callbacks.del_ipv4_route)
-          route_callbacks.del_ipv4_route(
-              range.BaseAddressString().c_str(),
-              net::TruncateV6(range.netmask_bits).ToString().c_str(),
-              callback_context);
-      }
-      else
-      {
-        if (route_callbacks.del_ipv6_route)
-          route_callbacks.del_ipv6_route(
-              range.BaseAddressString().c_str(), range.HostmaskBits(), callback_context);
-      }
+        check_trampoline(true);
+        if (callback_context)
+        {
+            if (range.IsV4())
+            {
+                if (route_callbacks.add_ipv4_route)
+                    route_callbacks.add_ipv4_route(
+                        range.BaseAddressString().c_str(),
+                        net::TruncateV6(range.netmask_bits).to_string().c_str(),
+                        callback_context);
+            }
+            else
+            {
+                if (route_callbacks.add_ipv6_route)
+                    route_callbacks.add_ipv6_route(
+                        range.BaseAddressString().c_str(), range.HostmaskBits(), callback_context);
+            }
+        }
     }
-  }
+
+    void RouteManager::delete_route_via_interface(vpn::NetworkInterface&, IPRange range)
+    {
+        check_trampoline(false);
+        if (callback_context)
+        {
+            if (range.IsV4())
+            {
+                if (route_callbacks.del_ipv4_route)
+                    route_callbacks.del_ipv4_route(
+                        range.BaseAddressString().c_str(),
+                        net::TruncateV6(range.netmask_bits).to_string().c_str(),
+                        callback_context);
+            }
+            else
+            {
+                if (route_callbacks.del_ipv6_route)
+                    route_callbacks.del_ipv6_route(
+                        range.BaseAddressString().c_str(), range.HostmaskBits(), callback_context);
+            }
+        }
+    }
 
 }  // namespace llarp::apple

@@ -2,230 +2,201 @@
 
 #include "kademlia.hpp"
 #include "key.hpp"
-#include <llarp/util/status.hpp>
+
+#include <llarp/util/logging.hpp>
 
 #include <map>
 #include <set>
 #include <vector>
 
-namespace llarp
+namespace llarp::dht
 {
-  namespace dht
-  {
+    static auto logcat = log::Cat("dht.bucket");
+
     template <typename Val_t>
     struct Bucket
     {
-      using BucketStorage_t = std::map<Key_t, Val_t, XorMetric>;
-      using Random_t = std::function<uint64_t()>;
+        using BucketStorage_t = std::map<Key_t, Val_t, XorMetric>;
+        using Random_t = std::function<uint64_t()>;
 
-      Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r))
-      {}
+        Bucket(const Key_t& us, Random_t r) : nodes(XorMetric(us)), random(std::move(r)) {}
 
-      util::StatusObject
-      ExtractStatus() const
-      {
-        util::StatusObject obj{};
-        for (const auto& item : nodes)
+        nlohmann::json ExtractStatus() const
         {
-          obj[item.first.ToString()] = item.second.ExtractStatus();
-        }
-        return obj;
-      }
-
-      size_t
-      size() const
-      {
-        return nodes.size();
-      }
-
-      struct SetIntersector
-      {
-        bool
-        operator()(const typename BucketStorage_t::value_type& lhs, const Key_t& rhs)
-        {
-          return lhs.first < rhs;
+            nlohmann::json obj{};
+            for (const auto& item : nodes)
+            {
+                obj[item.first.to_string()] = item.second.ExtractStatus();
+            }
+            return obj;
         }
 
-        bool
-        operator()(const Key_t& lhs, const typename BucketStorage_t::value_type& rhs)
+        size_t size() const { return nodes.size(); }
+
+        struct SetIntersector
         {
-          return lhs < rhs.first;
-        }
-      };
+            bool operator()(const typename BucketStorage_t::value_type& lhs, const Key_t& rhs)
+            {
+                return lhs.first < rhs;
+            }
 
-      bool
-      GetRandomNodeExcluding(Key_t& result, const std::set<Key_t>& exclude) const
-      {
-        std::vector<typename BucketStorage_t::value_type> candidates;
-        std::set_difference(
-            nodes.begin(),
-            nodes.end(),
-            exclude.begin(),
-            exclude.end(),
-            std::back_inserter(candidates),
-            SetIntersector());
+            bool operator()(const Key_t& lhs, const typename BucketStorage_t::value_type& rhs)
+            {
+                return lhs < rhs.first;
+            }
+        };
 
-        if (candidates.empty())
+        bool GetRandomNodeExcluding(Key_t& result, const std::set<Key_t>& exclude) const
         {
-          return false;
-        }
-        result = candidates[random() % candidates.size()].first;
-        return true;
-      }
+            std::vector<typename BucketStorage_t::value_type> candidates;
+            std::set_difference(
+                nodes.begin(),
+                nodes.end(),
+                exclude.begin(),
+                exclude.end(),
+                std::back_inserter(candidates),
+                SetIntersector());
 
-      bool
-      FindClosest(const Key_t& target, Key_t& result) const
-      {
-        Key_t mindist;
-        mindist.Fill(0xff);
-        for (const auto& item : nodes)
+            if (candidates.empty())
+            {
+                return false;
+            }
+            result = candidates[random() % candidates.size()].first;
+            return true;
+        }
+
+        bool FindClosest(const Key_t& target, Key_t& result) const
         {
-          auto curDist = item.first ^ target;
-          if (curDist < mindist)
-          {
-            mindist = curDist;
-            result = item.first;
-          }
+            Key_t mindist;
+            mindist.Fill(0xff);
+            for (const auto& item : nodes)
+            {
+                auto curDist = item.first ^ target;
+                if (curDist < mindist)
+                {
+                    mindist = curDist;
+                    result = item.first;
+                }
+            }
+            return nodes.size() > 0;
         }
-        return nodes.size() > 0;
-      }
 
-      bool
-      GetManyRandom(std::set<Key_t>& result, size_t N) const
-      {
-        if (nodes.size() < N || nodes.empty())
+        bool GetManyRandom(std::set<Key_t>& result, size_t N) const
         {
-          llarp::LogWarn("Not enough dht nodes, have ", nodes.size(), " want ", N);
-          return false;
+            if (nodes.size() < N || nodes.empty())
+            {
+                log::warning(logcat, "Not enough DHT nodes (have:{}, want:{})", nodes.size(), N);
+                return false;
+            }
+            if (nodes.size() == N)
+            {
+                std::transform(nodes.begin(), nodes.end(), std::inserter(result, result.end()), [](const auto& a) {
+                    return a.first;
+                });
+
+                return true;
+            }
+            size_t expecting = N;
+            size_t sz = nodes.size();
+            while (N)
+            {
+                auto itr = nodes.begin();
+                std::advance(itr, random() % sz);
+                if (result.insert(itr->first).second)
+                {
+                    --N;
+                }
+            }
+            return result.size() == expecting;
         }
-        if (nodes.size() == N)
+
+        bool FindCloseExcluding(const Key_t& target, Key_t& result, const std::set<Key_t>& exclude) const
         {
-          std::transform(
-              nodes.begin(), nodes.end(), std::inserter(result, result.end()), [](const auto& a) {
-                return a.first;
-              });
+            Key_t maxdist;
+            maxdist.Fill(0xff);
+            Key_t mindist;
+            mindist.Fill(0xff);
+            for (const auto& item : nodes)
+            {
+                if (exclude.count(item.first))
+                {
+                    continue;
+                }
 
-          return true;
+                auto curDist = item.first ^ target;
+                if (curDist < mindist)
+                {
+                    mindist = curDist;
+                    result = item.first;
+                }
+            }
+            return mindist < maxdist;
         }
-        size_t expecting = N;
-        size_t sz = nodes.size();
-        while (N)
+
+        bool GetManyNearExcluding(
+            const Key_t& target, std::set<Key_t>& result, size_t N, const std::set<Key_t>& exclude) const
         {
-          auto itr = nodes.begin();
-          std::advance(itr, random() % sz);
-          if (result.insert(itr->first).second)
-          {
-            --N;
-          }
-        }
-        return result.size() == expecting;
-      }
+            std::set<Key_t> s(exclude.begin(), exclude.end());
 
-      bool
-      FindCloseExcluding(const Key_t& target, Key_t& result, const std::set<Key_t>& exclude) const
-      {
-        Key_t maxdist;
-        maxdist.Fill(0xff);
-        Key_t mindist;
-        mindist.Fill(0xff);
-        for (const auto& item : nodes)
+            Key_t peer;
+            while (N--)
+            {
+                if (!FindCloseExcluding(target, peer, s))
+                {
+                    return false;
+                }
+                s.insert(peer);
+                result.insert(peer);
+            }
+            return true;
+        }
+
+        void PutNode(const Val_t& val)
         {
-          if (exclude.count(item.first))
-          {
-            continue;
-          }
-
-          auto curDist = item.first ^ target;
-          if (curDist < mindist)
-          {
-            mindist = curDist;
-            result = item.first;
-          }
+            auto itr = nodes.find(val.ID);
+            if (itr == nodes.end() || itr->second < val)
+            {
+                nodes[val.ID] = val;
+            }
         }
-        return mindist < maxdist;
-      }
 
-      bool
-      GetManyNearExcluding(
-          const Key_t& target,
-          std::set<Key_t>& result,
-          size_t N,
-          const std::set<Key_t>& exclude) const
-      {
-        std::set<Key_t> s(exclude.begin(), exclude.end());
-
-        Key_t peer;
-        while (N--)
+        void DelNode(const Key_t& key)
         {
-          if (!FindCloseExcluding(target, peer, s))
-          {
-            return false;
-          }
-          s.insert(peer);
-          result.insert(peer);
+            auto itr = nodes.find(key);
+            if (itr != nodes.end())
+            {
+                nodes.erase(itr);
+            }
         }
-        return true;
-      }
 
-      void
-      PutNode(const Val_t& val)
-      {
-        auto itr = nodes.find(val.ID);
-        if (itr == nodes.end() || itr->second < val)
+        bool HasNode(const Key_t& key) const { return nodes.find(key) != nodes.end(); }
+
+        // remove all nodes who's key matches a predicate
+        template <typename Predicate>
+        void RemoveIf(Predicate pred)
         {
-          nodes[val.ID] = val;
+            auto itr = nodes.begin();
+            while (itr != nodes.end())
+            {
+                if (pred(itr->first))
+                    itr = nodes.erase(itr);
+                else
+                    ++itr;
+            }
         }
-      }
 
-      void
-      DelNode(const Key_t& key)
-      {
-        auto itr = nodes.find(key);
-        if (itr != nodes.end())
+        template <typename Visit_t>
+        void ForEachNode(Visit_t visit)
         {
-          nodes.erase(itr);
+            for (const auto& item : nodes)
+            {
+                visit(item.second);
+            }
         }
-      }
 
-      bool
-      HasNode(const Key_t& key) const
-      {
-        return nodes.find(key) != nodes.end();
-      }
+        void Clear() { nodes.clear(); }
 
-      // remove all nodes who's key matches a predicate
-      template <typename Predicate>
-      void
-      RemoveIf(Predicate pred)
-      {
-        auto itr = nodes.begin();
-        while (itr != nodes.end())
-        {
-          if (pred(itr->first))
-            itr = nodes.erase(itr);
-          else
-            ++itr;
-        }
-      }
-
-      template <typename Visit_t>
-      void
-      ForEachNode(Visit_t visit)
-      {
-        for (const auto& item : nodes)
-        {
-          visit(item.second);
-        }
-      }
-
-      void
-      Clear()
-      {
-        nodes.clear();
-      }
-
-      BucketStorage_t nodes;
-      Random_t random;
+        BucketStorage_t nodes;
+        Random_t random;
     };
-  }  // namespace dht
-}  // namespace llarp
+}  // namespace llarp::dht

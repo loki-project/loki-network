@@ -2,100 +2,84 @@
 
 #include <llarp/crypto/types.hpp>
 #include <llarp/path/path_types.hpp>
-#include <llarp/util/bencode.hpp>
-#include <llarp/util/status.hpp>
+
+#include <oxenc/bt.h>
 
 #include <iostream>
+#include <set>
 
-namespace llarp
+namespace llarp::service
 {
-  namespace service
-  {
     struct Introduction
     {
-      RouterID router;
-      PathID_t pathID;
-      llarp_time_t latency = 0s;
-      llarp_time_t expiresAt = 0s;
-      uint64_t version = llarp::constants::proto_version;
+        RouterID pivot_router;
+        HopID pivot_hop_id;
+        std::chrono::milliseconds latency = 0s;
+        std::chrono::milliseconds expiry = 0s;
+        uint64_t version = llarp::constants::proto_version;
 
-      util::StatusObject
-      ExtractStatus() const;
+        Introduction() = default;
+        Introduction(std::string buf);
 
-      bool
-      IsExpired(llarp_time_t now) const
-      {
-        return now >= expiresAt;
-      }
+        nlohmann::json ExtractStatus() const;
 
-      bool
-      ExpiresSoon(llarp_time_t now, llarp_time_t dlt = 30s) const
-      {
-        return IsExpired(now + dlt);
-      }
+        bool is_expired(std::chrono::milliseconds now) const { return now >= expiry; }
 
-      std::string
-      ToString() const;
+        bool expires_soon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 30s) const
+        {
+            return is_expired(now + dlt);
+        }
 
-      bool
-      BEncode(llarp_buffer_t* buf) const;
+        std::string to_string() const;
 
-      bool
-      BDecode(llarp_buffer_t* buf)
-      {
-        return bencode_decode_dict(*this, buf);
-      }
+        void bt_encode(oxenc::bt_list_producer& btlp) const;
 
-      bool
-      DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf);
+        void bt_encode(oxenc::bt_dict_producer& subdict) const;
 
-      void
-      Clear();
+        bool bt_decode(std::string_view buf);
 
-      bool
-      operator<(const Introduction& other) const
-      {
-        return std::tie(expiresAt, pathID, router, version, latency)
-            < std::tie(other.expiresAt, other.pathID, other.router, other.version, other.latency);
-      }
+        void bt_decode(oxenc::bt_dict_consumer& btdc);
 
-      bool
-      operator==(const Introduction& other) const
-      {
-        return pathID == other.pathID && router == other.router;
-      }
+        void clear();
 
-      bool
-      operator!=(const Introduction& other) const
-      {
-        return pathID != other.pathID || router != other.router;
-      }
+        bool operator<(const Introduction& other) const
+        {
+            return std::tie(expiry, pivot_hop_id, pivot_router, version, latency)
+                < std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version, other.latency);
+        }
+
+        bool operator==(const Introduction& other) const
+        {
+            return std::tie(expiry, pivot_hop_id, pivot_router, version, latency)
+                == std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version, other.latency);
+        }
+
+        bool operator!=(const Introduction& other) const { return !(*this == other); }
+
+        static constexpr bool to_string_formattable = true;
     };
 
-    /// comparator for introset timestamp
-    struct CompareIntroTimestamp
+    /// comparator for introduction timestamp in order of nearest to furthest expiry time
+    struct IntroExpiryComparator
     {
-      bool
-      operator()(const Introduction& left, const Introduction& right) const
-      {
-        return left.expiresAt > right.expiresAt;
-      }
+        bool operator()(const Introduction& left, const Introduction& right) const
+        {
+            return left.expiry < right.expiry;
+        }
     };
-  }  // namespace service
-}  // namespace llarp
 
-template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::service::Introduction> = true;
+    using IntroductionSet = std::set<service::Introduction, service::IntroExpiryComparator>;
+
+}  // namespace llarp::service
 
 namespace std
 {
-  template <>
-  struct hash<llarp::service::Introduction>
-  {
-    size_t
-    operator()(const llarp::service::Introduction& i) const
+    template <>
+    struct hash<llarp::service::Introduction>
     {
-      return std::hash<llarp::PubKey>{}(i.router) ^ std::hash<llarp::PathID_t>{}(i.pathID);
-    }
-  };
+        size_t operator()(const llarp::service::Introduction& i) const
+        {
+            return std::hash<llarp::PubKey>{}(i.pivot_router) ^ std::hash<llarp::HopID>{}(i.pivot_hop_id);
+        }
+    };
 }  // namespace std

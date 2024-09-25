@@ -1,105 +1,102 @@
 #include "info.hpp"
 
 #include <llarp/crypto/crypto.hpp>
-#include "address.hpp"
-#include <llarp/util/buffer.hpp>
 
-#include <cassert>
-
-#include <sodium/crypto_generichash.h>
-#include <sodium/crypto_sign_ed25519.h>
-
-namespace llarp
+namespace llarp::service
 {
-  namespace service
-  {
-    bool
-    ServiceInfo::Verify(const llarp_buffer_t& payload, const Signature& sig) const
+    static auto logcat = log::Cat("service_info");
+
+    bool ServiceInfo::verify(uint8_t* buf, size_t size, const Signature& sig) const
     {
-      return CryptoManager::instance()->verify(signkey, payload, sig);
+        return crypto::verify(signkey, buf, size, sig);
     }
 
-    bool
-    ServiceInfo::Update(
-        const byte_t* sign, const byte_t* enc, const std::optional<VanityNonce>& nonce)
+    bool ServiceInfo::update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce)
     {
-      signkey = sign;
-      enckey = enc;
-      if (nonce)
-      {
-        vanity = *nonce;
-      }
-      return UpdateAddr();
+        signkey = sign;
+        enckey = enc;
+        if (nonce)
+        {
+            vanity = *nonce;
+        }
+
+        return update_address();
     }
 
-    bool
-    ServiceInfo::DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* val)
+    void ServiceInfo::bt_decode(oxenc::bt_dict_consumer& btdc)
     {
-      bool read = false;
-      if (!BEncodeMaybeReadDictEntry("e", enckey, read, key, val))
-        return false;
-      if (!BEncodeMaybeReadDictEntry("s", signkey, read, key, val))
-        return false;
-      if (!BEncodeMaybeReadDictInt("v", version, read, key, val))
-        return false;
-      if (!BEncodeMaybeReadDictEntry("x", vanity, read, key, val))
-        return false;
-      return read;
+        try
+        {
+            enckey.from_hex(btdc.require<std::string>("e"));
+            signkey.from_hex(btdc.require<std::string>("s"));
+            vanity.from_string(btdc.require<std::string>("x"));
+        }
+        catch (...)
+        {
+            log::critical(logcat, "ServiceInfo failed to populate with bt encoded contents");
+            throw;
+        }
     }
 
-    bool
-    ServiceInfo::BEncode(llarp_buffer_t* buf) const
+    bool ServiceInfo::bt_decode(std::string_view buf)
     {
-      if (!bencode_start_dict(buf))
-        return false;
-      if (!BEncodeWriteDictEntry("e", enckey, buf))
-        return false;
-      if (!BEncodeWriteDictEntry("s", signkey, buf))
-        return false;
-      if (!BEncodeWriteDictInt("v", llarp::constants::proto_version, buf))
-        return false;
-      if (!vanity.IsZero())
-      {
-        if (!BEncodeWriteDictEntry("x", vanity, buf))
-          return false;
-      }
-      return bencode_end(buf);
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "ServiceInfo parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
     }
 
-    std::string
-    ServiceInfo::Name() const
+    void ServiceInfo::bt_encode(oxenc::bt_dict_producer& btdp) const
     {
-      if (m_CachedAddr.IsZero())
-      {
-        Address addr;
-        CalculateAddress(addr.as_array());
-        return addr.ToString();
-      }
-      return m_CachedAddr.ToString();
+        btdp.append("e", enckey.to_view());
+        btdp.append("s", signkey.to_view());
+
+        if (not vanity.is_zero())
+            btdp.append("x", vanity.to_view());
     }
 
-    bool
-    ServiceInfo::CalculateAddress(std::array<byte_t, 32>& data) const
+    std::string ServiceInfo::name() const
     {
-      data = signkey.as_array();
-      return true;
+        if (_cached_addr.is_empty())
+        {
+            PubKey pk;
+            calculate_address(pk);
+            return pk.to_string();
+        }
+
+        return _cached_addr.to_string();
     }
 
-    bool
-    ServiceInfo::UpdateAddr()
+    bool ServiceInfo::calculate_address(PubKey& data) const
     {
-      if (m_CachedAddr.IsZero())
-      {
-        return CalculateAddress(m_CachedAddr.as_array());
-      }
-      return true;
+        data = PubKey{signkey.as_array()};
+        return true;
     }
 
-    std::string
-    ServiceInfo::ToString() const
+    bool ServiceInfo::update_address()
     {
-      return fmt::format("[ServiceInfo e={} s={} v={} x={}]", enckey, signkey, version, vanity);
+        if (_cached_addr.is_empty())
+        {
+            return calculate_address(_cached_addr.pubkey());
+        }
+
+        return true;
     }
 
-  }  // namespace service
-}  // namespace llarp
+    std::string ServiceInfo::to_string() const
+    {
+        return fmt::format("[ServiceInfo e={} s={} v={} x={}]", enckey, signkey, version, vanity);
+    }
+
+}  // namespace llarp::service

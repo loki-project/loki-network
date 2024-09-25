@@ -9,60 +9,58 @@ typedef HRESULT(FAR PASCAL* p_SetThreadDescription)(void*, const wchar_t*);
 
 typedef struct _THREADNAME_INFO
 {
-  DWORD dwType;     /* must be 0x1000 */
-  LPCSTR szName;    /* pointer to name (in user addr space) */
-  DWORD dwThreadID; /* thread ID (-1=caller thread) */
-  DWORD dwFlags;    /* reserved for future use, must be zero */
+    DWORD dwType;     /* must be 0x1000 */
+    LPCSTR szName;    /* pointer to name (in user addr space) */
+    DWORD dwThreadID; /* thread ID (-1=caller thread) */
+    DWORD dwFlags;    /* reserved for future use, must be zero */
 } THREADNAME_INFO;
 
-void
-SetThreadName(DWORD dwThreadID, LPCSTR szThreadName)
+void SetThreadName(DWORD dwThreadID, LPCSTR szThreadName)
 {
-  THREADNAME_INFO info;
-  DWORD infosize;
-  HANDLE hThread;
-  /* because loonix is SHIT and limits thread names to 16 bytes */
-  wchar_t thr_name_w[16];
-  p_SetThreadDescription _SetThreadDescription;
+    THREADNAME_INFO info;
+    DWORD infosize;
+    HANDLE hThread;
+    /* because loonix is SHIT and limits thread names to 16 bytes */
+    wchar_t thr_name_w[16];
+    p_SetThreadDescription _SetThreadDescription;
 
-  /* current win10 flights now have a new named-thread API, let's try to use
-   * that first! */
-  /* first, dlsym(2) the new call from system library */
-  hThread = NULL;
-  _SetThreadDescription =
-      (p_SetThreadDescription)GetProcAddress(GetModuleHandle("kernel32"), "SetThreadDescription");
-  if (_SetThreadDescription)
-  {
-    /* grab another reference to the thread */
-    hThread = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, dwThreadID);
-    /* windows takes unicode, our input is utf-8 or plain ascii */
-    MultiByteToWideChar(CP_ACP, 0, szThreadName, -1, thr_name_w, 16);
-    if (hThread)
-      _SetThreadDescription(hThread, thr_name_w);
-    else
-      goto old; /* for whatever reason, we couldn't get a handle to the thread.
-                   Just use the old method. */
-  }
-  else
-  {
-  old:
-    info.dwType = 0x1000;
-    info.szName = szThreadName;
-    info.dwThreadID = dwThreadID;
-    info.dwFlags = 0;
-
-    infosize = sizeof(info) / sizeof(DWORD);
-
-    __try
+    /* current win10 flights now have a new named-thread API, let's try to use
+     * that first! */
+    /* first, dlsym(2) the new call from system library */
+    hThread = NULL;
+    _SetThreadDescription = (p_SetThreadDescription)GetProcAddress(GetModuleHandle("kernel32"), "SetThreadDescription");
+    if (_SetThreadDescription)
     {
-      RaiseException(EXCEPTION_SET_THREAD_NAME, 0, infosize, (DWORD*)&info);
+        /* grab another reference to the thread */
+        hThread = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, dwThreadID);
+        /* windows takes unicode, our input is utf-8 or plain ascii */
+        MultiByteToWideChar(CP_ACP, 0, szThreadName, -1, thr_name_w, 16);
+        if (hThread)
+            _SetThreadDescription(hThread, thr_name_w);
+        else
+            goto old; /* for whatever reason, we couldn't get a handle to the thread.
+                         Just use the old method. */
     }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {}
-  }
-  /* clean up */
-  if (hThread)
-    CloseHandle(hThread);
+    else
+    {
+    old:
+        info.dwType = 0x1000;
+        info.szName = szThreadName;
+        info.dwThreadID = dwThreadID;
+        info.dwFlags = 0;
+
+        infosize = sizeof(info) / sizeof(DWORD);
+
+        __try
+        {
+            RaiseException(EXCEPTION_SET_THREAD_NAME, 0, infosize, (DWORD*)&info);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {}
+    }
+    /* clean up */
+    if (hThread)
+        CloseHandle(hThread);
 }
 #endif
 

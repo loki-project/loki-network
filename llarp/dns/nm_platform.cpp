@@ -8,14 +8,11 @@ extern "C"
 
 #include <llarp/linux/dbus.hpp>
 
-using namespace std::literals;
-
 namespace llarp::dns::nm
 {
-  void
-  Platform::set_resolver(unsigned int, llarp::SockAddr, bool)
-  {
-    // todo: implement me eventually
-  }
+    void Platform::set_resolver(unsigned int, oxen::quic::Address, bool)
+    {
+        // todo: implement me eventually
+    }
 }  // namespace llarp::dns::nm
 #endif

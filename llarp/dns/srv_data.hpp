@@ -1,108 +1,109 @@
 #pragma once
 
+#include "dns.hpp"
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <tuple>
 #include <string_view>
-
-#include "llarp/util/status.hpp"
+#include <tuple>
 
 namespace llarp::dns
 {
-  using SRVTuple = std::tuple<std::string, uint16_t, uint16_t, uint16_t, std::string>;
+    inline constexpr size_t TARGET_MAX_SIZE{200};
 
-  struct SRVData
-  {
-    static constexpr size_t TARGET_MAX_SIZE = 200;
+    using SRVTuple = std::tuple<std::string, uint16_t, uint16_t, uint16_t, std::string>;
 
-    std::string service_proto;  // service and protocol may as well be together
+    /** SRVData
 
-    uint16_t priority;
-    uint16_t weight;
-    uint16_t port;
-
-    // target string for the SRV record to point to
-    // options:
-    //   empty                     - refer to query name
-    //   dot                       - authoritative "no such service available"
-    //   any other .loki or .snode - target is that .loki or .snode
-    std::string target;
-
-    // do some basic validation on the target string
-    // note: this is not a conclusive, regex solution,
-    // but rather some sanity/safety checks
-    bool
-    IsValid() const;
-
-    SRVTuple
-    toTuple() const;
-
-    auto
-    toTupleRef() const
+        bt-encoded keys:
+            'p' : port
+            's' : service protocol
+            't' : target
+            'u' : priority
+            'w' : weight
+    */
+    struct SRVData
     {
-      return std::tie(service_proto, priority, weight, port, target);
-    }
+        SRVData() = default;
+        // SRVData constructor expecting a bt-encoded dictionary
+        explicit SRVData(std::string bt);
+        SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target);
 
-    /// so we can put SRVData in a std::set
-    bool
-    operator<(const SRVData& other) const
-    {
-      return toTupleRef() < other.toTupleRef();
-    }
+        /* bind-like formatted string for SRV records in config file
+         *
+         * format:
+         *   srv=service.proto priority weight port target
+         *
+         * exactly one space character between parts.
+         *
+         * target can be empty, in which case the space after port should
+         * be omitted.  if this is the case, the target is
+         * interpreted as the .loki or .snode of the current context.
+         *
+         * if target is not empty, it must be either
+         *  - simply a full stop (dot/period) OR
+         *  - a name within the .loki or .snode subdomains. a target
+         *    specified in this manner must not end with a full stop.
+         */
+        static std::optional<SRVData> from_srv_string(std::string buf);
 
-    bool
-    operator==(const SRVData& other) const
-    {
-      return toTupleRef() == other.toTupleRef();
-    }
+        std::string service_proto;  // service and protocol may as well be together
 
-    bool
-    BEncode(llarp_buffer_t*) const;
+        uint16_t priority;
+        uint16_t weight;
+        uint16_t port;
 
-    bool
-    BDecode(llarp_buffer_t*);
+        // target string for the SRV record to point to
+        // options:
+        //   empty                     - refer to query name
+        //   dot                       - authoritative "no such service available"
+        //   any other .loki or .snode - target is that .loki or .snode
+        std::string target;
 
-    util::StatusObject
-    ExtractStatus() const;
+        // do some basic validation on the target string
+        // note: this is not a conclusive, regex solution,
+        // but rather some sanity/safety checks
+        bool is_valid() const;
 
-    static SRVData
-    fromTuple(SRVTuple tuple);
+        /// so we can put SRVData in a std::set
+        bool operator<(const SRVData& other) const
+        {
+            return std::tie(service_proto, priority, weight, port, target)
+                < std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
+        }
 
-    /* bind-like formatted string for SRV records in config file
-     *
-     * format:
-     *   srv=service.proto priority weight port target
-     *
-     * exactly one space character between parts.
-     *
-     * target can be empty, in which case the space after port should
-     * be omitted.  if this is the case, the target is
-     * interpreted as the .loki or .snode of the current context.
-     *
-     * if target is not empty, it must be either
-     *  - simply a full stop (dot/period) OR
-     *  - a name within the .loki or .snode subdomains. a target
-     *    specified in this manner must not end with a full stop.
-     */
-    bool
-    fromString(std::string_view srvString);
-  };
+        bool operator==(const SRVData& other) const
+        {
+            return std::tie(service_proto, priority, weight, port, target)
+                == std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
+        }
+
+        bool operator!=(const SRVData& other) const { return !(*this == other); }
+
+        std::string bt_encode() const;
+
+        bool bt_decode(std::string buf);
+
+        nlohmann::json ExtractStatus() const;
+
+      private:
+        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+        bool from_string(std::string_view srvString);
+    };
 
 }  // namespace llarp::dns
 
 namespace std
 {
-  template <>
-  struct hash<llarp::dns::SRVData>
-  {
-    size_t
-    operator()(const llarp::dns::SRVData& data) const
+    template <>
+    struct hash<llarp::dns::SRVData>
     {
-      const std::hash<std::string> h_str{};
-      const std::hash<uint16_t> h_port{};
-      return h_str(data.service_proto) ^ (h_str(data.target) << 3) ^ (h_port(data.priority) << 5)
-          ^ (h_port(data.weight) << 7) ^ (h_port(data.port) << 9);
-    }
-  };
+        size_t operator()(const llarp::dns::SRVData& data) const
+        {
+            const std::hash<std::string> h_str{};
+            const std::hash<uint16_t> h_port{};
+            return h_str(data.service_proto) ^ (h_str(data.target) << 3) ^ (h_port(data.priority) << 5)
+                ^ (h_port(data.weight) << 7) ^ (h_port(data.port) << 9);
+        }
+    };
 }  // namespace std

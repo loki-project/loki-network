@@ -2,14 +2,8 @@
 
 namespace llarp::net
 {
-  std::string
-  InterfaceInfo::ToString() const
-  {
-    return fmt::format(
-        "{}[i={}; addrs={}; gw={}]",
-        name,
-        index,
-        fmt::join(addrs, ","),
-        gateway ? net::ToString(*gateway) : "none");
-  }
+    std::string InterfaceInfo::to_string() const
+    {
+        return fmt::format("{}[i={}; addrs={}]", name, index, fmt::join(addrs, ","));
+    }
 }  // namespace llarp::net

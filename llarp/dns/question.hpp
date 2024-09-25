@@ -1,72 +1,59 @@
 #pragma once
 
-#include "serialize.hpp"
 #include "name.hpp"
+#include "serialize.hpp"
+
 #include <llarp/net/net_int.hpp>
 
-namespace llarp
+namespace llarp::dns
 {
-  namespace dns
-  {
     using QType_t = uint16_t;
     using QClass_t = uint16_t;
 
     struct Question : public Serialize
     {
-      Question() = default;
+        Question() = default;
 
-      explicit Question(std::string name, QType_t type);
+        explicit Question(std::string name, QType_t type);
 
-      Question(Question&& other);
-      Question(const Question& other);
-      bool
-      Encode(llarp_buffer_t* buf) const override;
+        Question(Question&& other);
+        Question(const Question& other);
 
-      bool
-      Decode(llarp_buffer_t* buf) override;
+        bool Encode(llarp_buffer_t* buf) const override;
 
-      std::string
-      ToString() const;
+        bool Decode(llarp_buffer_t* buf) override;
 
-      bool
-      operator==(const Question& other) const
-      {
-        return qname == other.qname && qtype == other.qtype && qclass == other.qclass;
-      }
+        bool decode(std::span<unsigned char> /* b */) override { return {}; }
 
-      std::string qname;
-      QType_t qtype;
-      QClass_t qclass;
+        std::string to_string() const;
 
-      /// determine if we match a name
-      bool
-      IsName(const std::string& other) const;
+        bool operator==(const Question& other) const
+        {
+            return qname == other.qname && qtype == other.qtype && qclass == other.qclass;
+        }
 
-      /// is the name [something.]localhost.loki. ?
-      bool
-      IsLocalhost() const;
+        std::string qname;
+        QType_t qtype;
+        QClass_t qclass;
 
-      /// return true if we have subdomains in ths question
-      bool
-      HasSubdomains() const;
+        /// determine if we match a name
+        bool IsName(const std::string& other) const;
 
-      /// get subdomain(s), if any, from qname
-      std::string
-      Subdomains() const;
+        /// is the name [something.]localhost.loki. ?
+        bool IsLocalhost() const;
 
-      /// return qname with no trailing .
-      std::string
-      Name() const;
+        /// return true if we have subdomains in ths question
+        bool HasSubdomains() const;
 
-      /// determine if we are using this TLD
-      bool
-      HasTLD(const std::string& tld) const;
+        /// get subdomain(s), if any, from qname
+        std::string Subdomains() const;
 
-      util::StatusObject
-      ToJSON() const override;
+        /// return qname with no trailing .
+        std::string Name() const;
+
+        /// determine if we are using this TLD
+        bool HasTLD(const std::string& tld) const;
+
+        nlohmann::json ToJSON() const override;
     };
-  }  // namespace dns
-}  // namespace llarp
-
-template <>
-constexpr inline bool llarp::IsToStringFormattable<llarp::dns::Question> = true;
+}  // namespace llarp::dns

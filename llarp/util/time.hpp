@@ -1,49 +1,55 @@
 #pragma once
 
-#include "types.hpp"
-#include <nlohmann/json.hpp>
-#include <iostream>
-#include <fmt/format.h>
+#include "buffer.hpp"
+#include "formattable.hpp"
+
 #include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <nlohmann/json.hpp>
+
+#include <iostream>
 
 using namespace std::chrono_literals;
 
 namespace llarp
 {
-  /// get time right now as milliseconds, this is monotonic
-  Duration_t
-  time_now_ms();
+    // Libevent uses µs precision
+    using loop_time = std::chrono::microseconds;
 
-  /// get the uptime of the process
-  Duration_t
-  uptime();
+    using rc_time = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>;
 
-  /// convert to milliseconds
-  uint64_t
-  ToMS(Duration_t duration);
+    rc_time time_point_now();
 
-  nlohmann::json
-  to_json(const Duration_t& t);
+    /// get time right now as milliseconds, this is monotonic
+    std::chrono::milliseconds time_now_ms();
 
-  // Returns a string such as "27m13s ago" or "in 1h12m" or "now".  You get precision of minutes
-  // (for >=1h), seconds (>=10s), or milliseconds.  The `now_threshold` argument controls how close
-  // to current time (default 1s) the time has to be to get the "now" argument.
-  std::string
-  short_time_from_now(const TimePoint_t& t, const Duration_t& now_threshold = 1s);
+    /// get the uptime of the process
+    std::chrono::milliseconds uptime();
 
-  // Makes a duration human readable.  This always has full millisecond precision, but formats up to
-  // hours. E.g. "-4h04m12.123s" or "1234h00m09.876s.
-  std::string
-  ToString(Duration_t t);
+    /// convert to milliseconds
+    uint64_t to_milliseconds(std::chrono::milliseconds duration);
+
+    nlohmann::json to_json(const std::chrono::milliseconds& t);
+
+    // Returns a string such as "27m13s ago" or "in 1h12m" or "now".  You get precision of minutes
+    // (for >=1h), seconds (>=10s), or milliseconds.  The `now_threshold` argument controls how
+    // close to current time (default 1s) the time has to be to get the "now" argument.
+    std::string short_time_from_now(
+        const std::chrono::system_clock::time_point& t, const std::chrono::milliseconds& now_threshold = 1s);
+
+    inline timeval loop_time_to_timeval(loop_time t)
+    {
+        return timeval{
+            .tv_sec = static_cast<decltype(timeval::tv_sec)>(t / 1s),
+            .tv_usec = static_cast<decltype(timeval::tv_usec)>((t % 1s) / 1us)};
+    }
+
+    std::chrono::nanoseconds get_timestamp();
+
+    template <typename unit_t>
+    auto get_timestamp()
+    {
+        return std::chrono::duration_cast<unit_t>(get_timestamp());
+    }
 
 }  // namespace llarp
-
-// Duration_t is currently just a typedef to std::chrono::milliseconds, and specializing
-// that seems wrong; leaving this here to remind us not to add it back in again.
-// namespace fmt
-//{
-//  template <>
-//  struct formatter<llarp::Duration_t>
-//  {
-//  };
-//}  // namespace fmt

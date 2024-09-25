@@ -7,7 +7,6 @@
 #include <llarp/service/intro_set.hpp>
 #include <llarp/util/time.hpp>
 
-#include "test_util.hpp"
 #include <catch2/catch.hpp>
 
 using namespace llarp;
@@ -44,8 +43,6 @@ TEST_CASE("test service::Identity throws on error")
 
 TEST_CASE("test subkey derivation", "[crypto]")
 {
-  CryptoManager manager(new sodium::CryptoLibSodium());
-
   // These values came out of a run of Tor's test code, so that we can confirm we are doing the same
   // blinding subkey crypto math as Tor.  Our hash value is generated differently so we use the hash
   // from a Tor random test suite run.
@@ -79,27 +76,22 @@ TEST_CASE("test subkey derivation", "[crypto]")
   CHECK(root.toPrivate(root_key));
   CHECK(root_key.as_array() == root_key_data.as_array());
 
-  auto crypto = CryptoManager::instance();
-
   PrivateKey aprime; // a'
-  CHECK(crypto->derive_subkey_private(aprime, root, 0, &hash));
+  CHECK(crypto::derive_subkey_private(aprime, root, 0, &hash));
 
   // We use a different signing hash than Tor
   // only the private key value (the first 32 bytes) will match:
   CHECK(std::memcmp(aprime.data(), derived_key_data.data(), 32) == 0);
 
   PubKey Aprime; // A'
-  CHECK(crypto->derive_subkey(Aprime, root.toPublic(), 0, &hash));
+  CHECK(crypto::derive_subkey(Aprime, root.toPublic(), 0, &hash));
   CHECK(Aprime.as_array() == derived_pub_data.as_array());
 }
 
 TEST_CASE("test root key signing" , "[crypto]")
 {
-  CryptoManager manager(new sodium::CryptoLibSodium());
-
-  auto crypto = CryptoManager::instance();
   SecretKey root_key;
-  crypto->identity_keygen(root_key);
+  crypto::identity_keygen(root_key);
 
   // We have our own reimplementation of sodium's signing function which can work with derived
   // private keys (unlike sodium's built-in which requires starting from a seed).  This tests that
@@ -109,23 +101,20 @@ TEST_CASE("test root key signing" , "[crypto]")
   llarp_buffer_t nibbs_buf{nibbs.data(), nibbs.size()};
 
   Signature sig_sodium;
-  CHECK(crypto->sign(sig_sodium, root_key, nibbs_buf));
+  CHECK(crypto::sign(sig_sodium, root_key, nibbs_buf));
 
   PrivateKey root_privkey;
   CHECK(root_key.toPrivate(root_privkey));
   Signature sig_ours;
-  CHECK(crypto->sign(sig_ours, root_privkey, nibbs_buf));
+  CHECK(crypto::sign(sig_ours, root_privkey, nibbs_buf));
 
   CHECK(sig_sodium == sig_ours);
 }
 
 TEST_CASE("Test generate derived key", "[crypto]")
 {
-  CryptoManager manager(new sodium::CryptoLibSodium());
-
-  auto crypto = CryptoManager::instance();
   SecretKey root_key;
-  crypto->identity_keygen(root_key);
+  crypto::identity_keygen(root_key);
 
   PrivateKey root_privkey;
   CHECK(root_key.toPrivate(root_privkey));
@@ -144,10 +133,10 @@ TEST_CASE("Test generate derived key", "[crypto]")
   }
 
   PrivateKey aprime; // a'
-  CHECK(crypto->derive_subkey_private(aprime, root_key, 1));
+  CHECK(crypto::derive_subkey_private(aprime, root_key, 1));
 
   PubKey Aprime; // A'
-  CHECK(crypto->derive_subkey(Aprime, A, 1));
+  CHECK(crypto::derive_subkey(Aprime, A, 1));
 
   // We should also be able to derive A' via a':
   PubKey Aprime_alt;
@@ -158,14 +147,14 @@ TEST_CASE("Test generate derived key", "[crypto]")
   // Generate using the same constant and make sure we get an identical privkey (including the
   // signing hash value)
   PrivateKey aprime_repeat;
-  CHECK(crypto->derive_subkey_private(aprime_repeat, root_key, 1));
+  CHECK(crypto::derive_subkey_private(aprime_repeat, root_key, 1));
   CHECK(aprime_repeat == aprime);
 
   // Generate another using a different constant and make sure we get something different
   PrivateKey a2;
   PubKey A2;
-  CHECK(crypto->derive_subkey_private(a2, root_key, 2));
-  CHECK(crypto->derive_subkey(A2, A, 2));
+  CHECK(crypto::derive_subkey_private(a2, root_key, 2));
+  CHECK(crypto::derive_subkey(A2, A, 2));
   CHECK(A2 != Aprime);
   CHECK(a2.ToHex().substr(0, 64) != aprime.ToHex().substr(0, 64));
   CHECK(a2.ToHex().substr(64) != aprime.ToHex().substr(64)); // The hash should be different too
@@ -173,11 +162,8 @@ TEST_CASE("Test generate derived key", "[crypto]")
 
 TEST_CASE("Test signing with derived key", "[crypto]")
 {
-  CryptoManager manager(new sodium::CryptoLibSodium());
-
-  auto crypto = CryptoManager::instance();
   SecretKey root_key;
-  crypto->identity_keygen(root_key);
+  crypto::identity_keygen(root_key);
 
   PrivateKey root_privkey;
   root_key.toPrivate(root_privkey);
@@ -188,24 +174,22 @@ TEST_CASE("Test signing with derived key", "[crypto]")
   a.toPublic(A);
 
   PrivateKey aprime; // a'
-  crypto->derive_subkey_private(aprime, root_key, 1);
+  crypto::derive_subkey_private(aprime, root_key, 1);
 
   PubKey Aprime; // A'
-  crypto->derive_subkey(Aprime, A, 1);
+  crypto::derive_subkey(Aprime, A, 1);
 
   const std::string s = "Jeff loves one-letter variable names.";
   llarp_buffer_t buf(s.data(), s.size());
 
   Signature sig;
   
-  CHECK(crypto->sign(sig, aprime, buf));
-  CHECK(crypto->verify(Aprime, buf, sig));
+  CHECK(crypto::sign(sig, aprime, buf));
+  CHECK(crypto::verify(Aprime, buf, sig));
 }
 
 TEST_CASE("Test sign and encrypt introset", "[crypto]")
 {
-  CryptoManager manager(new sodium::CryptoLibSodium());
-
   service::Identity ident;
   ident.RegenerateKeys();
   service::Address addr;
@@ -227,7 +211,6 @@ TEST_CASE("Test sign and encrypt introset", "[crypto]")
   CHECK(maybe->Verify(now));
   PubKey blind_key;
   const PubKey root_key(addr.as_array());
-  auto crypto = CryptoManager::instance();
-  CHECK(crypto->derive_subkey(blind_key, root_key, 1));
+  CHECK(crypto::derive_subkey(blind_key, root_key, 1));
   CHECK(blind_key == maybe->derivedSigningKey);
 }

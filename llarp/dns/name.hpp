@@ -1,28 +1,21 @@
 #pragma once
 
-#include <llarp/net/net_int.hpp>
+#include <llarp/address/types.hpp>
 #include <llarp/util/buffer.hpp>
 
-#include <string>
 #include <optional>
+#include <string>
 
-namespace llarp
+namespace llarp::dns
 {
-  namespace dns
-  {
     /// decode name from buffer; return nullopt on failure
-    std::optional<std::string>
-    DecodeName(llarp_buffer_t* buf, bool trimTrailingDot = false);
+    std::optional<std::string> DecodeName(llarp_buffer_t* buf, bool trimTrailingDot = false);
 
     /// encode name to buffer
-    bool
-    EncodeNameTo(llarp_buffer_t* buf, std::string_view name);
+    bool EncodeNameTo(llarp_buffer_t* buf, std::string_view name);
 
-    std::optional<huint128_t>
-    DecodePTR(std::string_view name);
+    std::optional<ip_v> DecodePTR(std::string_view name);
 
-    bool
-    NameIsReserved(std::string_view name);
+    bool NameIsReserved(std::string_view name);
 
-  }  // namespace dns
-}  // namespace llarp
+}  // namespace llarp::dns

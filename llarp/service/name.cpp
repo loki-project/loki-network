@@ -1,69 +1,87 @@
 #include "name.hpp"
+
+#include <llarp/address/address.hpp>
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/util/str.hpp>
 
 namespace llarp::service
 {
-  std::optional<Address>
-  EncryptedName::Decrypt(std::string_view name) const
-  {
-    if (ciphertext.empty())
-      return std::nullopt;
-    const auto crypto = CryptoManager::instance();
-    const auto maybe = crypto->maybe_decrypt_name(ciphertext, nonce, name);
-    if (maybe.has_value())
-      return Address{*maybe};
-    return std::nullopt;
-  }
+    static auto logcat = llarp::log::Cat("ONSRecord");
 
-  bool
-  NameIsValid(std::string_view lnsName)
-  {
-    // make sure it ends with .loki because no fucking shit right?
-    if (not ends_with(lnsName, ".loki"))
-      return false;
-    // strip off .loki suffix
-    lnsName = lnsName.substr(0, lnsName.find_last_of('.'));
-
-    // ensure chars are sane
-    for (const auto ch : lnsName)
+    std::optional<EncryptedONSRecord> EncryptedONSRecord::construct(std::string bt)
     {
-      if (ch == '-')
-        continue;
-      if (ch == '.')
-        continue;
-      if (ch >= 'a' and ch <= 'z')
-        continue;
-      if (ch >= '0' and ch <= '9')
-        continue;
-      return false;
-    }
-    // split into domain parts
-    const auto parts = split(lnsName, ".");
-    // get root domain
-    const auto primaryName = parts[parts.size() - 1];
-    constexpr size_t MaxNameLen = 32;
-    constexpr size_t MaxPunycodeNameLen = 63;
-    // check against lns name blacklist
-    if (primaryName == "localhost")
-      return false;
-    if (primaryName == "loki")
-      return false;
-    if (primaryName == "snode")
-      return false;
-    // check for dashes
-    if (primaryName.find("-") == std::string_view::npos)
-      return primaryName.size() <= MaxNameLen;
-    // check for dashes and end or beginning
-    if (*primaryName.begin() == '-' or *(primaryName.end() - 1) == '-')
-      return false;
-    // check for punycode name length
-    if (primaryName.size() > MaxPunycodeNameLen)
-      return false;
-    // check for xn--
-    return (primaryName[2] == '-' and primaryName[3] == '-')
-        ? (primaryName[0] == 'x' and primaryName[1] == 'n')
-        : true;
-  }
+        if (EncryptedONSRecord ret; ret.bt_decode(std::move(bt)))
+            return ret;
 
+        return std::nullopt;
+    }
+
+    EncryptedONSRecord::EncryptedONSRecord(std::string bt)
+    {
+        try
+        {
+            // The constructor calls the ::bt_decode() overload that re-throws any exception it hits
+            oxenc::bt_dict_consumer btdc{bt};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "EncryptedONSRecord exception: {}", e.what());
+        }
+    }
+
+    bool EncryptedONSRecord::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            ciphertext = btdc.require<std::string>("c");
+            nonce.from_string(btdc.require<std::string>("n"));
+
+            return true;
+        }
+        catch (...)
+        {
+            log::warning(logcat, "EncryptedONSRecord exception");
+            throw;
+        }
+    }
+
+    bool EncryptedONSRecord::bt_decode(std::string bt)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{bt};
+            return bt_decode(btdc);
+        }
+        catch (...)
+        {
+            log::warning(logcat, "EncryptedONSRecord exception");
+            return false;
+        }
+    }
+
+    std::string EncryptedONSRecord::bt_encode() const
+    {
+        oxenc::bt_dict_producer btdp;
+
+        btdp.append("c", ciphertext);
+        btdp.append("n", nonce.to_view());
+
+        return std::move(btdp).str();
+    }
+
+    std::optional<NetworkAddress> EncryptedONSRecord::decrypt(std::string_view ons_name) const
+    {
+        std::optional<NetworkAddress> ret = std::nullopt;
+
+        if (ciphertext.empty())
+            return ret;
+
+        if (auto maybe = crypto::maybe_decrypt_name(ciphertext, nonce, ons_name))
+        {
+            auto _name = "{}.loki"_format(maybe->to_view());
+            ret = NetworkAddress::from_network_addr(std::move(_name));
+        }
+
+        return ret;
+    }
 }  // namespace llarp::service

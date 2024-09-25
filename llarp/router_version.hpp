@@ -1,70 +1,58 @@
 #pragma once
 
-#include <array>
-#include "util/bencode.hpp"
-#include "constants/version.hpp"
 #include "constants/proto.hpp"
+#include "constants/version.hpp"
 #include "util/formattable.hpp"
+
+#include <array>
+
+namespace
+{}  // namespace
 
 namespace llarp
 {
-  struct RouterVersion
-  {
-    using Version_t = std::array<uint16_t, 3>;
-
-    RouterVersion() = default;
-
-    explicit RouterVersion(const Version_t& routerVersion, uint64_t protoVersion);
-
-    bool
-    BEncode(llarp_buffer_t* buf) const;
-
-    bool
-    BDecode(llarp_buffer_t* buf);
-
-    /// return true if this router version is all zeros
-    bool
-    IsEmpty() const;
-
-    /// set to be empty
-    void
-    Clear();
-
-    std::string
-    ToString() const;
-
-    /// return true if the other router version is compatible with ours
-    bool
-    IsCompatableWith(const RouterVersion& other) const;
-
-    /// compare router versions
-    bool
-    operator<(const RouterVersion& other) const
+    struct RouterVersion
     {
-      return std::tie(m_ProtoVersion, m_Version) < std::tie(other.m_ProtoVersion, other.m_Version);
-    }
+        RouterVersion() = default;
 
-    bool
-    operator!=(const RouterVersion& other) const
-    {
-      return !(*this == other);
-    }
+        explicit RouterVersion(const std::array<uint16_t, 3>& routerVersion, uint64_t protoVersion);
 
-    bool
-    operator==(const RouterVersion& other) const
-    {
-      return m_ProtoVersion == other.m_ProtoVersion && m_Version == other.m_Version;
-    }
+        std::string bt_encode() const;
 
-   private:
-    Version_t m_Version = {{0, 0, 0}};
-    int64_t m_ProtoVersion = llarp::constants::proto_version;
-  };
+        bool bt_decode(std::string_view buf);
 
-  template <>
-  constexpr inline bool IsToStringFormattable<RouterVersion> = true;
+        /// return true if this router version is all zeros
+        bool is_empty() const;
 
-  static constexpr int64_t INVALID_VERSION = -1;
-  static const RouterVersion emptyRouterVersion({0, 0, 0}, INVALID_VERSION);
+        /// set to be empty
+        void clear();
+
+        std::string to_string() const;
+
+        /// return true if the other router version is compatible with ours
+        bool is_compatible_with(const RouterVersion& other) const;
+
+        /// compare router versions
+        bool operator<(const RouterVersion& other) const
+        {
+            return std::tie(_proto, _version) < std::tie(other._proto, other._version);
+        }
+
+        bool operator!=(const RouterVersion& other) const { return !(*this == other); }
+
+        bool operator==(const RouterVersion& other) const
+        {
+            return _proto == other._proto && _version == other._version;
+        }
+
+        static constexpr bool to_string_formattable = true;
+
+      private:
+        std::array<uint16_t, 3> _version = {{0, 0, 0}};
+        int64_t _proto = llarp::constants::proto_version;
+    };
+
+    static constexpr int64_t INVALID_VERSION = -1;
+    static const RouterVersion emptyRouterVersion({0, 0, 0}, INVALID_VERSION);
 
 }  // namespace llarp

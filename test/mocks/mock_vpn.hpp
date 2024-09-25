@@ -47,7 +47,7 @@ namespace mocks
     {}
 
     virtual std::shared_ptr<llarp::vpn::NetworkInterface>
-    ObtainInterface(llarp::vpn::InterfaceInfo info, llarp::AbstractRouter*) override
+    obtain_interface(llarp::vpn::InterfaceInfo info, llarp::Router*) override
     {
       return std::make_shared<MockInterface>(info);
     };

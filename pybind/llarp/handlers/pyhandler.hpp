@@ -1,112 +1,83 @@
 #pragma once
-#include <common.hpp>
 #include <llarp.hpp>
+#include <llarp/router/router.hpp>
 #include <llarp/service/context.hpp>
 #include <llarp/service/endpoint.hpp>
-#include <llarp/router/abstractrouter.hpp>
+
+#include <common.hpp>
 
 namespace llarp
 {
-  namespace handlers
-  {
-    using Context_ptr = std::shared_ptr<llarp::Context>;
-
-    struct PythonEndpoint final : public llarp::service::Endpoint,
-                                  public std::enable_shared_from_this<PythonEndpoint>
+    namespace handlers
     {
-      PythonEndpoint(std::string name, Context_ptr routerContext)
-          : llarp::service::Endpoint(
-              routerContext->router.get(), &routerContext->router->hiddenServiceContext())
-          , OurName(std::move(name))
-      {}
-      const std::string OurName;
+        using Context_ptr = std::shared_ptr<llarp::Context>;
 
-      bool
-      HandleInboundPacket(
-          const service::ConvoTag tag,
-          const llarp_buffer_t& pktbuf,
-          service::ProtocolType proto,
-          uint64_t) override
-      {
-        if (handlePacket)
+        struct PythonEndpoint final : public llarp::service::Endpoint,
+                                      public std::enable_shared_from_this<PythonEndpoint>
         {
-          service::Address addr{};
-          if (auto maybe = GetEndpointWithConvoTag(tag))
-          {
-            if (auto ptr = std::get_if<service::Address>(&*maybe))
-              addr = *ptr;
-            else
-              return false;
-          }
-          else
-            return false;
-          std::vector<byte_t> pkt;
-          pkt.resize(pktbuf.sz);
-          std::copy_n(pktbuf.base, pktbuf.sz, pkt.data());
-          handlePacket(addr, std::move(pkt), proto);
-        }
-        return true;
-      }
+            PythonEndpoint(std::string name, Context_ptr routerContext)
+                : llarp::service::Endpoint(routerContext->router.get(), &routerContext->router->hiddenServiceContext()),
+                  OurName(std::move(name))
+            {}
+            const std::string OurName;
 
-      path::PathSet_ptr
-      GetSelf() override
-      {
-        return shared_from_this();
-      }
+            bool HandleInboundPacket(
+                const service::ConvoTag tag,
+                const llarp_buffer_t& pktbuf,
+                service::ProtocolType proto,
+                uint64_t) override
+            {
+                if (handlePacket)
+                {
+                    service::Address addr{};
+                    if (auto maybe = GetEndpointWithConvoTag(tag))
+                    {
+                        if (auto ptr = std::get_if<service::Address>(&*maybe))
+                            addr = *ptr;
+                        else
+                            return false;
+                    }
+                    else
+                        return false;
+                    std::vector<byte_t> pkt;
+                    pkt.resize(pktbuf.sz);
+                    std::copy_n(pktbuf.base, pktbuf.sz, pkt.data());
+                    handlePacket(addr, std::move(pkt), proto);
+                }
+                return true;
+            }
 
-      std::weak_ptr<path::PathSet>
-      GetWeak() override
-      {
-        return weak_from_this();
-      }
+            std::shared_ptr<path::PathSet> GetSelf() override { return shared_from_this(); }
 
-      bool
-      SupportsV6() const override
-      {
-        return false;
-      }
+            std::weak_ptr<path::PathSet> GetWeak() override { return weak_from_this(); }
 
-      llarp::huint128_t
-      ObtainIPForAddr(std::variant<service::Address, RouterID>) override
-      {
-        return {0};
-      }
+            bool SupportsV6() const override { return false; }
 
-      std::optional<std::variant<service::Address, RouterID>>
-      ObtainAddrForIP(huint128_t) const override
-      {
-        return std::nullopt;
-      }
+            llarp::huint128_t ObtainIPForAddr(std::variant<service::Address, RouterID>) override { return {0}; }
 
-      std::string
-      GetIfName() const override
-      {
-        return "";
-      }
+            std::optional<std::variant<service::Address, RouterID>> ObtainAddrForIP(huint128_t) const override
+            {
+                return std::nullopt;
+            }
 
-      using PacketHandler_t =
-          std::function<void(service::Address, std::vector<byte_t>, service::ProtocolType)>;
+            std::string GetIfName() const override { return ""; }
 
-      PacketHandler_t handlePacket;
+            using PacketHandler_t = std::function<void(service::Address, std::vector<byte_t>, service::ProtocolType)>;
 
-      void
-      SendPacket(service::Address remote, std::vector<byte_t> pkt, service::ProtocolType proto)
-      {
-        m_router->loop()->call([remote, pkt, proto, self = shared_from_this()]() {
-          self->SendToOrQueue(remote, llarp_buffer_t(pkt), proto);
-        });
-      }
+            PacketHandler_t handlePacket;
 
-      void
-      SendPacketToRemote(const llarp_buffer_t&, service::ProtocolType) override{};
+            void SendPacket(service::Address remote, std::vector<byte_t> pkt, service::ProtocolType proto)
+            {
+                m_router->loop()->call([remote, pkt, proto, self = shared_from_this()]() {
+                    self->SendToOrQueue(remote, llarp_buffer_t(pkt), proto);
+                });
+            }
 
-      std::string
-      GetOurAddress() const
-      {
-        return m_Identity.pub.Addr().ToString();
-      }
-    };
+            void SendPacketToRemote(const llarp_buffer_t&, service::ProtocolType) override{};
 
-    using PythonEndpoint_ptr = std::shared_ptr<PythonEndpoint>;
-  }  // namespace handlers
+            std::string GetOurAddress() const { return m_Identity.pub.Addr().ToString(); }
+        };
+
+        using PythonEndpoint_ptr = std::shared_ptr<PythonEndpoint>;
+    }  // namespace handlers
 }  // namespace llarp

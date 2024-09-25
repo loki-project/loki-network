@@ -11,7 +11,7 @@ find_library(FOUNDATION Foundation REQUIRED)
 find_library(NETEXT NetworkExtension REQUIRED)
 find_library(COREFOUNDATION CoreFoundation REQUIRED)
 
-target_link_libraries(lokinet-util PUBLIC ${FOUNDATION})
+target_link_libraries(lokinet-base INTERFACE ${FOUNDATION})
 
 target_sources(lokinet-platform PRIVATE vpn_platform.cpp vpn_interface.cpp route_manager.cpp context_wrapper.cpp)
 
@@ -27,7 +27,7 @@ enable_lto(lokinet-extension)
 target_compile_options(lokinet-extension PRIVATE -fobjc-arc)
 if(MACOS_SYSTEM_EXTENSION)
   target_compile_definitions(lokinet-extension PRIVATE MACOS_SYSTEM_EXTENSION)
-  target_compile_definitions(lokinet-util PUBLIC MACOS_SYSTEM_EXTENSION)
+  target_compile_definitions(lokinet-base INTERFACE MACOS_SYSTEM_EXTENSION)
 else()
   target_link_options(lokinet-extension PRIVATE -e _NSExtensionMain)
 endif()
@@ -41,7 +41,7 @@ else()
 endif()
 
 target_link_libraries(lokinet-extension PRIVATE
-  lokinet-amalgum
+  lokinet-core
   ${COREFOUNDATION}
   ${NETEXT})
 

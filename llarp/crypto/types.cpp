@@ -1,155 +1,100 @@
 #include "types.hpp"
 
+#include <llarp/address/keys.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>
 
-#include <iterator>
-
 #include <oxenc/hex.h>
-
-#include <sodium/crypto_sign.h>
-#include <sodium/crypto_sign_ed25519.h>
+#include <sodium/crypto_hash_sha512.h>
 #include <sodium/crypto_scalarmult_ed25519.h>
 
 namespace llarp
 {
-  bool
-  PubKey::FromString(const std::string& str)
-  {
-    if (str.size() != 2 * size())
-      return false;
-    oxenc::from_hex(str.begin(), str.end(), begin());
-    return true;
-  }
+    static auto logcat = log::Cat("cryptoutils");
 
-  std::string
-  PubKey::ToString() const
-  {
-    return oxenc::to_hex(begin(), end());
-  }
-
-  bool
-  SecretKey::LoadFromFile(const fs::path& fname)
-  {
-    size_t sz;
-    std::array<byte_t, 128> tmp;
-    try
+    PubKey Ed25519SecretKey::to_pubkey() const
     {
-      sz = util::slurp_file(fname, tmp.data(), tmp.size());
-    }
-    catch (const std::exception&)
-    {
-      return false;
+        return PubKey(data() + 32);
     }
 
-    if (sz == size())
+    bool Ed25519SecretKey::load_from_file(const fs::path& fname)
     {
-      // is raw buffer
-      std::copy_n(tmp.begin(), sz, begin());
-      return true;
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        size_t sz;
+        std::string tmp;
+        tmp.resize(128);
+
+        try
+        {
+            sz = util::file_to_buffer(fname, tmp.data(), tmp.size());
+        }
+        catch (const std::exception& e)
+        {
+            log::critical(logcat, "Failed to read contents from file: {}", e.what());
+            return false;
+        }
+
+        std::copy_n(tmp.begin(), sz, begin());
+        return true;
     }
 
-    llarp_buffer_t buf(tmp);
-    return BDecode(&buf);
-  }
-
-  bool
-  SecretKey::Recalculate()
-  {
-    PrivateKey key;
-    PubKey pubkey;
-    if (!toPrivate(key) || !key.toPublic(pubkey))
-      return false;
-    std::memcpy(data() + 32, pubkey.data(), 32);
-    return true;
-  }
-
-  bool
-  SecretKey::toPrivate(PrivateKey& key) const
-  {
-    // Ed25519 calculates a 512-bit hash from the seed; the first half (clamped)
-    // is the private key; the second half is the hash that gets used in
-    // signing.
-    unsigned char h[crypto_hash_sha512_BYTES];
-    if (crypto_hash_sha512(h, data(), 32) < 0)
-      return false;
-    h[0] &= 248;
-    h[31] &= 63;
-    h[31] |= 64;
-    std::memcpy(key.data(), h, 64);
-    return true;
-  }
-
-  bool
-  PrivateKey::toPublic(PubKey& pubkey) const
-  {
-    return crypto_scalarmult_ed25519_base_noclamp(pubkey.data(), data()) != -1;
-  }
-
-  bool
-  SecretKey::SaveToFile(const fs::path& fname) const
-  {
-    std::string tmp(128, 0);
-    llarp_buffer_t buf(tmp);
-    if (!BEncode(&buf))
-      return false;
-
-    tmp.resize(buf.cur - buf.base);
-    try
+    bool Ed25519SecretKey::recalculate()
     {
-      util::dump_file(fname, tmp);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        Ed25519Hash key = to_edhash();
+        PubKey pubkey = key.to_pubkey();
+        std::memcpy(data() + 32, pubkey.data(), 32);
+        return true;
     }
-    catch (const std::exception&)
+
+    Ed25519Hash Ed25519SecretKey::to_edhash() const
     {
-      return false;
+        Ed25519Hash k;
+        unsigned char h[crypto_hash_sha512_BYTES];
+        crypto_hash_sha512(h, data(), 32);
+        h[0] &= 248;
+        h[31] &= 63;
+        h[31] |= 64;
+        std::memcpy(k.data(), h, 64);
+        return k;
     }
-    return true;
-  }
 
-  bool
-  IdentitySecret::LoadFromFile(const fs::path& fname)
-  {
-    std::array<byte_t, SIZE> buf;
-    size_t sz;
-    try
+    PubKey Ed25519Hash::to_pubkey() const
     {
-      sz = util::slurp_file(fname, buf.data(), buf.size());
+        PubKey p;
+        crypto_scalarmult_ed25519_base_noclamp(p.data(), data());
+        return p;
     }
-    catch (const std::exception& e)
+
+    bool Ed25519SecretKey::write_to_file(const fs::path& fname) const
     {
-      llarp::LogError("failed to load service node seed: ", e.what());
-      return false;
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        try
+        {
+            util::buffer_to_file(fname, to_view());
+        }
+        catch (const std::exception& e)
+        {
+            log::critical(logcat, "Failed to write contents to file: {}", e.what());
+            return false;
+        }
+
+        return true;
     }
-    if (sz != SIZE)
+
+    SymmNonce SymmNonce::make(std::string nonce)
     {
-      llarp::LogError("service node seed size invalid: ", sz, " != ", SIZE);
-      return false;
+        SymmNonce n;
+        if (!n.from_string(nonce))
+            throw std::invalid_argument{"Invalid nonce passed to static constructor function:{}"_format(nonce)};
+        return n;
     }
-    std::copy(buf.begin(), buf.end(), begin());
-    return true;
-  }
 
-  byte_t*
-  Signature::Lo()
-  {
-    return data();
-  }
+    SymmNonce SymmNonce::make_random()
+    {
+        SymmNonce n;
+        n.Randomize();
+        return n;
+    }
 
-  const byte_t*
-  Signature::Lo() const
-  {
-    return data();
-  }
-
-  byte_t*
-  Signature::Hi()
-  {
-    return data() + 32;
-  }
-
-  const byte_t*
-  Signature::Hi() const
-  {
-    return data() + 32;
-  }
 }  // namespace llarp

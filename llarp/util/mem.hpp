@@ -9,85 +9,81 @@
 
 namespace llarp
 {
-  void
-  Zero(void* ptr, size_t sz);
+    void Zero(void* ptr, size_t sz);
 
-  template <typename T>
-  void
-  dumphex(const uint8_t* t)
-  {
-    size_t idx = 0;
-    while (idx < sizeof(T))
+    template <typename T>
+    void dumphex(const uint8_t* t)
     {
-      printf("%.2x ", t[idx++]);
-      if (idx % 8 == 0)
-        printf("\n");
+        size_t idx = 0;
+        while (idx < sizeof(T))
+        {
+            printf("%.2x ", t[idx++]);
+            if (idx % 8 == 0)
+                printf("\n");
+        }
     }
-  }
 
-  template <typename T, size_t align = 128>
-  void
-  DumpBufferHex(const T& buff)
-  {
-    size_t idx = 0;
-    printf("buffer of size %zu\n", buff.sz);
-    while (idx < buff.sz)
+    template <typename T, size_t align = 128>
+    void DumpBufferHex(const T& buff)
     {
-      if (buff.base + idx == buff.cur)
-      {
+        size_t idx = 0;
+        printf("buffer of size %zu\n", buff.sz);
+        while (idx < buff.sz)
+        {
+            if (buff.base + idx == buff.cur)
+            {
 #ifndef _WIN32
-        printf("%c[1;31m", 27);
+                printf("%c[1;31m", 27);
 #endif
-      }
-      printf("%.2x", buff.base[idx]);
-      if (buff.base + idx == buff.cur)
-      {
+            }
+            printf("%.2x", buff.base[idx]);
+            if (buff.base + idx == buff.cur)
+            {
 #ifndef _WIN32
-        printf("%c[0;0m", 27);
+                printf("%c[0;0m", 27);
 #endif
-      }
-      ++idx;
-      if (idx % align == 0)
+            }
+            ++idx;
+            if (idx % align == 0)
+                printf("\n");
+        }
         printf("\n");
+        fflush(stdout);
     }
-    printf("\n");
-    fflush(stdout);
-  }
 
-  template <typename T, size_t align = 128>
-  void
-  DumpBuffer(const T& buff)
-  {
-    size_t idx = 0;
-    printf("buffer of size %zu\n", buff.sz);
-    while (idx < buff.sz)
+    template <typename T, size_t align = 128>
+    void DumpBuffer(const T& buff)
     {
-      if (buff.base + idx == buff.cur)
-      {
+        size_t idx = 0;
+        printf("buffer of size %zu\n", buff.sz);
+        while (idx < buff.sz)
+        {
+            if (buff.base + idx == buff.cur)
+            {
 #ifndef _WIN32
-        printf("%c[1;31m", 27);
+                printf("%c[1;31m", 27);
 #endif
-      }
-      if (std::isprint(buff.base[idx]))
-      {
-        printf("%c", buff.base[idx]);
-      }
-      else
-      {
-        printf(".");
-      }
-      if (buff.base + idx == buff.cur)
-      {
+            }
+            if (std::isprint(buff.base[idx]))
+            {
+                printf("%c", buff.base[idx]);
+            }
+            else
+            {
+                printf(".");
+            }
+            if (buff.base + idx == buff.cur)
+            {
 #ifndef _WIN32
-        printf("%c[0;0m", 27);
+                printf("%c[0;0m", 27);
 #endif
-      }
-      ++idx;
-      if (idx % align == 0)
+            }
+            ++idx;
+            if (idx % align == 0)
+                printf("\n");
+        }
         printf("\n");
+        fflush(stdout);
     }
-    printf("\n");
-    fflush(stdout);
-  }
 
 }  // namespace llarp

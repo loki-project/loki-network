@@ -1,96 +1,90 @@
 #include "router_version.hpp"
-#include "constants/version.hpp"
-#include "constants/proto.hpp"
 
-#include <algorithm>
+#include "util/buffer.hpp"
+#include "util/logging.hpp"
+
+#include <oxenc/bt.h>
+
 #include <cassert>
 
 namespace llarp
 {
-  RouterVersion::RouterVersion(const Version_t& router, uint64_t proto)
-      : m_Version(router), m_ProtoVersion(proto)
-  {}
+    static auto logcat = llarp::log::Cat("router_version");
 
-  bool
-  RouterVersion::IsCompatableWith(const RouterVersion& other) const
-  {
-    return m_ProtoVersion == other.m_ProtoVersion;
-  }
+    RouterVersion::RouterVersion(const std::array<uint16_t, 3>& router, uint64_t proto)
+        : _version(router), _proto(proto)
+    {}
 
-  bool
-  RouterVersion::BEncode(llarp_buffer_t* buf) const
-  {
-    if (not bencode_start_list(buf))
-      return false;
-    if (not IsEmpty())
+    bool RouterVersion::is_compatible_with(const RouterVersion& other) const
     {
-      if (not bencode_write_uint64(buf, m_ProtoVersion))
-        return false;
-      for (const auto& i : m_Version)
-      {
-        if (not bencode_write_uint64(buf, i))
-          return false;
-      }
+        return _proto == other._proto;
     }
-    return bencode_end(buf);
-  }
 
-  void
-  RouterVersion::Clear()
-  {
-    m_Version.fill(0);
-    m_ProtoVersion = INVALID_VERSION;
-    assert(IsEmpty());
-  }
+    std::string RouterVersion::bt_encode() const
+    {
+        oxenc::bt_list_producer btlp;
 
-  bool
-  RouterVersion::IsEmpty() const
-  {
-    return *this == emptyRouterVersion;
-  }
+        try
+        {
+            btlp.append(_proto);
 
-  bool
-  RouterVersion::BDecode(llarp_buffer_t* buf)
-  {
-    // clear before hand
-    Clear();
-    size_t idx = 0;
-    if (not bencode_read_list(
-            [this, &idx](llarp_buffer_t* buffer, bool has) {
-              if (has)
-              {
-                uint64_t i;
-                if (idx == 0)
-                {
-                  uint64_t val = -1;
-                  if (not bencode_read_integer(buffer, &val))
-                    return false;
-                  m_ProtoVersion = val;
-                }
-                else if (bencode_read_integer(buffer, &i))
-                {
-                  // prevent overflow (note that idx includes version too)
-                  if (idx > m_Version.max_size())
-                    return false;
-                  m_Version[idx - 1] = i;
-                }
-                else
-                  return false;
-                ++idx;
-              }
-              return true;
-            },
-            buf))
-      return false;
-    // either full list or empty list is valid
-    return idx == 4 || idx == 0;
-  }
+            for (auto& v : _version)
+                btlp.append(v);
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: RouterVersion failed to bt encode contents!");
+        }
 
-  std::string
-  RouterVersion::ToString() const
-  {
-    return std::to_string(m_Version.at(0)) + "." + std::to_string(m_Version.at(1)) + "."
-        + std::to_string(m_Version.at(2)) + " protocol version " + std::to_string(m_ProtoVersion);
-  }
+        return std::move(btlp).str();
+    }
+
+    void RouterVersion::clear()
+    {
+        _version.fill(0);
+        _proto = INVALID_VERSION;
+        assert(is_empty());
+    }
+
+    bool RouterVersion::is_empty() const
+    {
+        return *this == emptyRouterVersion;
+    }
+
+    bool RouterVersion::bt_decode(std::string_view buf)
+    {
+        // clear before hand
+        clear();
+
+        try
+        {
+            oxenc::bt_list_consumer btlc{buf};
+
+            _proto = btlc.consume_integer<int64_t>();
+
+            // The previous bt_decode implementation accepted either a full or empty version array,
+            // so accounting for this with the following check...
+            if (not btlc.is_finished())
+            {
+                for (auto& v : _version)
+                    v = btlc.consume_integer<uint16_t>();
+            }
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "RouterVersion parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
+        return true;
+    }
+
+    std::string RouterVersion::to_string() const
+    {
+        return std::to_string(_version.at(0)) + "." + std::to_string(_version.at(1)) + "."
+            + std::to_string(_version.at(2)) + " protocol version " + std::to_string(_proto);
+    }
 
 }  // namespace llarp

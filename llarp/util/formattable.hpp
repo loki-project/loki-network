@@ -1,39 +1,15 @@
 #pragma once
 
-#include <fmt/format.h>
-#include <type_traits>
+#include "concept.hpp"
 
-// Formattable types can specialize this to true and will get automatic fmt formattering support via
-// their .ToString() method.
+#include <oxen/log/format.hpp>
+
+#include <optional>
 
 namespace llarp
 {
-  // Types can opt-in to being formatting via .ToString() by specializing this to true.  This also
-  // allows scoped enums by instead looking for a call to `ToString(val)` (and so there should be a
-  // ToString function in the same namespace as the scoped enum to pick it up via ADL).
-  template <typename T>
-  constexpr bool IsToStringFormattable = false;
-
-  // e.g.:
-  // template <> inline constexpr bool IsToStringFormattable<MyType> = true;
-
-#ifdef __cpp_lib_is_scoped_enum
-  using std::is_scoped_enum;
-  using std::is_scoped_enum_v;
-#else
-  template <typename T, bool = std::is_enum_v<T>>
-  struct is_scoped_enum : std::false_type
-  {};
-
-  template <typename T>
-  struct is_scoped_enum<T, true>
-      : std::bool_constant<!std::is_convertible_v<T, std::underlying_type_t<T>>>
-  {};
-
-  template <typename T>
-  constexpr bool is_scoped_enum_v = is_scoped_enum<T>::value;
-#endif
-
+    using namespace std::literals;
+    using namespace oxen::log::literals;
 }  // namespace llarp
 
 #if !defined(USE_GHC_FILESYSTEM) && FMT_VERSION >= 80102
@@ -43,39 +19,110 @@ namespace llarp
 
 #else
 
-#include <llarp/util/fs.hpp>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace fmt
 {
-  template <>
-  struct formatter<fs::path> : formatter<std::string_view>
-  {
-    template <typename FormatContext>
-    auto
-    format(const fs::path& p, FormatContext& ctx) const
+    template <>
+    struct formatter<fs::path> : formatter<std::string_view>
     {
-      return formatter<std::string_view>::format(p.string(), ctx);
-    }
-  };
+        template <typename FormatContext>
+        auto format(const fs::path& p, FormatContext& ctx) const
+        {
+            return formatter<std::string_view>::format(p.string(), ctx);
+        }
+    };
 }  // namespace fmt
+
+#endif
+
+// fmt added optional support in version 10.0.0
+#if FMT_HAS_INCLUDE(<optional>) && FMT_VERSION <= 100000
+namespace fmt
+{
+    template <typename T, typename Char>
+    struct formatter<std::optional<T>, Char, std::enable_if_t<is_formattable<T, Char>::value>>
+    {
+      private:
+        formatter<T, Char> underlying_;
+        static constexpr basic_string_view<Char> optional =
+            detail::string_literal<Char, 'o', 'p', 't', 'i', 'o', 'n', 'a', 'l', '('>{};
+        static constexpr basic_string_view<Char> none = detail::string_literal<Char, 'n', 'o', 'n', 'e'>{};
+
+        template <class U>
+        FMT_CONSTEXPR static auto maybe_set_debug_format(U& u, bool set) -> decltype(u.set_debug_format(set))
+        {
+            u.set_debug_format(set);
+        }
+
+        template <class U>
+        FMT_CONSTEXPR static void maybe_set_debug_format(U&, ...)
+        {}
+
+      public:
+        template <typename ParseContext>
+        FMT_CONSTEXPR auto parse(ParseContext& ctx)
+        {
+            maybe_set_debug_format(underlying_, true);
+            return underlying_.parse(ctx);
+        }
+
+        template <typename FormatContext>
+        auto format(const std::optional<T>& opt, FormatContext& ctx) const -> decltype(ctx.out())
+        {
+            if (!opt)
+                return detail::write<Char>(ctx.out(), none);
+
+            auto out = ctx.out();
+            out = detail::write<Char>(out, optional);
+            ctx.advance_to(out);
+            out = underlying_.format(*opt, ctx);
+            return detail::write(out, ')');
+        }
+    };
+}  //  namespace fmt
 
 #endif
 
 namespace fmt
 {
-  template <typename T>
-  struct formatter<T, char, std::enable_if_t<llarp::IsToStringFormattable<T>>>
-      : formatter<std::string_view>
-  {
-    template <typename FormatContext>
-    auto
-    format(const T& val, FormatContext& ctx) const
+    template <llarp::concepts::is_scoped_enum T>
+    struct formatter<T, char> : formatter<std::string_view>
     {
-      if constexpr (llarp::is_scoped_enum_v<T>)
-        return formatter<std::string_view>::format(ToString(val), ctx);
-      else
-        return formatter<std::string_view>::format(val.ToString(), ctx);
-    }
-  };
+        template <typename FormatContext>
+        auto format(const T& val, FormatContext& ctx) const
+        {
+            return formatter<std::string_view>::format(to_string(val), ctx);
+        }
+    };
 
+    // template <std::convertible_to<std::string_view> T>
+    // struct formatter<std::optional<T>, char> : formatter<std::string_view>
+    // {
+    //     template <typename FormatContext>
+    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
+    //     {
+    //         if (opt)
+    //         {
+    //             return formatter<std::string_view>::format(*opt, ctx);
+    //         }
+    //         return format_to(ctx.out(), "[-nullopt-]");
+    //     }
+    // };
+
+    // template <llarp::concepts::to_string_formattable T>
+    // struct formatter<std::optional<T>, char> : formatter<T>
+    // {
+    //     template <typename FormatContext>
+    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
+    //     {
+    //         if (opt)
+    //         {
+    //             return formatter<std::string_view>::format(opt->to_string(), ctx);
+    //         }
+    //         return format_to(ctx.out(), "[-nullopt-]");
+    //     }
+    // };
 }  // namespace fmt

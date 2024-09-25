@@ -1,435 +1,459 @@
 #include "intro_set.hpp"
+
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/path/path.hpp>
 
 #include <oxenc/bt_serialize.h>
 
 namespace llarp::service
 {
-  util::StatusObject
-  EncryptedIntroSet::ExtractStatus() const
-  {
-    const auto sz = introsetPayload.size();
-    return {
-        {"location", derivedSigningKey.ToString()}, {"signedAt", to_json(signedAt)}, {"size", sz}};
-  }
+    static auto logcat = log::Cat("EncIntro");
 
-  bool
-  EncryptedIntroSet::BEncode(llarp_buffer_t* buf) const
-  {
-    if (not bencode_start_dict(buf))
-      return false;
-    if (not BEncodeWriteDictEntry("d", derivedSigningKey, buf))
-      return false;
-    if (not BEncodeWriteDictEntry("n", nounce, buf))
-      return false;
-    if (not BEncodeWriteDictInt("s", signedAt.count(), buf))
-      return false;
-    if (not bencode_write_bytestring(buf, "x", 1))
-      return false;
-    if (not bencode_write_bytestring(buf, introsetPayload.data(), introsetPayload.size()))
-      return false;
-    if (not BEncodeWriteDictEntry("z", sig, buf))
-      return false;
-    return bencode_end(buf);
-  }
-
-  bool
-  EncryptedIntroSet::DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf)
-  {
-    bool read = false;
-    if (key.startswith("x"))
+    EncryptedIntroSet::EncryptedIntroSet(
+        std::string signing_key,
+        std::chrono::milliseconds signed_at,
+        std::string enc_payload,
+        std::string nonce,
+        std::string s)
+        : signed_at{signed_at},
+          introset_payload{reinterpret_cast<uint8_t*>(enc_payload.data()), enc_payload.size()},
+          nonce{reinterpret_cast<uint8_t*>(nonce.data())}
     {
-      llarp_buffer_t strbuf;
-      if (not bencode_read_string(buf, &strbuf))
-        return false;
-      if (strbuf.sz > MAX_INTROSET_SIZE)
-        return false;
-      introsetPayload.resize(strbuf.sz);
-      std::copy_n(strbuf.base, strbuf.sz, introsetPayload.data());
-      return true;
-    }
-    if (not BEncodeMaybeReadDictEntry("d", derivedSigningKey, read, key, buf))
-      return false;
-
-    if (not BEncodeMaybeReadDictEntry("n", nounce, read, key, buf))
-      return false;
-
-    if (not BEncodeMaybeReadDictInt("s", signedAt, read, key, buf))
-      return false;
-
-    if (not BEncodeMaybeReadDictEntry("z", sig, read, key, buf))
-      return false;
-    return read;
-  }
-
-  bool
-  EncryptedIntroSet::OtherIsNewer(const EncryptedIntroSet& other) const
-  {
-    return signedAt < other.signedAt;
-  }
-
-  std::string
-  EncryptedIntroSet::ToString() const
-  {
-    return fmt::format(
-        "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]",
-        derivedSigningKey,
-        nounce,
-        signedAt.count(),
-        introsetPayload.size(),
-        sig);
-  }
-
-  std::optional<IntroSet>
-  EncryptedIntroSet::MaybeDecrypt(const PubKey& root) const
-  {
-    SharedSecret k(root);
-    IntroSet i;
-    std::vector<byte_t> payload = introsetPayload;
-    llarp_buffer_t buf(payload);
-    CryptoManager::instance()->xchacha20(buf, k, nounce);
-    if (not i.BDecode(&buf))
-      return {};
-    return i;
-  }
-
-  bool
-  EncryptedIntroSet::IsExpired(llarp_time_t now) const
-  {
-    return now >= signedAt + path::default_lifetime;
-  }
-
-  bool
-  EncryptedIntroSet::Sign(const PrivateKey& k)
-  {
-    signedAt = llarp::time_now_ms();
-    if (not k.toPublic(derivedSigningKey))
-      return false;
-    sig.Zero();
-    std::array<byte_t, MAX_INTROSET_SIZE + 128> tmp;
-    llarp_buffer_t buf(tmp);
-    if (not BEncode(&buf))
-      return false;
-    buf.sz = buf.cur - buf.base;
-    buf.cur = buf.base;
-    if (not CryptoManager::instance()->sign(sig, k, buf))
-      return false;
-    LogDebug("signed encrypted introset: ", *this);
-    return true;
-  }
-
-  bool
-  EncryptedIntroSet::Verify(llarp_time_t now) const
-  {
-    if (IsExpired(now))
-      return false;
-    std::array<byte_t, MAX_INTROSET_SIZE + 128> tmp;
-    llarp_buffer_t buf(tmp);
-    EncryptedIntroSet copy(*this);
-    copy.sig.Zero();
-    if (not copy.BEncode(&buf))
-      return false;
-    LogDebug("verify encrypted introset: ", copy, " sig = ", sig);
-    buf.sz = buf.cur - buf.base;
-    buf.cur = buf.base;
-    return CryptoManager::instance()->verify(derivedSigningKey, buf, sig);
-  }
-
-  util::StatusObject
-  IntroSet::ExtractStatus() const
-  {
-    util::StatusObject obj{{"published", to_json(timestampSignedAt)}};
-    std::vector<util::StatusObject> introsObjs;
-    std::transform(
-        intros.begin(),
-        intros.end(),
-        std::back_inserter(introsObjs),
-        [](const auto& intro) -> util::StatusObject { return intro.ExtractStatus(); });
-    obj["intros"] = introsObjs;
-    if (!topic.IsZero())
-      obj["topic"] = topic.ToString();
-
-    std::vector<util::StatusObject> protocols;
-    std::transform(
-        supportedProtocols.begin(),
-        supportedProtocols.end(),
-        std::back_inserter(protocols),
-        [](const auto& proto) -> util::StatusObject { return service::ToString(proto); });
-    obj["protos"] = protocols;
-    std::vector<util::StatusObject> ranges;
-    std::transform(
-        ownedRanges.begin(),
-        ownedRanges.end(),
-        std::back_inserter(ranges),
-        [](const auto& range) -> util::StatusObject { return range.ToString(); });
-
-    obj["advertisedRanges"] = ranges;
-    if (exitTrafficPolicy)
-      obj["exitPolicy"] = exitTrafficPolicy->ExtractStatus();
-
-    return obj;
-  }
-
-  bool
-  IntroSet::DecodeKey(const llarp_buffer_t& key, llarp_buffer_t* buf)
-  {
-    bool read = false;
-    if (!BEncodeMaybeReadDictEntry("a", addressKeys, read, key, buf))
-      return false;
-
-    if (key.startswith("e"))
-    {
-      net::TrafficPolicy policy;
-      if (not policy.BDecode(buf))
-        return false;
-      exitTrafficPolicy = policy;
-      return true;
+        derived_signing_key.from_hex(signing_key);
+        sig.from_string(std::move(s));
     }
 
-    if (key.startswith("i"))
+    EncryptedIntroSet::EncryptedIntroSet(std::string bt_payload)
     {
-      return BEncodeReadList(intros, buf);
+        try
+        {
+            oxenc::bt_dict_consumer btdc{bt_payload};
+            bt_decode(btdc);
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
+        }
     }
-    if (!BEncodeMaybeReadDictEntry("k", sntrupKey, read, key, buf))
-      return false;
 
-    if (!BEncodeMaybeReadDictEntry("n", topic, read, key, buf))
-      return false;
-
-    if (key.startswith("p"))
+    nlohmann::json EncryptedIntroSet::ExtractStatus() const
     {
-      return bencode_read_list(
-          [&](llarp_buffer_t* buf, bool more) {
-            if (more)
-            {
-              uint64_t protoval;
-              if (not bencode_read_integer(buf, &protoval))
-                return false;
-              supportedProtocols.emplace_back(static_cast<ProtocolType>(protoval));
-            }
+        const auto sz = introset_payload.size();
+        return {{"location", derived_signing_key.to_string()}, {"signedAt", to_json(signed_at)}, {"size", sz}};
+    }
+
+    bool EncryptedIntroSet::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+            return bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "EncryptedIntroSet parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+    }
+
+    bool EncryptedIntroSet::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            derived_signing_key.from_string(btdc.require<std::string>("d"));
+            nonce.from_string(btdc.require<std::string>("n"));
+            signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("s")};
+            introset_payload = btdc.require<ustring>("x");
+            sig.from_string(btdc.require<std::string>("z"));
+
             return true;
-          },
-          buf);
+        }
+        catch (...)
+        {
+            log::critical(logcat, "EncryptedIntroSet failed to decode bt payload!");
+            throw;
+        }
     }
 
-    if (key.startswith("r"))
+    std::string EncryptedIntroSet::bt_encode() const
     {
-      return BEncodeReadSet(ownedRanges, buf);
+        oxenc::bt_dict_producer btdp;
+
+        try
+        {
+            btdp.append("d", derived_signing_key.to_view());
+            btdp.append("n", nonce.to_view());
+            btdp.append("s", signed_at.count());
+            btdp.append(
+                "x", std::string_view{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()});
+            btdp.append("z", sig.to_view());
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
+        }
+
+        return std::move(btdp).str();
     }
 
-    if (key.startswith("s"))
+    std::optional<EncryptedIntroSet> EncryptedIntroSet::construct(std::string bt)
     {
-      byte_t* begin = buf->cur;
-      if (not bencode_discard(buf))
-        return false;
+        if (EncryptedIntroSet ret; ret.bt_decode(std::move(bt)))
+            return ret;
 
-      byte_t* end = buf->cur;
-
-      std::string_view srvString(
-          reinterpret_cast<const char*>(begin), static_cast<size_t>(end - begin));
-
-      try
-      {
-        oxenc::bt_deserialize(srvString, SRVs);
-      }
-      catch (const oxenc::bt_deserialize_invalid& err)
-      {
-        LogError("Error decoding SRV records from IntroSet: ", err.what());
-        return false;
-      }
-      read = true;
+        return std::nullopt;
     }
 
-    if (!BEncodeMaybeReadDictInt("t", timestampSignedAt, read, key, buf))
-      return false;
-
-    if (!BEncodeMaybeReadDictInt("v", version, read, key, buf))
-      return false;
-
-    if (!BEncodeMaybeReadDictEntry("z", signature, read, key, buf))
-      return false;
-
-    return read or bencode_discard(buf);
-  }
-
-  bool
-  IntroSet::BEncode(llarp_buffer_t* buf) const
-  {
-    if (not bencode_start_dict(buf))
-      return false;
-    if (not BEncodeWriteDictEntry("a", addressKeys, buf))
-      return false;
-
-    // exit policy if applicable
-    if (exitTrafficPolicy)
+    bool EncryptedIntroSet::other_is_newer(const EncryptedIntroSet& other) const
     {
-      if (not BEncodeWriteDictEntry("e", *exitTrafficPolicy, buf))
-        return false;
+        return signed_at < other.signed_at;
     }
-    // start introduction list
-    if (not bencode_write_bytestring(buf, "i", 1))
-      return false;
-    if (not BEncodeWriteList(intros.begin(), intros.end(), buf))
-      return false;
-    // end introduction list
 
-    // pq pubkey
-    if (not BEncodeWriteDictEntry("k", sntrupKey, buf))
-      return false;
-
-    // topic tag
-    if (not topic.ToString().empty())
+    std::string EncryptedIntroSet::to_string() const
     {
-      if (not BEncodeWriteDictEntry("n", topic, buf))
-        return false;
+        return fmt::format(
+            "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]",
+            derived_signing_key,
+            nonce,
+            signed_at.count(),
+            introset_payload.size(),
+            sig);
     }
 
-    // supported ethertypes
-    if (not supportedProtocols.empty())
+    std::optional<IntroSet> EncryptedIntroSet::decrypt(const PubKey& root) const
     {
-      if (not bencode_write_bytestring(buf, "p", 1))
-        return false;
+        std::optional<IntroSet> ret = std::nullopt;
 
-      if (not bencode_start_list(buf))
-        return false;
+        SharedSecret k(root);
+        std::string payload{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()};
 
-      for (const auto& proto : supportedProtocols)
-      {
-        if (not bencode_write_uint64(buf, static_cast<uint64_t>(proto)))
-          return false;
-      }
+        if (crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce))
+            ret = IntroSet{payload};
 
-      if (not bencode_end(buf))
-        return false;
+        return ret;
     }
 
-    // owned ranges
-    if (not ownedRanges.empty())
+    bool EncryptedIntroSet::is_expired(std::chrono::milliseconds now) const
     {
-      if (not bencode_write_bytestring(buf, "r", 1))
-        return false;
-
-      if (not BEncodeWriteSet(ownedRanges, buf))
-        return false;
+        return now >= signed_at + path::DEFAULT_LIFETIME;
     }
 
-    // srv records
-    if (not SRVs.empty())
+    bool EncryptedIntroSet::sign(const Ed25519Hash& k)
     {
-      std::string serial = oxenc::bt_serialize(SRVs);
-      if (!bencode_write_bytestring(buf, "s", 1))
-        return false;
-      if (!buf->write(serial.begin(), serial.end()))
-        return false;
-    }
+        signed_at = llarp::time_now_ms();
+        derived_signing_key = k.to_pubkey();
+        sig.zero();
+        auto bte = bt_encode();
 
-    // timestamp
-    if (!BEncodeWriteDictInt("t", timestampSignedAt.count(), buf))
-      return false;
+        if (not crypto::sign(sig, k, reinterpret_cast<uint8_t*>(bte.data()), bte.size()))
+            return false;
 
-    // write version
-    if (!BEncodeWriteDictInt("v", version, buf))
-      return false;
-
-    if (!BEncodeWriteDictEntry("z", signature, buf))
-      return false;
-
-    return bencode_end(buf);
-  }
-
-  bool
-  IntroSet::HasExpiredIntros(llarp_time_t now) const
-  {
-    for (const auto& intro : intros)
-      if (now >= intro.expiresAt)
+        log::debug(logcat, "Singed encrypted introset: {}", *this);
         return true;
-    return false;
-  }
+    }
 
-  bool
-  IntroSet::HasStaleIntros(llarp_time_t now, llarp_time_t delta) const
-  {
-    for (const auto& intro : intros)
-      if (intro.ExpiresSoon(now, delta))
+    bool EncryptedIntroSet::verify() const
+    {
+        if (is_expired())
+            return false;
+
+        EncryptedIntroSet copy(*this);
+        copy.sig.zero();
+
+        auto bte = copy.bt_encode();
+        return crypto::verify(derived_signing_key, reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);
+    }
+
+    bool EncryptedIntroSet::verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig)
+    {
+        return crypto::verify(key, introset, introset_size, sig);
+    }
+
+    bool EncryptedIntroSet::verify(std::string introset, std::string key, std::string sig)
+    {
+        return crypto::verify(
+            reinterpret_cast<uint8_t*>(key.data()),
+            reinterpret_cast<uint8_t*>(introset.data()),
+            introset.size(),
+            reinterpret_cast<uint8_t*>(sig.data()));
+    }
+
+    nlohmann::json IntroSet::ExtractStatus() const
+    {
+        nlohmann::json obj{{"published", to_json(time_signed)}};
+        // TODO: this
+        // std::vector<nlohmann::json> introsObjs;
+        // std::transform(
+        //     intros.begin(),
+        //     intros.end(),
+        //     std::back_inserter(introsObjs),
+        //     [](const auto& intro) -> nlohmann::json { return intro.ExtractStatus(); });
+        // obj["intros"] = introsObjs;
+        // if (!topic.IsZero())
+        //   obj["topic"] = topic.to_string();
+
+        // std::vector<nlohmann::json> protocols;
+        // std::transform(
+        //     supported_protocols.begin(),
+        //     supported_protocols.end(),
+        //     std::back_inserter(protocols),
+        //     [](const auto& proto) -> nlohmann::json { return service::to_string(proto); });
+        // obj["protos"] = protocols;
+        // std::vector<nlohmann::json> ranges;
+        // std::transform(
+        //     owned_ranges.begin(),
+        //     owned_ranges.end(),
+        //     std::back_inserter(ranges),
+        //     [](const auto& range) -> nlohmann::json { return range.to_string(); });
+
+        // obj["advertisedRanges"] = ranges;
+        // if (exit_policy)
+        //   obj["exitPolicy"] = exit_policy->ExtractStatus();
+
+        return obj;
+    }
+
+    IntroSet::IntroSet(std::string bt_payload)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{bt_payload};
+            bt_decode(btdc);
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: EncryptedIntroSet failed to bt encode contents!");
+        }
+    }
+
+    bool IntroSet::bt_decode(std::string_view buf)
+    {
+        try
+        {
+            oxenc::bt_dict_consumer btdc{buf};
+            bt_decode(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            // DISCUSS: rethrow or print warning/return false...?
+            auto err = "IntroSet parsing exception: {}"_format(e.what());
+            log::warning(logcat, "{}", err);
+            throw std::runtime_error{err};
+        }
+
         return true;
-    return false;
-  }
-
-  bool
-  IntroSet::IsExpired(llarp_time_t now) const
-  {
-    return GetNewestIntroExpiration() < now;
-  }
-
-  std::vector<llarp::dns::SRVData>
-  IntroSet::GetMatchingSRVRecords(std::string_view service_proto) const
-  {
-    std::vector<llarp::dns::SRVData> records;
-
-    for (const auto& tuple : SRVs)
-    {
-      if (std::get<0>(tuple) == service_proto)
-      {
-        records.push_back(llarp::dns::SRVData::fromTuple(tuple));
-      }
     }
 
-    return records;
-  }
+    void IntroSet::bt_decode(oxenc::bt_dict_consumer& btdc)
+    {
+        try
+        {
+            {
+                auto [key, subdict] = btdc.next_dict_consumer();
 
-  bool
-  IntroSet::Verify(llarp_time_t now) const
-  {
-    std::array<byte_t, MAX_INTROSET_SIZE> tmp;
-    llarp_buffer_t buf{tmp};
-    IntroSet copy;
-    copy = *this;
-    copy.signature.Zero();
-    if (!copy.BEncode(&buf))
-    {
-      return false;
+                if (key != "a")
+                    throw std::invalid_argument{
+                        "IntroSet received unexpected key (expected:'a', actual:{})"_format(key)};
+
+                address_keys.bt_decode(subdict);
+            }
+
+            if (auto maybe_subdict = btdc.maybe<std::string>("e"); maybe_subdict)
+            {
+                oxenc::bt_dict_consumer subdict{*maybe_subdict};
+                exit_policy->bt_decode(subdict);
+            }
+
+            {
+                auto [key, sublist] = btdc.next_list_consumer();
+
+                if (key != "i")
+                    throw std::invalid_argument{
+                        "IntroSet received unexpected key (expected:'i', actual:{})"_format(key)};
+
+                while (not sublist.is_finished())
+                {
+                    intros.insert(sublist.consume_string());
+                }
+            }
+
+            sntru_pubkey.from_string(btdc.require<std::string>("k"));
+
+            if (auto maybe_supportedprotos = btdc.maybe<std::string>("p"); maybe_supportedprotos)
+            {
+                oxenc::bt_list_consumer sublist{*maybe_supportedprotos};
+
+                while (not sublist.is_finished())
+                {
+                    supported_protocols.push_back(ProtocolType{sublist.consume_integer<uint64_t>()});
+                }
+            }
+
+            if (auto maybe_ownedranges = btdc.maybe<std::string>("i"); maybe_ownedranges)
+            {
+                oxenc::bt_list_consumer sublist{*maybe_ownedranges};
+
+                while (not sublist.is_finished())
+                {
+                    _routed_ranges.emplace(sublist.consume_string());
+                }
+            }
+
+            if (auto maybe_srvs = btdc.maybe<std::string>("s"); maybe_srvs)
+            {
+                oxenc::bt_list_consumer sublist{*maybe_srvs};
+
+                while (not sublist.is_finished())
+                {
+                    SRVs.emplace_back(sublist.consume_string());
+                }
+            }
+
+            time_signed = std::chrono::milliseconds{btdc.require<uint64_t>("t")};
+            signature.from_string(btdc.require<std::string>("z"));
+        }
+        catch (...)
+        {
+            log::critical(logcat, "IntroSet failed to decode bt payload!");
+            throw;
+        }
     }
-    // rewind and resize buffer
-    buf.sz = buf.cur - buf.base;
-    buf.cur = buf.base;
-    if (!addressKeys.Verify(buf, signature))
+
+    std::string IntroSet::bt_encode() const
     {
-      return false;
+        oxenc::bt_dict_producer btdp;
+
+        try
+        {
+            {
+                auto subdict = btdp.append_dict("a");
+                address_keys.bt_encode(subdict);
+            }
+
+            if (exit_policy)
+            {
+                auto subdict = btdp.append_dict("e");
+                exit_policy->bt_encode(subdict);
+            }
+
+            {
+                auto sublist = btdp.append_list("i");
+                for (auto& i : intros)
+                    i.bt_encode(sublist);
+            }
+
+            btdp.append("k", sntru_pubkey.to_view());
+
+            if (not supported_protocols.empty())
+            {
+                auto sublist = btdp.append_list("p");
+                for (auto& p : supported_protocols)
+                    sublist.append(static_cast<uint64_t>(p));
+            }
+
+            if (not _routed_ranges.empty())
+            {
+                auto sublist = btdp.append_list("r");
+                for (auto& r : _routed_ranges)
+                    r.bt_encode(sublist);
+            }
+
+            if (not SRVs.empty())
+            {
+                auto sublist = btdp.append_list("s");
+                for (auto& s : SRVs)
+                    sublist.append(s.bt_encode());
+            }
+
+            btdp.append("t", time_signed.count());
+            btdp.append("z", signature.to_view());
+        }
+        catch (...)
+        {
+            log::critical(logcat, "Error: IntroSet failed to bt encode contents!");
+        }
+
+        return std::move(btdp).str();
     }
-    // valid timestamps
-    // add max clock skew
-    now += MAX_INTROSET_TIME_DELTA;
-    for (const auto& intro : intros)
+
+    bool IntroSet::HasExpiredIntros(std::chrono::milliseconds now) const
     {
-      if (intro.expiresAt > now && intro.expiresAt - now > path::default_lifetime)
-      {
+        for (const auto& intro : intros)
+            if (now >= intro.expiry)
+                return true;
         return false;
-      }
     }
-    return not IsExpired(now);
-  }
 
-  llarp_time_t
-  IntroSet::GetNewestIntroExpiration() const
-  {
-    llarp_time_t maxTime = 0s;
-    for (const auto& intro : intros)
-      maxTime = std::max(intro.expiresAt, maxTime);
-    return maxTime;
-  }
+    bool IntroSet::HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const
+    {
+        for (const auto& intro : intros)
+            if (intro.expires_soon(now, delta))
+                return true;
+        return false;
+    }
 
-  std::string
-  IntroSet::ToString() const
-  {
-    return fmt::format(
-        "[IntroSet addressKeys={} intros={{{}}} sntrupKey={} topic={} signedAt={} v={} sig={}]",
-        addressKeys,
-        fmt::format("{}", fmt::join(intros, ",")),
-        sntrupKey,
-        topic,
-        timestampSignedAt.count(),
-        version,
-        signature);
-  }
+    bool IntroSet::IsExpired(std::chrono::milliseconds now) const
+    {
+        return GetNewestIntroExpiration() < now;
+    }
+
+    std::vector<llarp::dns::SRVData> IntroSet::GetMatchingSRVRecords(std::string_view service_proto) const
+    {
+        std::vector<llarp::dns::SRVData> records;
+
+        for (const auto& srv : SRVs)
+        {
+            if (srv.service_proto == service_proto)
+            {
+                records.push_back(srv);
+            }
+        }
+
+        return records;
+    }
+
+    bool IntroSet::verify(std::chrono::milliseconds now) const
+    {
+        IntroSet copy;
+        copy = *this;
+        copy.signature.zero();
+
+        auto bte = copy.bt_encode();
+
+        if (!address_keys.verify(reinterpret_cast<uint8_t*>(bte.data()), bte.size(), signature))
+        {
+            return false;
+        }
+        // valid timestamps
+        // add max clock skew
+        now += MAX_INTROSET_TIME_DELTA;
+        for (const auto& intro : intros)
+        {
+            if (intro.expiry > now && intro.expiry - now > path::DEFAULT_LIFETIME)
+            {
+                return false;
+            }
+        }
+        return not IsExpired(now);
+    }
+
+    std::chrono::milliseconds IntroSet::GetNewestIntroExpiration() const
+    {
+        std::chrono::milliseconds maxTime = 0s;
+        for (const auto& intro : intros)
+            maxTime = std::max(intro.expiry, maxTime);
+        return maxTime;
+    }
+
+    std::string IntroSet::to_string() const
+    {
+        return "[IntroSet addressKeys={} intros={{}} sntrupKey={} topic={} signedAt={} v={} sig={}]"_format(
+            address_keys.to_string(),
+            "{}"_format(fmt::join(intros, ",")),
+            sntru_pubkey,
+            time_signed.count(),
+            version,
+            signature.to_view());
+    }
 }  // namespace llarp::service

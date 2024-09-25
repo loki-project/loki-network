@@ -1,25 +1,24 @@
 #include <initializer_list>
-#include "llarp/bootstrap.hpp"
+#include <llarp/bootstrap.hpp>
 
 namespace llarp
 {
-  using namespace std::literals;
-
   std::unordered_map<std::string, BootstrapList>
   load_bootstrap_fallbacks()
   {
     std::unordered_map<std::string, BootstrapList> fallbacks;
-    using init_list = std::initializer_list<std::pair<std::string, std::string_view>>;
-    // clang-format off
-    for (const auto& [network, bootstrap] : init_list{
+
+    for (const auto& [network, bootstrap] : std::initializer_list<std::pair<std::string, std::string_view>>{
 @BOOTSTRAP_FALLBACKS@
     })
-    // clang-format on
     {
-      llarp_buffer_t buf{bootstrap.data(), bootstrap.size()};
+      if (network != RouterContact::ACTIVE_NETID)
+        continue;
+      
       auto& bsl = fallbacks[network];
-      bsl.BDecode(&buf);
+      bsl.bt_decode(bootstrap);
     }
+    
     return fallbacks;
   }
 }  // namespace llarp

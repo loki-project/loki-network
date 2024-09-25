@@ -8,7 +8,6 @@ using namespace llarp;
 
 TEST_CASE("Identity key")
 {
-  llarp::sodium::CryptoLibSodium crypto;
   SecretKey secret;
   crypto.identity_keygen(secret);
 
@@ -35,7 +34,6 @@ TEST_CASE("Identity key")
 
 TEST_CASE("PQ crypto")
 {
-  llarp::sodium::CryptoLibSodium crypto;
   PQKeyPair keys;
   crypto.pqe_keygen(keys);
   PQCipherBlock block;
@@ -52,8 +50,6 @@ TEST_CASE("PQ crypto")
 
 TEST_CASE("passwd hash valid")
 {
-  llarp::sodium::CryptoLibSodium crypto;
-
   // poggers password hashes
   std::set<std::string> valid_hashes;
   // UNIX DES

@@ -1,61 +1,57 @@
 #pragma once
 #include "platform.hpp"
 
-#include <llarp/util/fs.hpp>
-
-#include <stdlib.h>
+#include <filesystem>
 
 #ifndef _WIN32
-#include <unistd.h>
 #include <pwd.h>
+#include <unistd.h>
 #endif
+
+namespace fs = std::filesystem;
 
 namespace llarp
 {
-  constexpr auto our_rc_filename = "self.signed";
-  constexpr auto our_identity_filename = "identity.key";
-  constexpr auto our_enc_key_filename = "encryption.key";
-  constexpr auto our_transport_key_filename = "transport.key";
+    constexpr auto our_rc_filename = "self.signed";
+    constexpr auto our_identity_filename = "identity.key";
+    constexpr auto our_enc_key_filename = "encryption.key";
+    constexpr auto our_transport_key_filename = "transport.key";
 
-  constexpr auto nodedb_dirname = "nodedb";
+    constexpr auto nodedb_dirname = "nodedb";
 
-  inline fs::path
-  GetDefaultDataDir()
-  {
-    if constexpr (not platform::is_windows)
+    inline fs::path GetDefaultDataDir()
     {
-      fs::path datadir{"/var/lib/lokinet"};
-#ifndef _WIN32
-      if (auto uid = geteuid())
-      {
-        if (auto* pw = getpwuid(uid))
+        if constexpr (not platform::is_windows)
         {
-          datadir = fs::path{pw->pw_dir} / ".lokinet";
-        }
-      }
+            fs::path datadir{"/var/lib/lokinet"};
+#ifndef _WIN32
+            if (auto uid = geteuid())
+            {
+                if (auto* pw = getpwuid(uid))
+                {
+                    datadir = fs::path{pw->pw_dir} / ".lokinet";
+                }
+            }
 #endif
-      return datadir;
+            return datadir;
+        }
+        else
+            return "C:\\ProgramData\\Lokinet";
     }
-    else
-      return "C:\\ProgramData\\Lokinet";
-  }
 
-  inline fs::path
-  GetDefaultConfigFilename()
-  {
-    return "lokinet.ini";
-  }
+    inline fs::path GetDefaultConfigFilename()
+    {
+        return "lokinet.ini";
+    }
 
-  inline fs::path
-  GetDefaultConfigPath()
-  {
-    return GetDefaultDataDir() / GetDefaultConfigFilename();
-  }
+    inline fs::path GetDefaultConfigPath()
+    {
+        return GetDefaultDataDir() / GetDefaultConfigFilename();
+    }
 
-  inline fs::path
-  GetDefaultBootstrap()
-  {
-    return GetDefaultDataDir() / "bootstrap.signed";
-  }
+    inline fs::path GetDefaultBootstrap()
+    {
+        return GetDefaultDataDir() / "bootstrap.signed";
+    }
 
 }  // namespace llarp

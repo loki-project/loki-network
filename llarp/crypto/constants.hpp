@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstdint>
-
 #include <libntrup/ntru.h>
+
+#include <cstdint>
 
 static constexpr uint32_t PUBKEYSIZE = 32;
 static constexpr uint32_t SECKEYSIZE = 64;

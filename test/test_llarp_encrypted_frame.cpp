@@ -2,7 +2,6 @@
 #include "test_util.hpp"
 #include <llarp/crypto/encrypted_frame.hpp>
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/crypto/crypto_libsodium.hpp>
 #include <llarp/messages/relay_commit.hpp>
 #include <catch2/catch.hpp>
 
@@ -13,14 +12,13 @@ using SecretKey = SecretKey;
 using PubKey = PubKey;
 using LRCR = LR_CommitRecord;
 
-class FrameTest : public test::LlarpTest<>
+class FrameTest
 {
  public:
   FrameTest() : test::LlarpTest<>{}
   {
-    auto crypto = CryptoManager::instance();
-    crypto->encryption_keygen(alice);
-    crypto->encryption_keygen(bob);
+    crypto::encryption_keygen(alice);
+    crypto::encryption_keygen(bob);
   }
 
   SecretKey alice, bob;
