@@ -135,6 +135,8 @@ namespace llarp
         ustring_view uview() const { return {data(), size()}; }
 
         std::string to_string();
+
+        std::string info_line() const;
     };
 
 }  // namespace llarp

@@ -19,13 +19,6 @@ namespace llarp
     // shared_ptr containing the actual libev loop
     using loop_ptr = std::shared_ptr<::event_base>;
 
-    inline constexpr auto watch_deleter = [](::evwatch* w) {
-        if (w)
-            ::evwatch_free(w);
-    };
-
-    using watch_ptr = std::unique_ptr<::evwatch, decltype(watch_deleter)>;
-
     /** EventTrigger
             This class is a parallel implementation of libquic Ticker (typedef'ed as 'EventTicker' above). Rather than
         invoking at regular intervals, it is manually invoked with an optional time delay. This is a useful
@@ -106,35 +99,55 @@ namespace llarp
         bool is_cooling_down() const { return _is_cooling_down; }
     };
 
-    /** EventPoller
-            This class is a similar implementation to EventTrigger and Ticker, with a few key differences in relation to
-        the net interfaces it manages. First, we don't want the execution of the logic to be tied to a specific timer or
-        fixed interval. Rather, this will be event triggered on packet I/O. As a result, this necessitates the second
-        key difference: it uses a libevent "prepare" watcher to fire immediately BEFORE polling for I/O. Libevent also
-        exposes the concept of a "check" watcher, which fires immediately AFTER processing active events.
+    /** FDPoller
+            This class is the base for the platform-specific Pollers that watch for IO on the virtual TUN network
+        interface.
      */
-    struct EventPoller
+    struct FDPoller
     {
         friend class oxen::quic::Loop;
 
-      private:
-        EventPoller(const loop_ptr& _loop, std::function<void()> task);
+        // No move/copy/etc
+        FDPoller() = delete;
+        FDPoller(const FDPoller&) = delete;
+        FDPoller(FDPoller&&) = delete;
+        FDPoller& operator=(const FDPoller&) = delete;
+        FDPoller& operator=(FDPoller&&) = delete;
+
+        virtual ~FDPoller()
+        {
+            ev.reset();
+            f = nullptr;
+        }
+
+      protected:
+        FDPoller(int _fd, std::function<void()> task) : fd{_fd}, f{std::move(task)} {}
+
+        int fd;
+        event_ptr ev;
+        std::function<void()> f;
 
       public:
-        static std::shared_ptr<EventPoller> make(const std::shared_ptr<EventLoop>& _loop, std::function<void()> task);
+        virtual bool start() = 0;
 
-        // No move/copy/etc
-        EventPoller() = delete;
-        EventPoller(const EventTrigger&) = delete;
-        EventPoller(EventPoller&&) = delete;
-        EventPoller& operator=(const EventPoller&) = delete;
-        EventPoller& operator=(EventPoller&&) = delete;
+        virtual bool stop() = 0;
+    };
 
-        ~EventPoller();
+    /** LinuxPoller
+            This class is a linux-specific extension of the Base poller type.
+     */
+    struct LinuxPoller final : public FDPoller
+    {
+        friend class EventLoop;
+        friend class oxen::quic::Loop;
 
       private:
-        watch_ptr pv;
-        std::function<void()> f;
+        LinuxPoller(int _fd, const loop_ptr& _loop, std::function<void()> task);
+
+      public:
+        bool start() override;
+
+        bool stop() override;
     };
 
 }  //  namespace llarp

@@ -517,7 +517,7 @@ namespace llarp::path
 
             if (auto [it, b] = _paths.try_emplace(terminus, nullptr); not b)
             {
-                log::error(logcat, "Pending build to {} already underway... aborting...", terminus);
+                log::warning(logcat, "Pending build to {} already underway... aborting...", terminus);
                 return false;
             }
         }

@@ -184,7 +184,7 @@ namespace llarp::path
             upstream_rid(),
             "path_control",
             std::move(outer_payload),
-            [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) {
+            [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) mutable {
                 auto self = weak.lock();
                 // TODO: do we want to allow empty callback here?
                 if ((not self) or (not response_cb))
@@ -301,7 +301,7 @@ namespace llarp::path
     std::string Path::to_string() const
     {
         return "RID:{} -- TX:{}/RX:{}"_format(
-            _router.local_rid(), upstream_txid().to_view(), upstream_rxid().to_view());
+            _router.local_rid().ShortString(), upstream_txid().to_string(), upstream_rxid().to_string());
     }
 
     std::string Path::HopsString() const

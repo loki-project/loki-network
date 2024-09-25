@@ -54,7 +54,7 @@ namespace llarp::handlers
         std::optional<IPRange> _base_ipv6_range = std::nullopt;
 
         std::shared_ptr<vpn::NetworkInterface> _net_if;
-        std::shared_ptr<EventPoller> _pkt_watcher;
+        std::shared_ptr<FDPoller> _poller;
 
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
@@ -144,6 +144,8 @@ namespace llarp::handlers
         const Router& router() const { return _router; }
 
         Router& router() { return _router; }
+
+        void start_poller();
 
         //   protected:
         struct WritePacket

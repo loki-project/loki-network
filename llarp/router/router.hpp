@@ -109,7 +109,7 @@ namespace llarp
         bool _testing_disabled{false};
         bool _testnet{false};
         bool _bootstrap_seed{false};
-        bool _should_init_tun{false};
+        bool _using_tun{false};
 
         consensus::reachability_testing router_testing;
 
@@ -203,7 +203,7 @@ namespace llarp
 
         bool fully_meshed() const;
 
-        bool using_tun_if() const { return _should_init_tun; }
+        bool using_tun_if() const { return _using_tun; }
 
         bool testnet() const { return _testnet; }
 

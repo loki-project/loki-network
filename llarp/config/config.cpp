@@ -1083,7 +1083,7 @@ namespace llarp
             if (maybe and maybe->is_loopback())
                 throw std::invalid_argument{"{} is a loopback address"_format(arg)};
 
-            log::critical(logcat, "parsed address: ", *maybe);
+            log::critical(logcat, "parsed address: {}", *maybe);
 
             return maybe;
         };

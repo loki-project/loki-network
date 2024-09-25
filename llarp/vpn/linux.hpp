@@ -45,6 +45,9 @@ namespace llarp::vpn
             if (_fd == -1)
                 throw std::runtime_error("cannot open /dev/net/tun " + std::string{strerror(errno)});
 
+            if (fcntl(_fd, F_SETFL, O_NONBLOCK) == -1)
+                throw std::runtime_error{"Failed to set Linux interface fd non-block!s"};
+
             ifreq ifr{};
             in6_ifreq ifr6{};
 
@@ -213,9 +216,8 @@ namespace llarp::vpn
             {
                 family = AF_INET6;
                 bitlen = 128;
-
-                auto bigly = oxenc::host_to_big<uint64_t>(v6.hi);
-                inet_ntop(AF_INET6, &bigly, reinterpret_cast<char*>(data), sizeof(struct in6_addr));
+                auto in6 = v6.to_in6();
+                std::memcpy(&data, &in6, sizeof(in6_addr));
             }
 
             _inet_addr(net::ipv4addr_t addr, size_t bits = 32)

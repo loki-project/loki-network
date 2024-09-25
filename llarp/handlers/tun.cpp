@@ -340,6 +340,9 @@ namespace llarp::handlers
             }
         }
 
+        log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
+        _local_range_iterator = IPRangeIterator(_local_range);
+
         _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
         _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
 
@@ -356,34 +359,6 @@ namespace llarp::handlers
 
         log::debug(logcat, "{} setting up network...", name());
 
-        _net_if = router().vpn_platform()->CreateInterface(std::move(info), &_router);
-
-        _if_name = _net_if->interface_info().ifname;
-        log::info(logcat, "{} got network interface:{}", name(), _if_name);
-
-        auto if_hook = [netif = _net_if, pktrouter = _packet_router]() mutable {
-            auto pkt = netif->read_next_packet();
-
-            while (not pkt.empty())
-            {
-                pktrouter->handle_ip_packet(std::move(pkt));
-                pkt = netif->read_next_packet();
-            }
-        };
-
-        auto handle_packet = [netif = _net_if, pktrouter = _packet_router](IPPacket pkt) {
-            // TODO: packets used to have reply hooks
-            // pkt.reply = [netif](auto pkt) { netif->write_packet(std::move(pkt)); };
-            pktrouter->handle_ip_packet(std::move(pkt));
-        };
-
-        if (not router().loop()->add_network_interface(_net_if, std::move(handle_packet)))
-        {
-            auto err = "{} failed to add network interface!"_format(name());
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{std::move(err)};
-        }
-
         _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
 
         if (ipv6_enabled)
@@ -399,6 +374,26 @@ namespace llarp::handlers
 
         log::info(
             logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+
+        _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
+        _if_name = _net_if->interface_info().ifname;
+
+        log::info(logcat, "{} got network interface:{}", name(), _if_name);
+
+        auto pkt_hook = [this]() {
+            for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+            {
+                log::debug(logcat, "packet router receiving {}", pkt.info_line());
+                _packet_router->handle_ip_packet(std::move(pkt));
+            }
+        };
+
+        if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
+        {
+            auto err = "{} failed to add network interface!"_format(name());
+            log::error(logcat, "{}", err);
+            throw std::runtime_error{std::move(err)};
+        }
 
         // if (auto* quic = GetQUICTunnel())
         // {
@@ -1015,11 +1010,12 @@ namespace llarp::handlers
             {
                 log::debug(logcat, "Dispatching outbound packet for session (remote: {})", remote);
                 session->send_path_data_message(std::move(pkt).steal_payload());
-                return;
             }
-            throw std::runtime_error{"Could not find session (remote: {}) for outbound packet!"_format(remote)};
+            else
+                log::warning(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
         }
-        throw std::runtime_error{"Could not find remote mapped to local ip: {}"_format(dest)};
+        else
+            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
     }
 
     bool TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4)
@@ -1143,6 +1139,13 @@ namespace llarp::handlers
         rewrite_and_send_packet(std::move(pkt), src, dest);
 
         return true;
+    }
+
+    void TunEndpoint::start_poller()
+    {
+        if (not _poller->start())
+            throw std::runtime_error{"TUN failed to start FD poller!"};
+        log::debug(logcat, "TUN successfully started FD poller!");
     }
 
     bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const

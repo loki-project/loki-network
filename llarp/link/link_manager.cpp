@@ -1963,6 +1963,7 @@ namespace llarp
         HopID pivot_txid;
         bool use_tun;
         std::optional<std::string> maybe_auth = std::nullopt;
+        std::shared_ptr<path::Path> path_ptr;
 
         try
         {
@@ -1977,7 +1978,7 @@ namespace llarp
                 return m.respond(InitiateSession::AUTH_DENIED, true);
             }
 
-            auto path_ptr = _router.path_context()->get_path(pivot_txid);
+            path_ptr = _router.path_context()->get_path(pivot_txid);
 
             if (not path_ptr)
             {
@@ -1998,6 +1999,7 @@ namespace llarp
             log::warning(logcat, "Exception: {}", e.what());
         }
 
+        _router.path_context()->drop_path(path_ptr);
         m.respond(messages::ERROR_RESPONSE, true);
     }
 

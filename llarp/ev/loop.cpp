@@ -19,17 +19,19 @@ namespace llarp
         log::info(logcat, "lokinet loop shut down {}", _close_immediately ? "immediately" : "gracefully");
     }
 
-    bool EventLoop::add_network_interface(std::shared_ptr<vpn::NetworkInterface> netif, ip_pkt_hook handler)
+    std::shared_ptr<FDPoller> EventLoop::add_network_interface(
+        std::shared_ptr<vpn::NetworkInterface> netif, std::function<void()> hook)
     {
         (void)netif;
-        (void)handler;
+        (void)hook;
+        std::shared_ptr<FDPoller> _p;
 
 #ifdef __linux__
-        //
+        _p = _loop->template make_shared<LinuxPoller>(netif->PollFD(), _loop->loop(), std::move(hook));
 #else
         //
 #endif
-        return true;
+        return _p;
     }
 
     void EventLoop::stop(bool)

@@ -108,7 +108,7 @@ namespace llarp::vpn
         virtual ~Platform() = default;
 
         /// create and start a network interface
-        std::shared_ptr<NetworkInterface> CreateInterface(InterfaceInfo info, Router* router)
+        std::shared_ptr<NetworkInterface> create_interface(InterfaceInfo info, Router* router)
         {
             if (auto netif = obtain_interface(std::move(info), router))
             {

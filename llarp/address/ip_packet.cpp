@@ -374,4 +374,9 @@ namespace llarp
         return {reinterpret_cast<const char*>(data()), size()};
     }
 
+    std::string IPPacket::info_line() const
+    {
+        return "IPPacket (src:{}, dest:{}, size:{})"_format(_src_addr, _dst_addr, size());
+    }
+
 }  // namespace llarp

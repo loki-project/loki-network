@@ -24,7 +24,6 @@ namespace llarp
 
     bool KeyManager::_initialize(const Config& config, bool is_relay)
     {
-        logcat->set_level(log::Level::trace);  // TESTNET:
         if (is_initialized)
             return false;
 

@@ -392,6 +392,8 @@ namespace llarp::handlers
             else
             {
                 // TODO: if this fails, we should close the session
+                log::warning(logcat, "TUN devcice failed to route session (remote: {}) to local ip", session->remote());
+                ret = false;
             }
         }
         else
@@ -445,7 +447,7 @@ namespace llarp::handlers
                 path->pivot_txid(),
                 fetch_auth_token(remote),
                 _router.using_tun_if()),
-            [this, remote, tag, path, hook = std::move(cb), is_exit](std::string response) {
+            [this, remote, tag, path, hook = std::move(cb), is_exit](std::string response) mutable {
                 if (response == messages::OK_RESPONSE)
                 {
                     auto outbound = std::make_shared<session::OutboundSession>(
@@ -525,7 +527,7 @@ namespace llarp::handlers
         if (not build3(
                 path->upstream_rid(),
                 std::move(payload),
-                [this, path, intros, remote, hook = std::move(cb), is_exit](oxen::quic::message m) {
+                [this, path, intros, remote, hook = std::move(cb), is_exit](oxen::quic::message m) mutable {
                     if (m)
                     {
                         // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will
@@ -570,12 +572,13 @@ namespace llarp::handlers
 
         auto counter = std::make_shared<size_t>(path::DEFAULT_PATHS_HELD);
 
-        _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() {
+        _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() mutable {
             lookup_intro(
                 remote.router_id(),
                 false,
                 0,
-                [this, remote, hook = std::move(handler), is_exit, counter](std::optional<service::IntroSet> intro) {
+                [this, remote, hook = std::move(handler), is_exit, counter](
+                    std::optional<service::IntroSet> intro) mutable {
                     // already have a successful return
                     if (*counter == 0)
                         return;

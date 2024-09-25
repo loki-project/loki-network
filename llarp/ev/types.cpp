@@ -169,19 +169,17 @@ namespace llarp
         log::trace(logcat, "Cooldown {}successfully began after {} attempts!", _is_cooling_down ? "" : "un", _current);
     }
 
-    std::shared_ptr<EventPoller> EventPoller::make(const std::shared_ptr<EventLoop>& _loop, std::function<void()> task)
+    LinuxPoller::LinuxPoller(int _fd, const loop_ptr& _loop, std::function<void()> task)
+        : FDPoller{_fd, std::move(task)}
     {
-        return _loop->template make_shared<EventPoller>(_loop->loop(), std::move(task));
-    }
-
-    EventPoller::EventPoller(const loop_ptr& _loop, std::function<void()> task) : f{std::move(task)}
-    {
-        pv.reset(evwatch_prepare_new(
+        ev.reset(event_new(
             _loop.get(),
-            [](struct evwatch*, const struct evwatch_prepare_cb_info*, void* w) {
+            fd,
+            EV_READ | EV_PERSIST,
+            [](evutil_socket_t, short, void* s) {
                 try
                 {
-                    auto* self = reinterpret_cast<EventPoller*>(w);
+                    auto* self = reinterpret_cast<LinuxPoller*>(s);
                     assert(self);
 
                     if (not self->f)
@@ -194,15 +192,25 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    log::critical(logcat, "EventPoller caugh exception: {}", e.what());
+                    log::critical(logcat, "EventPoller caught exception: {}", e.what());
                 }
             },
             this));
+
+        log::debug(logcat, "Linux poller configured to watch FD: {}", fd);
     }
 
-    EventPoller::~EventPoller()
+    bool LinuxPoller::start()
     {
-        pv.reset();
-        f = nullptr;
+        auto rv = event_add(ev.get(), nullptr) == 0;
+        log::info(logcat, "Linux poller {} watching FD: {}", rv ? "successfully began" : "failed to start", fd);
+        return rv;
+    }
+
+    bool LinuxPoller::stop()
+    {
+        auto rv = event_del(ev.get());
+        log::info(logcat, "Linux poller {} watching FD: {}", rv ? "successfully stopped" : "failed to stop", fd);
+        return rv;
     }
 }  //  namespace llarp

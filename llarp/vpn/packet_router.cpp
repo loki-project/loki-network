@@ -50,15 +50,15 @@ namespace llarp::vpn
     void PacketRouter::handle_ip_packet(IPPacket pkt)
     {
         auto dest_port = pkt.dest_port();
+
         if (not dest_port)
             return _handler(std::move(pkt));
 
-        {}
-        // const auto proto = pkt.Header()->protocol;
-        // if (const auto itr = _ip_proto_handler.find(proto); itr != _ip_proto_handler.end())
-        //     itr->second->HandleIPPacket(std::move(pkt));
-        // else
-        //     _handler(std::move(pkt));
+        auto proto = pkt.protocol();
+        if (const auto itr = _ip_proto_handler.find(*proto); itr != _ip_proto_handler.end())
+            itr->second->handle_ip_packet(std::move(pkt));
+        else
+            _handler(std::move(pkt));
     }
 
     void PacketRouter::add_udp_handler(uint16_t localport, ip_pkt_hook func)
