@@ -66,9 +66,9 @@ namespace llarp::net
         /// protocols that are explicity allowed
         std::set<ProtocolInfo> protocols;
 
-        void bt_encode(oxenc::bt_dict_producer& btdp) const;
+        void bt_encode(oxenc::bt_dict_producer&& btdp) const;
 
-        void bt_decode(oxenc::bt_dict_consumer& btdc);
+        void bt_decode(oxenc::bt_dict_consumer&& btdc);
 
         bool bt_decode(std::string_view buf);
         nlohmann::json ExtractStatus() const;

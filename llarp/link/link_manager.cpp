@@ -548,7 +548,7 @@ namespace llarp
             connect_to(*rc, std::move(on_open), std::move(on_close));
         }
         else
-            log::warning(logcat, "Could not find RouterContact for connection to rid:{}", rid);
+            log::warning(logcat, "Could not find RelayContact for connection to rid:{}", rid);
     }
 
     void LinkManager::connect_and_send(

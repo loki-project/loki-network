@@ -8,7 +8,7 @@
 #include <llarp/auth/auth.hpp>
 #include <llarp/bootstrap.hpp>
 #include <llarp/constants/files.hpp>
-#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>

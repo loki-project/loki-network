@@ -231,7 +231,7 @@ namespace llarp::handlers
     }
 
     void SessionEndpoint::lookup_intro(
-        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSet>)> func)
+        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSetOld>)> func)
     {
         if (auto maybe_intro = _router.contacts().get_decrypted_introset(remote))
         {
@@ -306,7 +306,7 @@ namespace llarp::handlers
         //     return build_more(1);
         // }
 
-        service::intro_que _path_intros = get_recent_path_intros();
+        service::intro_que_old _path_intros = get_recent_path_intros();
 
         if (_path_intros.empty())
         {
@@ -494,7 +494,7 @@ namespace llarp::handlers
     }
 
     void SessionEndpoint::_make_session_path(
-        service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
+        service::IntroductionSet_old intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
     {
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
@@ -589,7 +589,7 @@ namespace llarp::handlers
                 false,
                 0,
                 [this, remote, hook = std::move(handler), is_exit, counter](
-                    std::optional<service::IntroSet> intro) mutable {
+                    std::optional<service::IntroSetOld> intro) mutable {
                     // already have a successful return
                     if (*counter == 0)
                         return;

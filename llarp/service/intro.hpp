@@ -69,9 +69,9 @@ namespace llarp::service
         }
     };
 
-    using intro_que = std::priority_queue<Introduction, std::vector<Introduction>, IntroExpiryComparator>;
+    using intro_que_old = std::priority_queue<Introduction, std::vector<Introduction>, IntroExpiryComparator>;
 
-    using IntroductionSet = std::set<service::Introduction, service::IntroExpiryComparator>;
+    using IntroductionSet_old = std::set<service::Introduction, service::IntroExpiryComparator>;
 
 }  // namespace llarp::service
 

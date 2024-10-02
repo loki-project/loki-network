@@ -194,7 +194,7 @@ TEST_CASE("Test sign and encrypt introset", "[crypto]")
   ident.RegenerateKeys();
   service::Address addr;
   CHECK(ident.pub.CalculateAddress(addr.as_array()));
-  service::IntroSet introset;
+  service::IntroSetOld introset;
   auto now = time_now_ms();
   introset.timestampSignedAt = now;
   while(introset.intros.size() < 10)

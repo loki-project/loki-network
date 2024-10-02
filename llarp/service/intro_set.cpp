@@ -121,15 +121,15 @@ namespace llarp::service
             sig);
     }
 
-    std::optional<IntroSet> EncryptedIntroSet::decrypt(const PubKey& root) const
+    std::optional<IntroSetOld> EncryptedIntroSet::decrypt(const PubKey& root) const
     {
-        std::optional<IntroSet> ret = std::nullopt;
+        std::optional<IntroSetOld> ret = std::nullopt;
 
         SharedSecret k(root);
         std::string payload{reinterpret_cast<const char*>(introset_payload.data()), introset_payload.size()};
 
         if (crypto::xchacha20(reinterpret_cast<uint8_t*>(payload.data()), payload.size(), k, nonce))
-            ret = IntroSet{payload};
+            ret = IntroSetOld{payload};
 
         return ret;
     }
@@ -179,7 +179,7 @@ namespace llarp::service
             reinterpret_cast<uint8_t*>(sig.data()));
     }
 
-    nlohmann::json IntroSet::ExtractStatus() const
+    nlohmann::json IntroSetOld::ExtractStatus() const
     {
         nlohmann::json obj{{"published", to_json(time_signed)}};
         // TODO: this
@@ -214,7 +214,7 @@ namespace llarp::service
         return obj;
     }
 
-    IntroSet::IntroSet(std::string bt_payload)
+    IntroSetOld::IntroSetOld(std::string bt_payload)
     {
         try
         {
@@ -227,7 +227,7 @@ namespace llarp::service
         }
     }
 
-    bool IntroSet::bt_decode(std::string_view buf)
+    bool IntroSetOld::bt_decode(std::string_view buf)
     {
         try
         {
@@ -237,7 +237,7 @@ namespace llarp::service
         catch (const std::exception& e)
         {
             // DISCUSS: rethrow or print warning/return false...?
-            auto err = "IntroSet parsing exception: {}"_format(e.what());
+            auto err = "IntroSetOld parsing exception: {}"_format(e.what());
             log::warning(logcat, "{}", err);
             throw std::runtime_error{err};
         }
@@ -245,7 +245,7 @@ namespace llarp::service
         return true;
     }
 
-    void IntroSet::bt_decode(oxenc::bt_dict_consumer& btdc)
+    void IntroSetOld::bt_decode(oxenc::bt_dict_consumer& btdc)
     {
         try
         {
@@ -254,15 +254,14 @@ namespace llarp::service
 
                 if (key != "a")
                     throw std::invalid_argument{
-                        "IntroSet received unexpected key (expected:'a', actual:{})"_format(key)};
+                        "IntroSetOld received unexpected key (expected:'a', actual:{})"_format(key)};
 
                 address_keys.bt_decode(subdict);
             }
 
             if (auto maybe_subdict = btdc.maybe<std::string>("e"); maybe_subdict)
             {
-                oxenc::bt_dict_consumer subdict{*maybe_subdict};
-                exit_policy->bt_decode(subdict);
+                exit_policy->bt_decode(oxenc::bt_dict_consumer{*maybe_subdict});
             }
 
             {
@@ -270,7 +269,7 @@ namespace llarp::service
 
                 if (key != "i")
                     throw std::invalid_argument{
-                        "IntroSet received unexpected key (expected:'i', actual:{})"_format(key)};
+                        "IntroSetOld received unexpected key (expected:'i', actual:{})"_format(key)};
 
                 while (not sublist.is_finished())
                 {
@@ -313,12 +312,12 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(logcat, "IntroSet failed to decode bt payload!");
+            log::critical(logcat, "IntroSetOld failed to decode bt payload!");
             throw;
         }
     }
 
-    std::string IntroSet::bt_encode() const
+    std::string IntroSetOld::bt_encode() const
     {
         oxenc::bt_dict_producer btdp;
 
@@ -331,8 +330,7 @@ namespace llarp::service
 
             if (exit_policy)
             {
-                auto subdict = btdp.append_dict("e");
-                exit_policy->bt_encode(subdict);
+                exit_policy->bt_encode(btdp.append_dict("e"));
             }
 
             {
@@ -367,13 +365,13 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::critical(logcat, "Error: IntroSet failed to bt encode contents!");
+            log::critical(logcat, "Error: IntroSetOld failed to bt encode contents!");
         }
 
         return std::move(btdp).str();
     }
 
-    bool IntroSet::HasExpiredIntros(std::chrono::milliseconds now) const
+    bool IntroSetOld::HasExpiredIntros(std::chrono::milliseconds now) const
     {
         for (const auto& intro : intros)
             if (now >= intro.expiry)
@@ -381,7 +379,7 @@ namespace llarp::service
         return false;
     }
 
-    bool IntroSet::HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const
+    bool IntroSetOld::HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const
     {
         for (const auto& intro : intros)
             if (intro.expires_soon(delta, now))
@@ -389,12 +387,12 @@ namespace llarp::service
         return false;
     }
 
-    bool IntroSet::IsExpired(std::chrono::milliseconds now) const
+    bool IntroSetOld::IsExpired(std::chrono::milliseconds now) const
     {
         return GetNewestIntroExpiration() < now;
     }
 
-    std::vector<llarp::dns::SRVData> IntroSet::GetMatchingSRVRecords(std::string_view service_proto) const
+    std::vector<llarp::dns::SRVData> IntroSetOld::GetMatchingSRVRecords(std::string_view service_proto) const
     {
         std::vector<llarp::dns::SRVData> records;
 
@@ -409,9 +407,9 @@ namespace llarp::service
         return records;
     }
 
-    bool IntroSet::verify(std::chrono::milliseconds now) const
+    bool IntroSetOld::verify(std::chrono::milliseconds now) const
     {
-        IntroSet copy;
+        IntroSetOld copy;
         copy = *this;
         copy.signature.zero();
 
@@ -434,7 +432,7 @@ namespace llarp::service
         return not IsExpired(now);
     }
 
-    std::chrono::milliseconds IntroSet::GetNewestIntroExpiration() const
+    std::chrono::milliseconds IntroSetOld::GetNewestIntroExpiration() const
     {
         std::chrono::milliseconds maxTime = 0s;
         for (const auto& intro : intros)
@@ -442,9 +440,9 @@ namespace llarp::service
         return maxTime;
     }
 
-    std::string IntroSet::to_string() const
+    std::string IntroSetOld::to_string() const
     {
-        return "[IntroSet addressKeys={} intros={{}} topic={} signedAt={} v={} sig={}]"_format(
+        return "[IntroSetOld addressKeys={} intros={{}} topic={} signedAt={} v={} sig={}]"_format(
             address_keys.to_string(),
             "{}"_format(fmt::join(intros, ",")),
             time_signed.count(),

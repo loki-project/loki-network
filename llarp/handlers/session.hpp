@@ -2,6 +2,7 @@
 
 #include <llarp/address/map.hpp>
 #include <llarp/config/config.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/path/path_handler.hpp>
 #include <llarp/service/identity.hpp>
 #include <llarp/session/map.hpp>
@@ -31,8 +32,10 @@ namespace llarp
             //  - Directly pre-loaded from config
             address_map<IPRange, NetworkAddress> _range_map;
 
-            service::Identity _identity;  // TODO: TESTNET: move responsibilities to KeyManager
-            service::IntroSet _local_introset;
+            ClientContact _local_cc;  // TODO: TESTNET: replacement for service::Introset
+
+            service::Identity _identity;           // TODO: TESTNET: move responsibilities to KeyManager, delete
+            service::IntroSetOld _local_introset;  // TODO: TESTNET: remove with CC impl
 
             std::chrono::milliseconds _last_introset_regen_attempt{0s};
 
@@ -84,7 +87,7 @@ namespace llarp
 
             oxen::quic::Address local_address() const { return _local_addr; }
 
-            const service::IntroSet& intro_set() const { return _local_introset; }
+            const service::IntroSetOld& intro_set() const { return _local_introset; }
 
             // get copy of all srv records
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
@@ -124,7 +127,7 @@ namespace llarp
                 RouterID remote,
                 bool is_relayed,
                 uint64_t order,
-                std::function<void(std::optional<service::IntroSet>)> func);
+                std::function<void(std::optional<service::IntroSetOld>)> func);
 
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
@@ -160,7 +163,7 @@ namespace llarp
             bool _initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
             void _make_session_path(
-                service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
+                service::IntroductionSet_old intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
             void _make_session(
                 NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);

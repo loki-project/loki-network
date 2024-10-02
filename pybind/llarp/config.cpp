@@ -104,7 +104,7 @@ namespace llarp
                     self.routers.clear();
                     for (const auto& arg : args)
                     {
-                        RouterContact rc{};
+                        RelayContact rc{};
                         if (rc.Read(arg))
                             self.routers.emplace(std::move(rc));
                         else

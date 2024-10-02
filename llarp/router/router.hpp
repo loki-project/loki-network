@@ -5,7 +5,7 @@
 #include <llarp/bootstrap.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
-#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/key_manager.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/session.hpp>

@@ -22,16 +22,16 @@ namespace llarp::service
     // 10 seconds clock skew permitted for introset expiration
     constexpr std::chrono::milliseconds MAX_INTROSET_TIME_DELTA = 10s;
 
-    struct IntroSet
+    struct IntroSetOld
     {
         ServiceInfo address_keys;
-        IntroductionSet intros;
+        IntroductionSet_old intros;
         std::vector<dns::SRVData> SRVs;
         std::chrono::milliseconds time_signed = 0s;
 
-        IntroSet() = default;
+        IntroSetOld() = default;
 
-        explicit IntroSet(std::string bt_payload);
+        explicit IntroSetOld(std::string bt_payload);
 
         /// ethertypes we advertise that we speak
         std::vector<ProtocolType> supported_protocols;
@@ -47,7 +47,7 @@ namespace llarp::service
         Signature signature;
         uint64_t version = llarp::constants::proto_version;
 
-        bool OtherIsNewer(const IntroSet& other) const { return time_signed < other.time_signed; }
+        bool OtherIsNewer(const IntroSetOld& other) const { return time_signed < other.time_signed; }
 
         std::string to_string() const;
 
@@ -75,18 +75,18 @@ namespace llarp::service
         static constexpr bool to_string_formattable = true;
     };
 
-    inline bool operator<(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator<(const IntroSetOld& lhs, const IntroSetOld& rhs)
     {
         return lhs.address_keys < rhs.address_keys;
     }
 
-    inline bool operator==(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator==(const IntroSetOld& lhs, const IntroSetOld& rhs)
     {
         return std::tie(lhs.address_keys, lhs.intros, lhs.time_signed, lhs.version, lhs.signature)
             == std::tie(rhs.address_keys, rhs.intros, rhs.time_signed, rhs.version, rhs.signature);
     }
 
-    inline bool operator!=(const IntroSet& lhs, const IntroSet& rhs)
+    inline bool operator!=(const IntroSetOld& lhs, const IntroSetOld& rhs)
     {
         return !(lhs == rhs);
     }
@@ -138,7 +138,7 @@ namespace llarp::service
 
         nlohmann::json ExtractStatus() const;
 
-        std::optional<IntroSet> decrypt(const PubKey& root) const;
+        std::optional<IntroSetOld> decrypt(const PubKey& root) const;
         static constexpr bool to_string_formattable = true;
     };
 
@@ -159,6 +159,6 @@ namespace llarp::service
     }
 
     using EncryptedIntroSetLookupHandler = std::function<void(const std::vector<EncryptedIntroSet>&)>;
-    using IntroSetLookupHandler = std::function<void(const std::vector<IntroSet>&)>;
+    using IntroSetLookupHandler = std::function<void(const std::vector<IntroSetOld>&)>;
 
 }  // namespace llarp::service

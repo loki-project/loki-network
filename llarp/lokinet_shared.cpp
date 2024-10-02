@@ -446,7 +446,7 @@ extern "C"
         }
         else
         {
-            llarp::RouterContact rc{};
+            llarp::RelayContact rc{};
             if (not rc.BDecode(&buf))
             {
                 oxen::log::error(logcat, "failed to decode signle RC: {}", llarp::buffer_printer{buf});

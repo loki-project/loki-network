@@ -34,7 +34,7 @@ namespace llarp::service
             path_dh_func dh, SharedSecret& sharedkey, const ServiceInfo& other, const KeyExchangeNonce& N) const;
 
         std::optional<EncryptedIntroSet> encrypt_and_sign_introset(
-            const IntroSet& i, std::chrono::milliseconds now) const;
+            const IntroSetOld& i, std::chrono::milliseconds now) const;
 
         bool Sign(Signature& sig, uint8_t* buf, size_t size) const;
 

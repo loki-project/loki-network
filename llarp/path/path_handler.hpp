@@ -159,10 +159,10 @@ namespace llarp
 
             std::optional<std::shared_ptr<Path>> get_path(const RouterID& router) const;
 
-            service::intro_que get_recent_path_intros(
+            service::intro_que_old get_recent_path_intros(
                 std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;
 
-            std::optional<service::IntroductionSet> get_path_intros_conditional(
+            std::optional<service::IntroductionSet_old> get_path_intros_conditional(
                 std::function<bool(const service::Introduction&)> filter) const;
 
             nlohmann::json ExtractStatus() const;

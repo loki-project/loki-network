@@ -416,7 +416,7 @@ namespace llarp
                 throw std::runtime_error{"Could not find net interface on current platform!"};
         }
 
-        RouterContact::BLOCK_BOGONS = conf.router.block_bogons;
+        RelayContact::BLOCK_BOGONS = conf.router.block_bogons;
     }
 
     void Router::process_netconfig()
@@ -607,7 +607,7 @@ namespace llarp
                 _testnet = netid == llarp::LOKINET_TESTNET_NETID;
                 _testing_disabled = conf.lokid.disable_testing;
 
-                RouterContact::ACTIVE_NETID = netid;
+                RelayContact::ACTIVE_NETID = netid;
 
                 if (_testing_disabled and not _testnet)
                     throw std::runtime_error{"Error: reachability testing can only be disabled on testnet!"};

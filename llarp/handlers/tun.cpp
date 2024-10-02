@@ -568,7 +568,7 @@ namespace llarp::handlers
         //     }
         //     else if (subdomain == "netid")
         //     {
-        //       msg.AddTXTReply(fmt::format("netid={};", RouterContact::ACTIVE_NETID));
+        //       msg.AddTXTReply(fmt::format("netid={};", RelayContact::ACTIVE_NETID));
         //     }
         //     else
         //     {

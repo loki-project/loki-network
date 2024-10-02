@@ -2,7 +2,7 @@
 
 #include "key.hpp"
 
-#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/relay_contact.hpp>
 
 namespace llarp::dht
 {
@@ -14,7 +14,7 @@ namespace llarp::dht
 
         bool operator()(const Key_t& left, const Key_t& right) const { return (us ^ left) < (us ^ right); }
 
-        bool operator()(const RouterContact& left, const RouterContact& right) const
+        bool operator()(const RelayContact& left, const RelayContact& right) const
         {
             return (left.router_id() ^ us) < (right.router_id() ^ us);
         }

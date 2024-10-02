@@ -111,7 +111,7 @@ namespace llarp
 
         for (auto itr = begin(); itr != end(); ++itr)
         {
-            if (RouterContact::is_obsolete(*itr))
+            if (RelayContact::is_obsolete(*itr))
             {
                 log::debug(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
                 itr = erase(itr);
@@ -126,7 +126,7 @@ namespace llarp
             log::critical(logcat, "BootstrapRC list force loading fallbacks...");
             auto fallbacks = llarp::load_bootstrap_fallbacks();
 
-            if (auto itr = fallbacks.find(RouterContact::ACTIVE_NETID); itr != fallbacks.end())
+            if (auto itr = fallbacks.find(RelayContact::ACTIVE_NETID); itr != fallbacks.end())
             {
                 log::debug(logcat, "Loading {} default fallback bootstrap router(s)!", itr->second.size());
                 log::critical(logcat, "Fallback bootstrap loaded: {}", itr->second.current());

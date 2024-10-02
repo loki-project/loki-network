@@ -26,7 +26,7 @@ namespace llarp::dns
     {
         SRVData() = default;
         // SRVData constructor expecting a bt-encoded dictionary
-        explicit SRVData(std::string bt);
+        explicit SRVData(std::string_view bt);
         SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target);
 
         /* bind-like formatted string for SRV records in config file
@@ -80,6 +80,9 @@ namespace llarp::dns
 
         bool operator!=(const SRVData& other) const { return !(*this == other); }
 
+        void bt_encode(oxenc::bt_dict_producer&& btdp) const;
+
+        // TESTNET: TODO: remove this after refactoring IntroSet -> ClientContact
         std::string bt_encode() const;
 
         bool bt_decode(std::string buf);

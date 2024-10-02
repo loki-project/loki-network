@@ -9,7 +9,7 @@ namespace llarp
 
     /// This class mediates storage, retrieval, and functionality for the various types
     /// of contact information that needs to be stored locally by the link manager and
-    /// router, like RouterContacts and introsets for example
+    /// router, like RelayContacts and introsets for example
     struct Contacts
     {
       private:
@@ -24,7 +24,7 @@ namespace llarp
       public:
         explicit Contacts(Router& r);
 
-        std::optional<service::IntroSet> get_decrypted_introset(RouterID remote) const;
+        std::optional<service::IntroSetOld> get_decrypted_introset(RouterID remote) const;
 
         std::optional<service::EncryptedIntroSet> get_encrypted_introset(const dht::Key_t& key) const;
 

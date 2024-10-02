@@ -64,14 +64,14 @@ namespace llarp::service
     }
 
     std::optional<EncryptedIntroSet> Identity::encrypt_and_sign_introset(
-        const IntroSet& other_i, std::chrono::milliseconds now) const
+        const IntroSetOld& other_i, std::chrono::milliseconds now) const
     {
         EncryptedIntroSet encrypted;
 
         if (other_i.intros.empty())
             return std::nullopt;
 
-        IntroSet i{other_i};
+        IntroSetOld i{other_i};
         encrypted.nonce.Randomize();
         // set timestamp
         // TODO: round to nearest 1000 ms

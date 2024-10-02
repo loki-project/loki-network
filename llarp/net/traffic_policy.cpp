@@ -165,7 +165,7 @@ namespace llarp::net
         }
     }
 
-    void TrafficPolicy::bt_decode(oxenc::bt_dict_consumer& btdc)
+    void TrafficPolicy::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {
@@ -200,7 +200,7 @@ namespace llarp::net
         }
     }
 
-    void TrafficPolicy::bt_encode(oxenc::bt_dict_producer& btdp) const
+    void TrafficPolicy::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
         try
         {
@@ -226,9 +226,7 @@ namespace llarp::net
     {
         try
         {
-            oxenc::bt_dict_consumer btdc{buf};
-
-            bt_decode(btdc);
+            bt_decode(oxenc::bt_dict_consumer{buf});
         }
         catch (const std::exception& e)
         {

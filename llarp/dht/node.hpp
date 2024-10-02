@@ -2,7 +2,7 @@
 
 #include "key.hpp"
 
-#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/service/intro_set.hpp>
 
 #include <utility>
@@ -11,12 +11,12 @@ namespace llarp::dht
 {
     struct RCNode
     {
-        RouterContact rc;
+        RelayContact rc;
         Key_t ID;
 
         RCNode() { ID.zero(); }
 
-        RCNode(const RouterContact& other) : rc(other), ID(other.router_id()) {}
+        RCNode(const RelayContact& other) : rc(other), ID(other.router_id()) {}
 
         nlohmann::json ExtractStatus() const { return rc.extract_status(); }
 

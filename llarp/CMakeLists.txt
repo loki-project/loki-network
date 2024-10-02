@@ -83,9 +83,13 @@ lokinet_add_library(lokinet-utils
 add_dependencies(lokinet-utils genversion)
 
 lokinet_add_library(lokinet-contact
-  contact/router_contact.cpp
-  contact/router_contact_local.cpp
-  contact/router_contact_remote.cpp
+  contact/client_contact.cpp
+  contact/client_intro.cpp
+
+  contact/relay_contact.cpp
+  contact/relay_contact_local.cpp
+  contact/relay_contact_remote.cpp
+
   contact/router_id.cpp
 )
 

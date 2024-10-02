@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/contact/router_id.hpp>
 
 #include <oxen/quic.hpp>

@@ -1313,7 +1313,7 @@ namespace llarp
             "add-node",
             MultiValue,
             Comment{
-                "Specify a bootstrap file containing a list of signed RouterContacts of service "
+                "Specify a bootstrap file containing a list of signed RelayContacts of service "
                 "nodes",
                 "which can act as a bootstrap. Can be specified multiple times.",
             },

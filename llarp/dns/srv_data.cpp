@@ -19,7 +19,7 @@ namespace llarp::dns
             throw std::invalid_argument{"Invalid SRVData!"};
     }
 
-    SRVData::SRVData(std::string bt)
+    SRVData::SRVData(std::string_view bt)
     {
         try
         {
@@ -107,16 +107,19 @@ namespace llarp::dns
         return is_valid();
     }
 
-    std::string SRVData::bt_encode() const
+    void SRVData::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
-        oxenc::bt_dict_producer btdp;
-
         btdp.append("p", port);
         btdp.append("s", service_proto);
         btdp.append("t", target);
         btdp.append("u", priority);
         btdp.append("w", weight);
+    }
 
+    std::string SRVData::bt_encode() const
+    {
+        oxenc::bt_dict_producer btdp;
+        bt_encode(std::move(btdp));
         return std::move(btdp).str();
     }
 
