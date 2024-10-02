@@ -1,7 +1,7 @@
 #pragma once
 
+#include "contact/router_id.hpp"
 #include "path/path.hpp"
-#include "router_id.hpp"
 #include "util/thread/threading.hpp"
 
 #include <map>

@@ -232,10 +232,9 @@ namespace llarp::path
 
     bool Path::is_ready() const
     {
-        if (is_expired(llarp::time_now_ms()))
-            return false;
-
-        return intro.latency > 0s && _established;
+        // if (is_expired(llarp::time_now_ms()))
+        //     return false;
+        return _established;
     }
 
     RouterID Path::upstream_rid()

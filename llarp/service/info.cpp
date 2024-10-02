@@ -11,14 +11,10 @@ namespace llarp::service
         return crypto::verify(signkey, buf, size, sig);
     }
 
-    bool ServiceInfo::update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce)
+    bool ServiceInfo::update(const uint8_t* sign, const uint8_t* enc)
     {
         signkey = sign;
         enckey = enc;
-        if (nonce)
-        {
-            vanity = *nonce;
-        }
 
         return update_address();
     }
@@ -29,7 +25,6 @@ namespace llarp::service
         {
             enckey.from_hex(btdc.require<std::string>("e"));
             signkey.from_hex(btdc.require<std::string>("s"));
-            vanity.from_string(btdc.require<std::string>("x"));
         }
         catch (...)
         {
@@ -61,9 +56,6 @@ namespace llarp::service
     {
         btdp.append("e", enckey.to_view());
         btdp.append("s", signkey.to_view());
-
-        if (not vanity.is_zero())
-            btdp.append("x", vanity.to_view());
     }
 
     std::string ServiceInfo::name() const
@@ -96,7 +88,7 @@ namespace llarp::service
 
     std::string ServiceInfo::to_string() const
     {
-        return fmt::format("[ServiceInfo e={} s={} v={} x={}]", enckey, signkey, version, vanity);
+        return "[ServiceInfo e={} s={} v={}]"_format(enckey, signkey, version);
     }
 
 }  // namespace llarp::service

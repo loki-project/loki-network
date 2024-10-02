@@ -19,7 +19,7 @@ lokinet_add_library(lokinet-cryptography
 # Functional objects use by lokinet-core and other libraries
 # needed by vpn/ router/ rpc/ handlers/ net/ link/
 lokinet_add_library(lokinet-core-utils
-  # endpoint_base.cpp
+#  endpoint_base.cpp
 
   auth/file_auth.cpp
   auth/rpc_auth.cpp
@@ -72,7 +72,7 @@ lokinet_add_library(lokinet-utils
   ${CMAKE_CURRENT_BINARY_DIR}/constants/version.cpp
   util/buffer.cpp
   util/file.cpp
-#   util/logging/buffer.cpp
+#  util/logging/buffer.cpp
   util/mem.cpp
   util/str.cpp
   util/thread/threading.cpp
@@ -81,6 +81,13 @@ lokinet_add_library(lokinet-utils
 )
 
 add_dependencies(lokinet-utils genversion)
+
+lokinet_add_library(lokinet-contact
+  contact/router_contact.cpp
+  contact/router_contact_local.cpp
+  contact/router_contact_remote.cpp
+  contact/router_id.cpp
+)
 
 # Addressing and event loop files used by lokinet-core and other libraries
 # needed by rpc/ link/ service/ config/ path/ dht/
@@ -99,10 +106,6 @@ lokinet_add_library(lokinet-addressing
   net/ip.cpp
   net/net_int.cpp
 
-  router_contact.cpp    # TODO: move these + router_id.cpp to lokinet-core-utils..?
-  router_contact_local.cpp
-  router_contact_remote.cpp
-  router_id.cpp
   router_version.cpp  # to be deleted shortly
 
   service/tag.cpp
@@ -224,7 +227,7 @@ target_link_libraries(lokinet-dns PUBLIC lokinet-utils lokinet-cryptography loki
 target_link_libraries(lokinet-nodedb PUBLIC lokinet-addressing lokinet-cryptography)
 target_link_libraries(lokinet-platform PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-rpc PUBLIC lokinet-wire)
-target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography)
+target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography lokinet-contact)
 target_link_libraries(lokinet-wire PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-config PUBLIC lokinet-cryptography)
 
@@ -249,7 +252,6 @@ target_link_libraries(lokinet-core-utils
 target_link_libraries(lokinet-cryptography
   PUBLIC
   lokinet-libcrypt
-  lokinet-libntrup
 )
 
 target_link_libraries(lokinet-utils

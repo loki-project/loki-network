@@ -1,7 +1,5 @@
 #pragma once
 
-#include "vanity.hpp"
-
 #include <llarp/address/address.hpp>
 #include <llarp/constants/proto.hpp>
 #include <llarp/crypto/types.hpp>
@@ -20,10 +18,7 @@ namespace llarp::service
         mutable NetworkAddress _cached_addr;
 
       public:
-        VanityNonce vanity;
         uint64_t version = llarp::constants::proto_version;
-
-        void randomize_vanity() { vanity.Randomize(); }
 
         bool verify(uint8_t* buf, size_t size, const Signature& sig) const;
 
@@ -35,12 +30,11 @@ namespace llarp::service
             return enckey;
         }
 
-        bool update(const uint8_t* sign, const uint8_t* enc, const std::optional<VanityNonce>& nonce = {});
+        bool update(const uint8_t* sign, const uint8_t* enc);
 
         bool operator==(const ServiceInfo& other) const
         {
-            return enckey == other.enckey && signkey == other.signkey && version == other.version
-                && vanity == other.vanity;
+            return std::tie(enckey, version) == std::tie(other.enckey, other.version);
         }
 
         bool operator!=(const ServiceInfo& other) const { return !(*this == other); }

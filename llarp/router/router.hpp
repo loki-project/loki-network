@@ -5,13 +5,13 @@
 #include <llarp/bootstrap.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
+#include <llarp/contact/router_contact.hpp>
 #include <llarp/crypto/key_manager.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/path/path_context.hpp>
 #include <llarp/profiling.hpp>
-#include <llarp/router_contact.hpp>
 #include <llarp/rpc/rpc_client.hpp>
 #include <llarp/rpc/rpc_server.hpp>
 #include <llarp/util/buffer.hpp>

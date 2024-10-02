@@ -1,12 +1,15 @@
 #pragma once
 
 #include "router_id.hpp"
-#include "router_version.hpp"
 
 #include <llarp/constants/version.hpp>
-#include <llarp/crypto/types.hpp>
+#include <llarp/crypto/crypto.hpp>
 #include <llarp/dns/srv_data.hpp>
+#include <llarp/net/net.hpp>
+#include <llarp/router_version.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/buffer.hpp>
+#include <llarp/util/file.hpp>
 #include <llarp/util/time.hpp>
 
 #include <nlohmann/json.hpp>

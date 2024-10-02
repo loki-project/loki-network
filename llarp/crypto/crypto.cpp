@@ -451,21 +451,6 @@ namespace llarp
         crypto_scalarmult_curve25519_base(d + 32, d);  //  expects xkey
     }
 
-    bool crypto::pqe_encrypt(PQCipherBlock& ciphertext, SharedSecret& sharedkey, const PQPubKey& pubkey)
-    {
-        return crypto_kem_enc(ciphertext.data(), sharedkey.data(), pubkey.data()) != -1;
-    }
-    bool crypto::pqe_decrypt(const PQCipherBlock& ciphertext, SharedSecret& sharedkey, const uint8_t* secretkey)
-    {
-        return crypto_kem_dec(sharedkey.data(), ciphertext.data(), secretkey) != -1;
-    }
-
-    void crypto::pqe_keygen(PQKeyPair& keypair)
-    {
-        auto d = keypair.data();
-        crypto_kem_keypair(d + PQ_SECRETKEYSIZE, d);
-    }
-
 #ifdef HAVE_CRYPT
     bool crypto::check_passwd_hash(std::string pwhash, std::string challenge)
     {
@@ -487,16 +472,6 @@ namespace llarp
         return sec.data() + 32;
     }
 
-    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& k)
-    {
-        return k.data() + PQ_SECRETKEYSIZE;
-    }
-
-    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& k)
-    {
-        return k.data();
-    }
-
     uint64_t randint()
     {
         uint64_t i;
@@ -504,7 +479,7 @@ namespace llarp
         return i;
     }
 
-    // Called during static initialization to initialize libsodium and ntru.  (The CSRNG return is
+    // Called during static initialization to initialize libsodium.  (The CSRNG return is
     // not useful, but just here to get this called during static initialization of `csrng`).
     static CSRNG _initialize_crypto()
     {
@@ -513,8 +488,6 @@ namespace llarp
             log::critical(logcat, "sodium_init() failed, unable to continue!");
             std::abort();
         }
-        char* avx2 = std::getenv("AVX2_FORCE_DISABLE");
-        ntru_init(avx2 && avx2 == "1"sv);
 
         return CSRNG{};
     }

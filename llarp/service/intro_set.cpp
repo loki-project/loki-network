@@ -278,8 +278,6 @@ namespace llarp::service
                 }
             }
 
-            sntru_pubkey.from_string(btdc.require<std::string>("k"));
-
             if (auto maybe_supportedprotos = btdc.maybe<std::string>("p"); maybe_supportedprotos)
             {
                 oxenc::bt_list_consumer sublist{*maybe_supportedprotos};
@@ -343,8 +341,6 @@ namespace llarp::service
                     i.bt_encode(sublist);
             }
 
-            btdp.append("k", sntru_pubkey.to_view());
-
             if (not supported_protocols.empty())
             {
                 auto sublist = btdp.append_list("p");
@@ -388,7 +384,7 @@ namespace llarp::service
     bool IntroSet::HasStaleIntros(std::chrono::milliseconds now, std::chrono::milliseconds delta) const
     {
         for (const auto& intro : intros)
-            if (intro.expires_soon(now, delta))
+            if (intro.expires_soon(delta, now))
                 return true;
         return false;
     }
@@ -448,10 +444,9 @@ namespace llarp::service
 
     std::string IntroSet::to_string() const
     {
-        return "[IntroSet addressKeys={} intros={{}} sntrupKey={} topic={} signedAt={} v={} sig={}]"_format(
+        return "[IntroSet addressKeys={} intros={{}} topic={} signedAt={} v={} sig={}]"_format(
             address_keys.to_string(),
             "{}"_format(fmt::join(intros, ",")),
-            sntru_pubkey,
             time_signed.count(),
             version,
             signature.to_view());

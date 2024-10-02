@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <cstdint>
@@ -101,15 +101,6 @@ namespace llarp
         /// generate encryption keypair
         void encryption_keygen(Ed25519SecretKey&);
 
-        /// generate post quantum encrytion key
-        void pqe_keygen(PQKeyPair&);
-
-        /// post quantum decrypt (buffer, sharedkey_dst, sec)
-        bool pqe_decrypt(const PQCipherBlock&, SharedSecret&, const uint8_t*);
-
-        /// post quantum encrypt (buffer, sharedkey_dst,  pub)
-        bool pqe_encrypt(PQCipherBlock&, SharedSecret&, const PQPubKey&);
-
         bool check_identity_privkey(const Ed25519SecretKey&);
 
         bool check_passwd_hash(std::string pwhash, std::string challenge);
@@ -119,10 +110,6 @@ namespace llarp
     uint64_t randint();
 
     const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& secret);
-
-    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& keypair);
-
-    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& keypair);
 
     /// rng type that uses llarp::randint(), which is cryptographically secure
     struct CSRNG

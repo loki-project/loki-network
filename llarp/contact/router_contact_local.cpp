@@ -1,10 +1,4 @@
-#include "constants/version.hpp"
-#include "crypto/crypto.hpp"
-#include "net/net.hpp"
 #include "router_contact.hpp"
-#include "util/buffer.hpp"
-#include "util/file.hpp"
-#include "util/time.hpp"
 
 #include <oxenc/bt_serialize.h>
 

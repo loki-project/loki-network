@@ -1,8 +1,8 @@
 #pragma once
 
+#include <llarp/contact/router_id.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
-#include <llarp/router_id.hpp>
 #include <llarp/service/name.hpp>
 
 #include <oxenmq/address.h>

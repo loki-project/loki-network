@@ -104,10 +104,6 @@ namespace llarp
     using TunnelNonce = AlignedBuffer<TUNNONCESIZE>;
     using SymmKey = AlignedBuffer<32>;  // not used
 
-    using PQCipherBlock = AlignedBuffer<PQ_CIPHERTEXTSIZE + 1>;
-    using PQPubKey = AlignedBuffer<PQ_PUBKEYSIZE>;
-    using PQKeyPair = AlignedBuffer<PQ_KEYPAIRSIZE>;
-
     /// PKE(result, publickey, secretkey, nonce)
     using path_dh_func = bool (*)(SharedSecret&, const PubKey&, const Ed25519SecretKey&, const TunnelNonce&);
 }  // namespace llarp

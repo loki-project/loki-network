@@ -2,7 +2,7 @@
 
 #include "key.hpp"
 
-#include <llarp/router_contact.hpp>
+#include <llarp/contact/router_contact.hpp>
 
 namespace llarp::dht
 {

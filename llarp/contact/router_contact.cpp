@@ -1,11 +1,5 @@
 #include "router_contact.hpp"
 
-#include "constants/version.hpp"
-#include "crypto/crypto.hpp"
-#include "net/net.hpp"
-#include "util/buffer.hpp"
-#include "util/file.hpp"
-
 #include <oxenc/bt_serialize.h>
 
 namespace llarp

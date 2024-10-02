@@ -8,12 +8,12 @@
 #include <llarp/auth/auth.hpp>
 #include <llarp/bootstrap.hpp>
 #include <llarp/constants/files.hpp>
+#include <llarp/contact/router_contact.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/net/net_int.hpp>
 #include <llarp/net/traffic_policy.hpp>
-#include <llarp/router_contact.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
 

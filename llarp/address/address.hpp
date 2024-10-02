@@ -3,7 +3,7 @@
 #include "keys.hpp"
 #include "utils.hpp"
 
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/service/name.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/concept.hpp>

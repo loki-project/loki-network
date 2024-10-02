@@ -251,10 +251,24 @@ namespace llarp::path
         }
     }
 
-    std::optional<std::set<service::Introduction>> PathHandler::get_path_intros_conditional(
+    service::intro_que PathHandler::get_recent_path_intros(std::chrono::milliseconds stale_threshold) const
+    {
+        Lock_t l{paths_mutex};
+        service::intro_que ret{};
+
+        for (const auto& [_, p] : _paths)
+        {
+            if (p->is_ready() and not p->intro.expires_soon(stale_threshold))
+                ret.push(p->intro);
+        }
+
+        return ret;
+    }
+
+    std::optional<service::IntroductionSet> PathHandler::get_path_intros_conditional(
         std::function<bool(const service::Introduction&)> filter) const
     {
-        std::set<service::Introduction> intros;
+        service::IntroductionSet intros;
         Lock_t l{paths_mutex};
 
         for (const auto& p : _paths)

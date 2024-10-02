@@ -1,7 +1,6 @@
 #pragma once
 
-#include "router_id.hpp"
-
+#include <llarp/contact/router_id.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/link/tunnel.hpp>

@@ -12,7 +12,6 @@ namespace llarp::service
             {"router", pivot_router.ToHex()},
             {"path", pivot_hop_id.ToHex()},
             {"expiresAt", to_json(expiry)},
-            {"latency", to_json(latency)},
             {"version", uint64_t(version)}};
         return obj;
     }
@@ -24,7 +23,6 @@ namespace llarp::service
             oxenc::bt_dict_consumer btdc{std::move(buf)};
 
             pivot_router.from_relay_address(btdc.require<std::string>("k"));
-            latency = std::chrono::milliseconds{btdc.require<uint64_t>("l")};
             pivot_hop_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};
         }
@@ -52,7 +50,6 @@ namespace llarp::service
         try
         {
             subdict.append("k", pivot_router.to_view());
-            subdict.append("l", latency.count());
             subdict.append("p", pivot_hop_id.to_view());
             subdict.append("x", expiry.count());
         }
@@ -85,8 +82,6 @@ namespace llarp::service
         try
         {
             pivot_router.from_string(btdc.require<std::string>("k"));
-            latency = std::chrono::milliseconds{btdc.require<int64_t>("l")};
-            pivot_hop_id.from_string(btdc.require<std::string>("p"));
             expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
         }
         catch (...)
@@ -100,19 +95,13 @@ namespace llarp::service
     {
         pivot_router.zero();
         pivot_hop_id.zero();
-        latency = 0s;
         expiry = 0s;
     }
 
     std::string Introduction::to_string() const
     {
         return fmt::format(
-            "[Intro k={} l={} p={} v={} x={}]",
-            RouterID{pivot_router},
-            latency.count(),
-            pivot_hop_id,
-            version,
-            expiry.count());
+            "[Intro k={} p={} v={} x={}]", RouterID{pivot_router}, pivot_hop_id, version, expiry.count());
     }
 
 }  // namespace llarp::service

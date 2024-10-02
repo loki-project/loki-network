@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 
 #include <atomic>
 

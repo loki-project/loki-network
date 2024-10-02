@@ -1,9 +1,9 @@
 #pragma once
 
+#include <llarp/contact/router_id.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/key.hpp>
 #include <llarp/path/path_types.hpp>
-#include <llarp/router_id.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>

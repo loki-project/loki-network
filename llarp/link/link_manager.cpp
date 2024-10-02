@@ -3,6 +3,7 @@
 #include "connection.hpp"
 #include "contacts.hpp"
 
+#include <llarp/contact/router_id.hpp>
 #include <llarp/messages/dht.hpp>
 #include <llarp/messages/exit.hpp>
 #include <llarp/messages/fetch.hpp>
@@ -11,7 +12,6 @@
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/router_id.hpp>
 
 #include <oxenc/bt_producer.h>
 #include <sodium/crypto_generichash_blake2b.h>

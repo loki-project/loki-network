@@ -3,7 +3,7 @@
 #include "path_types.hpp"
 
 #include <llarp/address/address.hpp>
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/service/intro.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -106,7 +106,7 @@ namespace llarp
             /// flag for ::Stop()
             std::atomic<bool> _running;
 
-            size_t num_paths_desired;
+            const size_t num_paths_desired;
             BuildStats _build_stats;
 
             using Lock_t = util::NullLock;
@@ -159,7 +159,10 @@ namespace llarp
 
             std::optional<std::shared_ptr<Path>> get_path(const RouterID& router) const;
 
-            std::optional<std::set<service::Introduction>> get_path_intros_conditional(
+            service::intro_que get_recent_path_intros(
+                std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;
+
+            std::optional<service::IntroductionSet> get_path_intros_conditional(
                 std::function<bool(const service::Introduction&)> filter) const;
 
             nlohmann::json ExtractStatus() const;

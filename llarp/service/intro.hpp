@@ -14,7 +14,6 @@ namespace llarp::service
     {
         RouterID pivot_router;
         HopID pivot_hop_id;
-        std::chrono::milliseconds latency = 0s;
         std::chrono::milliseconds expiry = 0s;
         uint64_t version = llarp::constants::proto_version;
 
@@ -25,7 +24,9 @@ namespace llarp::service
 
         bool is_expired(std::chrono::milliseconds now) const { return now >= expiry; }
 
-        bool expires_soon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 30s) const
+        // TODO: get rid of this entirely, and use ::is_expired(...)
+        bool expires_soon(
+            std::chrono::milliseconds dlt = 30s, std::chrono::milliseconds now = llarp::time_now_ms()) const
         {
             return is_expired(now + dlt);
         }
@@ -44,14 +45,14 @@ namespace llarp::service
 
         bool operator<(const Introduction& other) const
         {
-            return std::tie(expiry, pivot_hop_id, pivot_router, version, latency)
-                < std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version, other.latency);
+            return std::tie(expiry, pivot_hop_id, pivot_router, version)
+                < std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version);
         }
 
         bool operator==(const Introduction& other) const
         {
-            return std::tie(expiry, pivot_hop_id, pivot_router, version, latency)
-                == std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version, other.latency);
+            return std::tie(expiry, pivot_hop_id, pivot_router, version)
+                == std::tie(other.expiry, other.pivot_hop_id, other.pivot_router, other.version);
         }
 
         bool operator!=(const Introduction& other) const { return !(*this == other); }
@@ -67,6 +68,8 @@ namespace llarp::service
             return left.expiry < right.expiry;
         }
     };
+
+    using intro_que = std::priority_queue<Introduction, std::vector<Introduction>, IntroExpiryComparator>;
 
     using IntroductionSet = std::set<service::Introduction, service::IntroExpiryComparator>;
 

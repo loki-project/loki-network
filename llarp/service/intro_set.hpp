@@ -26,7 +26,6 @@ namespace llarp::service
     {
         ServiceInfo address_keys;
         IntroductionSet intros;
-        PQPubKey sntru_pubkey;
         std::vector<dns::SRVData> SRVs;
         std::chrono::milliseconds time_signed = 0s;
 
@@ -83,8 +82,8 @@ namespace llarp::service
 
     inline bool operator==(const IntroSet& lhs, const IntroSet& rhs)
     {
-        return std::tie(lhs.address_keys, lhs.intros, lhs.sntru_pubkey, lhs.time_signed, lhs.version, lhs.signature)
-            == std::tie(rhs.address_keys, rhs.intros, rhs.sntru_pubkey, rhs.time_signed, rhs.version, rhs.signature);
+        return std::tie(lhs.address_keys, lhs.intros, lhs.time_signed, lhs.version, lhs.signature)
+            == std::tie(rhs.address_keys, rhs.intros, rhs.time_signed, rhs.version, rhs.signature);
     }
 
     inline bool operator!=(const IntroSet& lhs, const IntroSet& rhs)

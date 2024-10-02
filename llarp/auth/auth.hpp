@@ -3,8 +3,8 @@
 #include "types.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/router_id.hpp>
 #include <llarp/service/tag.hpp>
 #include <llarp/util/concept.hpp>
 #include <llarp/util/str.hpp>

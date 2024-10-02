@@ -1,7 +1,7 @@
 #pragma once
 
-#include <llarp/router_contact.hpp>
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_contact.hpp>
+#include <llarp/contact/router_id.hpp>
 
 #include <oxen/quic.hpp>
 

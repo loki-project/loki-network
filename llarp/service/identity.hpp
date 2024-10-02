@@ -2,7 +2,6 @@
 
 #include "info.hpp"
 #include "intro_set.hpp"
-#include "vanity.hpp"
 
 #include <llarp/constants/proto.hpp>
 #include <llarp/crypto/key_manager.hpp>
@@ -19,9 +18,7 @@ namespace llarp::service
         Ed25519SecretKey _idkey;
         Ed25519SecretKey _enckey;
         Ed25519Hash derivedSignKey;
-        PQKeyPair pq;
         uint64_t version = llarp::constants::proto_version;
-        VanityNonce vanity;
 
         // public service info
         ServiceInfo pub;
@@ -47,7 +44,6 @@ namespace llarp::service
 
     inline bool operator==(const Identity& lhs, const Identity& rhs)
     {
-        return std::tie(lhs._enckey, lhs._idkey, lhs.pq, lhs.version, lhs.vanity)
-            == std::tie(rhs._enckey, rhs._idkey, rhs.pq, rhs.version, rhs.vanity);
+        return std::tie(lhs._enckey, lhs._idkey, lhs.version) == std::tie(rhs._enckey, rhs._idkey, rhs.version);
     }
 }  // namespace llarp::service
