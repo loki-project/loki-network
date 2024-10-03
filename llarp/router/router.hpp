@@ -53,6 +53,7 @@ namespace llarp
   {
     llarp_time_t _lastPump = 0s;
     bool ready;
+    bool is_default_netID{true};
     // transient iwp encryption key
     fs::path transport_keyfile;
 
