@@ -638,6 +638,7 @@ namespace llarp
     log::debug(logcat, "Network ID set to {}", conf.router.m_netId);
     if (!conf.router.m_netId.empty() && strcmp(conf.router.m_netId.c_str(), llarp::DEFAULT_NETID))
     {
+      is_default_netID = false;
       const auto& netid = conf.router.m_netId;
       llarp::LogWarn(
           "!!!! you have manually set netid to be '",
@@ -932,6 +933,17 @@ namespace llarp
       return;
     // LogDebug("tick router");
     const auto now = Now();
+
+    // If a node is deregistered while running (or is started before being registered),
+    // it can fail to properly connect to the network once registered (again).  This does
+    // not *fix* that, but these symptoms should be sufficient to detect such a state and
+    // the node should recover upon restart.
+    if (is_default_netID and IsServiceNode() and uptime() > 1h and nodedb()->NumLoaded() < 10)
+    {
+      Stop();
+      return;
+    }
+
     if (const auto delta = now - _lastTick; _lastTick != 0s and delta > TimeskipDetectedDuration)
     {
       // we detected a time skip into the futre, thaw the network
