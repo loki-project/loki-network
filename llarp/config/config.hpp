@@ -87,13 +87,31 @@ namespace llarp
         /// i.e. 32 for every hop unique ip, 24 unique /24 per hop, etc
         uint8_t unique_hop_netmask;
 
-        /// set of countrys to exclude from path building (2 char country code)
-        std::unordered_set<std::string> exclude_countries;
-
         void define_config_options(ConfigDefinition& conf, const ConfigGenParameters& params);
 
         /// return true if this set of router contacts is acceptable against this config
         bool check_rcs(const std::set<RemoteRC>& hops) const;
+    };
+
+    /// Config options related to exit node services
+    struct ExitConfig
+    {
+        bool exit_enabled{false};
+
+        // Used by RemoteHandler to provide auth tokens for remote exits
+        std::unordered_map<NetworkAddress, std::string> auth_tokens;
+        std::unordered_map<std::string, std::string> ons_auth_tokens;
+
+        net::ExitPolicy exit_policy;
+
+        // Remote client ONS exit addresses mapped to local IP ranges pending ONS address resolution
+        // Reserved local IP ranges mapped to remote client ONS addresses (pending ONS resolution)
+        std::unordered_map<std::string, IPRange> ons_ranges;
+
+        // Reserved local IP ranges mapped to remote client exit addresses
+        std::unordered_map<NetworkAddress, IPRange> ranges;
+
+        void define_config_options(ConfigDefinition& conf, const ConfigGenParameters& params);
     };
 
     struct NetworkConfig
@@ -108,15 +126,10 @@ namespace llarp
         std::optional<int> paths;
 
         bool enable_ipv6{false};
-        bool allow_exit{false};
         bool is_reachable{false};
         bool init_tun{true};
 
         std::set<RouterID> snode_blacklist;
-
-        // Used by RemoteHandler to provide auth tokens for remote exits
-        std::unordered_map<NetworkAddress, std::string> exit_auths;
-        std::unordered_map<std::string, std::string> ons_exit_auths;
 
         /*   Auth specific config   */
         auth::AuthType auth_type = auth::AuthType::NONE;
@@ -132,8 +145,6 @@ namespace llarp
         std::set<fs::path> auth_files;
 
         std::vector<llarp::dns::SRVData> srv_records;
-
-        std::optional<net::TrafficPolicy> traffic_policy;
 
         std::optional<std::chrono::milliseconds> path_alignment_timeout;
 
@@ -163,14 +174,18 @@ namespace llarp
         //      - when a session is created, check mapping when assigning IP's
         std::unordered_map<NetworkAddress, ip_v> _reserved_local_ips;
 
+        // TESTNET: moved into ExitConfig!
+        bool allow_exit{false};
+        // Used by RemoteHandler to provide auth tokens for remote exits
+        std::unordered_map<NetworkAddress, std::string> exit_auths;
+        std::unordered_map<std::string, std::string> ons_exit_auths;
+        std::optional<net::ExitPolicy> traffic_policy;
         // Remote client exit addresses mapped to local IP ranges
         std::unordered_map<NetworkAddress, IPRange> _exit_ranges;
-
         // Remote client ONS exit addresses mapped to local IP ranges pending ONS address resolution
         std::unordered_map<std::string, IPRange> _ons_ranges;
-
         // Used when in exit mode; pass down to LocalEndpoint
-        std::set<IPRange> _routed_ranges;
+        // std::set<IPRange> _routed_ranges;  // moved into traffic_policy!
 
         bool enable_route_poker;
         bool blackhole_routes;
@@ -261,6 +276,7 @@ namespace llarp
         virtual std::unique_ptr<ConfigGenParameters> make_gen_params() const;
 
         RouterConfig router;
+        ExitConfig exit;
         NetworkConfig network;
         PeerSelectionConfig paths;
         DnsConfig dns;

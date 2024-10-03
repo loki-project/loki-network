@@ -23,27 +23,28 @@ namespace llarp
 {
     inline static constexpr size_t NETID_SIZE{8};
 
-    /// On the wire we encode the data as a dict containing:
-    /// ""  -- the RC format version, which must be == RelayContact::Version for us to attempt to
-    ///        parse the reset of the fields.  (Future versions might have backwards-compat support
-    ///        for lower versions).
-    /// "4" -- 6 byte packed IPv4 address & port: 4 bytes of IPv4 address followed by 2 bytes of
-    ///        port, both encoded in network (i.e. big-endian) order.
-    /// "6" -- optional 18 byte IPv6 address & port: 16 byte raw IPv6 address followed by 2 bytes
-    ///        of port in network order.
-    /// "i" -- optional network ID string of up to 8 bytes; this is omitted for the default network
-    ///        ID ("lokinet") but included for others (such as "testnet" for testnet).
-    /// "p" -- 32-byte router pubkey
-    /// "t" -- timestamp when this RC record was created (which also implicitly determines when it
-    ///        goes stale and when it expires).
-    /// "v" -- lokinet version of the router; this is a three-byte packed value of
-    ///        MAJOR, MINOR, PATCH, e.g. \x00\x0a\x03 for 0.10.3.
-    /// "~" -- signature of all of the previous serialized data, signed by "p"
+    /** RelayContact
+        On the wire we encode the data as a dict containing:
+        - "" : the RC format version, which must be == RelayContact::VERSION for us to attempt to
+                parse the reset of the fields.  (Future versions might have backwards-compat support
+                for lower versions).
+        - "4" : 6 byte packed IPv4 address & port: 4 bytes of IPv4 address followed by 2 bytes of
+                port, both encoded in network (i.e. big-endian) order.
+        - "6" : optional 18 byte IPv6 address & port: 16 byte raw IPv6 address followed by 2 bytes
+                of port in network order.
+        - "i" : optional network ID string of up to 8 bytes; this is omitted for the default network
+                ID ("lokinet") but included for others (such as "testnet" for testnet).
+        - "p" : 32-byte router pubkey
+        - "t" : timestamp when this RC record was created (which also implicitly determines when it
+                goes stale and when it expires).
+        - "v" : lokinet version of the router; this is a three-byte packed value of
+                MAJOR, MINOR, PATCH, e.g. \x00\x0a\x03 for 0.10.3.
+        - "~" : signature of all of the previous serialized data, signed by "p"
 
-    /// RelayContact
+    */
     struct RelayContact
     {
-        static constexpr uint8_t RC_VERSION{0};
+        static constexpr uint8_t VERSION{0};
 
         /// Unit tests disable this to allow private IP ranges in RCs, which normally get rejected.
         inline static bool BLOCK_BOGONS{true};
@@ -110,7 +111,7 @@ namespace llarp
         virtual std::string to_string() const
         {
             return "RC:['4'={} | 'i'='{}' | 'p'={} | 't'={} | v={}]"_format(
-                _addr.to_string(), ACTIVE_NETID, _router_id, _timestamp.time_since_epoch().count(), RC_VERSION);
+                _addr.to_string(), ACTIVE_NETID, _router_id, _timestamp.time_since_epoch().count(), VERSION);
         }
 
         bool write(const fs::path& fname) const;

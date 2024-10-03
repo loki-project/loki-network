@@ -39,9 +39,6 @@ namespace llarp
                 s.bt_encode(sublist.append_dict());
         }
 
-        btdp.append("t", signed_at.count());
-        btdp.append("~", signature.to_view());
-
         return std::move(btdp).str();
     }
 
@@ -95,9 +92,6 @@ namespace llarp
             while (not sublist.is_finished())
                 SRVs.emplace_back(sublist.consume_string_view());
         }
-
-        signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("t")};
-        signature.from_string(btdc.require<std::string_view>("~"));
     }
 
     bool ClientContact::is_expired(std::chrono::milliseconds now) const

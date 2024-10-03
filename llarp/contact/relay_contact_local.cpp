@@ -47,7 +47,7 @@ namespace llarp
 
     void LocalRC::bt_encode(oxenc::bt_dict_producer& btdp)
     {
-        btdp.append("", RC_VERSION);
+        btdp.append("", VERSION);
 
         std::array<unsigned char, 18> buf;
 

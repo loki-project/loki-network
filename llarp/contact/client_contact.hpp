@@ -28,6 +28,17 @@ namespace llarp
 
     // TODO: add version to `` field to match RelayContact
 
+    /** ClientContact
+
+        On the wire we encode the data as a dict containing:
+            - "" : the CC format version, which must be == ClientContact::VERSION to be parsed successfully
+            - "a" : public key of the remote client instance
+            - "i" : list of client introductions corresponding to the different pivots through which paths can be built
+                    to the client instance
+            - "p" : supported protocols indicating the traffic accepted by the client instance; this indicates if the
+                    client is embedded and therefore requires a tunneled connection
+            - "s" : SRV records for lokinet DNS lookup
+    */
     struct ClientContact
     {
         static constexpr uint8_t CC_VERSION{0};
@@ -44,7 +55,7 @@ namespace llarp
         std::vector<service::ProtocolType> supported_protos;
 
         // In exit mode, we advertise our policy for accepted traffic and the corresponding ranges
-        std::optional<net::TrafficPolicy> exit_policy;
+        std::optional<net::ExitPolicy> exit_policy;
 
         Signature signature;
 

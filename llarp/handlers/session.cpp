@@ -57,14 +57,9 @@ namespace llarp::handlers
         {
             assert(not _is_snode_service);
 
-            if (not net_config._routed_ranges.empty())
-            {
-                _routed_ranges.merge(net_config._routed_ranges);
-                _local_introset._routed_ranges = _routed_ranges;
-            }
-
             _exit_policy = net_config.traffic_policy;
             _local_introset.exit_policy = _exit_policy;
+            _local_cc.exit_policy = _exit_policy;
         }
 
         if (not net_config.srv_records.empty())

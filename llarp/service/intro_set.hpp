@@ -37,12 +37,12 @@ namespace llarp::service
         std::vector<ProtocolType> supported_protocols;
         /// aonnuce that these ranges are reachable via our endpoint
         /// only set when we support exit traffic ethertype is supported
-        std::set<IPRange> _routed_ranges;
+        std::set<IPRange> _routed_ranges;  // TESTNET: TOFIX: Move into exit policy!
 
         /// policies about traffic that we are willing to carry
         /// a protocol/range whitelist or blacklist
         /// only set when we support exit traffic ethertype
-        std::optional<net::TrafficPolicy> exit_policy = std::nullopt;
+        std::optional<net::ExitPolicy> exit_policy = std::nullopt;
 
         Signature signature;
         uint64_t version = llarp::constants::proto_version;

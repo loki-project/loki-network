@@ -67,7 +67,7 @@ namespace llarp::net
         return pkt.header()->protocol == static_cast<std::underlying_type_t<IPProtocol>>(protocol);
     }
 
-    bool TrafficPolicy::allow_ip_traffic(const IPPacket& pkt)
+    bool ExitPolicy::allow_ip_traffic(const IPPacket& pkt)
     {
         if (protocols.empty() and ranges.empty())
             return true;
@@ -165,7 +165,7 @@ namespace llarp::net
         }
     }
 
-    void TrafficPolicy::bt_decode(oxenc::bt_dict_consumer&& btdc)
+    void ExitPolicy::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {
@@ -200,7 +200,7 @@ namespace llarp::net
         }
     }
 
-    void TrafficPolicy::bt_encode(oxenc::bt_dict_producer&& btdp) const
+    void ExitPolicy::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
         try
         {
@@ -222,7 +222,7 @@ namespace llarp::net
         }
     }
 
-    bool TrafficPolicy::bt_decode(std::string_view buf)
+    bool ExitPolicy::bt_decode(std::string_view buf)
     {
         try
         {
@@ -249,7 +249,7 @@ namespace llarp::net
         return status;
     }
 
-    nlohmann::json TrafficPolicy::ExtractStatus() const
+    nlohmann::json ExitPolicy::ExtractStatus() const
     {
         std::vector<nlohmann::json> rangesStatus;
         std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {

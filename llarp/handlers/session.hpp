@@ -64,7 +64,7 @@ namespace llarp
             std::set<IPRange> _routed_ranges;  // formerly from LocalEndpoint
 
             // policies about traffic that we are willing to carry -- Exit mode only!
-            std::optional<net::TrafficPolicy> _exit_policy = std::nullopt;
+            std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
 
           public:
             SessionEndpoint(Router& r);

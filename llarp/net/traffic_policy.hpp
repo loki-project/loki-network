@@ -10,7 +10,6 @@
 namespace llarp::net
 {
     // Copied over from llarp/net/ip_packet_old.hpp...
-    // TODO: do we fucking need this?
     enum class IPProtocol : uint8_t
     {
         ICMP = 0x01,
@@ -57,14 +56,16 @@ namespace llarp::net
         explicit ProtocolInfo(std::string_view spec);
     };
 
-    /// information about what traffic an endpoint will carry
-    struct TrafficPolicy
+    /// information about what exit traffic an endpoint will carry
+    struct ExitPolicy
     {
         /// ranges that are explicitly allowed
         std::set<IPRange> ranges;
 
         /// protocols that are explicity allowed
         std::set<ProtocolInfo> protocols;
+
+        bool empty() const { return ranges.empty() and protocols.empty(); }
 
         void bt_encode(oxenc::bt_dict_producer&& btdp) const;
 
