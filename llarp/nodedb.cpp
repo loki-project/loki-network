@@ -725,7 +725,7 @@ namespace llarp
         _router.link_manager()->fetch_bootstrap_rcs(
             rc,
             BootstrapFetchMessage::serialize(
-                _is_service_node ? std::make_optional(_router.router_contact) : std::nullopt, num_needed),
+                _is_service_node ? std::make_optional(_router.relay_contact) : std::nullopt, num_needed),
             [this, src = source](oxen::quic::message m) mutable {
                 log::info(logcat, "Received response to BootstrapRC fetch request...");
 

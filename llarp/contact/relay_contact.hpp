@@ -40,11 +40,10 @@ namespace llarp
         - "v" : lokinet version of the router; this is a three-byte packed value of
                 MAJOR, MINOR, PATCH, e.g. \x00\x0a\x03 for 0.10.3.
         - "~" : signature of all of the previous serialized data, signed by "p"
-
     */
     struct RelayContact
     {
-        static constexpr uint8_t VERSION{0};
+        inline static constexpr uint8_t VERSION{0};
 
         /// Unit tests disable this to allow private IP ranges in RCs, which normally get rejected.
         inline static bool BLOCK_BOGONS{true};
@@ -55,15 +54,15 @@ namespace llarp
 
         /// How long (from its signing time) before an RC is considered "stale".  Relays republish
         /// their RCs slightly more frequently than this so that ideally this won't happen.
-        static constexpr auto STALE_AGE{6h};
+        inline static constexpr auto STALE_AGE{6h};
 
         /// How long (from its signing time) before an RC becomes "outdated".  Outdated records are
         /// used (e.g. for path building) only if there are no newer records available, such as
         /// might be the case when a client has been turned off for a while.
-        static constexpr auto OUTDATED_AGE{12h};
+        inline static constexpr auto OUTDATED_AGE{12h};
 
         /// How long before an RC becomes invalid (and thus deleted).
-        static constexpr auto LIFETIME{30 * 24h};
+        inline static constexpr auto LIFETIME{30 * 24h};
 
         ustring_view view() const { return _payload; }
 
@@ -160,10 +159,6 @@ namespace llarp
     /// Extension of RelayContact used to store a local "RC," and inserts a RelayContact by
     /// re-parsing and sending it out. This sub-class contains a pubkey and all the other attributes
     /// required for signing and serialization
-    ///
-    /// Note: this class may be entirely superfluous, so it is used here as a placeholder until its
-    /// marginal utility is determined. It may end up as a free-floating method that reads in
-    /// parameters and outputs a bt-serialized string
     struct LocalRC final : public RelayContact
     {
         static LocalRC make(Ed25519SecretKey secret, oxen::quic::Address local);
@@ -302,6 +297,6 @@ namespace std
     {};
 
     template <>
-    struct hash<llarp::LocalRC> final : public hash<llarp::RelayContact>
+    struct hash<llarp::LocalRC> : public hash<llarp::RelayContact>
     {};
 }  // namespace std

@@ -22,7 +22,7 @@ namespace llarp
 
             std::unordered_set<dns::SRVData> _srv_records;
 
-            bool should_publish_introset{true};
+            bool should_publish_cc{false};
 
             session_map<NetworkAddress, session::BaseSession> _sessions;
 
@@ -32,12 +32,12 @@ namespace llarp
             //  - Directly pre-loaded from config
             address_map<IPRange, NetworkAddress> _range_map;
 
-            ClientContact _local_cc;  // TODO: TESTNET: replacement for service::Introset
+            ClientContact client_contact;  // TODO: TESTNET: replacement for service::Introset
 
             service::Identity _identity;           // TODO: TESTNET: move responsibilities to KeyManager, delete
             service::IntroSetOld _local_introset;  // TODO: TESTNET: remove with CC impl
 
-            std::chrono::milliseconds _last_introset_regen_attempt{0s};
+            std::shared_ptr<EventTicker> _cc_publisher;
 
             // auth tokens for making outbound sessions
             std::unordered_map<NetworkAddress, std::string> _auth_tokens;
@@ -87,8 +87,6 @@ namespace llarp
 
             oxen::quic::Address local_address() const { return _local_addr; }
 
-            const service::IntroSetOld& intro_set() const { return _local_introset; }
-
             // get copy of all srv records
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
@@ -105,6 +103,21 @@ namespace llarp
             }
 
             void srv_records_changed();
+
+            // This function can be called with the fields to be updated. ClientIntros are always passed, so there
+            // is no need to pass them to this function
+            template <typename... Opt>
+            void update_and_publish_localcc(intro_set intros, Opt&&... args)
+            {
+                if (intros.empty())
+                    return _localcc_update_fail();
+                client_contact.regenerate(std::move(intros), std::forward<Opt>(args)...);
+                _update_and_publish_localcc();
+            }
+
+            void update_and_publish_localcc(intro_set intros);
+
+            void start_tickers();
 
             void regen_and_publish_introset();
 
@@ -160,6 +173,10 @@ namespace llarp
             void unmap_range_by_name(const std::string& name);
 
           private:
+            void _localcc_update_fail();
+
+            void _update_and_publish_localcc();
+
             bool _initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
             void _make_session_path(

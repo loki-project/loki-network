@@ -251,6 +251,22 @@ namespace llarp::path
         }
     }
 
+    intro_set PathHandler::get_current_client_intros() const
+    {
+        Lock_t lock{paths_mutex};
+
+        intro_set intros{};
+        auto now = llarp::time_now_ms();
+
+        for (const auto& [_, p] : _paths)
+        {
+            if (p->is_ready() and not p->intro.is_expired(now))
+                intros.emplace(p->intro);
+        }
+
+        return intros;
+    }
+
     service::intro_que_old PathHandler::get_recent_path_intros(std::chrono::milliseconds stale_threshold) const
     {
         Lock_t l{paths_mutex};
@@ -258,8 +274,8 @@ namespace llarp::path
 
         for (const auto& [_, p] : _paths)
         {
-            if (p->is_ready() and not p->intro.expires_soon(stale_threshold))
-                ret.push(p->intro);
+            if (p->is_ready() and not p->intro_old.expires_soon(stale_threshold))
+                ret.push(p->intro_old);
         }
 
         return ret;
@@ -273,9 +289,9 @@ namespace llarp::path
 
         for (const auto& p : _paths)
         {
-            if (p.second->is_ready() and filter(p.second->intro))
+            if (p.second->is_ready() and filter(p.second->intro_old))
             {
-                intros.insert(p.second->intro);
+                intros.insert(p.second->intro_old);
             }
         }
 

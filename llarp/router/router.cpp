@@ -2,9 +2,8 @@
 
 #include <llarp/config/config.hpp>
 #include <llarp/constants/proto.hpp>
+#include <llarp/contact/contactdb.hpp>
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/dht/node.hpp>
-#include <llarp/link/contacts.hpp>
 #include <llarp/link/link_manager.hpp>
 #include <llarp/link/tunnel.hpp>
 #include <llarp/messages/dht.hpp>
@@ -219,16 +218,15 @@ namespace llarp
         }
         else
         {
+            _session_endpoint->start_tickers();
             // Resolve needed ONS values now that we have the necessary things prefigured
             _session_endpoint->resolve_ons_mappings();
         }
     }
 
-    bool Router::fully_meshed() const
+    bool Router::is_fully_meshed() const
     {
-        if (auto n_conns = num_router_connections(); n_conns)
-            return n_conns >= _node_db->num_rcs();
-        return false;
+        return num_router_connections() >= _node_db->num_rcs();
     }
 
     void Router::persist_connection_until(const RouterID& remote, std::chrono::milliseconds until)
@@ -660,7 +658,7 @@ namespace llarp
             if (not ensure_identity())
                 throw std::runtime_error{"EnsureIdentity() failed"};
 
-            router_contact =
+            relay_contact =
                 LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
 
             _path_context = std::make_shared<path::PathContext>(local_rid());
@@ -752,7 +750,7 @@ namespace llarp
     {
         // _node_db->put_rc(router_contact.view());
         log::info(logcat, "Saving RC file to {}", our_rc_file);
-        queue_disk_io([&]() { router_contact.write(our_rc_file); });
+        queue_disk_io([&]() { relay_contact.write(our_rc_file); });
     }
 
     bool Router::is_bootstrap_node(const RouterID r) const
@@ -780,7 +778,7 @@ namespace llarp
 
         log::critical(logcat, "Local {}: {}", is_service_node() ? "Service Node" : "Client", _stats_line());
 
-        if (is_service_node() and fully_meshed())
+        if (is_service_node() and is_fully_meshed())
         {
             log::critical(logcat, "SERVICE NODE IS FULLY MESHED");
         }
@@ -964,7 +962,7 @@ namespace llarp
 
         if (is_service_node())
         {
-            if (not router_contact.is_public_addressable())
+            if (not relay_contact.is_public_addressable())
             {
                 log::error(logcat, "Router is configured as relay but has no reachable addresses!");
                 return false;
@@ -987,7 +985,7 @@ namespace llarp
         }
 
         // This must be constructed AFTER router creates its LocalRC
-        _contacts = std::make_unique<Contacts>(*this);
+        _contact_db = std::make_unique<ContactDB>(*this);
 
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(

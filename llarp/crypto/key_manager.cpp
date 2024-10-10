@@ -73,4 +73,9 @@ namespace llarp
         public_key = seckey_to_pubkey(identity_key);
         log::info(logcat, "Relay key manager updated secret key; new public key: {}", public_key);
     }
+
+    Ed25519Hash KeyManager::derive_subkey() const
+    {
+        return crypto::derive_private_subkey(identity_key);
+    }
 }  // namespace llarp

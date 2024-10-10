@@ -4,6 +4,7 @@
 #include "path_types.hpp"
 #include "transit_hop.hpp"
 
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
@@ -45,6 +46,8 @@ namespace llarp::path
         void drop_path(const std::shared_ptr<Path>& p);
 
         void drop_paths(std::vector<std::shared_ptr<Path>> droplist);
+
+        intro_set get_recent_ccs() const;
 
       private:
         const RouterID _local_rid;

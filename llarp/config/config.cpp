@@ -521,7 +521,7 @@ namespace llarp
             ReachableDefault,
             assignment_acceptor(is_reachable),
             Comment{
-                "Determines whether we will pubish our service's introset to the DHT.",
+                "Determines whether we will pubish our service's ClientContact to the DHT (client default: TRUE)",
             });
 
         conf.define_option<int>(
@@ -884,7 +884,7 @@ namespace llarp
                 if (not maybe_srv)
                     throw std::invalid_argument{"Invalid SRV Record string: {}"_format(arg)};
 
-                srv_records.push_back(std::move(*maybe_srv));
+                srv_records.emplace(std::move(*maybe_srv));
             });
 
         conf.define_option<int>(

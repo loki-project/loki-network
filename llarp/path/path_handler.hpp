@@ -3,7 +3,7 @@
 #include "path_types.hpp"
 
 #include <llarp/address/address.hpp>
-#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/client_intro.hpp>
 #include <llarp/service/intro.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -158,6 +158,8 @@ namespace llarp
             std::optional<std::shared_ptr<Path>> get_path(HopID id) const;
 
             std::optional<std::shared_ptr<Path>> get_path(const RouterID& router) const;
+
+            intro_set get_current_client_intros() const;
 
             service::intro_que_old get_recent_path_intros(
                 std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;

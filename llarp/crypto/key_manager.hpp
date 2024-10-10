@@ -10,6 +10,11 @@ namespace llarp
 {
     struct Config;
 
+    namespace handlers
+    {
+        class SessionEndpoint;
+    }
+
     // KeyManager manages the cryptographic keys stored on disk for the local
     // node. This includes private keys as well as the self-signed router contact
     // file (e.g. "self.signed").
@@ -23,6 +28,7 @@ namespace llarp
     struct KeyManager
     {
         friend struct Router;
+        friend class handlers::SessionEndpoint;
 
       private:
         KeyManager(const Config& config, bool is_relay);
@@ -43,7 +49,11 @@ namespace llarp
 
         void update_idkey(Ed25519SecretKey&& newkey);
 
+        Ed25519Hash derive_subkey() const;
+
       public:
+        //
+
         const RouterID& router_id() const { return public_key; }
     };
 

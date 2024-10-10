@@ -38,23 +38,23 @@ namespace llarp
         // used when sending over the wire.
         enum class ProtocolType : uint64_t
         {
-            Control = 0UL,
-            TrafficV4 = 1UL,
-            TrafficV6 = 2UL,
-            Exit = 3UL,
-            Auth = 4UL,
+            CONTROL = 0UL,
+            IPV4 = 1UL,
+            IPV6 = 2UL,
+            EXIT = 3UL,
+            AUTH = 4UL,
             TCP2QUIC = 5UL,
         };
 
         inline constexpr std::string_view to_string(ProtocolType t)
         {
-            return t == ProtocolType::Control  ? "Control"sv
-                : t == ProtocolType::TrafficV4 ? "TrafficV4"sv
-                : t == ProtocolType::TrafficV6 ? "TrafficV6"sv
-                : t == ProtocolType::Exit      ? "Exit"sv
-                : t == ProtocolType::Auth      ? "Auth"sv
-                : t == ProtocolType::TCP2QUIC  ? "TCP->QUIC"sv
-                                               : "(unknown-protocol-type)"sv;
+            return t == ProtocolType::CONTROL ? "Control"sv
+                : t == ProtocolType::IPV4     ? "TrafficV4"sv
+                : t == ProtocolType::IPV6     ? "TrafficV6"sv
+                : t == ProtocolType::EXIT     ? "Exit"sv
+                : t == ProtocolType::AUTH     ? "Auth"sv
+                : t == ProtocolType::TCP2QUIC ? "TCP->QUIC"sv
+                                              : "(unknown-protocol-type)"sv;
         }
 
         // namespace util

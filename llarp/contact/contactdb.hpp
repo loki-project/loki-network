@@ -7,13 +7,16 @@ namespace llarp
 {
     struct Router;
 
-    /// This class mediates storage, retrieval, and functionality for the various types
-    /// of contact information that needs to be stored locally by the link manager and
-    /// router, like RelayContacts and introsets for example
-    struct Contacts
+    /**
+        ContactDB TODO:
+        - Store nearest-furthest expiry, trim
+
+    */
+
+    /// This class mediates storage, retrieval, and functionality for ClientContacts
+    struct ContactDB
     {
       private:
-        // TODO: why was this a shared ptr in the original implementation? revisit this
         std::shared_ptr<int> timer_keepalive;
         Router& _router;
         const dht::Key_t _local_key;
@@ -21,8 +24,14 @@ namespace llarp
         // holds introsets for remote services
         std::unique_ptr<dht::Bucket<dht::ISNode>> _introset_nodes;
 
+        // std::unique_ptr<dht::Bucket<dht::CCNode>> _cc_nodes;
+
       public:
-        explicit Contacts(Router& r);
+        explicit ContactDB(Router& r);
+
+        // std::optional<ClientContact> get_decrypted_cc(RouterID remote) const;
+
+        // std::optional<EncryptedClientContact> get_encrypted_cc(const dht::Key_t& key) const;
 
         std::optional<service::IntroSetOld> get_decrypted_introset(RouterID remote) const;
 

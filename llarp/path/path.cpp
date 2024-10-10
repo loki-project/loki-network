@@ -43,8 +43,8 @@ namespace llarp::path
         }
 
         // initialize parts of the introduction
-        intro.pivot_router = hops[hsz - 1].rc.router_id();
-        intro.pivot_hop_id = hops[hsz - 1].txID;
+        intro_old.pivot_router = hops[hsz - 1].rc.router_id();
+        intro_old.pivot_hop_id = hops[hsz - 1].txID;
     }
 
     void Path::link_session(recv_session_dgram_cb cb)
@@ -332,7 +332,7 @@ namespace llarp::path
         auto now = llarp::time_now_ms();
 
         nlohmann::json obj{
-            {"intro", intro.ExtractStatus()},
+            {"intro", intro_old.ExtractStatus()},
             {"lastRecvMsg", to_json(last_recv_msg)},
             {"lastLatencyTest", to_json(last_latency_test)},
             {"buildStarted", to_json(buildStarted)},

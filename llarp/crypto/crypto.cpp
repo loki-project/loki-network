@@ -413,6 +413,34 @@ namespace llarp
         return true;
     }
 
+    Ed25519Hash crypto::derive_private_subkey(const Ed25519SecretKey& root)
+    {
+        Ed25519Hash ret{};
+
+        AlignedBuffer<32> h;
+
+        if (not make_scalar(h, root.to_pubkey(), 1))
+            throw std::runtime_error{"Call to `make_scalar` failed in deriving private subkey!"};
+
+        h[0] &= 248;
+        h[31] &= 63;
+        h[31] |= 64;
+
+        Ed25519Hash a = root.to_edhash();
+
+        // a' = ha
+        crypto_core_ed25519_scalar_mul(ret.data(), h.data(), a.data());
+
+        // s' = H(h || s)
+        std::array<uint8_t, 64> buf;
+        std::copy(h.begin(), h.end(), buf.begin());
+        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
+        if (crypto_generichash_blake2b(ret.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0) == -1)
+            throw std::runtime_error{"Call to `crypto_generichash_blake2b` failed!"};
+
+        return ret;
+    }
+
     void crypto::randomize(uint8_t* buf, size_t len)
     {
         randombytes(buf, len);

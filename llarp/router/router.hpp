@@ -69,7 +69,7 @@ namespace llarp
 
     inline constexpr auto SERVICE_MANAGER_REPORT_INTERVAL{5s};
 
-    struct Contacts;
+    struct ContactDB;
 
     struct Router : std::enable_shared_from_this<Router>
     {
@@ -95,7 +95,7 @@ namespace llarp
         bool use_file_logging{false};
 
         // our router contact
-        LocalRC router_contact;
+        LocalRC relay_contact;
         std::shared_ptr<oxenmq::OxenMQ> _lmq;
         path::BuildLimiter _pathbuild_limiter;
 
@@ -132,7 +132,7 @@ namespace llarp
         std::shared_ptr<vpn::Platform> _vpn;
 
         std::shared_ptr<path::PathContext> _path_context;
-        std::shared_ptr<Contacts> _contacts;
+        std::shared_ptr<ContactDB> _contact_db;
         std::shared_ptr<NodeDB> _node_db;
 
         std::shared_ptr<EventTicker> _loop_ticker;
@@ -201,7 +201,7 @@ namespace llarp
       public:
         void start();
 
-        bool fully_meshed() const;
+        bool is_fully_meshed() const;
 
         bool using_tun_if() const { return _using_tun; }
 
@@ -221,9 +221,9 @@ namespace llarp
 
         const std::shared_ptr<QUICTunnel>& quic_tunnel() const { return _quic_tun; }
 
-        const Contacts& contacts() const { return *_contacts; }
+        const ContactDB& contacts() const { return *_contact_db; }
 
-        Contacts& contacts() { return *_contacts; }
+        ContactDB& contact_db() { return *_contact_db; }
 
         std::shared_ptr<Config> config() const { return _config; }
 
@@ -241,7 +241,7 @@ namespace llarp
 
         const RouterID& router_id() const { return _key_manager->public_key; }
 
-        const RouterID& local_rid() const { return router_contact.router_id(); }
+        const RouterID& local_rid() const { return relay_contact.router_id(); }
 
         Profiling& router_profiling() { return _router_profiling; }
 
@@ -255,7 +255,7 @@ namespace llarp
 
         const std::shared_ptr<path::PathContext>& path_context() const { return _path_context; }
 
-        const LocalRC& rc() const { return router_contact; }
+        const LocalRC& rc() const { return relay_contact; }
 
         oxen::quic::Address listen_addr() const;
 

@@ -22,7 +22,7 @@ namespace llarp::service
 
         nlohmann::json ExtractStatus() const;
 
-        bool is_expired(std::chrono::milliseconds now) const { return now >= expiry; }
+        bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const { return now >= expiry; }
 
         // TODO: get rid of this entirely, and use ::is_expired(...)
         bool expires_soon(

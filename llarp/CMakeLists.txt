@@ -62,7 +62,6 @@ lokinet_add_library(lokinet-rpc
 
 lokinet_add_library(lokinet-wire
   link/connection.cpp
-  link/contacts.cpp
   link/link_manager.cpp
   link/tunnel.cpp
 )
@@ -72,7 +71,6 @@ lokinet_add_library(lokinet-utils
   ${CMAKE_CURRENT_BINARY_DIR}/constants/version.cpp
   util/buffer.cpp
   util/file.cpp
-#  util/logging/buffer.cpp
   util/mem.cpp
   util/str.cpp
   util/thread/threading.cpp
@@ -85,6 +83,8 @@ add_dependencies(lokinet-utils genversion)
 lokinet_add_library(lokinet-contact
   contact/client_contact.cpp
   contact/client_intro.cpp
+
+  contact/contactdb.cpp
 
   contact/relay_contact.cpp
   contact/relay_contact_local.cpp

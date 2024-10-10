@@ -3,6 +3,7 @@
 #include "path_handler.hpp"
 
 #include <llarp/constants/path.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
 #include <llarp/util/aligned.hpp>
@@ -43,7 +44,9 @@ namespace llarp
 
             std::weak_ptr<PathHandler> handler;
 
-            service::Introduction intro;
+            service::Introduction intro_old;
+
+            ClientIntro intro;
 
             std::chrono::milliseconds buildStarted = 0s;
 

@@ -89,6 +89,8 @@ namespace llarp
             uint64_t key_n,
             const AlignedBuffer<32>* hash = nullptr);
 
+        Ed25519Hash derive_private_subkey(const Ed25519SecretKey& root);
+
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);
 

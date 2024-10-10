@@ -144,7 +144,7 @@ namespace llarp
 
         std::set<fs::path> auth_files;
 
-        std::vector<llarp::dns::SRVData> srv_records;
+        std::unordered_set<llarp::dns::SRVData> srv_records;
 
         std::optional<std::chrono::milliseconds> path_alignment_timeout;
 

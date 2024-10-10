@@ -1,6 +1,6 @@
 #include "session.hpp"
 
-#include <llarp/link/contacts.hpp>
+#include <llarp/contact/contactdb.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
 #include <llarp/router/router.hpp>
@@ -47,9 +47,6 @@ namespace llarp::handlers
     {
         auto net_config = _router.config()->network;
 
-        if (net_config.is_reachable)
-            should_publish_introset = true;
-
         _is_exit_node = _router.is_exit_node();
         _is_snode_service = _router.is_service_node();
 
@@ -58,12 +55,12 @@ namespace llarp::handlers
             assert(not _is_snode_service);
 
             _exit_policy = net_config.traffic_policy;
-            _local_introset.exit_policy = _exit_policy;
-            _local_cc.exit_policy = _exit_policy;
+            // _local_cc.exit_policy = _exit_policy; // TESTNET:
         }
 
-        if (not net_config.srv_records.empty())
-            _local_introset.SRVs = std::move(net_config.srv_records);
+        if (not net_config.srv_records.empty())  // TESTNET:
+            _srv_records.merge(net_config.srv_records);
+        //     _local_cc.SRVs = std::move(net_config.srv_records);
 
         if (use_tokens = not net_config.auth_static_tokens.empty(); use_tokens)
             _static_auth_tokens.merge(net_config.auth_static_tokens);
@@ -88,6 +85,23 @@ namespace llarp::handlers
         {
             _auth_tokens.merge(net_config.exit_auths);
         }
+
+        uint16_t protoflags = protocol_flag::TCP2QUIC;
+
+        if (_router.using_tun_if())
+            protoflags |= _is_v4 ? protocol_flag::IPV4 : protocol_flag::IPV6;
+
+        if (_is_exit_node)
+            protoflags |= protocol_flag::EXIT;
+
+        client_contact =
+            ClientContact::generate(_router.key_manager()->derive_subkey(), _srv_records, protoflags, _exit_policy);
+
+        should_publish_cc = net_config.is_reachable;
+
+        if (should_publish_cc)
+        {
+        }
     }
 
     void SessionEndpoint::build_more(size_t n)
@@ -109,16 +123,25 @@ namespace llarp::handlers
 
     void SessionEndpoint::srv_records_changed()
     {
-        // TODO: Investigate the usage or the term exit RE: service nodes acting as exits
-        // ^^ lol
-        _local_introset.SRVs.clear();
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        update_and_publish_localcc(get_current_client_intros(), _srv_records);
+    }
 
-        for (const auto& srv : srv_records())
+    void SessionEndpoint::start_tickers()
+    {
+        if (should_publish_cc)
         {
-            _local_introset.SRVs.emplace_back(srv);
+            log::debug(logcat, "Starting ClientContact publish ticker...");
+            _cc_publisher = _router.loop()->call_every(
+                path::DEFAULT_LIFETIME,
+                [this]() {
+                    log::info(logcat, "Updating and publishing ClientContact...");
+                    update_and_publish_localcc(get_current_client_intros());
+                },
+                true);
         }
-
-        regen_and_publish_introset();
+        else
+            log::debug(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
     }
 
     void SessionEndpoint::resolve_ons_mappings()
@@ -228,7 +251,7 @@ namespace llarp::handlers
     void SessionEndpoint::lookup_intro(
         RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSetOld>)> func)
     {
-        if (auto maybe_intro = _router.contacts().get_decrypted_introset(remote))
+        if (auto maybe_intro = _router.contact_db().get_decrypted_introset(remote))
         {
             log::debug(logcat, "Decrypted introset for remote (rid:{}) found locally~", remote);
             return func(std::move(maybe_intro));
@@ -237,12 +260,12 @@ namespace llarp::handlers
         log::debug(logcat, "Looking up introset for remote (rid:{})", remote);
         auto remote_key = dht::Key_t::derive_from_rid(remote);
 
-        auto response_handler = [this, remote, hook = std::move(func)](std::string response) {
+        auto response_handler = [this, remote, hook = std::move(func)](std::string response) mutable {
             if (auto encrypted = service::EncryptedIntroSet::construct(response);
                 auto intro = encrypted->decrypt(remote))
             {
                 log::debug(logcat, "Storing introset for remote (rid:{})", remote);
-                _router.contacts().put_intro(std::move(*encrypted));
+                _router.contact_db().put_intro(std::move(*encrypted));
                 return hook(std::move(intro));
             }
 
@@ -277,6 +300,29 @@ namespace llarp::handlers
         }
     }
 
+    void SessionEndpoint::_localcc_update_fail()
+    {
+        log::warning(
+            logcat,
+            "Failed to query enough client introductions from current paths! Building more paths to publish "
+            "introset");
+        return build_more(1);
+    }
+
+    void SessionEndpoint::update_and_publish_localcc(intro_set intros)
+    {
+        if (intros.empty())
+            return _localcc_update_fail();
+        client_contact.regenerate(std::move(intros));
+        _update_and_publish_localcc();
+    }
+
+    void SessionEndpoint::_update_and_publish_localcc()
+    {
+        // TESTNET: TODO: encrypt and sign
+        
+    }
+
     /** Introset publishing:
         - When a local service or exit node publishes an introset, it is also sent along the path currently used
             for that session
@@ -285,21 +331,6 @@ namespace llarp::handlers
     void SessionEndpoint::regen_and_publish_introset()
     {
         const auto now = llarp::time_now_ms();
-        _last_introset_regen_attempt = now;
-
-        // service::IntroductionSet path_intros;
-
-        // if (auto maybe_intros = get_path_intros_conditional([now](const service::Introduction& intro) -> bool {
-        //         return not intro.expires_soon(path::INTRO_STALE_THRESHOLD, now);
-        //     }))
-        // {
-        //     path_intros.merge(*maybe_intros);
-        // }
-        // else
-        // {
-        //     log::warning(logcat, "Failed to get enough valid path introductions to publish introset!");
-        //     return build_more(1);
-        // }
 
         service::intro_que_old _path_intros = get_recent_path_intros();
 
@@ -314,11 +345,11 @@ namespace llarp::handlers
 
         if (_router.using_tun_if())
         {
-            intro_protos.push_back(_is_v4 ? service::ProtocolType::TrafficV4 : service::ProtocolType::TrafficV6);
+            intro_protos.push_back(_is_v4 ? service::ProtocolType::IPV4 : service::ProtocolType::IPV6);
 
             if (_is_exit_node)
             {
-                intro_protos.push_back(service::ProtocolType::Exit);
+                intro_protos.push_back(service::ProtocolType::EXIT);
                 _local_introset.exit_policy = _exit_policy;
                 _local_introset._routed_ranges = _routed_ranges;
             }

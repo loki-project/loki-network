@@ -112,13 +112,8 @@ namespace llarp::service
 
     std::string EncryptedIntroSet::to_string() const
     {
-        return fmt::format(
-            "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]",
-            derived_signing_key,
-            nonce,
-            signed_at.count(),
-            introset_payload.size(),
-            sig);
+        return "[EncIntroSet d={} n={} s={} x=[{} bytes] z={}]"_format(
+            derived_signing_key, nonce, signed_at.count(), introset_payload.size(), sig);
     }
 
     std::optional<IntroSetOld> EncryptedIntroSet::decrypt(const PubKey& root) const
