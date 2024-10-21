@@ -114,6 +114,7 @@ namespace llarp::path
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
     }
 
+    // TESTNET: TONUKE:
     bool Path::find_intro(
         const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
     {
@@ -121,6 +122,7 @@ namespace llarp::path
             "find_intro", FindIntroMessage::serialize(location, is_relayed, order), std::move(func));
     }
 
+    // TESTNET: TONUKE:
     bool Path::publish_intro(
         const service::EncryptedIntroSet& introset,
         bool is_relayed,
@@ -129,6 +131,20 @@ namespace llarp::path
     {
         return send_path_control_message(
             "publish_intro", PublishIntroMessage::serialize(introset, is_relayed, order), std::move(func));
+    }
+
+    bool Path::find_client_contact(
+        const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
+    {
+        return send_path_control_message(
+            "find_cc", FindClientContact::serialize(location, order, is_relayed), std::move(func));
+    }
+
+    bool Path::publish_client_contact(
+        const EncryptedClientContact& ecc, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
+    {
+        return send_path_control_message(
+            "publish_cc", PublishClientContact::serialize(ecc, order, is_relayed), std::move(func));
     }
 
     bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)

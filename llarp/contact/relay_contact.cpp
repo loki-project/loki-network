@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:llarp/contact/router_contact.cpp
-#include "router_contact.hpp"
-========
 #include "relay_contact.hpp"
->>>>>>>> a41903e54 ((WIP, squash) contact library, re-org):llarp/contact/relay_contact.cpp
 
 #include <oxenc/bt_serialize.h>
 
@@ -38,7 +34,7 @@ namespace llarp
 
     void RelayContact::bt_load(oxenc::bt_dict_consumer& btdc)
     {
-        if (int rc_ver = btdc.require<uint8_t>(""); rc_ver != VERSION)
+        if (int rc_ver = btdc.require<uint8_t>(""); rc_ver != RelayContact::VERSION)
             throw std::runtime_error{"Invalid RC: do not know how to parse v{} RCs"_format(rc_ver)};
 
         auto ipv4_port = btdc.require<std::string_view>("4");

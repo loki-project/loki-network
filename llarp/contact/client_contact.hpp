@@ -5,6 +5,7 @@
 
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
+#include <llarp/dht/key.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/net/traffic_policy.hpp>
@@ -46,41 +47,61 @@ namespace llarp
         TCP2QUIC = 1 << 5,
     };
 
+    /** TODO:
+            - LocalCC
+                - holds the derived Ed25519PrivateData
+            - RemoteCC:
+
+     */
+
     /** ClientContact
         On the wire we encode the data as a dict containing:
             - "" : the CC format version, which must be == ClientContact::VERSION to be parsed successfully
             - "a" : public key of the remote client instance
+            - "e" : (optional) exit policy containing sublists of accepted protocols and routed IP ranges
             - "i" : list of client introductions corresponding to the different pivots through which paths can be built
                     to the client instance
             - "p" : supported protocols indicating the traffic accepted by the client instance; this indicates if the
                     client is embedded and therefore requires a tunneled connection. Serialized as a bitwise flag of
                     above protocol_flag enums
-            - "s" : SRV records for lokinet DNS lookup
+            - "s" : (optional) SRV records for lokinet DNS lookup
     */
     struct ClientContact
     {
+        friend struct EncryptedClientContact;
         friend class handlers::SessionEndpoint;
 
         inline static constexpr uint8_t CC_VERSION{0};
         inline static constexpr size_t MAX_CC_SIZE{4096};
 
+        ~ClientContact() = default;
+
       protected:
         ClientContact() = default;
-        ClientContact(std::string_view buf);
+        ClientContact(std::string&& buf);
 
         ClientContact(
-            Ed25519Hash pk,
+            Ed25519PrivateData private_data,
+            PubKey pk,
             const std::unordered_set<dns::SRVData>& srvs,
             uint16_t proto_flags,
             std::optional<net::ExitPolicy> policy = std::nullopt);
 
+        /** Parameters:
+            - `private_data` : derived private subkey data
+            - `pubkey` : master identity key pubkey
+            - `srvs` : SRV records (optional, can be empty)
+            - `proto_flags` : client-supported protocols
+            - `policy` : exit-related traffic policy (optional)
+         */
         static ClientContact generate(
-            Ed25519Hash&& pk,
+            Ed25519PrivateData&& private_data,
+            PubKey&& pubkey,
             const std::unordered_set<dns::SRVData>& srvs,
             uint16_t proto_flags,
             std::optional<net::ExitPolicy> policy = std::nullopt);
 
-        EncryptedClientContact encrypt_and_sign();
+        EncryptedClientContact encrypt_and_sign() const;
 
         template <typename... Opt>
         void regenerate(intro_set iset, Opt&&... args)
@@ -95,9 +116,7 @@ namespace llarp
             _regenerate();
         }
 
-        ~ClientContact() = default;
-
-        Ed25519Hash derived_privatekey;
+        Ed25519PrivateData derived_privatekey;
 
         PubKey pubkey;
 
@@ -114,7 +133,7 @@ namespace llarp
 
         void bt_encode(std::vector<unsigned char>& buf) const;
 
-        void bt_encode(oxenc::bt_dict_producer&& btdp) const;
+        size_t bt_encode(oxenc::bt_dict_producer&& btdp) const;
 
         // Throws like a MF (for now)
         void bt_decode(std::string_view buf);
@@ -135,38 +154,46 @@ namespace llarp
     };
 
     /** EncryptedClientContact
-            "i" blinded local routerID
+            "i" blinded local PubKey (routerID)
             "n" nounce
             "t" signing time
             "x" encrypted payload
-            "~" signature
+            "~" signature   (signed with blinded derived scalar `b`)
     */
     struct EncryptedClientContact
     {
         friend struct dht::CCNode;
         friend struct ClientContact;
 
-      protected:
         EncryptedClientContact() : nonce{SymmNonce::make_random()}, encrypted(ClientContact::MAX_CC_SIZE) {}
-
-        static EncryptedClientContact construct();
 
         static EncryptedClientContact deserialize(std::string_view buf);
 
-        //   protected:
+      protected:
         explicit EncryptedClientContact(std::string_view buf);
 
         PubKey blinded_pubkey;
         SymmNonce nonce;
         std::chrono::milliseconds signed_at{0s};
         std::vector<unsigned char> encrypted;
-        Signature sig;
+        Signature sig{};
 
-        void bt_encode(oxenc::bt_dict_producer&& btdp) const;
+        std::string _bt_payload;
+
+        // Does not encode signature, meant to be called prior to signing
+        void bt_encode(oxenc::bt_dict_producer& btdp) const;
 
         void bt_decode(oxenc::bt_dict_consumer&& btdc);
 
       public:
+        dht::Key_t key() const { return dht::Key_t{blinded_pubkey.data()}; }
+
+        std::optional<ClientContact> decrypt(const PubKey& root);
+
+        std::string_view bt_payload() const { return _bt_payload; }
+
+        bool verify() const;
+
         bool is_expired(std::chrono::milliseconds now = time_now_ms()) const;
     };
 }  //  namespace llarp

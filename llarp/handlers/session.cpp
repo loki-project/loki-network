@@ -94,13 +94,20 @@ namespace llarp::handlers
         if (_is_exit_node)
             protoflags |= protocol_flag::EXIT;
 
-        client_contact =
-            ClientContact::generate(_router.key_manager()->derive_subkey(), _srv_records, protoflags, _exit_policy);
+        auto& key_manager = _router.key_manager();
+
+        client_contact = ClientContact::generate(
+            key_manager->derive_subkey(),
+            key_manager->identity_data.to_pubkey(),
+            _srv_records,
+            protoflags,
+            _exit_policy);
 
         should_publish_cc = net_config.is_reachable;
 
         if (should_publish_cc)
         {
+            //
         }
     }
 
@@ -248,17 +255,71 @@ namespace llarp::handlers
         }
     }
 
+    void SessionEndpoint::lookup_client_intro(
+        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<ClientContact>)> func)
+    {
+        auto remote_key = dht::Key_t::derive_from_rid(remote);
+
+        if (auto maybe_intro = _router.contact_db().get_decrypted_cc(remote))
+        {
+            log::info(logcat, "Decrypted clientcontact for remote (rid: {}) found locally!", remote);
+            return func(std::move(maybe_intro));
+        }
+
+        log::debug(logcat, "Looking up clientcontact for remote (rid:{})", remote);
+
+        auto response_handler = [this, remote, hook = std::move(func)](std::string response) mutable {
+            try
+            {
+                auto enc = EncryptedClientContact::deserialize(response);
+
+                if (auto intro = enc.decrypt(remote))
+                {
+                    log::info(logcat, "Storing ClientContact for remote rid:{}", remote);
+                    _router.contact_db().put_cc(std::move(enc));
+                    return hook(std::move(intro));
+                }
+
+                oxenc::bt_dict_consumer btdc{response};
+                auto s = btdc.maybe<std::string_view>(messages::STATUS_KEY);
+
+                log::warning(logcat, "Call to `find_cc` failed -- status: {}", s.value_or("< NONE GIVEN >"));
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught parsing FindClientContact response: {}", e.what());
+            }
+
+            hook(std::nullopt);
+        };
+
+        {
+            Lock_t l{paths_mutex};
+
+            for (const auto& [rid, path] : _paths)
+            {
+                log::debug(
+                    logcat,
+                    "Querying pivot (rid:{}) for clientcontact lookup target (rid:{})",
+                    path->pivot_rid(),
+                    remote);
+                path->find_client_contact(remote_key, is_relayed, order, response_handler);
+            }
+        }
+    }
+
     void SessionEndpoint::lookup_intro(
         RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSetOld>)> func)
     {
+        auto remote_key = dht::Key_t::derive_from_rid(remote);
+
         if (auto maybe_intro = _router.contact_db().get_decrypted_introset(remote))
         {
-            log::debug(logcat, "Decrypted introset for remote (rid:{}) found locally~", remote);
+            log::debug(logcat, "Decrypted introset for remote (rid:{}) found locally", remote);
             return func(std::move(maybe_intro));
         }
 
         log::debug(logcat, "Looking up introset for remote (rid:{})", remote);
-        auto remote_key = dht::Key_t::derive_from_rid(remote);
 
         auto response_handler = [this, remote, hook = std::move(func)](std::string response) mutable {
             if (auto encrypted = service::EncryptedIntroSet::construct(response);
@@ -319,15 +380,25 @@ namespace llarp::handlers
 
     void SessionEndpoint::_update_and_publish_localcc()
     {
-        // TESTNET: TODO: encrypt and sign
-        
+        try
+        {
+            auto enc = client_contact.encrypt_and_sign();
+
+            if (publish_client_contact(enc))
+                log::debug(logcat, "Successfully republished updated EncryptedClientContact!");
+            else
+                log::warning(logcat, "Failed to republish updated EncryptedClientContact!");
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "ClientContact encryption/signing exception: {}", e.what());
+        }
     }
 
     /** Introset publishing:
         - When a local service or exit node publishes an introset, it is also sent along the path currently used
             for that session
     */
-    // TODO: this
     void SessionEndpoint::regen_and_publish_introset()
     {
         const auto now = llarp::time_now_ms();
@@ -375,9 +446,7 @@ namespace llarp::handlers
         if (auto maybe_encrypted = _identity.encrypt_and_sign_introset(_local_introset, now))
         {
             if (publish_introset(*maybe_encrypted))
-            {
                 log::debug(logcat, "Successfully republished encrypted introset");
-            }
             else
                 log::warning(logcat, "Failed to republish encrypted introset!");
         }
@@ -437,6 +506,24 @@ namespace llarp::handlers
         {
             log::info(logcat, "{} Connecting to TCP backend to route session traffic...", msg);
             // session->tcp_backend_connect();
+        }
+
+        return ret;
+    }
+
+    bool SessionEndpoint::publish_client_contact(const EncryptedClientContact& ecc)
+    {
+        bool ret{true};
+
+        {
+            Lock_t l{paths_mutex};
+
+            for (const auto& [rid, path] : _paths)
+            {
+                log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
+
+                ret += path->publish_client_contact(ecc, true);
+            }
         }
 
         return ret;
@@ -608,6 +695,8 @@ namespace llarp::handlers
             throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
 
         auto counter = std::make_shared<size_t>(path::DEFAULT_PATHS_HELD);
+
+        // TESTNET: TODO:
 
         _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() mutable {
             lookup_intro(

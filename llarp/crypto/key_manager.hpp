@@ -43,16 +43,17 @@ namespace llarp
         static std::shared_ptr<KeyManager> make(const Config& config, bool is_relay);
 
         Ed25519SecretKey identity_key;
+        Ed25519PrivateData identity_data;
         RouterID public_key;
 
         fs::path rc_path;
 
         void update_idkey(Ed25519SecretKey&& newkey);
 
-        Ed25519Hash derive_subkey() const;
+        Ed25519PrivateData derive_subkey(uint64_t domain = 1) const;
 
       public:
-        //
+        void encrypt(uint8_t* buf, size_t size);
 
         const RouterID& router_id() const { return public_key; }
     };

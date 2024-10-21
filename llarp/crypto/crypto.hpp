@@ -52,13 +52,12 @@ namespace llarp
         bool sign(uint8_t* sig, const Ed25519SecretKey& sk, ustring_view buf);
 
         /// ed25519 sign (custom with derived keys)
-        bool sign(Signature&, const Ed25519Hash&, uint8_t* buf, size_t size);
+        bool sign(Signature&, const Ed25519PrivateData&, const uint8_t* buf, size_t size);
 
         /// ed25519 verify
         bool verify(const PubKey&, ustring_view, ustring_view);
-        bool verify(const PubKey&, uint8_t*, size_t, const Signature&);
+        bool verify(const PubKey&, const uint8_t*, size_t, const Signature&);
         bool verify(ustring_view, ustring_view, ustring_view);
-        bool verify(uint8_t*, uint8_t*, size_t, uint8_t*);
 
         /// Used in path-build and session initiation messages. Derives a shared secret key for symmetric DH, encrypting
         /// the given payload in-place. Will throw on failure of either the client DH derivation or the xchacha20
@@ -76,6 +75,8 @@ namespace llarp
         void derive_decrypt_outer_wrapping(
             const Ed25519SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
 
+        bool make_scalar(AlignedBuffer<32>& out, const PubKey& k, uint64_t i);
+
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
         bool derive_subkey(
@@ -84,12 +85,10 @@ namespace llarp
         /// derive sub keys for private keys.  hash is really only intended for
         /// testing ands key_n if given.
         bool derive_subkey_private(
-            Ed25519Hash& derived,
+            Ed25519PrivateData& derived,
             const Ed25519SecretKey& root,
             uint64_t key_n,
             const AlignedBuffer<32>* hash = nullptr);
-
-        Ed25519Hash derive_private_subkey(const Ed25519SecretKey& root);
 
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);

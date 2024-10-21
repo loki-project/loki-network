@@ -1128,6 +1128,100 @@ namespace llarp
         }
     }
 
+    void LinkManager::handle_publish_cc(std::string_view body, std::function<void(std::string)> respond)
+    {
+        EncryptedClientContact enc;
+        bool is_relayed;
+        uint64_t relay_order;
+
+        try
+        {
+            std::tie(enc, relay_order, is_relayed) = PublishClientContact::deserialize(body);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return respond(messages::ERROR_RESPONSE);
+        }
+
+        if (enc.is_expired())
+        {
+            log::warning(logcat, "Received expired EncryptedClientContact!");
+            return respond(PublishClientContact::EXPIRED);
+        }
+
+        if (not enc.verify())
+        {
+            log::warning(logcat, "Received invalid EncryptedClientContact!");
+            return respond(PublishClientContact::INVALID);
+        }
+
+        auto dht_key = enc.key();
+        auto local_rid = _router.router_id();
+
+        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+
+        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
+        {
+            log::warning(logcat, "Received PublishClientContact message but only know {} nodes?", closest_rcs.size());
+            return respond(PublishClientContact::INSUFFICIENT);
+        }
+
+        if (is_relayed)
+        {
+            if (is_relayed >= path::DEFAULT_PATHS_HELD)
+            {
+                log::error(logcat, "Received PublishClientContact with invalid relay order: {}", relay_order);
+                return respond(PublishClientContact::INVALID_ORDER);
+            }
+
+            log::debug(logcat, "Relaying EncryptedClientContact for {}", dht_key);
+
+            const auto& peer_key = closest_rcs[relay_order].router_id();
+
+            if (peer_key == local_rid)
+            {
+                log::info(
+                    logcat,
+                    "Received PublishClientContact for which we are index {}... storing client contact...",
+                    relay_order);
+                _router.contact_db().put_cc(std::move(enc));
+                return respond(messages::OK_RESPONSE);
+            }
+
+            log::info(logcat, "Received PublishClientContact; propagating to peer index {}...", relay_order);
+
+            send_control_message(
+                peer_key,
+                "publish_cc",
+                PublishClientContact::serialize(std::move(enc), relay_order, is_relayed),
+                [respond = std::move(respond)](oxen::quic::message m) mutable {
+                    if (m.timed_out)
+                        return;  // drop; requester will already have timed out
+                    respond(m.body_str());
+                });
+        }
+        else
+        {
+            for (auto& rc : closest_rcs)
+            {
+                if (rc.router_id() == local_rid)
+                {
+                    log::info(
+                        logcat,
+                        "Received PublishClientContact for {}; we are candidate {}; accepting...",
+                        dht_key,
+                        relay_order);
+                    _router.contact_db().put_cc(std::move(enc));
+                    return respond(messages::OK_RESPONSE);
+                }
+            }
+
+            log::warning(logcat, "Received non-relayed PublishClientContact from {}; we are not a candidate", dht_key);
+        }
+    }
+
+    // TONUKE: this
     void LinkManager::handle_publish_intro(std::string_view body, std::function<void(std::string)> respond)
     {
         service::EncryptedIntroSet enc;
@@ -1174,7 +1268,7 @@ namespace llarp
         {
             if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
-                log::error(logcat, "Received PublishIntroMessage with invalide relay order: {}", relay_order);
+                log::error(logcat, "Received PublishIntroMessage with invalid relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_ORDER}}));
                 return;
             }
@@ -1235,57 +1329,69 @@ namespace llarp
             log::warning(logcat, "Received non-relayed PublishIntroMessage from {}; we are not the candidate", addr);
     }
 
-    // DISCUSS: I feel like ::handle_publish_intro_response should be the callback that handles the
-    // response to a relayed publish_intro (above line 1131-ish)
-
-    void LinkManager::handle_publish_intro_response(oxen::quic::message m)
+    void LinkManager::handle_find_cc(std::string_view body, std::function<void(std::string)> respond)
     {
-        if (m.timed_out)
-        {
-            log::info(logcat, "PublishIntroMessage timed out!");
-            return;
-        }
-
-        std::string payload;
+        dht::Key_t dht_key;
+        bool is_relayed;
+        uint64_t relay_order;
 
         try
         {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            payload = btdc.require<std::string>(messages::STATUS_KEY);
+            std::tie(dht_key, relay_order, is_relayed) = FindClientContact::deserialize(body);
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            return;
+            return respond(messages::ERROR_RESPONSE);
         }
 
-        if (m)
+        auto local_rid = _router.router_id();
+
+        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+
+        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
         {
-            // DISCUSS: not sure what to do on success of a publish intro command?
+            log::warning(logcat, "Received FindClientContact message but only know {} nodes?", closest_rcs.size());
+            return respond(FindClientContact::INSUFFICIENT);
+        }
+
+        if (is_relayed)
+        {
+            if (is_relayed >= path::DEFAULT_PATHS_HELD)
+            {
+                log::error(logcat, "Received FindClientContact with invalid relay order: {}", relay_order);
+                return respond(FindClientContact::INVALID_ORDER);
+            }
+
+            log::debug(logcat, "Relaying FindClientContactMessage for {}", dht_key);
+
+            const auto& peer_key = closest_rcs[relay_order].router_id();
+
+            send_control_message(
+                peer_key,
+                "find_cc",
+                FindClientContact::serialize(dht_key, relay_order, is_relayed),
+                [respond = std::move(respond)](oxen::quic::message m) mutable {
+                    if (m)
+                        log::info(logcat, "Relayed FindClientContact returned successful! Relaying response...");
+                    else if (m.timed_out)
+                        log::info(logcat, "Relayed FindClientContact timed out! Relaying response...");
+                    else
+                        log::info(logcat, "Relayed FindClientContact failed! Relaying response...");
+
+                    respond(m.body_str());
+                });
         }
         else
         {
-            if (payload == "ERROR")
+            if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
             {
-                log::info(logcat, "PublishIntroMessage failed with remote exception!");
-                // Do something smart here probably
-                return;
+                log::info(logcat, "Received non-relayed FindClientContact; returning local EncryptedClientContact...");
+                return respond(FindClientContact::serialize_response(maybe_cc->bt_payload()));
             }
 
-            log::info(logcat, "PublishIntroMessage failed with error code: {}", payload);
-
-            if (payload == PublishIntroMessage::INVALID_INTROSET)
-            {
-            }
-            else if (payload == PublishIntroMessage::EXPIRED)
-            {
-            }
-            else if (payload == PublishIntroMessage::INSUFFICIENT)
-            {
-            }
-            else if (payload == PublishIntroMessage::INVALID_ORDER)
-            {
-            }
+            log::warning(logcat, "Received non-relayed FindClientContact; no local EncryptedClientContact found...");
+            return respond(FindClientContact::NOT_FOUND);
         }
     }
 
@@ -1311,21 +1417,21 @@ namespace llarp
 
         const auto addr = dht::Key_t{location.data()};
 
+        auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
+
+        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
+        {
+            log::error(logcat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
+            respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INSUFFICIENT_NODES}}));
+            return;
+        }
+
         if (is_relayed)
         {
             if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
                 log::warning(logcat, "Received FindIntroMessage with invalid relay order: {}", relay_order);
                 respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INVALID_ORDER}}));
-                return;
-            }
-
-            auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
-
-            if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
-            {
-                log::error(logcat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
-                respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INSUFFICIENT_NODES}}));
                 return;
             }
 

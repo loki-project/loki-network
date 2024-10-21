@@ -102,13 +102,24 @@ namespace llarp
 
             bool resolve_ons(std::string name, std::function<void(std::string)> func = nullptr);
 
-            bool find_intro(
+            bool find_client_contact(
+                const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
+
+            bool publish_client_contact(
+                const EncryptedClientContact& ecc,
+                bool is_relayed = false,
+                uint64_t order = 0,
+                std::function<void(std::string)> func = nullptr);
+
+            // TESTNET: // TONUKE:
+            [[deprecated]] bool find_intro(
                 const dht::Key_t& location,
                 bool is_relayed = false,
                 uint64_t order = 0,
                 std::function<void(std::string)> func = nullptr);
 
-            bool publish_intro(
+            // TESTNET: // TONUKE:
+            [[deprecated]] bool publish_intro(
                 const service::EncryptedIntroSet& introset,
                 bool is_relayed = false,
                 uint64_t order = 0,

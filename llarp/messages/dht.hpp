@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/service/intro_set.hpp>
 
 namespace llarp
@@ -67,6 +68,108 @@ namespace llarp
             return std::move(btdp).str();
         }
     }  // namespace FindNameMessage
+
+    namespace FindClientContact
+    {
+        inline const auto NOT_FOUND = messages::serialize_response({{messages::STATUS_KEY, "NOT FOUND"}});
+        inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
+        inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
+
+        inline static std::string serialize(const dht::Key_t& location, uint64_t relay_order, bool is_relayed)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            try
+            {
+                btdp.append("c", location.to_view());
+                btdp.append("o", relay_order);
+                btdp.append("r", is_relayed);
+            }
+            catch (...)
+            {
+                log::error(messages::logcat, "Error: failed to serialize PublishClientContact contents!");
+            }
+
+            return std::move(btdp).str();
+        }
+
+        inline static std::string serialize_response(std::string_view encrypted_payload)
+        {
+            return messages::serialize_response({{"ECC", encrypted_payload}});
+        }
+
+        inline static std::tuple<dht::Key_t, uint64_t, bool> deserialize(std::string_view buf)
+        {
+            dht::Key_t key;
+            bool is_relayed;
+            uint64_t relay_order;
+
+            try
+            {
+                oxenc::bt_dict_consumer btdc{buf};
+                key.from_string(btdc.require<std::string_view>("c"));
+                is_relayed = btdc.require<bool>("o");
+                relay_order = btdc.require<uint64_t>("r");
+            }
+            catch (const std::exception& e)
+            {
+                log::error(
+                    messages::logcat, "Error: failed to deserialize PublishClientContact contents: {}", e.what());
+                throw;
+            }
+
+            return {key, relay_order, is_relayed};
+        }
+    }  //  namespace FindClientContact
+
+    namespace PublishClientContact
+    {
+        inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});
+        inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
+        inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
+        inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
+
+        inline static std::string serialize(const EncryptedClientContact& ecc, uint64_t relay_order, bool is_relayed)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            try
+            {
+                btdp.append("o", relay_order);
+                btdp.append("r", is_relayed);
+                btdp.append("x", ecc.bt_payload());
+            }
+            catch (...)
+            {
+                log::error(messages::logcat, "Error: failed to serialize PublishClientContact contents!");
+            }
+
+            return std::move(btdp).str();
+        }
+
+        inline static std::tuple<EncryptedClientContact, uint64_t, bool> deserialize(std::string_view buf)
+        {
+            EncryptedClientContact ecc;
+            bool is_relayed;
+            uint64_t relay_order;
+
+            try
+            {
+                oxenc::bt_dict_consumer btdc{buf};
+                is_relayed = btdc.require<bool>("o");
+                relay_order = btdc.require<uint64_t>("r");
+                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("x"));
+            }
+            catch (const std::exception& e)
+            {
+                log::error(
+                    messages::logcat, "Error: failed to deserialize PublishClientContact contents: {}", e.what());
+                throw;
+            }
+
+            return {std::move(ecc), relay_order, is_relayed};
+        }
+    }  // namespace PublishClientContact
 
     namespace PublishIntroMessage
     {

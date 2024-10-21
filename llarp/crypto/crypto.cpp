@@ -28,7 +28,7 @@ namespace llarp
         const PubKey& client_pk,
         const PubKey& server_pk,
         const uint8_t* themPub,
-        const Ed25519Hash& local_edhash)
+        const Ed25519PrivateData& local_edhash)
     {
         SharedSecret shared;
         crypto_generichash_state h;
@@ -57,7 +57,7 @@ namespace llarp
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk.to_edhash()))
+        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk.to_eddata()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -72,7 +72,7 @@ namespace llarp
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk.to_edhash()))
+        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk.to_eddata()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -177,7 +177,7 @@ namespace llarp
         return crypto_sign_detached(sig, nullptr, buf.data(), buf.size(), sk.data()) != -1;
     }
 
-    bool crypto::sign(Signature& sig, const Ed25519Hash& privkey, uint8_t* buf, size_t size)
+    bool crypto::sign(Signature& sig, const Ed25519PrivateData& privkey, const uint8_t* buf, size_t size)
     {
         PubKey pubkey = privkey.to_pubkey();
 
@@ -225,7 +225,7 @@ namespace llarp
             : false;
     }
 
-    bool crypto::verify(const PubKey& pub, uint8_t* buf, size_t size, const Signature& sig)
+    bool crypto::verify(const PubKey& pub, const uint8_t* buf, size_t size, const Signature& sig)
     {
         return crypto_sign_verify_detached(sig.data(), buf, size, pub.data()) != -1;
     }
@@ -235,11 +235,6 @@ namespace llarp
         return (pub.size() == 32 && sig.size() == 64)
             ? crypto_sign_verify_detached(sig.data(), buf.data(), buf.size(), pub.data()) != -1
             : false;
-    }
-
-    bool crypto::verify(uint8_t* pub, uint8_t* buf, size_t size, uint8_t* sig)
-    {
-        return crypto_sign_verify_detached(sig, buf, size, pub) != -1;
     }
 
     void crypto::derive_encrypt_outer_wrapping(
@@ -318,14 +313,13 @@ namespace llarp
         "can't in the and by be or then before so just face it this text hurts "
         "to read? lokinet yolo!";
 
-    template <typename K>
-    static bool make_scalar(AlignedBuffer<32>& out, const K& k, uint64_t i)
+    bool crypto::make_scalar(AlignedBuffer<32>& out, const PubKey& k, uint64_t i)
     {
         // b = BLIND-STRING || k || i
-        std::array<uint8_t, 160 + K::SIZE + sizeof(uint64_t)> buf;
+        std::array<uint8_t, 160 + PubKey::SIZE + sizeof(uint64_t)> buf;
         std::copy(derived_key_hash_str, derived_key_hash_str + 160, buf.begin());
         std::copy(k.begin(), k.end(), buf.begin() + 160);
-        oxenc::write_host_as_little(i, buf.data() + 160 + K::SIZE);
+        oxenc::write_host_as_little(i, buf.data() + 160 + PubKey::SIZE);
         // n = H(b)
         // h = make_point(n)
         ShortHash n;
@@ -352,7 +346,7 @@ namespace llarp
     }
 
     bool crypto::derive_subkey_private(
-        Ed25519Hash& out_key, const Ed25519SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
+        Ed25519PrivateData& out_key, const Ed25519SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
     {
         // Derives a private subkey from a root key.
         //
@@ -399,7 +393,7 @@ namespace llarp
         h[31] &= 63;
         h[31] |= 64;
 
-        Ed25519Hash a = root_key.to_edhash();
+        Ed25519PrivateData a = root_key.to_eddata();
 
         // a' = ha
         crypto_core_ed25519_scalar_mul(out_key.data(), h.data(), a.data());
@@ -411,34 +405,6 @@ namespace llarp
         return -1 != crypto_generichash_blake2b(out_key.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0);
 
         return true;
-    }
-
-    Ed25519Hash crypto::derive_private_subkey(const Ed25519SecretKey& root)
-    {
-        Ed25519Hash ret{};
-
-        AlignedBuffer<32> h;
-
-        if (not make_scalar(h, root.to_pubkey(), 1))
-            throw std::runtime_error{"Call to `make_scalar` failed in deriving private subkey!"};
-
-        h[0] &= 248;
-        h[31] &= 63;
-        h[31] |= 64;
-
-        Ed25519Hash a = root.to_edhash();
-
-        // a' = ha
-        crypto_core_ed25519_scalar_mul(ret.data(), h.data(), a.data());
-
-        // s' = H(h || s)
-        std::array<uint8_t, 64> buf;
-        std::copy(h.begin(), h.end(), buf.begin());
-        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
-        if (crypto_generichash_blake2b(ret.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0) == -1)
-            throw std::runtime_error{"Call to `crypto_generichash_blake2b` failed!"};
-
-        return ret;
     }
 
     void crypto::randomize(uint8_t* buf, size_t len)

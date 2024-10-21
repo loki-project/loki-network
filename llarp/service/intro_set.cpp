@@ -134,7 +134,7 @@ namespace llarp::service
         return now >= signed_at + path::DEFAULT_LIFETIME;
     }
 
-    bool EncryptedIntroSet::sign(const Ed25519Hash& k)
+    bool EncryptedIntroSet::sign(const Ed25519PrivateData& k)
     {
         signed_at = llarp::time_now_ms();
         derived_signing_key = k.to_pubkey();
@@ -158,20 +158,6 @@ namespace llarp::service
 
         auto bte = copy.bt_encode();
         return crypto::verify(derived_signing_key, reinterpret_cast<uint8_t*>(bte.data()), bte.size(), sig);
-    }
-
-    bool EncryptedIntroSet::verify(uint8_t* introset, size_t introset_size, uint8_t* key, uint8_t* sig)
-    {
-        return crypto::verify(key, introset, introset_size, sig);
-    }
-
-    bool EncryptedIntroSet::verify(std::string introset, std::string key, std::string sig)
-    {
-        return crypto::verify(
-            reinterpret_cast<uint8_t*>(key.data()),
-            reinterpret_cast<uint8_t*>(introset.data()),
-            introset.size(),
-            reinterpret_cast<uint8_t*>(sig.data()));
     }
 
     nlohmann::json IntroSetOld::ExtractStatus() const

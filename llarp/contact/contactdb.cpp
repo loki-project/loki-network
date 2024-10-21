@@ -10,28 +10,28 @@ namespace llarp
         _introset_nodes = std::make_unique<dht::Bucket<dht::ISNode>>(_local_key, llarp::randint);
     }
 
-    // std::optional<ClientContact> ContactDB::get_decrypted_cc(RouterID remote) const
-    // {
-    //     std::optional<ClientContact> ret = std::nullopt;
+    std::optional<ClientContact> ContactDB::get_decrypted_cc(RouterID remote) const
+    {
+        std::optional<ClientContact> ret = std::nullopt;
 
-    //     (void)remote;
-    //     // TESTNET: TODO: finish this after implementing CC encrypt/decrypt
+        if (auto enc = get_encrypted_cc(dht::Key_t::derive_from_rid(remote)))
+            ret = enc->decrypt(remote);
 
-    //     return ret;
-    // }
+        return ret;
+    }
 
-    // std::optional<EncryptedClientContact> ContactDB::get_encrypted_cc(const dht::Key_t& key) const
-    // {
-    //     std::optional<EncryptedClientContact> enc = std::nullopt;
+    std::optional<EncryptedClientContact> ContactDB::get_encrypted_cc(const dht::Key_t& key) const
+    {
+        std::optional<EncryptedClientContact> enc = std::nullopt;
 
-    //     auto& clientcontacts = _cc_nodes->nodes;
+        auto& clientcontacts = _cc_nodes->nodes;
 
-    //     if (auto itr = clientcontacts.find(key);
-    //         itr != clientcontacts.end() && not itr->second.client_contact.is_expired())
-    //         enc = itr->second.client_contact;
+        if (auto itr = clientcontacts.find(key);
+            itr != clientcontacts.end() && not itr->second.client_contact.is_expired())
+            enc = itr->second.client_contact;
 
-    //     return enc;
-    // }
+        return enc;
+    }
 
     std::optional<service::IntroSetOld> ContactDB::get_decrypted_introset(RouterID remote) const
     {
@@ -65,6 +65,11 @@ namespace llarp
     void ContactDB::put_intro(service::EncryptedIntroSet enc)
     {
         _introset_nodes->put_node(std::move(enc));
+    }
+
+    void ContactDB::put_cc(EncryptedClientContact enc)
+    {
+        _cc_nodes->put_node(enc);
     }
 
 }  //  namespace llarp

@@ -80,7 +80,6 @@ namespace llarp
         std::string name() const { return _pubkey.to_string(); }
 
         std::string to_string() const { return name().append(_tld); }
-
         static constexpr bool to_string_formattable{true};
     };
 

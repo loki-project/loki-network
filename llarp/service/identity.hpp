@@ -17,7 +17,7 @@ namespace llarp::service
     {
         Ed25519SecretKey _idkey;
         Ed25519SecretKey _enckey;
-        Ed25519Hash derivedSignKey;
+        Ed25519PrivateData derivedSignKey;
         uint64_t version = llarp::constants::proto_version;
 
         // public service info

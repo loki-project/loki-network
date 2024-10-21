@@ -121,6 +121,8 @@ namespace llarp
 
             void regen_and_publish_introset();
 
+            bool publish_client_contact(const EncryptedClientContact& ecc);
+
             bool publish_introset(const service::EncryptedIntroSet& introset);
 
             // SessionEndpoint can use either a whitelist or a static auth token list to  validate incomininbg requests
@@ -136,6 +138,13 @@ namespace llarp
             void lookup_remote_srv(
                 std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler);
 
+            void lookup_client_intro(
+                RouterID remote,
+                bool is_relayed,
+                uint64_t order,
+                std::function<void(std::optional<ClientContact>)> func);
+
+            // TESTNET: // TONUKE:
             void lookup_intro(
                 RouterID remote,
                 bool is_relayed,

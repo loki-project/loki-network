@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:llarp/contact/router_contact_remote.cpp
-#include "router_contact.hpp"
-========
 #include "relay_contact.hpp"
->>>>>>>> a41903e54 ((WIP, squash) contact library, re-org):llarp/contact/relay_contact_remote.cpp
 
 #include <oxenc/bt_serialize.h>
 

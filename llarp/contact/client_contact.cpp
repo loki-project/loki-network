@@ -5,29 +5,32 @@ namespace llarp
     static auto logcat = log::Cat("client-intro");
 
     ClientContact::ClientContact(
-        Ed25519Hash pk,
+        Ed25519PrivateData private_data,
+        PubKey pk,
         const std::unordered_set<dns::SRVData>& srvs,
         uint16_t proto_flags,
         std::optional<net::ExitPolicy> policy)
-        : derived_privatekey{std::move(pk)},
+        : derived_privatekey{std::move(private_data)},
+          pubkey{std::move(pk)},
           SRVs{srvs.begin(), srvs.end()},
           protos{proto_flags},
           exit_policy{std::move(policy)}
     {}
 
-    ClientContact::ClientContact(std::string_view buf)
+    ClientContact::ClientContact(std::string&& buf)
     {
-        bt_decode(buf);
+        bt_decode(oxenc::bt_dict_consumer{std::move(buf)});
     }
 
     ClientContact ClientContact::generate(
-        Ed25519Hash&& pk,
+        Ed25519PrivateData&& private_data,
+        PubKey&& pk,
         const std::unordered_set<dns::SRVData>& srvs,
         uint16_t proto_flags,
         std::optional<net::ExitPolicy> policy)
     {
         log::info(logcat, "Generating new ClientContact...");
-        return ClientContact{std::move(pk), srvs, proto_flags, std::move(policy)};
+        return ClientContact{std::move(private_data), std::move(pk), srvs, proto_flags, std::move(policy)};
     }
 
     void ClientContact::handle_updated_field(intro_set iset)
@@ -57,10 +60,10 @@ namespace llarp
 
     void ClientContact::bt_encode(std::vector<unsigned char>& buf) const
     {
-        bt_encode(oxenc::bt_dict_producer{reinterpret_cast<char*>(buf.data()), buf.size()});
+        buf.resize(bt_encode(oxenc::bt_dict_producer{reinterpret_cast<char*>(buf.data()), buf.size()}));
     }
 
-    void ClientContact::bt_encode(oxenc::bt_dict_producer&& btdp) const
+    size_t ClientContact::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
         btdp.append("a", pubkey.to_view());
 
@@ -82,20 +85,22 @@ namespace llarp
             for (auto& s : SRVs)
                 s.bt_encode(sublist.append_dict());
         }
+
+        return btdp.view().size();
     }
 
-    void ClientContact::bt_decode(std::string_view buf)
-    {
-        try
-        {
-            bt_decode(oxenc::bt_dict_consumer{buf});
-        }
-        catch (const std::exception& e)
-        {
-            log::critical(logcat, "ClientContact deserialization failed: {}", e.what());
-            throw;
-        }
-    }
+    // void ClientContact::bt_decode(std::string_view buf)
+    // {
+    //     try
+    //     {
+    //         bt_decode(oxenc::bt_dict_consumer{buf});
+    //     }
+    //     catch (const std::exception& e)
+    //     {
+    //         log::critical(logcat, "ClientContact deserialization failed: {}", e.what());
+    //         throw;
+    //     }
+    // }
 
     void ClientContact::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
@@ -117,7 +122,6 @@ namespace llarp
 
         protos = btdc.require<uint16_t>("p");
 
-        // ditto as above
         if (btdc.skip_until("s"))
         {
             auto sublist = btdc.consume_list_consumer();
@@ -133,20 +137,37 @@ namespace llarp
         return intros.rbegin()->is_expired(now);
     }
 
-    EncryptedClientContact ClientContact::encrypt_and_sign()
+    EncryptedClientContact ClientContact::encrypt_and_sign() const
     {
         EncryptedClientContact enc{};
-        
+
         try
         {
+            enc.blinded_pubkey = derived_privatekey.to_pubkey();
             bt_encode(enc.encrypted);
 
+            if (not crypto::xchacha20(enc.encrypted.data(), enc.encrypted.size(), pubkey.data(), enc.nonce.data()))
+                throw std::runtime_error{"Failed to encrypt ClientContact bt-payload!"};
+
+            enc.signed_at = llarp::time_now_ms();
+
+            oxenc::bt_dict_producer btdp;
+            enc.bt_encode(btdp);
+
+            auto view = btdp.view_for_signing<unsigned char>();
+
+            if (not crypto::sign(enc.sig, derived_privatekey, view.data(), view.size()))
+                throw std::runtime_error{"Failed to sign EncryptedClientContact payload!"};
+
+            btdp.append("~", enc.sig.to_view());
+
+            enc._bt_payload = std::move(btdp).str();
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception encrypting and signing client contact: {}", e.what());
+            throw;
         }
-        
 
         return enc;
     }
@@ -157,12 +178,12 @@ namespace llarp
         return EncryptedClientContact{buf};
     }
 
-    EncryptedClientContact::EncryptedClientContact(std::string_view buf)
+    EncryptedClientContact::EncryptedClientContact(std::string_view buf) : _bt_payload{buf}
     {
-        bt_decode(oxenc::bt_dict_consumer{buf});
+        bt_decode(oxenc::bt_dict_consumer{_bt_payload});
     }
 
-    void EncryptedClientContact::bt_encode(oxenc::bt_dict_producer&& btdp) const
+    void EncryptedClientContact::bt_encode(oxenc::bt_dict_producer& btdp) const
     {
         btdp.append("i", blinded_pubkey.to_view());
         btdp.append("n", nonce.to_view());
@@ -191,6 +212,27 @@ namespace llarp
             log::critical(logcat, "EncryptedClientContact deserialization failed: {}", e.what());
             throw;
         }
+    }
+
+    std::optional<ClientContact> EncryptedClientContact::decrypt(const PubKey& root)
+    {
+        std::optional<ClientContact> cc = std::nullopt;
+        std::string payload{_bt_payload};
+
+        if (crypto::xchacha20(
+                reinterpret_cast<unsigned char*>(payload.data()), payload.size(), root.data(), nonce.data()))
+        {
+            log::debug(logcat, "EncryptedClientContact decrypted successfully...");
+            cc = ClientContact{std::move(payload)};
+        }
+
+        return cc;
+    }
+
+    bool EncryptedClientContact::verify() const
+    {
+        return crypto::verify(
+            blinded_pubkey, reinterpret_cast<const unsigned char*>(_bt_payload.data()), _bt_payload.size(), sig);
     }
 
     bool EncryptedClientContact::is_expired(std::chrono::milliseconds now) const

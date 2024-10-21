@@ -257,6 +257,10 @@ namespace llarp
         void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay
         void handle_publish_intro(std::string_view body, std::function<void(std::string)> respond);  // relay
 
+        // TESTNET: // NEW CLIENT_CONTACT HANDLERS
+        void handle_find_cc(std::string_view body, std::function<void(std::string)> respond);
+        void handle_publish_cc(std::string_view body, std::function<void(std::string)> respond);
+
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
         void handle_path_latency(oxen::quic::message);                      // relay
@@ -294,7 +298,7 @@ namespace llarp
         // DHT responses
         void handle_resolve_ons_response(oxen::quic::message);
         void handle_find_intro_response(oxen::quic::message);
-        void handle_publish_intro_response(oxen::quic::message);
+        // void handle_publish_intro_response(oxen::quic::message);
 
         // Path responses
         void handle_path_latency_response(oxen::quic::message);

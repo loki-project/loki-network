@@ -1,10 +1,13 @@
 #include "types.hpp"
 
 #include <llarp/address/keys.hpp>
+#include <llarp/crypto/crypto.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>
 
 #include <oxenc/hex.h>
+#include <sodium/crypto_core_ed25519.h>
+#include <sodium/crypto_generichash.h>
 #include <sodium/crypto_hash_sha512.h>
 #include <sodium/crypto_scalarmult_ed25519.h>
 
@@ -41,15 +44,15 @@ namespace llarp
     bool Ed25519SecretKey::recalculate()
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-        Ed25519Hash key = to_edhash();
+        Ed25519PrivateData key = to_eddata();
         PubKey pubkey = key.to_pubkey();
         std::memcpy(data() + 32, pubkey.data(), 32);
         return true;
     }
 
-    Ed25519Hash Ed25519SecretKey::to_edhash() const
+    Ed25519PrivateData Ed25519SecretKey::to_eddata() const
     {
-        Ed25519Hash k;
+        Ed25519PrivateData k;
         unsigned char h[crypto_hash_sha512_BYTES];
         crypto_hash_sha512(h, data(), 32);
         h[0] &= 248;
@@ -59,7 +62,34 @@ namespace llarp
         return k;
     }
 
-    PubKey Ed25519Hash::to_pubkey() const
+    Ed25519PrivateData Ed25519SecretKey::derive_private_subkey_data(uint64_t domain) const
+    {
+        Ed25519PrivateData ret{};
+
+        AlignedBuffer<32> h;
+
+        if (not crypto::make_scalar(h, to_pubkey(), domain))
+            throw std::runtime_error{"Call to `make_scalar` failed in deriving private subkey!"};
+
+        h[0] &= 248;
+        h[31] &= 63;
+        h[31] |= 64;
+
+        auto a = to_eddata();
+
+        // a' = ha
+        crypto_core_ed25519_scalar_mul(ret.data(), h.data(), a.data());
+
+        // s' = H(h || s)
+        std::array<uint8_t, 64> buf;
+        std::copy(h.begin(), h.end(), buf.begin());
+        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
+        if (crypto_generichash_blake2b(ret.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0) == -1)
+            throw std::runtime_error{"Call to `crypto_generichash_blake2b` failed!"};
+        return ret;
+    }
+
+    PubKey Ed25519PrivateData::to_pubkey() const
     {
         PubKey p;
         crypto_scalarmult_ed25519_base_noclamp(p.data(), data());
