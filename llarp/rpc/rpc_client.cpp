@@ -165,20 +165,20 @@ namespace llarp::rpc
 
     void RPCClient::start_pings()
     {
-        constexpr auto PingInterval = 30s;
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto router = _router.lock();
         if (not router)
             return;
 
-        auto makePingRequest = router->loop()->make_caller([self = shared_from_this()]() {
+        log::info(logcat, "Starting RPCClient ping ticker...");
+        _ping_ticker = router->loop()->call_every(PING_INTERVAL, [this]() {
             // send a ping
-            PubKey pk{};
-            auto r = self->_router.lock();
+            auto r = _router.lock();
             if (not r)
                 return;  // router has gone away, maybe shutting down?
 
-            pk = r->local_rid();
+            auto pk = r->local_rid();
 
             nlohmann::json payload = {
                 {"pubkey_ed25519", oxenc::to_hex(pk.begin(), pk.end())},
@@ -187,33 +187,27 @@ namespace llarp::rpc
             if (auto err = r->OxendErrorState())
                 payload["error"] = *err;
 
-            self->request(
+            request(
                 "admin.lokinet_ping",
-                [](bool success, std::vector<std::string> data) {
-                    (void)data;
+                [](bool success, std::vector<std::string> /* data */) {
                     log::debug(logcat, "Received response for ping. Successful: {}", success);
                 },
                 payload.dump());
 
             // subscribe to block updates
-            self->request("sub.block", [](bool success, std::vector<std::string> data) {
+            request("sub.block", [](bool success, std::vector<std::string> data) {
                 if (data.empty() or not success)
-                {
                     log::error(logcat, "Failed to subscribe to new blocks");
-                    return;
-                }
-                log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
+                else
+                    log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
             });
+
             // Trigger an update on a regular timer as well in case we missed a block notify for
             // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
             // known hash so that the poll is very cheap (basically empty) if the block hasn't
             // advanced.
-            self->update_service_node_list();
+            update_service_node_list();
         });
-
-        // Fire one ping off right away to get things going.
-        makePingRequest();
-        m_lokiMQ->add_timer(std::move(makePingRequest), PingInterval);
     }
 
     void RPCClient::handle_new_service_node_list(const nlohmann::json& j)

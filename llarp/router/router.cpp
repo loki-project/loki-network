@@ -198,6 +198,7 @@ namespace llarp
 
         if (is_service_node())
         {
+            _rpc_client->start_pings();
             _link_manager->start_tickers();
 
             if (not _testing_disabled)
@@ -277,8 +278,6 @@ namespace llarp
                 {
                     _key_manager->update_idkey(rpc_client()->obtain_identity_key());
                     log::warning(logcat, "Obtained lokid identity key: {}", _key_manager->router_id());
-
-                    rpc_client()->start_pings();
                     break;
                 }
                 catch (const std::exception& e)
