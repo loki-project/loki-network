@@ -182,7 +182,7 @@ namespace llarp::path
     void PathHandler::reset_path_state()
     {
         build_interval_limit = PATH_BUILD_RATE;
-        _last_build = 0s;
+        last_build = 0s;
     }
 
     // called within the scope of locked mutex
@@ -267,40 +267,6 @@ namespace llarp::path
         return intros;
     }
 
-    service::intro_que_old PathHandler::get_recent_path_intros(std::chrono::milliseconds stale_threshold) const
-    {
-        Lock_t l{paths_mutex};
-        service::intro_que_old ret{};
-
-        for (const auto& [_, p] : _paths)
-        {
-            if (p->is_ready() and not p->intro_old.expires_soon(stale_threshold))
-                ret.push(p->intro_old);
-        }
-
-        return ret;
-    }
-
-    std::optional<service::IntroductionSet_old> PathHandler::get_path_intros_conditional(
-        std::function<bool(const service::Introduction&)> filter) const
-    {
-        service::IntroductionSet_old intros;
-        Lock_t l{paths_mutex};
-
-        for (const auto& p : _paths)
-        {
-            if (p.second->is_ready() and filter(p.second->intro_old))
-            {
-                intros.insert(p.second->intro_old);
-            }
-        }
-
-        if (intros.empty())
-            return std::nullopt;
-
-        return intros;
-    }
-
     void PathHandler::tick(std::chrono::milliseconds now)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -319,7 +285,7 @@ namespace llarp::path
 
         if (_build_stats.attempts > 50)
         {
-            if (_build_stats.SuccessRatio() <= BuildStats::MinGoodRatio && now - last_warn_time > 5s)
+            if (_build_stats.SuccessRatio() <= BuildStats::THRESHOLD && now - last_warn_time > 5s)
             {
                 log::warning(logcat, "Low path build success: {}", _build_stats);
                 last_warn_time = now;
@@ -406,7 +372,7 @@ namespace llarp::path
 
     bool PathHandler::build_cooldown() const
     {
-        return llarp::time_now_ms() < _last_build + build_interval_limit;
+        return llarp::time_now_ms() < last_build + build_interval_limit;
     }
 
     size_t PathHandler::should_build_more() const
@@ -532,7 +498,7 @@ namespace llarp::path
             return false;
         }
 
-        _last_build = llarp::time_now_ms();
+        last_build = llarp::time_now_ms();
         const auto& edge = hops[0].router_id();
         const auto& terminus = hops.back().router_id();
 

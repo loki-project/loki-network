@@ -3,9 +3,7 @@
 #include <llarp/address/ip_packet.hpp>
 #include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/net/ip.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/service/identity.hpp>
 #include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
@@ -167,25 +165,6 @@ namespace llarp::handlers
         bool obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4);
 
         void send_packet_to_net_if(IPPacket&& pkt);
-
-        template <typename Addr_t, typename Endpoint_t>
-        void send_dns_reply(
-            Addr_t addr,
-            Endpoint_t ctx,
-            std::shared_ptr<dns::Message> query,
-            std::function<void(dns::Message)> reply,
-            bool sendIPv6)
-        {
-            if (ctx)
-            {
-                huint128_t ip = get_ip_for_addr(addr);
-                query->answers.clear();
-                query->add_IN_reply(ip, sendIPv6);
-            }
-            else
-                query->add_nx_reply();
-            reply(*query);
-        }
     };
 
 }  // namespace llarp::handlers

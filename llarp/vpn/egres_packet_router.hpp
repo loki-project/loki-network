@@ -2,7 +2,6 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/address/ip_packet.hpp>
-#include <llarp/net/net_int.hpp>
 
 #include <functional>
 #include <unordered_map>

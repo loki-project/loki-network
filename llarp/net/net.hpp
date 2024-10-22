@@ -1,8 +1,6 @@
 #pragma once
 
-#include "interface_info.hpp"
 #include "net.h"
-#include "net_int.hpp"
 #include "uint128.hpp"
 
 #include <llarp/address/ip_range.hpp>
@@ -44,6 +42,29 @@ namespace llarp
 
     namespace net
     {
+
+        /// info about a network interface lokinet does not own
+        struct InterfaceInfo
+        {
+          private:
+          public:
+            // TODO: is this needed?
+            /// a gateway we can use if it exists
+            std::optional<ip_range_v> _gateway;
+
+            /// human readable name of interface
+            std::string name;
+            /// interface's index
+            int index;
+            /// the addresses owned by this interface
+            std::vector<IPRange> addrs;
+
+            std::string to_string() const
+            {
+                return "{} [ idx={}, addrs={}]"_format(name, index, fmt::join(addrs, ","));
+            }
+        };
+
         struct if_info
         {
             explicit if_info(int _af = AF_INET) : af{_af} {}

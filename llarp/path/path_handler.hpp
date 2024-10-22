@@ -4,7 +4,6 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/contact/client_intro.hpp>
-#include <llarp/service/intro.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
@@ -60,13 +59,13 @@ namespace llarp
         /// Stats about all our path builds
         struct BuildStats
         {
-            static constexpr double MinGoodRatio = 0.25;
+            static constexpr double THRESHOLD{0.25};
 
-            uint64_t attempts = 0;
-            uint64_t success = 0;
-            uint64_t build_fails = 0;  // path build failures
-            uint64_t path_fails = 0;   // path failures post-build
-            uint64_t timeouts = 0;
+            uint64_t attempts{};
+            uint64_t success{};
+            uint64_t build_fails{};  // path build failures
+            uint64_t path_fails{};   // path failures post-build
+            uint64_t timeouts{};
 
             nlohmann::json ExtractStatus() const;
 
@@ -92,7 +91,7 @@ namespace llarp
         struct PathHandler
         {
           private:
-            std::chrono::milliseconds last_warn_time = 0s;
+            std::chrono::milliseconds last_warn_time{0s};
 
             std::unordered_map<RouterID, std::weak_ptr<Path>> path_cache;
 
@@ -130,7 +129,7 @@ namespace llarp
           public:
             Router& _router;
             size_t num_hops;
-            std::chrono::milliseconds _last_build = 0s;
+            std::chrono::milliseconds last_build{0s};
             std::chrono::milliseconds build_interval_limit = MIN_PATH_BUILD_INTERVAL;
 
             std::set<RouterID> snode_blacklist;
@@ -161,11 +160,11 @@ namespace llarp
 
             intro_set get_current_client_intros() const;
 
-            service::intro_que_old get_recent_path_intros(
-                std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;
+            // service::intro_que_old get_recent_path_intros(
+            //     std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;
 
-            std::optional<service::IntroductionSet_old> get_path_intros_conditional(
-                std::function<bool(const service::Introduction&)> filter) const;
+            // std::optional<service::IntroductionSet_old> get_path_intros_conditional(
+            //     std::function<bool(const service::Introduction&)> filter) const;
 
             nlohmann::json ExtractStatus() const;
 

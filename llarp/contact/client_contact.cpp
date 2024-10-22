@@ -89,19 +89,6 @@ namespace llarp
         return btdp.view().size();
     }
 
-    // void ClientContact::bt_decode(std::string_view buf)
-    // {
-    //     try
-    //     {
-    //         bt_decode(oxenc::bt_dict_consumer{buf});
-    //     }
-    //     catch (const std::exception& e)
-    //     {
-    //         log::critical(logcat, "ClientContact deserialization failed: {}", e.what());
-    //         throw;
-    //     }
-    // }
-
     void ClientContact::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         pubkey.from_string(btdc.require<std::string_view>("a"));

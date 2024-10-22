@@ -1,10 +1,10 @@
 #pragma once
 
-#include "keys.hpp"
 #include "utils.hpp"
 
+#include <llarp/contact/keys.hpp>
 #include <llarp/contact/router_id.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/concept.hpp>
 

@@ -44,8 +44,6 @@ namespace llarp
 
             std::weak_ptr<PathHandler> handler;
 
-            service::Introduction intro_old;
-
             ClientIntro intro;
 
             std::chrono::milliseconds buildStarted = 0s;
@@ -69,7 +67,7 @@ namespace llarp
 
             std::chrono::milliseconds LastRemoteActivityAt() const { return last_recv_msg; }
 
-            void set_established() { _established = true; }
+            void set_established();
 
             void recv_path_data_message(bstring data);
 
@@ -81,18 +79,13 @@ namespace llarp
 
             std::chrono::milliseconds ExpireTime() const { return buildStarted + hops[0].lifetime; }
 
-            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const
-            {
-                return now >= (ExpireTime() - dlt);
-            }
-
             void enable_exit_traffic();
 
             void mark_exit_closed();
 
             bool update_exit(uint64_t tx_id);
 
-            bool is_expired(std::chrono::milliseconds now) const;
+            bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
             /// build a new path on the same set of hops as us
             /// regenerates keys
@@ -107,20 +100,6 @@ namespace llarp
 
             bool publish_client_contact(
                 const EncryptedClientContact& ecc,
-                bool is_relayed = false,
-                uint64_t order = 0,
-                std::function<void(std::string)> func = nullptr);
-
-            // TESTNET: // TONUKE:
-            [[deprecated]] bool find_intro(
-                const dht::Key_t& location,
-                bool is_relayed = false,
-                uint64_t order = 0,
-                std::function<void(std::string)> func = nullptr);
-
-            // TESTNET: // TONUKE:
-            [[deprecated]] bool publish_intro(
-                const service::EncryptedIntroSet& introset,
                 bool is_relayed = false,
                 uint64_t order = 0,
                 std::function<void(std::string)> func = nullptr);

@@ -4,7 +4,6 @@
 
 #include <llarp/contact/client_contact.hpp>
 #include <llarp/contact/relay_contact.hpp>
-#include <llarp/service/intro_set.hpp>
 
 #include <utility>
 
@@ -33,20 +32,8 @@ namespace llarp::dht
 
         CCNode(EncryptedClientContact other) : client_contact{std::move(other)}, ID{client_contact.blinded_pubkey} {}
 
+        nlohmann::json ExtractStatus() const { return nlohmann::json{{"key", client_contact.key()}}; }
+
         bool operator<(const CCNode& other) const { return client_contact.signed_at < other.client_contact.signed_at; }
-    };
-
-    struct ISNode
-    {
-        service::EncryptedIntroSet introset;
-        Key_t ID;
-
-        ISNode() { ID.zero(); }
-
-        ISNode(service::EncryptedIntroSet other) : introset(std::move(other)), ID{introset.derived_signing_key} {}
-
-        nlohmann::json ExtractStatus() const { return introset.ExtractStatus(); }
-
-        bool operator<(const ISNode& other) const { return introset.signed_at < other.introset.signed_at; }
     };
 }  // namespace llarp::dht

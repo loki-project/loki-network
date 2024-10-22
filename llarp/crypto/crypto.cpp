@@ -1,6 +1,6 @@
 #include "crypto.hpp"
 
-#include <llarp/address/keys.hpp>
+#include <llarp/contact/keys.hpp>
 
 #include <oxenc/endian.h>
 #include <sodium/core.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/address/keys.hpp>
+#include <llarp/contact/keys.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/util/formattable.hpp>
 

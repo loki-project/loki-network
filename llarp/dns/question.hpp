@@ -3,8 +3,6 @@
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <llarp/net/net_int.hpp>
-
 namespace llarp::dns
 {
     using QType_t = uint16_t;

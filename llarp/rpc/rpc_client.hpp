@@ -1,10 +1,10 @@
 #pragma once
 
 #include <llarp/contact/router_id.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
 #include <llarp/ev/types.hpp>
-#include <llarp/service/name.hpp>
 
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
@@ -33,7 +33,7 @@ namespace llarp
             uint64_t block_height() const { return _block_height; }
 
             void lookup_ons_hash(
-                std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler);
+                std::string namehash, std::function<void(std::optional<EncryptedSNSRecord>)> resultHandler);
 
             /// inform that if connected to a router successfully
             void inform_connection(RouterID router, bool success);

@@ -10,8 +10,6 @@
 #include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/logging/callback_sink.hpp>
 
-// #include <uvw/loop.h>
-
 #include <cassert>
 #include <cstdint>
 #include <cstring>

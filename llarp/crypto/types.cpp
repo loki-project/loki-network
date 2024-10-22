@@ -1,6 +1,6 @@
 #include "types.hpp"
 
-#include <llarp/address/keys.hpp>
+#include <llarp/contact/keys.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>

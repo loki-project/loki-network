@@ -4,7 +4,6 @@
 #include <llarp/config/config.hpp>
 #include <llarp/contact/client_contact.hpp>
 #include <llarp/path/path_handler.hpp>
-#include <llarp/service/identity.hpp>
 #include <llarp/session/map.hpp>
 
 namespace llarp
@@ -33,9 +32,6 @@ namespace llarp
             address_map<IPRange, NetworkAddress> _range_map;
 
             ClientContact client_contact;  // TODO: TESTNET: replacement for service::Introset
-
-            service::Identity _identity;           // TODO: TESTNET: move responsibilities to KeyManager, delete
-            service::IntroSetOld _local_introset;  // TODO: TESTNET: remove with CC impl
 
             std::shared_ptr<EventTicker> _cc_publisher;
 
@@ -119,11 +115,7 @@ namespace llarp
 
             void start_tickers();
 
-            void regen_and_publish_introset();
-
             bool publish_client_contact(const EncryptedClientContact& ecc);
-
-            bool publish_introset(const service::EncryptedIntroSet& introset);
 
             // SessionEndpoint can use either a whitelist or a static auth token list to  validate incomininbg requests
             // to initiate a session
@@ -143,13 +135,6 @@ namespace llarp
                 bool is_relayed,
                 uint64_t order,
                 std::function<void(std::optional<ClientContact>)> func);
-
-            // TESTNET: // TONUKE:
-            void lookup_intro(
-                RouterID remote,
-                bool is_relayed,
-                uint64_t order,
-                std::function<void(std::optional<service::IntroSetOld>)> func);
 
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
@@ -188,8 +173,7 @@ namespace llarp
 
             bool _initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
-            void _make_session_path(
-                service::IntroductionSet_old intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
+            void _make_session_path(intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
             void _make_session(
                 NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);

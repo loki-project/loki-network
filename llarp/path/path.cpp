@@ -5,7 +5,6 @@
 #include <llarp/messages/path.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/intro_set.hpp>
 #include <llarp/util/buffer.hpp>
 
 namespace llarp::path
@@ -42,9 +41,9 @@ namespace llarp::path
             hops[idx].txID = hops[idx + 1].rxID;
         }
 
-        // initialize parts of the introduction
-        intro_old.pivot_router = hops[hsz - 1].rc.router_id();
-        intro_old.pivot_hop_id = hops[hsz - 1].txID;
+        // initialize parts of the clientintro
+        intro.pivot_rid = hops[hsz - 1].rc.router_id();
+        intro.pivot_hid = hops[hsz - 1].txID;
     }
 
     void Path::link_session(recv_session_dgram_cb cb)
@@ -112,25 +111,6 @@ namespace llarp::path
     {
         return send_path_control_message(
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
-    }
-
-    // TESTNET: TONUKE:
-    bool Path::find_intro(
-        const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
-    {
-        return send_path_control_message(
-            "find_intro", FindIntroMessage::serialize(location, is_relayed, order), std::move(func));
-    }
-
-    // TESTNET: TONUKE:
-    bool Path::publish_intro(
-        const service::EncryptedIntroSet& introset,
-        bool is_relayed,
-        uint64_t order,
-        std::function<void(std::string)> func)
-    {
-        return send_path_control_message(
-            "publish_intro", PublishIntroMessage::serialize(introset, is_relayed, order), std::move(func));
     }
 
     bool Path::find_client_contact(
@@ -348,13 +328,9 @@ namespace llarp::path
         auto now = llarp::time_now_ms();
 
         nlohmann::json obj{
-            {"intro", intro_old.ExtractStatus()},
             {"lastRecvMsg", to_json(last_recv_msg)},
             {"lastLatencyTest", to_json(last_latency_test)},
-            {"buildStarted", to_json(buildStarted)},
             {"expired", is_expired(now)},
-            {"expiresSoon", ExpiresSoon(now)},
-            {"expiresAt", to_json(ExpireTime())},
             {"ready", is_ready()},
             // {"txRateCurrent", m_LastTXRate},
             // {"rxRateCurrent", m_LastRXRate},
@@ -492,6 +468,11 @@ namespace llarp::path
 
     /// how long we wait for a path to become active again after it times out
     // constexpr auto PathReanimationTimeout = 45s;
+
+    void Path::set_established()
+    {
+        _established = true;
+    }
 
     bool Path::is_expired(std::chrono::milliseconds now) const
     {

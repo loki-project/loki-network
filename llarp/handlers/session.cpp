@@ -210,7 +210,7 @@ namespace llarp::handlers
 
     void SessionEndpoint::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
     {
-        if (not service::is_valid_ons(ons))
+        if (not is_valid_ons(ons))
         {
             log::debug(logcat, "Invalid ONS name ({}) queried for lookup", ons);
             return func(std::nullopt);
@@ -219,8 +219,7 @@ namespace llarp::handlers
         log::debug(logcat, "Looking up ONS name {}", ons);
 
         auto response_handler = [ons_name = ons, hook = std::move(func)](std::string response) {
-            if (auto record = service::EncryptedONSRecord::construct(response);
-                auto client_addr = record->decrypt(ons_name))
+            if (auto record = EncryptedSNSRecord::construct(response); auto client_addr = record->decrypt(ons_name))
             {
                 return hook(std::move(client_addr));
             }
@@ -308,59 +307,6 @@ namespace llarp::handlers
         }
     }
 
-    void SessionEndpoint::lookup_intro(
-        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<service::IntroSetOld>)> func)
-    {
-        auto remote_key = dht::Key_t::derive_from_rid(remote);
-
-        if (auto maybe_intro = _router.contact_db().get_decrypted_introset(remote))
-        {
-            log::debug(logcat, "Decrypted introset for remote (rid:{}) found locally", remote);
-            return func(std::move(maybe_intro));
-        }
-
-        log::debug(logcat, "Looking up introset for remote (rid:{})", remote);
-
-        auto response_handler = [this, remote, hook = std::move(func)](std::string response) mutable {
-            if (auto encrypted = service::EncryptedIntroSet::construct(response);
-                auto intro = encrypted->decrypt(remote))
-            {
-                log::debug(logcat, "Storing introset for remote (rid:{})", remote);
-                _router.contact_db().put_intro(std::move(*encrypted));
-                return hook(std::move(intro));
-            }
-
-            std::optional<std::string> status = std::nullopt;
-
-            try
-            {
-                oxenc::bt_dict_consumer btdc{response};
-
-                if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
-                    status = s;
-            }
-            catch (...)
-            {
-                log::warning(logcat, "Exception caught parsing 'find_intro' response!");
-            }
-
-            log::warning(logcat, "Call to endpoint 'find_intro' failed -- status:{}", status.value_or("<none given>"));
-            hook(std::nullopt);
-        };
-
-        {
-            Lock_t l{paths_mutex};
-
-            for (const auto& [rid, path] : _paths)
-            {
-                log::info(
-                    logcat, "Querying pivot (rid:{}) for introset lookup target (rid:{})", path->pivot_rid(), remote);
-
-                path->find_intro(remote_key, is_relayed, order, response_handler);
-            }
-        }
-    }
-
     void SessionEndpoint::_localcc_update_fail()
     {
         log::warning(
@@ -393,65 +339,6 @@ namespace llarp::handlers
         {
             log::warning(logcat, "ClientContact encryption/signing exception: {}", e.what());
         }
-    }
-
-    /** Introset publishing:
-        - When a local service or exit node publishes an introset, it is also sent along the path currently used
-            for that session
-    */
-    void SessionEndpoint::regen_and_publish_introset()
-    {
-        const auto now = llarp::time_now_ms();
-
-        service::intro_que_old _path_intros = get_recent_path_intros();
-
-        if (_path_intros.empty())
-        {
-            log::warning(logcat, "Failed to get enough valid path introductions to publish introset!");
-            return build_more(1);
-        }
-
-        auto& intro_protos = _local_introset.supported_protocols;
-        intro_protos.clear();
-
-        if (_router.using_tun_if())
-        {
-            intro_protos.push_back(_is_v4 ? service::ProtocolType::IPV4 : service::ProtocolType::IPV6);
-
-            if (_is_exit_node)
-            {
-                intro_protos.push_back(service::ProtocolType::EXIT);
-                _local_introset.exit_policy = _exit_policy;
-                _local_introset._routed_ranges = _routed_ranges;
-            }
-        }
-
-        intro_protos.push_back(service::ProtocolType::TCP2QUIC);
-
-        auto& intros = _local_introset.intros;
-        intros.clear();
-
-        auto n_needed = num_paths_desired;
-
-        while (--n_needed)
-        {
-            intros.emplace(_path_intros.top());
-            _path_intros.pop();
-        }
-
-        // We already check that path_intros is not empty, so we can assert here
-        assert(not intros.empty());
-
-        // TESTNET: TODO: change to key_manager method
-        if (auto maybe_encrypted = _identity.encrypt_and_sign_introset(_local_introset, now))
-        {
-            if (publish_introset(*maybe_encrypted))
-                log::debug(logcat, "Successfully republished encrypted introset");
-            else
-                log::warning(logcat, "Failed to republish encrypted introset!");
-        }
-        else
-            log::warning(logcat, "Failed to encrypt and sign introset!");
     }
 
     bool SessionEndpoint::validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth)
@@ -529,24 +416,6 @@ namespace llarp::handlers
         return ret;
     }
 
-    bool SessionEndpoint::publish_introset(const service::EncryptedIntroSet& introset)
-    {
-        bool ret{true};
-
-        {
-            Lock_t l{paths_mutex};
-
-            for (const auto& [rid, path] : _paths)
-            {
-                log::debug(logcat, "Publishing introset to pivot {}", path->pivot_rid());
-
-                ret += path->publish_intro(introset, true);
-            }
-        }
-
-        return ret;
-    }
-
     std::optional<std::string_view> SessionEndpoint::fetch_auth_token(const NetworkAddress& remote) const
     {
         std::optional<std::string_view> ret = std::nullopt;
@@ -607,7 +476,7 @@ namespace llarp::handlers
     }
 
     void SessionEndpoint::_make_session_path(
-        service::IntroductionSet_old intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
+        intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
     {
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
@@ -619,14 +488,12 @@ namespace llarp::handlers
         }
 
         auto intro = intros.extract(intros.begin()).value();
-        auto pivot = intro.pivot_router;
+        auto& pivot = intro.pivot_rid;
 
-        // DISCUSS: we don't share paths, but if every successful path-build is logged in PathContext, we are
-        // effectively sharing across all path-building objects...?
-        if (auto path_ptr = _router.path_context()->get_path(intro.pivot_hop_id))
+        if (auto path = _router.path_context()->get_path(intro.pivot_hid))
         {
-            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hop_id);
-            return _make_session(std::move(remote), std::move(path_ptr), std::move(cb), is_exit);
+            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hid);
+            return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
         }
 
         log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
@@ -694,31 +561,25 @@ namespace llarp::handlers
         if (is_exit and not remote.is_client())
             throw std::runtime_error{"Cannot initiate exit session to remote service node!"};
 
-        auto counter = std::make_shared<size_t>(path::DEFAULT_PATHS_HELD);
-
-        // TESTNET: TODO:
+        auto counter = std::make_shared<size_t>(num_paths_desired);
 
         _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() mutable {
-            lookup_intro(
+            lookup_client_intro(
                 remote.router_id(),
                 false,
                 0,
-                [this, remote, hook = std::move(handler), is_exit, counter](
-                    std::optional<service::IntroSetOld> intro) mutable {
-                    // already have a successful return
+                [this, remote, hook = std::move(handler), is_exit, counter](std::optional<ClientContact> cc) {
                     if (*counter == 0)
                         return;
 
-                    if (intro)
+                    if (cc)
                     {
                         *counter = 0;
-                        log::info(logcat, "Session initiation returned successful 'lookup_intro'...");
-                        _make_session_path(std::move(intro->intros), remote, std::move(hook), is_exit);
+                        log::info(logcat, "Session initiation returned successful 'lookup_client_intro'...");
+                        _make_session_path(std::move(cc->intros), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)
-                    {
-                        log::warning(logcat, "Failed to initiate session at 'lookup_intro' (target:{})", remote);
-                    }
+                        log::warning(logcat, "Failed to initiate session at 'lookup_client_intro' (target:{})", remote);
                 });
         });
 

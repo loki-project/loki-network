@@ -4,7 +4,6 @@
 #include "srv_data.hpp"
 
 #include <llarp/address/ip_packet.hpp>
-#include <llarp/net/ip.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <oxenc/endian.h>
@@ -176,31 +175,6 @@ namespace llarp::dns
     static constexpr uint16_t reply_flags(uint16_t setbits)
     {
         return setbits | flags_QR | flags_AA | flags_RA;
-    }
-
-    void Message::add_IN_reply(llarp::huint128_t ip, bool isV6, RR_TTL_t ttl)
-    {
-        if (questions.size())
-        {
-            hdr_fields = reply_flags(hdr_fields);
-            ResourceRecord rec;
-            rec.rr_name = questions[0].qname;
-            rec.rr_class = qClassIN;
-            rec.ttl = ttl;
-            if (isV6)
-            {
-                rec.rr_type = qTypeAAAA;
-                ip.ToV6(rec.rData);
-            }
-            else
-            {
-                const auto addr = net::TruncateV6(ip);
-                rec.rr_type = qTypeA;
-                rec.rData.resize(4);
-                oxenc::write_host_as_big(addr.h, rec.rData.data());
-            }
-            answers.emplace_back(std::move(rec));
-        }
     }
 
     void Message::add_reply(std::string name, RR_TTL_t ttl)

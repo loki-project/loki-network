@@ -1,9 +1,6 @@
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/crypto/crypto_libsodium.hpp>
 #include <sodium/crypto_scalarmult_ed25519.h>
 #include <llarp/path/path.hpp>
-#include <llarp/service/address.hpp>
-#include <llarp/service/identity.hpp>
 #include <llarp/service/intro_set.hpp>
 #include <llarp/util/time.hpp>
 

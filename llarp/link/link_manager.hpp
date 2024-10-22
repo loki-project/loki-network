@@ -253,9 +253,7 @@ namespace llarp
 
       private:
         // DHT messages
-        void handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond);    // relay
-        void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay
-        void handle_publish_intro(std::string_view body, std::function<void(std::string)> respond);  // relay
+        void handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond);  // relay
 
         // TESTNET: // NEW CLIENT_CONTACT HANDLERS
         void handle_find_cc(std::string_view body, std::function<void(std::string)> respond);
@@ -287,18 +285,13 @@ namespace llarp
             void (LinkManager::*)(std::string_view body, std::function<void(std::string)> respond)>
             path_requests = {
                 {"resolve_ons"sv, &LinkManager::handle_resolve_ons},
-                {"publish_intro"sv, &LinkManager::handle_publish_intro},
-                {"find_intro"sv, &LinkManager::handle_find_intro}};
+                {"publish_intro"sv, &LinkManager::handle_publish_cc},
+                {"find_intro"sv, &LinkManager::handle_find_cc}};
 
         // Path relaying
         void handle_path_control(oxen::quic::message, const RouterID& from);
 
         void handle_inner_request(oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop);
-
-        // DHT responses
-        void handle_resolve_ons_response(oxen::quic::message);
-        void handle_find_intro_response(oxen::quic::message);
-        // void handle_publish_intro_response(oxen::quic::message);
 
         // Path responses
         void handle_path_latency_response(oxen::quic::message);

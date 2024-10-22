@@ -3,7 +3,6 @@
 #include "common.hpp"
 
 #include <llarp/contact/client_contact.hpp>
-#include <llarp/service/intro_set.hpp>
 
 namespace llarp
 {
@@ -170,31 +169,4 @@ namespace llarp
             return {std::move(ecc), relay_order, is_relayed};
         }
     }  // namespace PublishClientContact
-
-    namespace PublishIntroMessage
-    {
-        inline constexpr auto INVALID_INTROSET = "INVALID INTROSET"sv;
-        inline constexpr auto EXPIRED = "EXPIRED INTROSET"sv;
-        inline constexpr auto INSUFFICIENT = "INSUFFICIENT NODES"sv;
-        inline constexpr auto INVALID_ORDER = "INVALID ORDER"sv;
-
-        inline static std::string serialize(
-            const service::EncryptedIntroSet& introset, uint64_t relay_order, uint64_t is_relayed)
-        {
-            oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                btdp.append("I", introset.bt_encode());
-                btdp.append("O", relay_order);
-                btdp.append("R", is_relayed);
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
-            }
-
-            return std::move(btdp).str();
-        }
-    }  // namespace PublishIntroMessage
 }  // namespace llarp

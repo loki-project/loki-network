@@ -4,7 +4,6 @@
 
 #include <llarp/config/config.hpp>
 
-// #include <oxen/log/omq_logger.hpp>
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
 

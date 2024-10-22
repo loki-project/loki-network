@@ -9,13 +9,12 @@
 
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/platform.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/dns/dns.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/name.hpp>
-#include <llarp/service/types.hpp>
 #include <llarp/util/str.hpp>
 
 namespace llarp::handlers

@@ -28,6 +28,8 @@ namespace llarp::vpn
 
     inline constexpr ipv4 ipv4_subnet{255, 255, 255, 255};
 
+    inline constexpr std::array<ipv6, 4> if_ipv6_addrs{ipv6{}, ipv6{0x4000}, ipv6{0x8000}, ipv6{0xc000}};
+
     struct in6_ifreq
     {
         in6_addr addr;
@@ -219,20 +221,6 @@ namespace llarp::vpn
                 auto in6 = v6.to_in6();
                 std::memcpy(&data, &in6, sizeof(in6_addr));
             }
-
-            _inet_addr(net::ipv4addr_t addr, size_t bits = 32)
-            {
-                family = AF_INET;
-                bitlen = bits;
-                std::memcpy(data, &addr.n, 4);
-            }
-
-            _inet_addr(net::ipv6addr_t addr, size_t bits = 128)
-            {
-                family = AF_INET6;
-                bitlen = bits;
-                std::memcpy(data, &addr.n, 16);
-            }
         };
 
         void make_blackhole(int cmd, int flags, int af)
@@ -336,10 +324,10 @@ namespace llarp::vpn
             if (const auto maybe6 = Net().get_interface_ipv6_addr(info.ifname))
             {
                 const _inet_addr gateway6{*maybe6};
-                for (const std::string str : {"::", "4000::", "8000::", "c000::"})
+
+                for (const auto& v6 : if_ipv6_addrs)
                 {
-                    const _inet_addr hole6{net::ipv6addr_t::from_string(str), 2};
-                    make_route(cmd, flags, hole6, gateway6, GatewayMode::eUpperDefault, info.index);
+                    make_route(cmd, flags, _inet_addr{v6}, gateway6, GatewayMode::eUpperDefault, info.index);
                 }
             }
         }

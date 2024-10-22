@@ -19,20 +19,12 @@ lokinet_add_library(lokinet-cryptography
 # Functional objects use by lokinet-core and other libraries
 # needed by vpn/ router/ rpc/ handlers/ net/ link/
 lokinet_add_library(lokinet-core-utils
-#  endpoint_base.cpp
-
   auth/file_auth.cpp
   auth/rpc_auth.cpp
   auth/session_auth.cpp
   
   handlers/session.cpp
   handlers/tun.cpp
-  
-  service/identity.cpp
-  service/info.cpp
-  service/intro.cpp # path
-  service/intro_set.cpp
-  service/name.cpp
   
   vpn/egres_packet_router.cpp
 )
@@ -46,8 +38,6 @@ lokinet_add_library(lokinet-core
   
   router/router.cpp
   router/route_poker.cpp
-  
-  service/types.cpp
 
   session/session.cpp
 )
@@ -86,20 +76,25 @@ lokinet_add_library(lokinet-contact
 
   contact/contactdb.cpp
 
+  contact/keys.cpp
+
   contact/relay_contact.cpp
   contact/relay_contact_local.cpp
   contact/relay_contact_remote.cpp
 
   contact/router_id.cpp
+
+  contact/sns.cpp
+
+  contact/tag.cpp
 )
 
 # Addressing and event loop files used by lokinet-core and other libraries
-# needed by rpc/ link/ service/ config/ path/ dht/
+# needed by rpc/ link/ config/ path/ dht/
 lokinet_add_library(lokinet-addressing
   address/address.cpp
   address/ip_packet.cpp
   address/ip_range.cpp
-  address/keys.cpp
   address/utils.cpp
 
   ev/loop.cpp
@@ -107,17 +102,15 @@ lokinet_add_library(lokinet-addressing
   ev/types.cpp
   ev/udp.cpp
 
-  net/ip.cpp
-  net/net_int.cpp
+#  net/ip.cpp
+#  net/net_int.cpp
 
   router_version.cpp  # to be deleted shortly
-
-  service/tag.cpp
 )
 
 # lokinet-platform holds all platform specific code
 lokinet_add_library(lokinet-platform
-  net/interface_info.cpp
+#  net/interface_info.cpp
   vpn/packet_router.cpp
   vpn/platform.cpp
 )

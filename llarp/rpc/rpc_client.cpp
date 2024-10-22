@@ -332,19 +332,19 @@ namespace llarp::rpc
     }
 
     void RPCClient::lookup_ons_hash(
-        std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler)
+        std::string namehash, std::function<void(std::optional<EncryptedSNSRecord>)> resultHandler)
     {
         log::debug(logcat, "Looking Up ONS NameHash {}", namehash);
         const nlohmann::json req{{"type", 2}, {"name_hash", oxenc::to_hex(namehash)}};
         request(
             "rpc.lns_resolve",
             [this, resultHandler](bool success, std::vector<std::string> data) {
-                std::optional<service::EncryptedONSRecord> maybe = std::nullopt;
+                std::optional<EncryptedSNSRecord> maybe = std::nullopt;
                 if (success)
                 {
                     try
                     {
-                        service::EncryptedONSRecord result;
+                        EncryptedSNSRecord result;
                         const auto j = nlohmann::json::parse(data[1]);
                         j.dump();
                         result.ciphertext = oxenc::from_hex(j["encrypted_value"].get<std::string>());

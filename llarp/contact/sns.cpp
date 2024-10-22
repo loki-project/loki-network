@@ -1,21 +1,21 @@
-#include "name.hpp"
+#include "sns.hpp"
 
 #include <llarp/address/address.hpp>
 #include <llarp/crypto/crypto.hpp>
 
-namespace llarp::service
+namespace llarp
 {
     static auto logcat = llarp::log::Cat("ONSRecord");
 
-    std::optional<EncryptedONSRecord> EncryptedONSRecord::construct(std::string bt)
+    std::optional<EncryptedSNSRecord> EncryptedSNSRecord::construct(std::string bt)
     {
-        if (EncryptedONSRecord ret; ret.bt_decode(std::move(bt)))
+        if (EncryptedSNSRecord ret; ret.bt_decode(std::move(bt)))
             return ret;
 
         return std::nullopt;
     }
 
-    EncryptedONSRecord::EncryptedONSRecord(std::string bt)
+    EncryptedSNSRecord::EncryptedSNSRecord(std::string bt)
     {
         try
         {
@@ -25,11 +25,11 @@ namespace llarp::service
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "EncryptedONSRecord exception: {}", e.what());
+            log::warning(logcat, "EncryptedSNSRecord exception: {}", e.what());
         }
     }
 
-    bool EncryptedONSRecord::bt_decode(oxenc::bt_dict_consumer& btdc)
+    bool EncryptedSNSRecord::bt_decode(oxenc::bt_dict_consumer& btdc)
     {
         try
         {
@@ -40,12 +40,12 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::warning(logcat, "EncryptedONSRecord exception");
+            log::warning(logcat, "EncryptedSNSRecord exception");
             throw;
         }
     }
 
-    bool EncryptedONSRecord::bt_decode(std::string bt)
+    bool EncryptedSNSRecord::bt_decode(std::string bt)
     {
         try
         {
@@ -54,12 +54,12 @@ namespace llarp::service
         }
         catch (...)
         {
-            log::warning(logcat, "EncryptedONSRecord exception");
+            log::warning(logcat, "EncryptedSNSRecord exception");
             return false;
         }
     }
 
-    std::string EncryptedONSRecord::bt_encode() const
+    std::string EncryptedSNSRecord::bt_encode() const
     {
         oxenc::bt_dict_producer btdp;
 
@@ -69,7 +69,7 @@ namespace llarp::service
         return std::move(btdp).str();
     }
 
-    std::optional<NetworkAddress> EncryptedONSRecord::decrypt(std::string_view ons_name) const
+    std::optional<NetworkAddress> EncryptedSNSRecord::decrypt(std::string_view ons_name) const
     {
         std::optional<NetworkAddress> ret = std::nullopt;
 
@@ -84,4 +84,4 @@ namespace llarp::service
 
         return ret;
     }
-}  // namespace llarp::service
+}  // namespace llarp

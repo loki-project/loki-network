@@ -20,9 +20,6 @@ namespace llarp
         Router& _router;
         const dht::Key_t _local_key;
 
-        // holds introsets for remote services
-        std::unique_ptr<dht::Bucket<dht::ISNode>> _introset_nodes;
-
         std::unique_ptr<dht::Bucket<dht::CCNode>> _cc_nodes;
 
       public:
@@ -32,17 +29,9 @@ namespace llarp
 
         std::optional<EncryptedClientContact> get_encrypted_cc(const dht::Key_t& key) const;
 
-        std::optional<service::IntroSetOld> get_decrypted_introset(RouterID remote) const;
-
-        std::optional<service::EncryptedIntroSet> get_encrypted_introset(const dht::Key_t& key) const;
-
         nlohmann::json ExtractStatus() const;
 
-        void put_intro(service::EncryptedIntroSet enc);
-
         void put_cc(EncryptedClientContact enc);
-
-        dht::Bucket<dht::ISNode>* services() const { return _introset_nodes.get(); }
 
         Router* router() const { return &_router; }
     };

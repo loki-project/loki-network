@@ -10,7 +10,6 @@
 #include <llarp/net/net.hpp>
 #include <llarp/net/traffic_policy.hpp>
 #include <llarp/router_version.hpp>
-#include <llarp/service/types.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>

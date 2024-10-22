@@ -5,8 +5,7 @@
 
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
-#include <llarp/net/ip.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/util/file.hpp>
 #include <llarp/util/formattable.hpp>
 
@@ -266,7 +265,7 @@ namespace llarp
                 const auto addr = arg.substr(0, pos);
                 auto auth = arg.substr(pos + 1);
 
-                if (service::is_valid_ons(addr))
+                if (is_valid_ons(addr))
                 {
                     ons_auth_tokens.emplace(std::move(addr), std::move(auth));
                 }
@@ -333,7 +332,7 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (service::is_valid_ons(arg))
+                if (is_valid_ons(arg))
                     ons_ranges.emplace(std::move(arg), std::move(*range));
                 else if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
                     ranges.emplace(std::move(*maybe_raddr), std::move(*range));
@@ -662,7 +661,7 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (service::is_valid_ons(arg))
+                if (is_valid_ons(arg))
                     _ons_ranges.emplace(std::move(arg), std::move(*range));
                 else if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
                     _exit_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
@@ -702,7 +701,7 @@ namespace llarp
                 const auto addr = arg.substr(0, pos);
                 auto auth = arg.substr(pos + 1);
 
-                if (service::is_valid_ons(addr))
+                if (is_valid_ons(addr))
                 {
                     ons_exit_auths.emplace(std::move(addr), std::move(auth));
                 }
@@ -826,7 +825,7 @@ namespace llarp
                 auto addr_arg = arg.substr(0, pos);
                 auto ip_arg = arg.substr(pos + 1);
 
-                if (service::is_valid_ons(addr_arg))
+                if (is_valid_ons(addr_arg))
                     throw std::invalid_argument{"`mapaddr` cannot take an ONS entry: {}"_format(arg)};
 
                 if (auto maybe_raddr = NetworkAddress::from_network_addr(std::move(addr_arg)); maybe_raddr)
@@ -998,7 +997,7 @@ namespace llarp
                                 continue;
                             }
 
-                            if (service::is_valid_ons(*arg))
+                            if (is_valid_ons(*arg))
                             {
                                 log::warning(logcat, "{}: {}", addrmap_errorstr, "cannot accept ONS names!");
                                 continue;

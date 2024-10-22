@@ -1,7 +1,5 @@
 #pragma once
 
-#include <llarp/net/net_int.hpp>
-
 #include <oxen/quic.hpp>
 
 #include <memory>
