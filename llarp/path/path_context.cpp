@@ -66,7 +66,7 @@ namespace llarp::path
 
         for (auto& [_, p] : _path_map)
         {
-            if (p->is_ready() and not p->intro.is_expired(now))
+            if (p->is_ready() and not p->is_expired(now))
                 intros.emplace(p->intro);
         }
 

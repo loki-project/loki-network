@@ -319,7 +319,7 @@ namespace llarp
                 {
                     if (alpn == alpns::C_ALPNS)
                     {
-                        log::critical(logcat, "{} node accepting client connection (remote ID:{})!", us, other);
+                        log::critical(logcat, "{} accepting client connection (remote ID:{})!", us, other);
                         ep->client_conns.emplace(other, nullptr);
                         return true;
                     }
@@ -351,7 +351,7 @@ namespace llarp
 
                                 log::critical(
                                     logcat,
-                                    "{} node received inbound with ongoing outbound to remote "
+                                    "{} received inbound with ongoing outbound to remote "
                                     "(RID:{}); {}!",
                                     us,
                                     other,
@@ -360,13 +360,12 @@ namespace llarp
                                 return defer_to_incoming;
                             }
 
-                            log::critical(
-                                logcat, "{} node accepting inbound from registered remote (RID:{})", us, other);
+                            log::critical(logcat, "{} accepting inbound from registered remote (RID:{})", us, other);
                         }
                         else
                             log::critical(
                                 logcat,
-                                "{} node was unable to confirm remote (RID:{}) is registered; "
+                                "{} was unable to confirm remote (RID:{}) is registered; "
                                 "rejecting "
                                 "connection!",
                                 us,
@@ -375,7 +374,7 @@ namespace llarp
                         return result;
                     }
 
-                    log::critical(logcat, "{} node received unknown ALPN; rejecting connection!", us);
+                    log::critical(logcat, "{} received unknown ALPN; rejecting connection!", us);
                     return false;
                 }
 
@@ -1127,7 +1126,7 @@ namespace llarp
 
         if (is_relayed)
         {
-            if (is_relayed >= path::DEFAULT_PATHS_HELD)
+            if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
                 log::error(logcat, "Received PublishClientContact with invalid relay order: {}", relay_order);
                 return respond(PublishClientContact::INVALID_ORDER);
@@ -1207,7 +1206,7 @@ namespace llarp
 
         if (is_relayed)
         {
-            if (is_relayed >= path::DEFAULT_PATHS_HELD)
+            if (relay_order >= path::DEFAULT_PATHS_HELD)
             {
                 log::error(logcat, "Received FindClientContact with invalid relay order: {}", relay_order);
                 return respond(FindClientContact::INVALID_ORDER);
@@ -1736,6 +1735,9 @@ namespace llarp
 
                 if (not hop)
                     return;
+
+                if (response.timed_out)
+                    log::debug(logcat, "Path control message timed out!");
 
                 ustring hop_id, nonce, payload;
 

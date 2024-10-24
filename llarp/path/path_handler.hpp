@@ -33,7 +33,7 @@ namespace llarp
         inline constexpr size_t MAX_PATHS{32};
 
         // default number of paths per PathHandler
-        inline constexpr size_t DEFAULT_PATHS_HELD{1};
+        inline constexpr size_t DEFAULT_PATHS_HELD{4};
 
         // forward declare
         struct Path;

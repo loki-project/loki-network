@@ -144,29 +144,22 @@ namespace llarp::path
         // _role &= ePathRoleExit;
     }
 
-    std::string Path::make_outer_payload(ustring_view payload, SymmNonce& nonce)
+    std::string Path::make_outer_payload(char* data, size_t len)
     {
+        auto nonce = SymmNonce::make_random();
         // chacha and mutate nonce for each hop
         for (const auto& hop : hops)
         {
-            nonce = crypto::onion(
-                const_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
+            nonce = crypto::onion(reinterpret_cast<uint8_t*>(data), len, hop.shared, nonce, hop.nonceXOR);
         }
 
-        return Onion::serialize(nonce, upstream_txid(), payload);
-    }
-
-    std::string Path::make_outer_payload(ustring_view payload)
-    {
-        auto nonce = SymmNonce::make_random();
-
-        return make_outer_payload(payload, nonce);
+        return Onion::serialize(nonce, upstream_txid(), {data, len});
     }
 
     bool Path::send_path_data_message(std::string data)
     {
         auto payload = PathData::serialize(std::move(data), _router.local_rid());
-        auto outer_payload = make_outer_payload(to_usv(payload));
+        auto outer_payload = make_outer_payload(payload.data(), payload.size());
 
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
@@ -174,7 +167,7 @@ namespace llarp::path
     bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
     {
         auto inner_payload = PathControl::serialize(std::move(endpoint), std::move(body));
-        auto outer_payload = make_outer_payload(to_usv(inner_payload));
+        auto outer_payload = make_outer_payload(inner_payload.data(), inner_payload.size());
 
         return _router.send_control_message(
             upstream_rid(),
@@ -332,9 +325,6 @@ namespace llarp::path
             {"lastLatencyTest", to_json(last_latency_test)},
             {"expired", is_expired(now)},
             {"ready", is_ready()},
-            // {"txRateCurrent", m_LastTXRate},
-            // {"rxRateCurrent", m_LastRXRate},
-            // {"hasExit", SupportsAnyRoles(ePathRoleExit)}
         };
 
         std::vector<nlohmann::json> hopsObj;
@@ -343,30 +333,6 @@ namespace llarp::path
         });
         obj["hops"] = hopsObj;
 
-        // switch (_status)
-        // {
-        //   case PathStatus::BUILDING:
-        //     obj["status"] = "building";
-        //     break;
-        //   case PathStatus::ESTABLISHED:
-        //     obj["status"] = "established";
-        //     break;
-        //   case PathStatus::TIMEOUT:
-        //     obj["status"] = "timeout";
-        //     break;
-        //   case PathStatus::EXPIRED:
-        //     obj["status"] = "expired";
-        //     break;
-        //   case PathStatus::FAILED:
-        //     obj["status"] = "failed";
-        //     break;
-        //   case PathStatus::IGNORE:
-        //     obj["status"] = "ignored";
-        //     break;
-        //   default:
-        //     obj["status"] = "unknown";
-        //     break;
-        // }
         return obj;
     }
 
@@ -408,6 +374,9 @@ namespace llarp::path
 
     void Path::Tick(std::chrono::milliseconds now)
     {
+        if (not is_ready())
+            return;
+
         if (is_expired(now))
             return;
 
@@ -471,57 +440,20 @@ namespace llarp::path
 
     void Path::set_established()
     {
+        log::info(logcat, "Path marked as successfully established!");
         _established = true;
+        intro.expiry = llarp::time_now_ms() + path::DEFAULT_LIFETIME;
     }
 
     bool Path::is_expired(std::chrono::milliseconds now) const
     {
-        (void)now;
-        // if (_status == PathStatus::FAILED)
-        //   return true;
-        // if (_status == PathStatus::BUILDING)
-        //   return false;
-        // if (_status == PathStatus::TIMEOUT)
-        // {
-        //   return now >= last_recv_msg + PathReanimationTimeout;
-        // }
-        // if (_status == PathStatus::ESTABLISHED or _status == PathStatus::IGNORE)
-        // {
-        //   return now >= ExpireTime();
-        // }
-        return true;
+        return intro.is_expired(now);
     }
 
     std::string Path::name() const
     {
         return fmt::format("TX={} RX={}", upstream_txid().to_string(), upstream_rxid().to_string());
     }
-
-    /* TODO: replace this with sending an onion-ed data message
-    bool Path::SendRoutingMessage(std::string payload, Router*)
-    {
-      std::string buf(MAX_LINK_MSG_SIZE / 2, '\0');
-      buf.insert(0, payload);
-
-      // make nonce
-      TunnelNonce N;
-      N.Randomize();
-
-      // pad smaller messages
-      if (payload.size() < PAD_SIZE)
-      {
-        // randomize padding
-        crypto::randbytes(
-            reinterpret_cast<unsigned char*>(buf.data()) + payload.size(), PAD_SIZE -
-    payload.size());
-      }
-      log::debug(logcat, "Sending {}B routing message to {}", buf.size(), Endpoint());
-
-      // TODO: path relaying here
-
-      return true;
-    }
-    */
 
     template <typename Samples_t>
     static std::chrono::milliseconds computeLatency(const Samples_t& samps)

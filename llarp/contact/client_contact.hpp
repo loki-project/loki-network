@@ -47,7 +47,7 @@ namespace llarp
     };
 
     // TESTNET:
-    inline static constexpr auto CC_PUBLISH_INTERVAL{5min};
+    inline static constexpr auto CC_PUBLISH_INTERVAL{1min};
 
     /** ClientContact
         On the wire we encode the data as a dict containing:

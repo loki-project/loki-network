@@ -44,9 +44,9 @@ namespace llarp
 
             std::weak_ptr<PathHandler> handler;
 
-            ClientIntro intro;
+            ClientIntro intro{};
 
-            std::chrono::milliseconds buildStarted = 0s;
+            std::chrono::milliseconds buildStarted{0s};
 
             Path(
                 Router& rtr,
@@ -161,9 +161,7 @@ namespace llarp
             static constexpr bool to_string_formattable = true;
 
           private:
-            std::string make_outer_payload(ustring_view payload);
-
-            std::string make_outer_payload(ustring_view payload, SymmNonce& nonce);
+            std::string make_outer_payload(char* data, size_t len);
 
             bool SendLatencyMessage(Router* r);
 

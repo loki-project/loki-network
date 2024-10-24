@@ -35,10 +35,10 @@ namespace llarp
 
     void ClientContact::handle_updated_field(intro_set iset)
     {
-        log::trace(logcat, "ClientContact storing updated ClientIntros...");
         if (iset.empty())
             throw std::invalid_argument{"Cannot publish ClientContact with no ClientIntros!"};
         intros = std::move(iset);
+        log::debug(logcat, "ClientContact stored updated ClientIntros (n={})...", intros.size());
     }
 
     void ClientContact::handle_updated_field(std::unordered_set<dns::SRVData> srvs)

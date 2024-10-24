@@ -169,7 +169,7 @@ namespace llarp::path
     size_t PathHandler::paths_at_time(std::chrono::milliseconds futureTime) const
     {
         size_t num = 0;
-        Lock_t l(paths_mutex);
+        Lock_t l{paths_mutex};
 
         for (const auto& item : _paths)
         {
@@ -188,11 +188,14 @@ namespace llarp::path
     // called within the scope of locked mutex
     void PathHandler::tick_paths()
     {
+        Lock_t l{paths_mutex};
+
         const auto now = llarp::time_now_ms();
 
-        for (auto& item : _paths)
+        for (auto& [_, p] : _paths)
         {
-            item.second->Tick(now);
+            if (p)
+                p->Tick(now);
         }
     }
 
@@ -468,6 +471,8 @@ namespace llarp::path
 
     bool PathHandler::build_path_to_random()
     {
+        Lock_t l(paths_mutex);
+
         if (auto maybe_hops = get_hops_to_random())
         {
             build(*maybe_hops);
@@ -480,6 +485,8 @@ namespace llarp::path
 
     bool PathHandler::build_path_aligned_to_remote(const NetworkAddress& remote)
     {
+        Lock_t l(paths_mutex);
+
         if (auto maybe_hops = aligned_hops_to_remote(remote.router_id()))
         {
             build(*maybe_hops);
@@ -594,6 +601,7 @@ namespace llarp::path
         return _router.send_control_message(std::move(upstream), "path_build", std::move(payload), std::move(handler));
     }
 
+    // called within the scope of a locked mutex
     void PathHandler::build(std::vector<RemoteRC> hops)
     {
         if (pre_build(hops); auto new_path = build1(hops))

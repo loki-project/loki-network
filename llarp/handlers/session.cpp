@@ -55,12 +55,14 @@ namespace llarp::handlers
             assert(not _is_snode_service);
 
             _exit_policy = net_config.traffic_policy;
-            // _local_cc.exit_policy = _exit_policy; // TESTNET:
+            client_contact.exit_policy = _exit_policy;
         }
 
-        if (not net_config.srv_records.empty())  // TESTNET:
+        if (not net_config.srv_records.empty())
+        {
             _srv_records.merge(net_config.srv_records);
-        //     _local_cc.SRVs = std::move(net_config.srv_records);
+            client_contact.SRVs = _srv_records;
+        }
 
         if (use_tokens = not net_config.auth_static_tokens.empty(); use_tokens)
             _static_auth_tokens.merge(net_config.auth_static_tokens);
@@ -104,11 +106,6 @@ namespace llarp::handlers
             _exit_policy);
 
         should_publish_cc = net_config.is_reachable;
-
-        if (should_publish_cc)
-        {
-            //
-        }
     }
 
     void SessionEndpoint::build_more(size_t n)
@@ -401,6 +398,8 @@ namespace llarp::handlers
     bool SessionEndpoint::publish_client_contact(const EncryptedClientContact& ecc)
     {
         bool ret{true};
+
+        log::critical(logcat, "Publishing new EncryptedClientContact: {}", ecc.bt_payload());
 
         {
             Lock_t l{paths_mutex};
