@@ -138,11 +138,11 @@ namespace llarp::handlers
     {
         if (should_publish_cc)
         {
-            log::debug(logcat, "Starting ClientContact publish ticker...");
+            log::critical(logcat, "Starting ClientContact publish ticker...");
             _cc_publisher = _router.loop()->call_every(
-                path::DEFAULT_LIFETIME,
+                CC_PUBLISH_INTERVAL,
                 [this]() {
-                    log::info(logcat, "Updating and publishing ClientContact...");
+                    log::critical(logcat, "Updating and publishing ClientContact...");
                     update_and_publish_localcc(get_current_client_intros());
                 },
                 true);

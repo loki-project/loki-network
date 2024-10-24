@@ -285,8 +285,8 @@ namespace llarp
             void (LinkManager::*)(std::string_view body, std::function<void(std::string)> respond)>
             path_requests = {
                 {"resolve_ons"sv, &LinkManager::handle_resolve_ons},
-                {"publish_intro"sv, &LinkManager::handle_publish_cc},
-                {"find_intro"sv, &LinkManager::handle_find_cc}};
+                {"publish_cc"sv, &LinkManager::handle_publish_cc},
+                {"find_cc"sv, &LinkManager::handle_find_cc}};
 
         // Path relaying
         void handle_path_control(oxen::quic::message, const RouterID& from);

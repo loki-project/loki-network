@@ -46,12 +46,8 @@ namespace llarp
         TCP2QUIC = 1 << 5,
     };
 
-    /** TODO:
-            - LocalCC
-                - holds the derived Ed25519PrivateData
-            - RemoteCC:
-
-     */
+    // TESTNET:
+    inline static constexpr auto CC_PUBLISH_INTERVAL{5min};
 
     /** ClientContact
         On the wire we encode the data as a dict containing:

@@ -1086,6 +1086,8 @@ namespace llarp
 
     void LinkManager::handle_publish_cc(std::string_view body, std::function<void(std::string)> respond)
     {
+        log::critical(logcat, "Received request to publish client contact!");
+
         EncryptedClientContact enc;
         bool is_relayed;
         uint64_t relay_order;
