@@ -144,30 +144,39 @@ namespace llarp::path
         // _role &= ePathRoleExit;
     }
 
-    std::string Path::make_outer_payload(char* data, size_t len)
+    std::string Path::make_path_message(std::string&& inner_payload)
     {
-        auto nonce = SymmNonce::make_random();
-        // chacha and mutate nonce for each hop
-        for (const auto& hop : hops)
+        int n_hops = static_cast<int>(hops.size());
+        std::string payload{std::move(inner_payload)};
+
+        // Working from final hop to hop 1, we onion encrypt the message payload with each
+        // hop's shared secret (this was derived via DH KEM in path building). The encrypted
+        // payload will then be bt-serialized, and then encrypted/serialized for the next hop.
+        for (int i = n_hops - 1; i >= 0; --i)
         {
-            nonce = crypto::onion(reinterpret_cast<uint8_t*>(data), len, hop.shared, nonce, hop.nonceXOR);
+            auto& hop = hops[i];
+
+            crypto::onion(
+                reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, hop.nonce, hop.nonceXOR);
+
+            payload = ONION::serialize_hop(hop.upstream.to_view(), hop.nonce, payload);
         }
 
-        return Onion::serialize(nonce, upstream_txid(), {data, len});
+        return payload;
     }
 
     bool Path::send_path_data_message(std::string data)
     {
-        auto payload = PathData::serialize(std::move(data), _router.local_rid());
-        auto outer_payload = make_outer_payload(payload.data(), payload.size());
+        auto inner_payload = PATH::DATA::serialize(std::move(data), _router.local_rid());
+        auto outer_payload = make_path_message(std::move(inner_payload));
 
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
     bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
     {
-        auto inner_payload = PathControl::serialize(std::move(endpoint), std::move(body));
-        auto outer_payload = make_outer_payload(inner_payload.data(), inner_payload.size());
+        auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
+        auto outer_payload = make_path_message(std::move(inner_payload));
 
         return _router.send_control_message(
             upstream_rid(),
@@ -190,7 +199,7 @@ namespace llarp::path
                 try
                 {
                     oxenc::bt_dict_consumer btdc{m.body()};
-                    std::tie(hop_id_str, symmnonce, payload) = Onion::deserialize(btdc);
+                    std::tie(hop_id_str, symmnonce, payload) = ONION::deserialize_hop(btdc);
                 }
                 catch (const std::exception& e)
                 {
@@ -219,11 +228,9 @@ namespace llarp::path
             });
     }
 
-    bool Path::is_ready() const
+    bool Path::is_ready(std::chrono::milliseconds now) const
     {
-        // if (is_expired(llarp::time_now_ms()))
-        //     return false;
-        return _established;
+        return _established ? is_expired(now) : false;
     }
 
     RouterID Path::upstream_rid()

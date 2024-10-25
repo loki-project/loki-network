@@ -218,7 +218,7 @@ namespace llarp
         }
         else
         {
-            _session_endpoint->start_tickers();
+            // _session_endpoint->start_tickers();
             // Resolve needed ONS values now that we have the necessary things prefigured
             _session_endpoint->resolve_ons_mappings();
         }

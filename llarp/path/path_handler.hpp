@@ -130,7 +130,7 @@ namespace llarp
             Router& _router;
             size_t num_hops;
             std::chrono::milliseconds last_build{0s};
-            std::chrono::milliseconds build_interval_limit = MIN_PATH_BUILD_INTERVAL;
+            std::chrono::milliseconds build_interval_limit{MIN_PATH_BUILD_INTERVAL};
 
             std::set<RouterID> snode_blacklist;
 

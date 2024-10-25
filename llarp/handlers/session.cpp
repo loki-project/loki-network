@@ -36,6 +36,12 @@ namespace llarp::handlers
 
         _running = false;
 
+        if (_cc_publisher)
+        {
+            log::debug(logcat, "ClientContact publish ticker stopped!");
+            _cc_publisher->stop();
+        }
+
         Lock_t l{paths_mutex};
 
         _sessions.stop_sessions(send_close);
@@ -145,7 +151,7 @@ namespace llarp::handlers
                 true);
         }
         else
-            log::debug(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
+            log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
     }
 
     void SessionEndpoint::resolve_ons_mappings()

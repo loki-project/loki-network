@@ -713,7 +713,7 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{message};
-            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
+            std::tie(hop_id_str, nonce, payload) = ONION::deserialize_hop(btdc);
         }
         catch (const std::exception& e)
         {
@@ -739,7 +739,7 @@ namespace llarp
             try
             {
                 oxenc::bt_dict_consumer btdc{payload};
-                std::tie(sender, data) = PathData::deserialize(btdc);
+                std::tie(sender, data) = PATH::DATA::deserialize(btdc);
 
                 if (auto session = _router.session_endpoint()->get_session(sender))
                 {
@@ -763,7 +763,7 @@ namespace llarp
             const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
             const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
 
-            std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
+            std::string new_payload = ONION::serialize_hop(next_id.to_view(), symmnonce, payload);
 
             send_data_message(next_router, std::move(new_payload));
         }
@@ -1249,34 +1249,34 @@ namespace llarp
         if (!_router.path_context()->is_transit_allowed())
         {
             log::warning(logcat, "got path build request when not permitting transit");
-            m.respond(PathBuildMessage::NO_TRANSIT, true);
+            m.respond(PATH::BUILD::NO_TRANSIT, true);
             return;
         }
 
         try
         {
-            auto frames = Frames::deserialize(m.body());
+            auto frames = ONION::deserialize_frames(m.body());
             auto n_frames = frames.size();
 
             if (n_frames != path::MAX_LEN)
             {
                 log::info(logcat, "Path build message with wrong number of frames: {}", frames.size());
-                return m.respond(PathBuildMessage::BAD_FRAMES, true);
+                return m.respond(PATH::BUILD::BAD_FRAMES, true);
             }
 
             log::trace(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
             SymmNonce nonce;
-            PubKey remote_pk;
             ustring hop_payload;
+            SharedSecret shared;
 
-            std::tie(nonce, remote_pk, hop_payload) =
-                PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
+            std::tie(nonce, shared, hop_payload) =
+                PATH::BUILD::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
 
             log::trace(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
 
             auto hop = path::TransitHop::deserialize_hop(
-                oxenc::bt_dict_consumer{hop_payload}, from, _router, remote_pk, nonce);
+                oxenc::bt_dict_consumer{hop_payload}, from, _router, std::move(shared));
 
             hop->started = _router.now();
             set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
@@ -1321,7 +1321,7 @@ namespace llarp
             send_control_message(
                 std::move(upstream),
                 "path_build",
-                Frames::serialize(std::move(frames)),
+                ONION::serialize_frames(std::move(frames)),
                 [this, transit_hop = std::move(hop), prev_message = std::move(m)](oxen::quic::message m) mutable {
                     if (m)
                     {
@@ -1346,6 +1346,173 @@ namespace llarp
             // (ex: `TransitHop::deserialize_hop(...)`) contain the correct response bodies
             return m.respond(e.what(), true);
         }
+    }
+
+    void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& /* from */)
+    {
+        ustring nonce, hop_id_str, payload;
+
+        try
+        {
+            oxenc::bt_dict_consumer btdc{m.body()};
+            std::tie(hop_id_str, nonce, payload) = ONION::deserialize_hop(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return;
+        }
+
+        auto symmnonce = SymmNonce{nonce.data()};
+        HopID hopid{hop_id_str.data()};
+        auto hop = _router.path_context()->get_transit_hop(hopid);
+
+        // TODO: use "path_control" for both directions?  If not, drop message on
+        // floor if we don't have the path_id in question; if we decide to make this
+        // bidirectional, will need to check if we have a Path with path_id.
+        if (not hop)
+            return;
+
+        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
+
+        // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
+        if (hop->terminal_hop)
+        {
+            handle_inner_request(
+                std::move(m),
+                std::string{reinterpret_cast<const char*>(payload.data()), payload.size()},
+                std::move(hop));
+            return;
+        }
+
+        auto hop_is_rx = hop->rxid() == hopid;
+
+        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
+        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
+
+        std::string new_payload = ONION::serialize_hop(next_id.to_view(), symmnonce, payload);
+
+        send_control_message(
+            next_router,
+            "path_control"s,
+            std::move(new_payload),
+            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
+                oxen::quic::message response) mutable {
+                auto hop = hop_weak.lock();
+
+                if (not hop)
+                    return;
+
+                if (response.timed_out)
+                    log::debug(logcat, "Path control message timed out!");
+
+                ustring hop_id, nonce, payload;
+
+                try
+                {
+                    oxenc::bt_dict_consumer btdc{response.body()};
+                    std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(btdc);
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(logcat, "Exception: {}", e.what());
+                    return;
+                }
+
+                auto symmnonce = SymmNonce{nonce.data()};
+                auto resp_payload = ONION::serialize_hop(hop_id, symmnonce, payload);
+                prev_message.respond(std::move(resp_payload), false);
+            });
+    }
+
+    void LinkManager::handle_inner_request(
+        oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
+    {
+        std::string endpoint, body;
+
+        try
+        {
+            oxenc::bt_dict_consumer btdc{payload};
+            std::tie(endpoint, body) = PATH::CONTROL::deserialize(btdc);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return;
+        }
+
+        // If a handler exists for "method", call it; else drop request on the floor.
+        auto itr = path_requests.find(endpoint);
+
+        if (itr == path_requests.end())
+        {
+            log::info(logcat, "Received path control request \"{}\", which has no handler.", endpoint);
+            return;
+        }
+
+        auto respond = [m = std::move(m), hop_weak = hop->weak_from_this()](std::string response) mutable {
+            auto hop = hop_weak.lock();
+            if (not hop)
+                return;  // transit hop gone, drop response
+
+            auto n = SymmNonce::make_random();
+            m.respond(ONION::serialize_hop(hop->rxid().to_view(), n, response), false);
+        };
+
+        std::invoke(itr->second, this, std::move(body), std::move(respond));
+    }
+
+    void LinkManager::handle_initiate_session(oxen::quic::message m)
+    {
+        if (not m)
+        {
+            log::info(logcat, "Initiate session message timed out!");
+            return;
+        }
+
+        NetworkAddress initiator;
+        service::SessionTag tag;
+        HopID pivot_txid;
+        bool use_tun;
+        std::optional<std::string> maybe_auth = std::nullopt;
+        std::shared_ptr<path::Path> path_ptr;
+
+        try
+        {
+            oxenc::bt_dict_consumer btdc{m.body()};
+
+            std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
+                InitiateSession::decrypt_deserialize(btdc, _router.identity());
+
+            if (not _router.session_endpoint()->validate(initiator, maybe_auth))
+            {
+                log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
+                return m.respond(InitiateSession::AUTH_DENIED, true);
+            }
+
+            path_ptr = _router.path_context()->get_path(pivot_txid);
+
+            if (not path_ptr)
+            {
+                log::warning(logcat, "Failed to find local path corresponding to session over pivot: {}", pivot_txid);
+                return m.respond(messages::ERROR_RESPONSE, true);
+            }
+
+            if (_router.session_endpoint()->prefigure_session(
+                    std::move(initiator), std::move(tag), std::move(path_ptr), use_tun))
+            {
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Failed to configure InboundSession!");
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        _router.path_context()->drop_path(path_ptr);
+        m.respond(messages::ERROR_RESPONSE, true);
     }
 
     void LinkManager::handle_path_latency(oxen::quic::message m)
@@ -1679,173 +1846,6 @@ namespace llarp
         // if (path_ptr->SupportsAnyRoles(path::ePathRoleExit | path::ePathRoleSVC)
         //     and crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
         //   path_ptr->mark_exit_closed();
-    }
-
-    void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& /* from */)
-    {
-        ustring nonce, hop_id_str, payload;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        auto symmnonce = SymmNonce{nonce.data()};
-        HopID hopid{hop_id_str.data()};
-        auto hop = _router.path_context()->get_transit_hop(hopid);
-
-        // TODO: use "path_control" for both directions?  If not, drop message on
-        // floor if we don't have the path_id in question; if we decide to make this
-        // bidirectional, will need to check if we have a Path with path_id.
-        if (not hop)
-            return;
-
-        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
-
-        // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
-        if (hop->terminal_hop)
-        {
-            handle_inner_request(
-                std::move(m),
-                std::string{reinterpret_cast<const char*>(payload.data()), payload.size()},
-                std::move(hop));
-            return;
-        }
-
-        auto hop_is_rx = hop->rxid() == hopid;
-
-        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
-
-        std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
-
-        send_control_message(
-            next_router,
-            "path_control"s,
-            std::move(new_payload),
-            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
-                oxen::quic::message response) mutable {
-                auto hop = hop_weak.lock();
-
-                if (not hop)
-                    return;
-
-                if (response.timed_out)
-                    log::debug(logcat, "Path control message timed out!");
-
-                ustring hop_id, nonce, payload;
-
-                try
-                {
-                    oxenc::bt_dict_consumer btdc{response.body()};
-                    std::tie(hop_id, nonce, payload) = Onion::deserialize(btdc);
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Exception: {}", e.what());
-                    return;
-                }
-
-                auto symmnonce = SymmNonce{nonce.data()};
-                auto resp_payload = Onion::serialize(symmnonce, HopID{hop_id.data()}, payload);
-                prev_message.respond(std::move(resp_payload), false);
-            });
-    }
-
-    void LinkManager::handle_inner_request(
-        oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
-    {
-        std::string endpoint, body;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{payload};
-            std::tie(endpoint, body) = PathControl::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        // If a handler exists for "method", call it; else drop request on the floor.
-        auto itr = path_requests.find(endpoint);
-
-        if (itr == path_requests.end())
-        {
-            log::info(logcat, "Received path control request \"{}\", which has no handler.", endpoint);
-            return;
-        }
-
-        auto respond = [m = std::move(m), hop_weak = hop->weak_from_this()](std::string response) mutable {
-            auto hop = hop_weak.lock();
-            if (not hop)
-                return;  // transit hop gone, drop response
-
-            auto n = SymmNonce::make_random();
-            m.respond(Onion::serialize(n, hop->rxid(), response), false);
-        };
-
-        std::invoke(itr->second, this, std::move(body), std::move(respond));
-    }
-
-    void LinkManager::handle_initiate_session(oxen::quic::message m)
-    {
-        if (not m)
-        {
-            log::info(logcat, "Initiate session message timed out!");
-            return;
-        }
-
-        NetworkAddress initiator;
-        service::SessionTag tag;
-        HopID pivot_txid;
-        bool use_tun;
-        std::optional<std::string> maybe_auth = std::nullopt;
-        std::shared_ptr<path::Path> path_ptr;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{m.body()};
-
-            std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
-                InitiateSession::decrypt_deserialize(btdc, _router.identity());
-
-            if (not _router.session_endpoint()->validate(initiator, maybe_auth))
-            {
-                log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
-                return m.respond(InitiateSession::AUTH_DENIED, true);
-            }
-
-            path_ptr = _router.path_context()->get_path(pivot_txid);
-
-            if (not path_ptr)
-            {
-                log::warning(logcat, "Failed to find local path corresponding to session over pivot: {}", pivot_txid);
-                return m.respond(messages::ERROR_RESPONSE, true);
-            }
-
-            if (_router.session_endpoint()->prefigure_session(
-                    std::move(initiator), std::move(tag), std::move(path_ptr), use_tun))
-            {
-                return m.respond(messages::OK_RESPONSE);
-            }
-
-            log::warning(logcat, "Failed to configure InboundSession!");
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-        }
-
-        _router.path_context()->drop_path(path_ptr);
-        m.respond(messages::ERROR_RESPONSE, true);
     }
 
     void LinkManager::handle_convo_intro(oxen::quic::message m)

@@ -126,7 +126,7 @@ namespace llarp
 
             bool send_path_data_message(std::string body);
 
-            bool is_ready() const;
+            bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;
@@ -161,7 +161,7 @@ namespace llarp
             static constexpr bool to_string_formattable = true;
 
           private:
-            std::string make_outer_payload(char* data, size_t len);
+            std::string make_path_message(std::string&& payload);
 
             bool SendLatencyMessage(Router* r);
 

@@ -262,9 +262,12 @@ namespace llarp
     }
 
     void crypto::derive_decrypt_outer_wrapping(
-        const Ed25519SecretKey& local_sk, const PubKey& remote, const SymmNonce& nonce, uspan encrypted)
+        const Ed25519SecretKey& local_sk,
+        SharedSecret& shared,
+        const PubKey& remote,
+        const SymmNonce& nonce,
+        uspan encrypted)
     {
-        SharedSecret shared;
         // derive shared secret using ephemeral pubkey and our secret key (and nonce)
         if (!crypto::dh_server(shared, remote, local_sk, nonce))
         {

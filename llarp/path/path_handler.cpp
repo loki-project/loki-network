@@ -263,7 +263,7 @@ namespace llarp::path
 
         for (const auto& [_, p] : _paths)
         {
-            if (p->is_ready() and not p->intro.is_expired(now))
+            if (p and p->is_ready(now))
                 intros.emplace(p->intro);
         }
 
@@ -350,7 +350,8 @@ namespace llarp::path
 
         for (auto& [_, p] : _paths)
         {
-            dissociate_hop_ids(p);
+            if (p)
+                dissociate_hop_ids(p);
         }
 
         _paths.clear();
@@ -555,13 +556,13 @@ namespace llarp::path
         // the same entity from knowing they are part of the same path
         // (unless they're adjacent in the path; nothing we can do about that obviously).
 
-        // i from n_hops downto 0
+        // i from n_hops down to 0
         for (int i = n_hops - 1; i >= 0; --i)
         {
             const auto& next_rid = i == n_hops - 1 ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
             path_hops[i].upstream = next_rid;
 
-            frames[i] = PathBuildMessage::serialize_hop(path_hops[i]);
+            frames[i] = PATH::BUILD::serialize_hop(path_hops[i]);
 
             if (last_len and frames[i].size() != last_len)
             {
@@ -593,7 +594,7 @@ namespace llarp::path
 
         _build_stats.attempts++;
 
-        return Frames::serialize(std::move(frames));
+        return ONION::serialize_frames(std::move(frames));
     }
 
     bool PathHandler::build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler)

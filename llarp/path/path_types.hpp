@@ -31,7 +31,7 @@ namespace llarp
             /// next hop's router id
             RouterID upstream;
             // lifetime
-            std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
+            std::chrono::milliseconds lifetime{DEFAULT_LIFETIME};
 
             nlohmann::json ExtractStatus() const;
 
@@ -51,8 +51,8 @@ namespace llarp
         };
 
         // milliseconds waiting between builds on a path per router
-        static constexpr auto MIN_PATH_BUILD_INTERVAL = 500ms;
-        static constexpr auto PATH_BUILD_RATE = 100ms;
+        static constexpr auto MIN_PATH_BUILD_INTERVAL{500ms};
+        static constexpr auto PATH_BUILD_RATE{100ms};
     }  // namespace path
 }  // namespace llarp
 

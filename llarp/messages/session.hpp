@@ -82,6 +82,7 @@ namespace llarp
             SymmNonce nonce;
             RouterID shared_pubkey;
             ustring payload;
+            SharedSecret shared;
 
             try
             {
@@ -89,7 +90,7 @@ namespace llarp
                 shared_pubkey = RouterID{btdc.require<std::string>("s")};
                 payload = btdc.require<ustring>("x");
 
-                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, to_uspan(payload));
+                crypto::derive_decrypt_outer_wrapping(local, shared, shared_pubkey, nonce, to_uspan(payload));
 
                 {
                     RouterID remote;

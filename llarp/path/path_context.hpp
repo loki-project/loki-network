@@ -47,8 +47,6 @@ namespace llarp::path
 
         void drop_paths(std::vector<std::shared_ptr<Path>> droplist);
 
-        intro_set get_recent_ccs() const;
-
       private:
         const RouterID _local_rid;
 

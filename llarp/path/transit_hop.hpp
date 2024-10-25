@@ -27,19 +27,15 @@ namespace llarp
             // This static factory function is used in path-build logic. The exceptions thrown are the exact response
             // bodies passed to message::respond(...) function
             static std::shared_ptr<TransitHop> deserialize_hop(
-                oxenc::bt_dict_consumer&& btdc,
-                const RouterID& src,
-                Router& r,
-                const PubKey& remote_pk,
-                const SymmNonce& nonce);
+                oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret);
 
             SharedSecret shared;
             SymmNonce nonceXOR;
-            std::chrono::milliseconds started = 0s;
+            std::chrono::milliseconds started{0s};
             // 10 minutes default
-            std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
+            std::chrono::milliseconds lifetime{DEFAULT_LIFETIME};
             uint8_t version;
-            std::chrono::milliseconds _last_activity = 0s;
+            std::chrono::milliseconds _last_activity{0s};
             bool terminal_hop{false};
 
             RouterID& upstream() { return _upstream; }

@@ -57,22 +57,6 @@ namespace llarp::path
         }
     }
 
-    intro_set PathContext::get_recent_ccs() const
-    {
-        Lock_t l{paths_mutex};
-
-        intro_set intros;
-        auto now = llarp::time_now_ms();
-
-        for (auto& [_, p] : _path_map)
-        {
-            if (p->is_ready() and not p->is_expired(now))
-                intros.emplace(p->intro);
-        }
-
-        return intros;
-    }
-
     void PathContext::drop_path(const std::shared_ptr<Path>& path)
     {
         Lock_t l{paths_mutex};

@@ -73,7 +73,11 @@ namespace llarp
         /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
         /// the server DH derivation or the xchacha20 payload mutation
         void derive_decrypt_outer_wrapping(
-            const Ed25519SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
+            const Ed25519SecretKey& local,
+            SharedSecret& shared,
+            const PubKey& remote,
+            const SymmNonce& nonce,
+            uspan encrypted);
 
         bool make_scalar(AlignedBuffer<32>& out, const PubKey& k, uint64_t i);
 
