@@ -166,19 +166,6 @@ namespace llarp::path
         return selected;
     }
 
-    size_t PathHandler::paths_at_time(std::chrono::milliseconds futureTime) const
-    {
-        size_t num = 0;
-        Lock_t l{paths_mutex};
-
-        for (const auto& item : _paths)
-        {
-            if (item.second->is_ready() && !item.second->is_expired(futureTime))
-                ++num;
-        }
-        return num;
-    }
-
     void PathHandler::reset_path_state()
     {
         build_interval_limit = PATH_BUILD_RATE;
@@ -424,7 +411,6 @@ namespace llarp::path
         }
 
         RemoteRC remote_rc;
-        to_exclude.insert(remote_rc.router_id());  // we will manually add this last
 
         if (const auto maybe = _router.node_db()->get_rc(pivot))
         {
@@ -432,6 +418,8 @@ namespace llarp::path
         }
         else
             return std::nullopt;
+
+        to_exclude.insert(remote_rc.router_id());  // we will manually add this last
 
         // leave one extra spot for the terminal node
         auto hops_needed = num_hops - hops.size() - 1;
@@ -508,7 +496,7 @@ namespace llarp::path
 
         last_build = llarp::time_now_ms();
         const auto& edge = hops[0].router_id();
-        const auto& terminus = hops.back().router_id();
+        const auto& pivot = hops.back().router_id();
 
         if (not _router.pathbuild_limiter().Attempt(edge))
         {
@@ -519,9 +507,9 @@ namespace llarp::path
         {
             Lock_t l{paths_mutex};
 
-            if (auto [it, b] = _paths.try_emplace(terminus, nullptr); not b)
+            if (auto [it, b] = _paths.try_emplace(pivot, nullptr); not b)
             {
-                log::warning(logcat, "Pending build to {} already underway... aborting...", terminus);
+                log::warning(logcat, "Pending build to {} already underway... aborting...", pivot);
                 return false;
             }
         }

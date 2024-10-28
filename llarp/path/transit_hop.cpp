@@ -9,6 +9,20 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("transit-hop");
 
+    std::shared_ptr<TransitHop> TransitHop::from_hop_config(PathHopConfig hop_config)
+    {
+        auto hop = std::make_shared<TransitHop>();
+
+        hop->_txid = {hop_config.txID};
+        hop->_rxid = {hop_config.rxID};
+        hop->_upstream = {hop_config.upstream};
+        hop->shared = {hop_config.shared};
+        hop->nonce = {hop_config.nonce};
+        hop->nonceXOR = {hop_config.nonceXOR};
+
+        return hop;
+    }
+
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
         oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret)
     {
@@ -33,7 +47,7 @@ namespace llarp::path
         if (hop->lifetime > path::DEFAULT_LIFETIME)
             throw std::runtime_error{PATH::BUILD::BAD_LIFETIME};
 
-        hop->downstream() = src;
+        hop->_downstream = src;
         hop->shared = std::move(secret);
 
         if (r.path_context()->has_transit_hop(hop))

@@ -236,9 +236,9 @@ namespace llarp::handlers
                 if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
                     status = s;
             }
-            catch (...)
+            catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught parsing 'find_name' response!");
+                log::warning(logcat, "Exception caught parsing 'find_name' response: {}", e.what());
             }
 
             log::warning(logcat, "Call to endpoint 'lookup_name' failed -- status:{}", status.value_or("<none given>"));
@@ -414,7 +414,25 @@ namespace llarp::handlers
             {
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
-                ret &= path->publish_client_contact(ecc, true);
+                ret &= path->publish_client_contact(ecc, true, 0, [](std::string response) {
+                    log::info(logcat, "Received response to PublishClientContact...");
+
+                    std::optional<std::string> status = std::nullopt;
+                    try
+                    {
+                        oxenc::bt_dict_consumer btdc{response};
+
+                        if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                            status = s;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::warning(logcat, "Exception: {}", e.what());
+                    }
+
+                    log::warning(
+                        logcat, "Call to PublishClientContact failed -- status:{}", status.value_or("<none given>"));
+                });
             }
         }
 

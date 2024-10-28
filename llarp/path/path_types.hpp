@@ -11,6 +11,13 @@ namespace llarp
     struct HopID final : public AlignedBuffer<PATHIDSIZE>
     {
         using AlignedBuffer<PATHIDSIZE>::AlignedBuffer;
+
+        static HopID make_random()
+        {
+            HopID h;
+            h.Randomize();
+            return h;
+        }
     };
 
     namespace path

@@ -382,7 +382,7 @@ namespace llarp::handlers
         auto pkt_hook = [this]() {
             for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
             {
-                log::debug(logcat, "packet router receiving {}", pkt.info_line());
+                log::trace(logcat, "packet router receiving {}", pkt.info_line());
                 _packet_router->handle_ip_packet(std::move(pkt));
             }
         };

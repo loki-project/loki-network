@@ -51,29 +51,12 @@ namespace llarp
             }
             catch (const std::exception& e)
             {
-                throw std::runtime_error{"Exception caught deserializing onion data:{}"_format(e.what())};
+                throw std::runtime_error{"Exception caught deserializing onion data: {}"_format(e.what())};
             }
 
             return {std::move(hop_id), std::move(nonce), std::move(payload)};
         }
 
-        inline static std::tuple<ustring, ustring, ustring> deserialize_hop(oxenc::bt_dict_consumer& btdc)
-        {
-            ustring hopid, nonce, payload;
-
-            try
-            {
-                hopid = btdc.require<ustring>("k");
-                nonce = btdc.require<ustring>("n");
-                payload = btdc.require<ustring>("x");
-            }
-            catch (const std::exception& e)
-            {
-                throw std::runtime_error{"Exception caught deserializing onion data:{}"_format(e.what())};
-            }
-
-            return {std::move(hopid), std::move(nonce), std::move(payload)};
-        }
     }  // namespace ONION
 
     namespace PATH
@@ -170,7 +153,7 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    log::warning(logcat, "Exception caught deserializing hop dict:{}", e.what());
+                    log::warning(logcat, "Exception caught deserializing hop dict: {}", e.what());
                     throw;
                 }
 
@@ -227,7 +210,7 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    throw std::runtime_error{"Exception caught deserializing path control:{}"_format(e.what())};
+                    throw std::runtime_error{"Exception caught deserializing path control: {}"_format(e.what())};
                 }
 
                 return {std::move(endpoint), std::move(payload)};

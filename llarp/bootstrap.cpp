@@ -156,7 +156,7 @@ namespace llarp
 
         if (not fs::exists(fpath))
         {
-            log::critical(logcat, "Bootstrap RC file non-existant at path:{}", fpath);
+            log::critical(logcat, "Bootstrap RC file non-existent at path:{}", fpath);
             return result;
         }
 

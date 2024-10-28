@@ -7,6 +7,8 @@
 #include <llarp/router/router.hpp>
 #include <llarp/util/buffer.hpp>
 
+#include <ranges>
+
 namespace llarp::path
 {
     static auto logcat = log::Cat("path");
@@ -19,31 +21,34 @@ namespace llarp::path
         bool is_client)
         : handler{std::move(_handler)}, _router{rtr}, _is_session_path{is_session}, _is_client{is_client}
     {
-        hops.resize(_hops.size());
-        size_t hsz = _hops.size();
+        size_t n_hops = _hops.size();
+        // transit_hops.resize(n_hops);
+        hops.resize(n_hops);
 
-        for (size_t idx = 0; idx < hsz; ++idx)
+        for (size_t idx = 0; idx < n_hops; ++idx)
         {
+            // transit_hops[idx]
             hops[idx].rc = _hops[idx];
-            do
-            {
-                hops[idx].txID.Randomize();
-            } while (hops[idx].txID.is_zero());
-
-            do
-            {
-                hops[idx].rxID.Randomize();
-            } while (hops[idx].rxID.is_zero());
+            hops[idx].txID = HopID::make_random();
+            // transit_hops[idx]._txid = HopID::make_random();
+            hops[idx].rxID = HopID::make_random();
+            // transit_hops[idx]._rxid = HopID::make_random();
         }
 
-        for (size_t idx = 0; idx < hsz - 1; ++idx)
+        for (size_t idx = 0; idx < n_hops - 1; ++idx)
         {
+            // transit_hops[idx]._txid = transit_hops[idx + 1]._rxid;
             hops[idx].txID = hops[idx + 1].rxID;
         }
 
         // initialize parts of the clientintro
-        intro.pivot_rid = hops[hsz - 1].rc.router_id();
-        intro.pivot_hid = hops[hsz - 1].txID;
+        // intro.pivot_rid = transit_hops.back().rc.router_id();
+        // intro.pivot_hid = transit_hops.back()._txid;
+        intro.pivot_rid = hops.back().rc.router_id();
+        intro.pivot_hid = hops.back().txID;
+
+        log::info(
+            logcat, "Path client intro holding pivot_rid ({}) and pivot_hid ({})", intro.pivot_rid, intro.pivot_hid);
     }
 
     void Path::link_session(recv_session_dgram_cb cb)
@@ -75,8 +80,8 @@ namespace llarp::path
 
     bool Path::operator<(const Path& other) const
     {
-        auto& first_hop = hops[0];
-        auto& other_first = other.hops[0];
+        auto& first_hop = hops.front();
+        auto& other_first = other.hops.front();
         return std::tie(first_hop.txID, first_hop.rxID, first_hop.upstream)
             < std::tie(other_first.txID, other_first.rxID, other_first.upstream);
     }
@@ -148,14 +153,14 @@ namespace llarp::path
     {
         auto nonce = SymmNonce::make_random();
 
-        for (const auto& hop : hops)
+        for (const auto& hop : std::ranges::reverse_view(hops))
         {
             nonce = crypto::onion(
                 reinterpret_cast<unsigned char*>(inner_payload.data()),
                 inner_payload.size(),
                 hop.shared,
-                hop.nonce,
-                hop.nonce);
+                nonce,
+                hop.nonceXOR);
         }
 
         return ONION::serialize_hop(upstream_txid().to_view(), nonce, std::move(inner_payload));
@@ -182,7 +187,7 @@ namespace llarp::path
                 auto self = weak.lock();
                 if (not self)
                 {
-                    log::warning(logcat, "Received response to path control message with non-existant path!");
+                    log::warning(logcat, "Received response to path control message with non-existent path!");
                     return;
                 }
 
@@ -193,77 +198,86 @@ namespace llarp::path
                     return;
                 }
 
-                log::debug(logcat, "Received response to path control message...");
+                log::debug(logcat, "Received response to path control message: {}", buffer_printer{m.body()});
 
-                if (m.timed_out)
-                {
-                    log::info(logcat, "Path control message returned as time out!");
-                    return response_cb(messages::TIMEOUT_RESPONSE);
-                }
+                if (m)
+                    log::info(logcat, "Path control message returned successfully!");
+                else if (m.timed_out)
+                    log::warning(logcat, "Path control message returned as time out!");
+                else
+                    log::warning(logcat, "Path control message returned as error!");
 
-                HopID hop_id;
-                SymmNonce nonce;
-                std::string payload;
+                return response_cb(m.body_str());
 
-                try
-                {
-                    std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{m.body()});
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Error parsing path control message response: {}", e.what());
-                    return response_cb(messages::ERROR_RESPONSE);
-                }
+                // TODO: onion encrypt path message responses
+                // HopID hop_id;
+                // SymmNonce nonce;
+                // std::string payload;
 
-                for (const auto& hop : self->hops)
-                {
-                    nonce = crypto::onion(
-                        reinterpret_cast<unsigned char*>(payload.data()),
-                        payload.size(),
-                        hop.shared,
-                        nonce,
-                        hop.nonceXOR);
-                }
+                // try
+                // {
+                //     std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{m.body()});
+                // }
+                // catch (const std::exception& e)
+                // {
+                //     log::warning(logcat, "Exception parsing path control message response: {}", e.what());
+                //     return response_cb(messages::ERROR_RESPONSE);
+                // }
 
-                // TODO: DISCUSS:
-                // Parsing and handling of the contents (errors, etc.) is the currently responsibility of the callback
-                response_cb(std::string{reinterpret_cast<const char*>(payload.data()), payload.size()});
+                // for (const auto& hop : self->hops)
+                // {
+                //     nonce = crypto::onion(
+                //         reinterpret_cast<unsigned char*>(payload.data()),
+                //         payload.size(),
+                //         hop.shared,
+                //         nonce,
+                //         hop.nonceXOR);
+                // }
+
+                // // TODO: DISCUSS:
+                // // Parsing and handling of the contents (errors, etc.) is the currently responsibility of the
+                // callback response_cb(std::move(payload));
             });
     }
 
     bool Path::is_ready(std::chrono::milliseconds now) const
     {
-        return _established ? is_expired(now) : false;
+        return _established ? !is_expired(now) : false;
+    }
+
+    PathHopConfig Path::upstream()
+    {
+        return hops.front();
     }
 
     RouterID Path::upstream_rid()
     {
-        return hops[0].rc.router_id();
+        return hops.front().rc.router_id();
     }
 
     const RouterID& Path::upstream_rid() const
     {
-        return hops[0].rc.router_id();
+        return hops.front().rc.router_id();
     }
 
     HopID Path::upstream_txid()
     {
-        return hops[0].txID;
+        return hops.front().txID;
     }
 
     const HopID& Path::upstream_txid() const
     {
-        return hops[0].txID;
+        return hops.front().txID;
     }
 
     HopID Path::upstream_rxid()
     {
-        return hops[0].rxID;
+        return hops.front().rxID;
     }
 
     const HopID& Path::upstream_rxid() const
     {
-        return hops[0].rxID;
+        return hops.front().rxID;
     }
 
     RouterID Path::pivot_rid()

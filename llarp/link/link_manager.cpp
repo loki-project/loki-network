@@ -1292,6 +1292,8 @@ namespace llarp
 
     void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& /* from */)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
         HopID hop_id;
         std::string payload;
         SymmNonce nonce;
@@ -1313,12 +1315,20 @@ namespace llarp
         // bidirectional, will need to check if we have a Path with path_id.
         if (not hop)
         {
+            // if (auto path = _router.path_context()->get_path(hop_id))
+            // {
+            //     log::info(logcat, "Received path control corresponding to known path!");
+            //     //
+            // }
+
             log::warning(logcat, "Received path control with unknown next hop (ID: {})", hop_id);
             return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        nonce = crypto::onion(
-            reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop->shared, nonce, hop->nonceXOR);
+        auto onion_nonce = nonce ^ hop->nonceXOR;
+
+        crypto::onion(
+            reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop->shared, onion_nonce, hop->nonceXOR);
 
         // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
         if (hop->terminal_hop)
@@ -1332,7 +1342,7 @@ namespace llarp
         const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
         const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
 
-        std::string new_payload = ONION::serialize_hop(next_id.to_view(), nonce, std::move(payload));
+        std::string new_payload = ONION::serialize_hop(next_id.to_view(), onion_nonce, std::move(payload));
 
         send_control_message(
             next_router,
@@ -1344,33 +1354,44 @@ namespace llarp
 
                 if (not hop)
                 {
-                    log::warning(logcat, "Received response to path control message with non-existant TransitHop!");
+                    log::warning(logcat, "Received response to path control message with non-existent TransitHop!");
                     return prev_message.respond(messages::ERROR_RESPONSE, true);
                 }
 
-                if (response.timed_out)
+                if (response)
                 {
-                    log::info(logcat, "Path control message returned as time out!");
-                    return prev_message.respond(messages::TIMEOUT_RESPONSE, true);
+                    log::info(logcat, "Path control message returned successfully!");
+                    prev_message.respond(messages::OK_RESPONSE, false);
+                }
+                else if (response.timed_out)
+                {
+                    log::warning(logcat, "Path control message returned as time out!");
+                    prev_message.respond(messages::TIMEOUT_RESPONSE, true);
+                }
+                else
+                {
+                    log::warning(logcat, "Path control message returned as error!");
+                    prev_message.respond(messages::ERROR_RESPONSE, true);
                 }
 
-                HopID hop_id;
-                SymmNonce nonce;
-                std::string payload;
+                // TODO: onion encrypt path message responses
+                // HopID hop_id;
+                // SymmNonce nonce;
+                // std::string payload;
 
-                try
-                {
-                    std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{response.body()});
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Exception: {}", e.what());
-                    return prev_message.respond(messages::ERROR_RESPONSE, true);
-                    ;
-                }
+                // try
+                // {
+                //     std::tie(hop_id, nonce, payload) =
+                //     ONION::deserialize_hop(oxenc::bt_dict_consumer{response.body()});
+                // }
+                // catch (const std::exception& e)
+                // {
+                //     log::warning(logcat, "Exception: {}; payload: {}", e.what(), buffer_printer{response.body()});
+                //     return prev_message.respond(messages::ERROR_RESPONSE, true);
+                // }
 
-                auto resp_payload = ONION::serialize_hop(hop_id.to_view(), nonce, std::move(payload));
-                prev_message.respond(std::move(resp_payload), false);
+                // auto resp_payload = ONION::serialize_hop(hop_id.to_view(), nonce, std::move(payload));
+                // prev_message.respond(std::move(resp_payload), false);
             });
     }
 
@@ -1451,8 +1472,8 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
+            log::warning(logcat, "Exception: {}; Payload: {}", e.what(), buffer_printer{payload});
+            return m.respond(messages::serialize_response({{messages::STATUS_KEY, e.what()}}), true);
         }
 
         // If a handler exists for "method", call it; else drop request on the floor.
@@ -1471,8 +1492,11 @@ namespace llarp
             if (not hop)
                 return;  // transit hop gone, drop response
 
-            auto n = SymmNonce::make_random();
-            m.respond(ONION::serialize_hop(hop->rxid().to_view(), n, response), false);
+            m.respond(std::move(response));
+
+            // TODO: onion encrypt path message responses
+            // auto n = SymmNonce::make_random();
+            // m.respond(ONION::serialize_hop(hop->rxid().to_view(), n, response), false);
         };
 
         std::invoke(itr->second, this, std::move(body), std::move(respond));

@@ -42,6 +42,8 @@ namespace llarp
         {
             std::vector<PathHopConfig> hops;
 
+            // std::vector<TransitHop> transit_hops;
+
             std::weak_ptr<PathHandler> handler;
 
             ClientIntro intro{};
@@ -128,6 +130,8 @@ namespace llarp
 
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
+            PathHopConfig upstream();
+
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;
 
@@ -178,9 +182,9 @@ namespace llarp
 
             recv_session_dgram_cb _recv_dgram;
 
-            std::chrono::milliseconds last_recv_msg = 0s;
-            std::chrono::milliseconds last_latency_test = 0s;
-            uint64_t last_latency_test_id = 0;
+            std::chrono::milliseconds last_recv_msg{0s};
+            std::chrono::milliseconds last_latency_test{0s};
+            uint64_t last_latency_test_id{};
         };
     }  // namespace path
 }  // namespace llarp

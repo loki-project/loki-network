@@ -10,17 +10,21 @@ namespace llarp
 {
     struct Router;
 
+    /** TODO: combine PathHopConfig into TransitHop
+        - Add RelayContact
+     */
+
     namespace path
     {
         struct TransitHop : std::enable_shared_from_this<TransitHop>
         {
-          private:
             HopID _txid, _rxid;
             RouterID _upstream;
             RouterID _downstream;
 
-          public:
             TransitHop() = default;
+
+            static std::shared_ptr<TransitHop> from_hop_config(PathHopConfig hop_config);
 
             TransitHop(Router& r, const RouterID& src, ustring symmkey, ustring symmnonce);
 
@@ -30,6 +34,7 @@ namespace llarp
                 oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret);
 
             SharedSecret shared;
+            SymmNonce nonce;
             SymmNonce nonceXOR;
             std::chrono::milliseconds started{0s};
             // 10 minutes default
