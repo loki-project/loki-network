@@ -141,12 +141,11 @@ namespace llarp
             oxenc::bt_dict_producer btdp;
             enc.bt_encode(btdp);
 
-            auto view = btdp.view_for_signing<unsigned char>();
-
-            if (not crypto::sign(enc.sig, derived_privatekey, view.data(), view.size()))
-                throw std::runtime_error{"Failed to sign EncryptedClientContact payload!"};
-
-            btdp.append("~", enc.sig.to_view());
+            btdp.append_signature("~", [&](ustring_view to_sign) {
+                if (not crypto::sign(enc.sig, derived_privatekey, to_sign.data(), to_sign.size()))
+                    throw std::runtime_error{"Failed to sign EncryptedClientContact payload!"};
+                return enc.sig.to_view();
+            });
 
             enc._bt_payload = std::move(btdp).str();
         }

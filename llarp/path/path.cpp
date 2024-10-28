@@ -144,25 +144,21 @@ namespace llarp::path
         // _role &= ePathRoleExit;
     }
 
-    std::string Path::make_path_message(std::string&& inner_payload)
+    std::string Path::make_path_message(std::string inner_payload)
     {
-        int n_hops = static_cast<int>(hops.size());
-        std::string payload{std::move(inner_payload)};
+        auto nonce = SymmNonce::make_random();
 
-        // Working from final hop to hop 1, we onion encrypt the message payload with each
-        // hop's shared secret (this was derived via DH KEM in path building). The encrypted
-        // payload will then be bt-serialized, and then encrypted/serialized for the next hop.
-        for (int i = n_hops - 1; i >= 0; --i)
+        for (const auto& hop : hops)
         {
-            auto& hop = hops[i];
-
-            crypto::onion(
-                reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, hop.nonce, hop.nonceXOR);
-
-            payload = ONION::serialize_hop(hop.upstream.to_view(), hop.nonce, payload);
+            nonce = crypto::onion(
+                reinterpret_cast<unsigned char*>(inner_payload.data()),
+                inner_payload.size(),
+                hop.shared,
+                hop.nonce,
+                hop.nonce);
         }
 
-        return payload;
+        return ONION::serialize_hop(upstream_txid().to_view(), nonce, std::move(inner_payload));
     }
 
     bool Path::send_path_data_message(std::string data)
@@ -184,31 +180,40 @@ namespace llarp::path
             std::move(outer_payload),
             [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) mutable {
                 auto self = weak.lock();
-                // TODO: do we want to allow empty callback here?
-                if ((not self) or (not response_cb))
-                    return;
-
-                if (m.timed_out)
+                if (not self)
                 {
-                    response_cb(messages::TIMEOUT_RESPONSE);
+                    log::warning(logcat, "Received response to path control message with non-existant path!");
                     return;
                 }
 
-                ustring hop_id_str, symmnonce, payload;
+                // TODO: DISCUSS: do we want to allow empty callback here?
+                if (not response_cb)
+                {
+                    log::warning(logcat, "Received response to path control message with no response callback!");
+                    return;
+                }
+
+                log::debug(logcat, "Received response to path control message...");
+
+                if (m.timed_out)
+                {
+                    log::info(logcat, "Path control message returned as time out!");
+                    return response_cb(messages::TIMEOUT_RESPONSE);
+                }
+
+                HopID hop_id;
+                SymmNonce nonce;
+                std::string payload;
 
                 try
                 {
-                    oxenc::bt_dict_consumer btdc{m.body()};
-                    std::tie(hop_id_str, symmnonce, payload) = ONION::deserialize_hop(btdc);
+                    std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{m.body()});
                 }
                 catch (const std::exception& e)
                 {
                     log::warning(logcat, "Error parsing path control message response: {}", e.what());
-                    response_cb(messages::ERROR_RESPONSE);
-                    return;
+                    return response_cb(messages::ERROR_RESPONSE);
                 }
-
-                SymmNonce nonce{symmnonce.data()};
 
                 for (const auto& hop : self->hops)
                 {
@@ -220,10 +225,8 @@ namespace llarp::path
                         hop.nonceXOR);
                 }
 
-                // TODO: should we do anything (even really simple) here to check if the decrypted
-                //       response is sensible (e.g. is a bt dict)?  Parsing and handling of the
-                //       contents (errors or otherwise) is the currently responsibility of the
-                //       callback.
+                // TODO: DISCUSS:
+                // Parsing and handling of the contents (errors, etc.) is the currently responsibility of the callback
                 response_cb(std::string{reinterpret_cast<const char*>(payload.data()), payload.size()});
             });
     }

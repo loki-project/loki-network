@@ -185,6 +185,7 @@ namespace llarp::session
 
     void OutboundSession::path_died(std::shared_ptr<path::Path> p)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         p->rebuild();
     }
 
@@ -210,6 +211,7 @@ namespace llarp::session
 
     void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         path::PathHandler::path_build_succeeded(p);
 
         // TODO: why the fuck did we used to do this here...?

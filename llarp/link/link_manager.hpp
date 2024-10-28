@@ -278,7 +278,7 @@ namespace llarp
         void handle_convo_intro(oxen::quic::message);
 
         // These requests come over a path (as a "path_control" request),
-        // may or may not need to make a request to another relay,
+        // we may or may not need to make a request to another relay,
         // then respond (onioned) back along the path.
         std::unordered_map<
             std::string_view,

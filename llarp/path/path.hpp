@@ -161,7 +161,7 @@ namespace llarp
             static constexpr bool to_string_formattable = true;
 
           private:
-            std::string make_path_message(std::string&& payload);
+            std::string make_path_message(std::string payload);
 
             bool SendLatencyMessage(Router* r);
 

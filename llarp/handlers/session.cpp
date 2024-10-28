@@ -334,7 +334,7 @@ namespace llarp::handlers
             auto enc = client_contact.encrypt_and_sign();
 
             if (publish_client_contact(enc))
-                log::debug(logcat, "Successfully republished updated EncryptedClientContact!");
+                log::info(logcat, "Successfully republished updated EncryptedClientContact!");
             else
                 log::warning(logcat, "Failed to republish updated EncryptedClientContact!");
         }
@@ -414,7 +414,7 @@ namespace llarp::handlers
             {
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
-                ret += path->publish_client_contact(ecc, true);
+                ret &= path->publish_client_contact(ecc, true);
             }
         }
 

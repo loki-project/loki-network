@@ -37,6 +37,26 @@ namespace llarp
             return std::move(btdp).str();
         }
 
+        inline static std::tuple<HopID, SymmNonce, std::string> deserialize_hop(oxenc::bt_dict_consumer&& btdc)
+        {
+            HopID hop_id;
+            std::string payload;
+            SymmNonce nonce;
+
+            try
+            {
+                hop_id.from_string(btdc.require<std::string_view>("k"));
+                nonce.from_string(btdc.require<std::string_view>("n"));
+                payload = btdc.require<std::string_view>("x");
+            }
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error{"Exception caught deserializing onion data:{}"_format(e.what())};
+            }
+
+            return {std::move(hop_id), std::move(nonce), std::move(payload)};
+        }
+
         inline static std::tuple<ustring, ustring, ustring> deserialize_hop(oxenc::bt_dict_consumer& btdc)
         {
             ustring hopid, nonce, payload;
@@ -186,46 +206,46 @@ namespace llarp
         {
             /** Fields for transmitting Path Control:
                 - 'e' : request endpoint being invoked
-                - 'r' : request body
+                - 'p' : request payload
             */
-            inline static std::string serialize(std::string endpoint, std::string body)
+            inline static std::string serialize(std::string endpoint, std::string payload)
             {
                 oxenc::bt_dict_producer btdp;
                 btdp.append("e", endpoint);
-                btdp.append("r", body);
+                btdp.append("p", payload);
                 return std::move(btdp).str();
             }
 
-            inline static std::tuple<std::string, std::string> deserialize(oxenc::bt_dict_consumer& btdc)
+            inline static std::tuple<std::string, std::string> deserialize(oxenc::bt_dict_consumer&& btdc)
             {
-                std::string endpoint, body;
+                std::string endpoint, payload;
 
                 try
                 {
                     endpoint = btdc.require<std::string>("e");
-                    body = btdc.require<std::string>("r");
+                    payload = btdc.require<std::string>("p");
                 }
                 catch (const std::exception& e)
                 {
                     throw std::runtime_error{"Exception caught deserializing path control:{}"_format(e.what())};
                 }
 
-                return {std::move(endpoint), std::move(body)};
+                return {std::move(endpoint), std::move(payload)};
             }
         }  // namespace CONTROL
 
         namespace DATA
         {
             /** Fields for transmitting Path Data:
-                - 'b' : request/command body
-                - 's' : RouterID of sender
+                - 'i' : RouterID of sender
+                - 'p' : request/command payload
                 NOTE: more fields may be added later as needed, hence the namespacing
             */
-            inline static std::string serialize(std::string body, const RouterID& local)
+            inline static std::string serialize(std::string payload, const RouterID& local)
             {
                 oxenc::bt_dict_producer btdp;
-                btdp.append("b", body);
-                btdp.append("s", local.to_view());
+                btdp.append("i", local.to_view());
+                btdp.append("p", payload);
                 return std::move(btdp).str();
             }
 
@@ -236,8 +256,8 @@ namespace llarp
 
                 try
                 {
-                    body = btdc.require<bstring>("b");
-                    remote.from_string(btdc.require<std::string_view>("s"));
+                    remote.from_string(btdc.require<std::string_view>("i"));
+                    body = btdc.require<bstring>("p");
                     auto sender = NetworkAddress::from_pubkey(remote, true);
 
                     return {std::move(sender), std::move(body)};
