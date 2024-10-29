@@ -163,7 +163,8 @@ namespace llarp::path
                 hop.nonceXOR);
         }
 
-        return ONION::serialize_hop(upstream_txid().to_view(), nonce, std::move(inner_payload));
+        // TESTNET: upstream_txid -> upstream_rxid
+        return ONION::serialize_hop(upstream_rxid().to_view(), nonce, std::move(inner_payload));
     }
 
     bool Path::send_path_data_message(std::string data)

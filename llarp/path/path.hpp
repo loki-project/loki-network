@@ -63,8 +63,6 @@ namespace llarp
 
             nlohmann::json ExtractStatus() const;
 
-            std::string to_string() const;
-
             std::string HopsString() const;
 
             std::chrono::milliseconds LastRemoteActivityAt() const { return last_recv_msg; }
@@ -162,6 +160,7 @@ namespace llarp
 
             bool operator!=(const Path& other) const;
 
+            std::string to_string() const;
             static constexpr bool to_string_formattable = true;
 
           private:

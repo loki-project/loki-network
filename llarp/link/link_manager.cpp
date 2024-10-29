@@ -1080,7 +1080,9 @@ namespace llarp
                     "Received PublishClientContact for which we are index {}... storing client contact...",
                     relay_order);
                 _router.contact_db().put_cc(std::move(enc));
-                return respond(messages::OK_RESPONSE);
+                // return respond(messages::OK_RESPONSE);
+                // TESTNET:
+                return respond(PublishClientContact::SUCCESS);
             }
 
             log::info(logcat, "Received PublishClientContact; propagating to peer index {}...", relay_order);
@@ -1112,7 +1114,9 @@ namespace llarp
                         dht_key,
                         relay_order);
                     _router.contact_db().put_cc(std::move(enc));
-                    return respond(messages::OK_RESPONSE);
+                    // return respond(messages::OK_RESPONSE);
+                    // TESTNET:
+                    return respond(PublishClientContact::SUCCESS);
                 }
             }
 
@@ -1191,8 +1195,7 @@ namespace llarp
         if (!_router.path_context()->is_transit_allowed())
         {
             log::warning(logcat, "got path build request when not permitting transit");
-            m.respond(PATH::BUILD::NO_TRANSIT, true);
-            return;
+            return m.respond(PATH::BUILD::NO_TRANSIT, true);
         }
 
         try
@@ -1359,20 +1362,13 @@ namespace llarp
                 }
 
                 if (response)
-                {
                     log::info(logcat, "Path control message returned successfully!");
-                    prev_message.respond(messages::OK_RESPONSE, false);
-                }
                 else if (response.timed_out)
-                {
                     log::warning(logcat, "Path control message returned as time out!");
-                    prev_message.respond(messages::TIMEOUT_RESPONSE, true);
-                }
                 else
-                {
                     log::warning(logcat, "Path control message returned as error!");
-                    prev_message.respond(messages::ERROR_RESPONSE, true);
-                }
+
+                prev_message.respond(response.body_str(), response.is_error());
 
                 // TODO: onion encrypt path message responses
                 // HopID hop_id;

@@ -26,8 +26,10 @@ namespace llarp
             - 'n' : Symmetric nonce used to encrypt the layer
             - 'x' : Encrypted payload transmitted to next recipient
         */
-        template <oxenc::string_like K, oxenc::string_like T>
-        inline static std::string serialize_hop(K key, const SymmNonce& nonce, T encrypted)
+        // template <oxenc::string_like K, oxenc::string_like T>
+        // inline static std::string serialize_hop(K key, const SymmNonce& nonce, T encrypted)
+        inline static std::string serialize_hop(
+            std::string_view key, const SymmNonce& nonce, std::string_view encrypted)
         {
             oxenc::bt_dict_producer btdp;
             btdp.append("k", key);

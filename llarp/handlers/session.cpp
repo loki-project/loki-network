@@ -405,7 +405,7 @@ namespace llarp::handlers
     {
         bool ret{true};
 
-        log::critical(logcat, "Publishing new EncryptedClientContact: {}", ecc.bt_payload());
+        log::critical(logcat, "Publishing new EncryptedClientContact: {}", buffer_printer{ecc.bt_payload()});
 
         {
             Lock_t l{paths_mutex};
@@ -430,8 +430,12 @@ namespace llarp::handlers
                         log::warning(logcat, "Exception: {}", e.what());
                     }
 
-                    log::warning(
-                        logcat, "Call to PublishClientContact failed -- status:{}", status.value_or("<none given>"));
+                    auto b = status.value_or("<none given>") == "SUCCESS";
+
+                    log::critical(
+                        logcat,
+                        "Call to PublishClientContact {}",
+                        b ? "SUCCEEDED" : "FAILED -- reason: {}"_format(status.value_or("<none given>")));
                 });
             }
         }

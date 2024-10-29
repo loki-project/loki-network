@@ -13,7 +13,7 @@ namespace llarp
     struct ClientIntro
     {
         RouterID pivot_rid;
-        HopID pivot_hid;
+        HopID pivot_hid;  // TXID at the pivot
         std::chrono::milliseconds expiry{0s};
         uint64_t version{llarp::constants::proto_version};
 

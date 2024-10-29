@@ -80,7 +80,7 @@ namespace llarp
 
             try
             {
-                btdp.append("c", location.to_view());
+                btdp.append("k", location.to_view());
                 btdp.append("o", relay_order);
                 btdp.append("r", is_relayed);
             }
@@ -106,7 +106,7 @@ namespace llarp
             try
             {
                 oxenc::bt_dict_consumer btdc{buf};
-                key.from_string(btdc.require<std::string_view>("c"));
+                key.from_string(btdc.require<std::string_view>("k"));
                 is_relayed = btdc.require<bool>("o");
                 relay_order = btdc.require<uint64_t>("r");
             }
@@ -123,6 +123,7 @@ namespace llarp
 
     namespace PublishClientContact
     {
+        inline const auto SUCCESS = messages::serialize_response({{messages::STATUS_KEY, "SUCCESS"}});
         inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});
         inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
         inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
