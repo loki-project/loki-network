@@ -65,6 +65,8 @@ namespace llarp
 
     size_t ClientContact::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
+        btdp.append("", ClientContact::CC_VERSION);
+
         btdp.append("a", pubkey.to_view());
 
         if (exit_policy)
@@ -91,6 +93,12 @@ namespace llarp
 
     void ClientContact::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
+        auto version = btdc.require<uint8_t>("");
+        if (ClientContact::CC_VERSION != version)
+            throw std::runtime_error{
+                "Deserialized ClientContact with incorrect version! (Received:{}, expected:{})"_format(
+                    version, ClientContact::CC_VERSION)};
+
         pubkey.from_string(btdc.require<std::string_view>("a"));
 
         if (auto maybe_subdict = btdc.maybe<std::string_view>("e"))

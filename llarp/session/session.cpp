@@ -56,7 +56,7 @@ namespace llarp::session
 
         _current_path = std::move(_new_path);
 
-        _current_hop_id = _current_path->intro.pivot_hid;
+        _current_hop_id = _current_path->intro.pivot_rxid;
 
         if (_use_tun)
             _current_path->link_session([this](bstring data) {

@@ -65,19 +65,20 @@ namespace llarp::path
         log::debug(logcat, "Adding path...");
         Lock_t l(paths_mutex);
 
-        _paths.insert_or_assign(p->pivot_rid(), p);
-        associate_hop_ids(p);
+        _paths.insert_or_assign(p->upstream_rxid(), p);
+
+        // associate_hop_ids(p);
 
         _router.path_context()->add_path(p);
     }
 
     std::optional<std::shared_ptr<Path>> PathHandler::get_random_path()
     {
-        std::optional<std::pair<RouterID, std::shared_ptr<path::Path>>> t = std::nullopt;
+        auto p = std::make_optional<std::pair<HopID, std::shared_ptr<path::Path>>>();
 
-        std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);  // TOFIX: TESTNET:
+        std::sample(_paths.begin(), _paths.end(), &*p, 1, csrng);
 
-        return t.has_value() ? std::make_optional(t->second) : std::nullopt;
+        return p.has_value() ? std::make_optional(p->second) : std::nullopt;
     }
 
     std::optional<std::shared_ptr<Path>> PathHandler::get_path_conditional(
@@ -118,9 +119,9 @@ namespace llarp::path
 
         for (size_t i = 0; i < n; ++i)
         {
-            std::pair<RouterID, std::shared_ptr<path::Path>> t;
+            std::pair<HopID, std::shared_ptr<path::Path>> t;
 
-            std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);  // TOFIX: TESTNET:
+            std::sample(_paths.begin(), _paths.end(), &t, 1, csrng);
 
             selected->insert(selected->end(), t.second);
         }
@@ -216,16 +217,7 @@ namespace llarp::path
     // called within the scope of locked mutex
     std::optional<std::shared_ptr<Path>> PathHandler::get_path(HopID hid) const
     {
-        if (auto itr = _path_lookup.find(hid); itr != _path_lookup.end())
-            return get_path(itr->second);
-
-        return std::nullopt;
-    }
-
-    // called within the scope of locked mutex
-    std::optional<std::shared_ptr<Path>> PathHandler::get_path(const RouterID& rid) const
-    {
-        if (auto itr = _paths.find(rid); itr != _paths.end())
+        if (auto itr = _paths.find(hid); itr != _paths.end())
             return itr->second;
 
         return std::nullopt;
@@ -333,13 +325,13 @@ namespace llarp::path
 
         _running = false;
 
-        Lock_t l{paths_mutex};
+        // Lock_t l{paths_mutex};
 
-        for (auto& [_, p] : _paths)
-        {
-            if (p)
-                dissociate_hop_ids(p);
-        }
+        // for (auto& [_, p] : _path_map)
+        // {
+        //     if (p)
+        //         dissociate_hop_ids(p);
+        // }
 
         _paths.clear();
 
@@ -496,22 +488,11 @@ namespace llarp::path
 
         last_build = llarp::time_now_ms();
         const auto& edge = hops[0].router_id();
-        const auto& pivot = hops.back().router_id();
 
         if (not _router.pathbuild_limiter().Attempt(edge))
         {
             log::warning(logcat, "Building too quickly to edge router {}", edge);
             return false;
-        }
-
-        {
-            Lock_t l{paths_mutex};
-
-            if (auto [it, b] = _paths.try_emplace(pivot, nullptr); not b)
-            {
-                log::warning(logcat, "Pending build to {} already underway... aborting...", pivot);
-                return false;
-            }
         }
 
         return true;
@@ -520,6 +501,16 @@ namespace llarp::path
     std::shared_ptr<Path> PathHandler::build1(std::vector<RemoteRC>& hops)
     {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak());
+
+        {
+            Lock_t l{paths_mutex};
+
+            if (auto [it, b] = _paths.try_emplace(path->upstream_rxid(), nullptr); not b)
+            {
+                log::warning(logcat, "Pending build to {} already underway... aborting...", path->upstream_rxid());
+                return nullptr;
+            }
+        }
 
         log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
 
@@ -593,7 +584,11 @@ namespace llarp::path
     // called within the scope of a locked mutex
     void PathHandler::build(std::vector<RemoteRC> hops)
     {
-        if (pre_build(hops); auto new_path = build1(hops))
+        // error message logs in function scope
+        if (not pre_build(hops))
+            return;
+
+        if (auto new_path = build1(hops))
         {
             assert(new_path);
 
@@ -632,29 +627,29 @@ namespace llarp::path
                                 m.body());
                         }
 
-                        path_build_failed(pivot, std::move(new_path), m.timed_out);
+                        path_build_failed(std::move(new_path), m.timed_out);
                     }))
             {
                 log::warning(logcat, "Error sending path_build control message");
-                path_build_failed(pivot, new_path);
+                path_build_failed(new_path);
             }
         }
     }
 
-    void PathHandler::drop_path(const RouterID& remote)
+    void PathHandler::drop_path(const HopID& upstream_rxid)
     {
         Lock_t l{paths_mutex};
 
-        if (auto itr = _paths.find(remote); itr != _paths.end())
+        if (auto itr = _paths.find(upstream_rxid); itr != _paths.end())
             _paths.erase(itr);
     }
 
-    void PathHandler::path_build_failed(const RouterID& remote, std::shared_ptr<Path> p, bool timeout)
+    void PathHandler::path_build_failed(std::shared_ptr<Path> p, bool timeout)
     {
-        if (not timeout)
-            dissociate_hop_ids(p);
+        // if (not timeout)
+        //     dissociate_hop_ids(p);
 
-        drop_path(remote);
+        drop_path(p->upstream_rxid());
 
         if (timeout)
         {
@@ -690,23 +685,23 @@ namespace llarp::path
         _build_stats.path_fails++;
     }
 
-    void PathHandler::associate_hop_ids(std::shared_ptr<Path>& p)
-    {
-        for (auto& h : p->hops)
-        {
-            auto rid = p->pivot_rid();
-            _path_lookup.emplace(h.rxID, rid);
-            _path_lookup.emplace(h.txID, rid);
-        }
-    }
+    // void PathHandler::associate_hop_ids(std::shared_ptr<Path>& p)
+    // {
+    //     for (auto& h : p->hops)
+    //     {
+    //         auto rid = p->pivot_rid();
+    //         _path_lookup.emplace(h.rxID, rid);
+    //         _path_lookup.emplace(h.txID, rid);
+    //     }
+    // }
 
-    void PathHandler::dissociate_hop_ids(std::shared_ptr<Path>& p)
-    {
-        for (auto& h : p->hops)
-        {
-            _path_lookup.erase(h.txID);
-            _path_lookup.erase(h.rxID);
-        }
-    }
+    // void PathHandler::dissociate_hop_ids(std::shared_ptr<Path>& p)
+    // {
+    //     for (auto& h : p->hops)
+    //     {
+    //         _path_lookup.erase(h.txID);
+    //         _path_lookup.erase(h.rxID);
+    //     }
+    // }
 
 }  // namespace llarp::path

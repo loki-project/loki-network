@@ -11,7 +11,6 @@ namespace llarp
     struct Router;
 
     /** TODO: combine PathHopConfig into TransitHop
-        - Add RelayContact
      */
 
     namespace path

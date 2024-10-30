@@ -1,7 +1,6 @@
 #include "nodedb.hpp"
 
 #include "crypto/types.hpp"
-#include "dht/kademlia.hpp"
 #include "link/link_manager.hpp"
 #include "messages/fetch.hpp"
 #include "util/time.hpp"
@@ -1092,30 +1091,13 @@ namespace llarp
         });
     }
 
-    std::vector<RemoteRC> NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t numRouters) const
+    dht::rc_set NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t numRouters) const
     {
-        return _router.loop()->call_get([this, location, numRouters]() -> std::vector<RemoteRC> {
-            std::vector<const RemoteRC*> all;
+        return _router.loop()->call_get([this, location, numRouters]() -> dht::rc_set {
+            dht::rc_set ret{known_rcs.begin(), known_rcs.end(), dht::XorMetric{location}};
 
-            all.reserve(known_rcs.size());
-
-            for (auto& entry : rc_lookup)
-            {
-                all.push_back(&entry.second);
-            }
-
-            auto it_mid = numRouters < all.size() ? all.begin() + numRouters : all.end();
-
-            std::partial_sort(all.begin(), it_mid, all.end(), [compare = dht::XorMetric{location}](auto* a, auto* b) {
-                return compare(*a, *b);
-            });
-
-            std::vector<RemoteRC> closest;
-            closest.reserve(numRouters);
-            for (auto it = all.begin(); it != it_mid; ++it)
-                closest.push_back(**it);
-
-            return closest;
+            ret.erase(std::next(ret.begin(), numRouters), ret.end());
+            return ret;
         });
     }
 }  // namespace llarp

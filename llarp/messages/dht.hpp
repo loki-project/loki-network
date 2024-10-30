@@ -129,45 +129,14 @@ namespace llarp
         inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
         inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
 
-        inline static std::string serialize(const EncryptedClientContact& ecc, uint64_t relay_order, bool is_relayed)
+        inline static std::string serialize(const EncryptedClientContact& ecc)
         {
-            oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                btdp.append("o", relay_order);
-                btdp.append("r", is_relayed);
-                btdp.append("x", ecc.bt_payload());
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: failed to serialize PublishClientContact contents!");
-            }
-
-            return std::move(btdp).str();
+            return oxenc::bt_serialize(ecc.bt_payload());
         }
 
-        inline static std::tuple<EncryptedClientContact, uint64_t, bool> deserialize(std::string_view buf)
+        inline static EncryptedClientContact deserialize(std::string_view buf)
         {
-            EncryptedClientContact ecc;
-            bool is_relayed;
-            uint64_t relay_order;
-
-            try
-            {
-                oxenc::bt_dict_consumer btdc{buf};
-                is_relayed = btdc.require<bool>("o");
-                relay_order = btdc.require<uint64_t>("r");
-                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("x"));
-            }
-            catch (const std::exception& e)
-            {
-                log::error(
-                    messages::logcat, "Error: failed to deserialize PublishClientContact contents: {}", e.what());
-                throw;
-            }
-
-            return {std::move(ecc), relay_order, is_relayed};
+            return EncryptedClientContact::deserialize(oxenc::bt_deserialize<std::string_view>(buf));
         }
     }  // namespace PublishClientContact
 }  // namespace llarp

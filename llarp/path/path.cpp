@@ -41,14 +41,16 @@ namespace llarp::path
             hops[idx].txID = hops[idx + 1].rxID;
         }
 
+        // TODO: make pivot TXID = RXID
+
         // initialize parts of the clientintro
         // intro.pivot_rid = transit_hops.back().rc.router_id();
         // intro.pivot_hid = transit_hops.back()._txid;
         intro.pivot_rid = hops.back().rc.router_id();
-        intro.pivot_hid = hops.back().txID;
+        intro.pivot_rxid = hops.back().rxID;
 
         log::info(
-            logcat, "Path client intro holding pivot_rid ({}) and pivot_hid ({})", intro.pivot_rid, intro.pivot_hid);
+            logcat, "Path client intro holding pivot_rid ({}) and pivot_rxid ({})", intro.pivot_rid, intro.pivot_rxid);
     }
 
     void Path::link_session(recv_session_dgram_cb cb)
@@ -125,11 +127,9 @@ namespace llarp::path
             "find_cc", FindClientContact::serialize(location, order, is_relayed), std::move(func));
     }
 
-    bool Path::publish_client_contact(
-        const EncryptedClientContact& ecc, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
+    bool Path::publish_client_contact(const EncryptedClientContact& ecc, std::function<void(std::string)> func)
     {
-        return send_path_control_message(
-            "publish_cc", PublishClientContact::serialize(ecc, order, is_relayed), std::move(func));
+        return send_path_control_message("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
     }
 
     bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)
@@ -163,7 +163,6 @@ namespace llarp::path
                 hop.nonceXOR);
         }
 
-        // TESTNET: upstream_txid -> upstream_rxid
         return ONION::serialize_hop(upstream_rxid().to_view(), nonce, std::move(inner_payload));
     }
 

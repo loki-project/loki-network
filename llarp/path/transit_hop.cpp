@@ -58,7 +58,7 @@ namespace llarp::path
         crypto::shorthash(xor_hash, hop->shared.data(), hop->shared.size());
         hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
 
-        log::debug(logcat, "TransitHop data successfully deserialized");
+        log::critical(logcat, "TransitHop data successfully deserialized: {}", hop->to_string());
 
         return hop;
     }

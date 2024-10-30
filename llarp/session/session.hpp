@@ -137,13 +137,7 @@ namespace llarp
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            std::shared_ptr<path::Path> current_path()
-            {
-                if (auto itr = _paths.find(_remote.router_id()); itr != _paths.end())
-                    return itr->second;
-
-                return nullptr;
-            }
+            std::shared_ptr<path::Path> current_path() { return _current_path; }
 
             void blacklist_snode(const RouterID& snode) override;
 

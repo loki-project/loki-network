@@ -99,10 +99,7 @@ namespace llarp
                 const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
 
             bool publish_client_contact(
-                const EncryptedClientContact& ecc,
-                bool is_relayed = false,
-                uint64_t order = 0,
-                std::function<void(std::string)> func = nullptr);
+                const EncryptedClientContact& ecc, std::function<void(std::string)> func = nullptr);
 
             bool close_exit(
                 const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);

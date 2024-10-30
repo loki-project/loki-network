@@ -802,7 +802,7 @@ namespace llarp
         }
         catch (const std::exception& e)
         {
-            log::critical(logcat, "Exception handling bootstarp RC Fetch request (body:{}): {}", m.body(), e.what());
+            log::critical(logcat, "Exception handling bootstrap RC Fetch request (body:{}): {}", m.body(), e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -1025,12 +1025,10 @@ namespace llarp
         log::critical(logcat, "Received request to publish client contact!");
 
         EncryptedClientContact enc;
-        bool is_relayed;
-        uint64_t relay_order;
 
         try
         {
-            std::tie(enc, relay_order, is_relayed) = PublishClientContact::deserialize(body);
+            enc = PublishClientContact::deserialize(body);
         }
         catch (const std::exception& e)
         {
@@ -1055,73 +1053,39 @@ namespace llarp
 
         auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
 
-        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
+        for (const auto& rc : closest_rcs)
         {
-            log::warning(logcat, "Received PublishClientContact message but only know {} nodes?", closest_rcs.size());
-            return respond(PublishClientContact::INSUFFICIENT);
-        }
-
-        if (is_relayed)
-        {
-            if (relay_order >= path::DEFAULT_PATHS_HELD)
-            {
-                log::error(logcat, "Received PublishClientContact with invalid relay order: {}", relay_order);
-                return respond(PublishClientContact::INVALID_ORDER);
-            }
-
-            log::debug(logcat, "Relaying EncryptedClientContact for {}", dht_key);
-
-            const auto& peer_key = closest_rcs[relay_order].router_id();
-
-            if (peer_key == local_rid)
+            if (rc.router_id() == local_rid)
             {
                 log::info(
                     logcat,
-                    "Received PublishClientContact for which we are index {}... storing client contact...",
-                    relay_order);
+                    "Received PublishClientContact (key: {}) for which we are a candidate; accepting...",
+                    dht_key);
                 _router.contact_db().put_cc(std::move(enc));
                 // return respond(messages::OK_RESPONSE);
                 // TESTNET:
                 return respond(PublishClientContact::SUCCESS);
             }
-
-            log::info(logcat, "Received PublishClientContact; propagating to peer index {}...", relay_order);
-
-            send_control_message(
-                peer_key,
-                "publish_cc",
-                PublishClientContact::serialize(std::move(enc), relay_order, is_relayed),
-                [respond = std::move(respond)](oxen::quic::message m) mutable {
-                    if (m)
-                        log::info(logcat, "Relayed PublishClientContact returned successful! Relaying response...");
-                    else if (m.timed_out)
-                        log::info(logcat, "Relayed PublishClientContact timed out! Relaying response...");
-                    else
-                        log::info(logcat, "Relayed PublishClientContact failed! Relaying response...");
-
-                    respond(m.body_str());
-                });
         }
-        else
-        {
-            for (auto& rc : closest_rcs)
-            {
-                if (rc.router_id() == local_rid)
-                {
-                    log::info(
-                        logcat,
-                        "Received PublishClientContact for {}; we are candidate {}; accepting...",
-                        dht_key,
-                        relay_order);
-                    _router.contact_db().put_cc(std::move(enc));
-                    // return respond(messages::OK_RESPONSE);
-                    // TESTNET:
-                    return respond(PublishClientContact::SUCCESS);
-                }
-            }
 
-            log::warning(logcat, "Received non-relayed PublishClientContact from {}; we are not a candidate", dht_key);
-        }
+        const auto& peer_key = closest_rcs.begin()->router_id();
+
+        log::info(logcat, "Received PublishClientContact; propagating to peer (key: {})...", peer_key);
+
+        send_control_message(
+            peer_key,
+            "publish_cc",
+            PublishClientContact::serialize(std::move(enc)),
+            [respond = std::move(respond)](oxen::quic::message m) mutable {
+                if (m)
+                    log::info(logcat, "Relayed PublishClientContact returned successful! Relaying response...");
+                else if (m.timed_out)
+                    log::info(logcat, "Relayed PublishClientContact timed out! Relaying response...");
+                else
+                    log::info(logcat, "Relayed PublishClientContact failed! Relaying response...");
+
+                respond(m.body_str());
+            });
     }
 
     void LinkManager::handle_find_cc(std::string_view body, std::function<void(std::string)> respond)
@@ -1160,7 +1124,7 @@ namespace llarp
 
             log::debug(logcat, "Relaying FindClientContactMessage for {}", dht_key);
 
-            const auto& peer_key = closest_rcs[relay_order].router_id();
+            const auto& peer_key = closest_rcs.begin()->router_id();
 
             send_control_message(
                 peer_key,
@@ -1336,7 +1300,7 @@ namespace llarp
         // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
         if (hop->terminal_hop)
         {
-            log::debug(logcat, "We are terminal hop for path request!");
+            log::debug(logcat, "We are terminal hop for path request: {}", hop->to_string());
             return handle_inner_request(std::move(m), std::move(payload), std::move(hop));
         }
 

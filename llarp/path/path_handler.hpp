@@ -97,10 +97,10 @@ namespace llarp
 
             void path_build_backoff();
 
-            void associate_hop_ids(std::shared_ptr<Path>& p);
+            // void associate_hop_ids(std::shared_ptr<Path>& p);
 
           protected:
-            void dissociate_hop_ids(std::shared_ptr<Path>& p);
+            // void dissociate_hop_ids(std::shared_ptr<Path>& p);
 
             /// flag for ::Stop()
             std::atomic<bool> _running;
@@ -112,17 +112,21 @@ namespace llarp
             mutable util::NullMutex paths_mutex;
 
             // TODO: make into templated map object
-            std::unordered_map<HopID, RouterID> _path_lookup;
-            std::unordered_map<RouterID, std::shared_ptr<Path>> _paths;
+            /** TESTNET: TODO:
+                - paths are 1:1 with edge rxid, NOT pivot routerID
+            */
+
+            // TESTNET: path mapping
+            std::unordered_map<HopID, std::shared_ptr<Path>> _paths;
 
             /// return true if we hit our soft limit for building paths too fast on a first hop
             bool build_cooldown_hit(RouterID edge) const;
 
-            void drop_path(const RouterID& remote);
+            void drop_path(const HopID& remote);
 
             virtual void path_died(std::shared_ptr<Path> p);
 
-            void path_build_failed(const RouterID& remote, std::shared_ptr<Path> p, bool timeout = false);
+            void path_build_failed(std::shared_ptr<Path> p, bool timeout = false);
 
             virtual void path_build_succeeded(std::shared_ptr<Path> p);
 
@@ -155,8 +159,6 @@ namespace llarp
             virtual void blacklist_snode(const RouterID& remote) { snode_blacklist.insert(remote); }
 
             std::optional<std::shared_ptr<Path>> get_path(HopID id) const;
-
-            std::optional<std::shared_ptr<Path>> get_path(const RouterID& router) const;
 
             intro_set get_current_client_intros() const;
 

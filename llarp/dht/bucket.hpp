@@ -1,8 +1,8 @@
 #pragma once
 
-#include "kademlia.hpp"
 #include "key.hpp"
 
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/util/logging.hpp>
 
 #include <map>
@@ -12,6 +12,22 @@
 namespace llarp::dht
 {
     static auto logcat = log::Cat("dht.bucket");
+
+    struct XorMetric
+    {
+        const Key_t us;
+
+        XorMetric(const Key_t& ourKey) : us(ourKey) {}
+
+        bool operator()(const Key_t& left, const Key_t& right) const { return (us ^ left) < (us ^ right); }
+
+        bool operator()(const RemoteRC& left, const RemoteRC& right) const
+        {
+            return (left.router_id() ^ us) < (right.router_id() ^ us);
+        }
+    };
+
+    using rc_set = std::set<RemoteRC, XorMetric>;
 
     template <typename Val_t>
     struct Bucket

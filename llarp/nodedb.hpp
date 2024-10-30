@@ -3,7 +3,7 @@
 #include "contact/relay_contact.hpp"
 #include "contact/router_id.hpp"
 #include "crypto/crypto.hpp"
-#include "dht/key.hpp"
+#include "dht/bucket.hpp"
 #include "router/router.hpp"
 #include "util/common.hpp"
 #include "util/thread/threading.hpp"
@@ -316,7 +316,7 @@ namespace llarp
         RemoteRC find_closest_to(dht::Key_t location) const;
 
         /// find many routers closest to dht key
-        std::vector<RemoteRC> find_many_closest_to(dht::Key_t location, uint32_t numRouters) const;
+        dht::rc_set find_many_closest_to(dht::Key_t location, uint32_t numRouters) const;
 
         /// return true if we have an rc by its ident pubkey
         bool has_rc(const RouterID& pk) const;

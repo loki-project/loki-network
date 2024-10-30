@@ -18,23 +18,6 @@ namespace llarp::path
         return _allow_transit;
     }
 
-    std::vector<std::shared_ptr<Path>> PathContext::get_local_paths_to_remote(const RouterID& r)
-    {
-        Lock_t l{paths_mutex};
-
-        std::vector<std::shared_ptr<Path>> found;
-
-        for (const auto& [pathid, path] : _path_map)
-        {
-            if (path->upstream_txid() == pathid)
-                continue;
-
-            if (path->pivot_rid() == r && path->is_ready())
-                found.push_back(path);
-        }
-        return found;
-    }
-
     void PathContext::add_path(std::shared_ptr<Path> path)
     {
         Lock_t l{paths_mutex};
@@ -43,10 +26,6 @@ namespace llarp::path
         put_transit_hop(TransitHop::from_hop_config(path->upstream()));
 
         _path_map.emplace(path->upstream_rxid(), path);
-        _path_map.emplace(path->upstream_txid(), path);
-
-        _path_map.emplace(path->pivot_rxid(), path);
-        _path_map.emplace(path->pivot_txid(), path);
     }
 
     void PathContext::drop_paths(std::vector<std::shared_ptr<Path>> droplist)
@@ -65,15 +44,6 @@ namespace llarp::path
         Lock_t l{paths_mutex};
 
         if (auto itr = _path_map.find(path->upstream_rxid()); itr != _path_map.end())
-            _path_map.erase(itr);
-
-        if (auto itr = _path_map.find(path->upstream_txid()); itr != _path_map.end())
-            _path_map.erase(itr);
-
-        if (auto itr = _path_map.find(path->pivot_rxid()); itr != _path_map.end())
-            _path_map.erase(itr);
-
-        if (auto itr = _path_map.find(path->pivot_txid()); itr != _path_map.end())
             _path_map.erase(itr);
     }
 

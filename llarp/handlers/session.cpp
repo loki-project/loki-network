@@ -248,7 +248,7 @@ namespace llarp::handlers
         {
             Lock_t l{paths_mutex};
 
-            for (const auto& [rid, path] : _paths)
+            for (const auto& [_, path] : _paths)
             {
                 log::info(logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid(), ons);
 
@@ -298,13 +298,14 @@ namespace llarp::handlers
         {
             Lock_t l{paths_mutex};
 
-            for (const auto& [rid, path] : _paths)
+            for (const auto& [_, path] : _paths)
             {
                 log::debug(
                     logcat,
                     "Querying pivot (rid:{}) for clientcontact lookup target (rid:{})",
                     path->pivot_rid(),
                     remote);
+
                 path->find_client_contact(remote_key, is_relayed, order, response_handler);
             }
         }
@@ -410,11 +411,11 @@ namespace llarp::handlers
         {
             Lock_t l{paths_mutex};
 
-            for (const auto& [rid, path] : _paths)
+            for (const auto& [_, path] : _paths)
             {
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
-                ret &= path->publish_client_contact(ecc, true, 0, [](std::string response) {
+                ret &= path->publish_client_contact(ecc, [](std::string response) {
                     log::info(logcat, "Received response to PublishClientContact...");
 
                     std::optional<std::string> status = std::nullopt;
@@ -517,9 +518,9 @@ namespace llarp::handlers
         auto intro = intros.extract(intros.begin()).value();
         auto& pivot = intro.pivot_rid;
 
-        if (auto path = _router.path_context()->get_path(intro.pivot_hid))
+        if (auto path = _router.path_context()->get_path(intro.pivot_rxid))
         {
-            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_hid);
+            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_rxid);
             return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
         }
 

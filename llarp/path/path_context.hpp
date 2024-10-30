@@ -38,9 +38,6 @@ namespace llarp::path
 
         std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
-        /// get a set of all paths that we own who's endpoint is r
-        std::vector<std::shared_ptr<Path>> get_local_paths_to_remote(const RouterID& r);
-
         void add_path(std::shared_ptr<Path> p);
 
         void drop_path(const std::shared_ptr<Path>& p);
@@ -57,7 +54,7 @@ namespace llarp::path
 
         /** TODO:
             - paths are not 1:1 with upstream RID
-            - paths are 1:1 with txid's
+            - paths are 1:1 with edge rxIDs
         */
 
         std::unordered_map<HopID, std::shared_ptr<Path>> _path_map;

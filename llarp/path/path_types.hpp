@@ -27,10 +27,15 @@ namespace llarp
         {
             /// path id
             HopID txID, rxID;
+
+            // TESTNET: do not need the full RC, just the RouterID
             // router contact of router
             RemoteRC rc;
+
+            // TESTNET: do not need to hold on to this nonce after path-building
             /// nonce for key exchange
             SymmNonce nonce;
+
             /// shared secret at this hop
             SharedSecret shared;
             /// hash of shared secret used for nonce mutation
