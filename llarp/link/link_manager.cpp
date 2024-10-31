@@ -1187,14 +1187,17 @@ namespace llarp
             auto hop = path::TransitHop::deserialize_hop(
                 oxenc::bt_dict_consumer{hop_payload}, from, _router, std::move(shared));
 
-            hop->started = _router.now();
-            set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
-
             // we are terminal hop and everything is okay
             if (hop->upstream() == _router.local_rid())
             {
                 log::info(logcat, "We are the terminal hop; path build succeeded");
-                hop->terminal_hop = true;
+                if (not hop->terminal_hop)
+                {
+                    // TESTNET: remove this eventually
+                    log::critical(
+                        logcat, "DANIEL FIX THIS: Hop is terminal hop; constructor should have flipped this boolean");
+                    hop->terminal_hop = true;
+                }
                 _router.path_context()->put_transit_hop(std::move(hop));
                 return m.respond(messages::OK_RESPONSE, false);
             }
@@ -1303,6 +1306,8 @@ namespace llarp
             log::debug(logcat, "We are terminal hop for path request: {}", hop->to_string());
             return handle_inner_request(std::move(m), std::move(payload), std::move(hop));
         }
+
+        log::debug(logcat, "We are intermediate hop for path request: {}", hop->to_string());
 
         auto hop_is_rx = hop->rxid() == hop_id;
 

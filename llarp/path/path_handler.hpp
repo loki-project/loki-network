@@ -90,6 +90,8 @@ namespace llarp
 
         struct PathHandler
         {
+            friend struct Path;
+
           private:
             std::chrono::milliseconds last_warn_time{0s};
 
@@ -97,11 +99,7 @@ namespace llarp
 
             void path_build_backoff();
 
-            // void associate_hop_ids(std::shared_ptr<Path>& p);
-
           protected:
-            // void dissociate_hop_ids(std::shared_ptr<Path>& p);
-
             /// flag for ::Stop()
             std::atomic<bool> _running;
 
@@ -110,11 +108,6 @@ namespace llarp
 
             using Lock_t = util::NullLock;
             mutable util::NullMutex paths_mutex;
-
-            // TODO: make into templated map object
-            /** TESTNET: TODO:
-                - paths are 1:1 with edge rxid, NOT pivot routerID
-            */
 
             // TESTNET: path mapping
             std::unordered_map<HopID, std::shared_ptr<Path>> _paths;
@@ -215,18 +208,18 @@ namespace llarp
 
             bool build_path_to_random();
 
-            bool build_path_aligned_to_remote(const NetworkAddress& remote);
+            bool build_path_aligned_to_remote(const RouterID& remote);
 
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
                 const RouterID& pivot, const std::set<RouterID>& exclude = {});
 
             // The build logic is segmented into functions designed to be called sequentially.
-            //  - pre_build() : This handles all checking of the vector of hops, verifying with buildlimiter, ensuring
-            //      there is no ongoing path-build, etc
+            //  - pre_build() : This handles all checking of the vector of hops, verifying with buildlimiter, etc
             //  - build1() : This can be re-implemented by inheriting classes that want to pass different parameters to
             //      the created path. This is useful ßin cases like Outbound Sessions, Paths are constructed with the
             //      respective is_client and is_exit booleans set. Regardless, the implementation needs to return the
-            //      created shared_ptr to be passed by reference to build2(...) and build3(...).
+            //      created shared_ptr to be passed by reference to build2(...) and build3(...). The implementation MUST
+            //      also check if the upstream rxid is already being used for a current path (very unlikely)
             //  - build2() : This contains the bulk of the code that is identical across all instances of path building.
             //      It returns the payload holding the encoded frames for each hop.
             //  - build3() : Inheriting classes can pass their own response handler functions as the second parameter,
@@ -235,15 +228,15 @@ namespace llarp
             //      failures for that respective remote or not.
             //  - build() : This function calls pre_build() + build{1,2,3}() in the correct order and is used for the
             //      usual times that PathBuilder initiates a path build
+            void build(std::vector<RemoteRC> hops);
+
             bool pre_build(std::vector<RemoteRC>& hops);
 
             virtual std::shared_ptr<Path> build1(std::vector<RemoteRC>& hops);
 
-            std::string build2(std::shared_ptr<Path>& path);
+            std::string build2(const std::shared_ptr<Path>& path);
 
             bool build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler);
-
-            void build(std::vector<RemoteRC> hops);
 
             void for_each_path(std::function<void(const std::shared_ptr<Path>&)> visit) const;
 

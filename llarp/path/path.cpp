@@ -21,35 +21,38 @@ namespace llarp::path
         bool is_client)
         : handler{std::move(_handler)}, _router{rtr}, _is_session_path{is_session}, _is_client{is_client}
     {
+        populate_internals(_hops);
+
+        log::info(logcat, "Path successfully constructed: {}", to_string());
+    }
+
+    void Path::populate_internals(const std::vector<RemoteRC>& _hops)
+    {
         size_t n_hops = _hops.size();
-        // transit_hops.resize(n_hops);
         hops.resize(n_hops);
 
-        for (size_t idx = 0; idx < n_hops; ++idx)
+        for (size_t i = 0; i < n_hops; ++i)
         {
-            // transit_hops[idx]
-            hops[idx].rc = _hops[idx];
-            hops[idx].txID = HopID::make_random();
-            // transit_hops[idx]._txid = HopID::make_random();
-            hops[idx].rxID = HopID::make_random();
-            // transit_hops[idx]._rxid = HopID::make_random();
+            hops[i]._rid = _hops[i].router_id();
+            hops[i]._txid = HopID::make_random();
+
+            // First hop RXID is unique, the rest are the previous hop TXID
+            hops[i]._rxid = i ? hops[i - 1]._txid : HopID::make_random();
+            // First hop downstream is it's own RID, the rest are the previous hop RID
+            hops[i]._downstream = i ? hops[i - 1]._rid : hops[i]._rid;
+            // Last hop upstream is it's own RID, the rest are the next hop RID
+            hops[i]._upstream = i == n_hops - 1 ? hops[i]._rid : hops[i + 1]._rid;
         }
 
-        for (size_t idx = 0; idx < n_hops - 1; ++idx)
-        {
-            // transit_hops[idx]._txid = transit_hops[idx + 1]._rxid;
-            hops[idx].txID = hops[idx + 1].rxID;
-        }
+        hops.back().terminal_hop = true;
 
-        // TODO: make pivot TXID = RXID
+        log::info(logcat, "Path populated with hops: {}", hop_string());
 
         // initialize parts of the clientintro
-        // intro.pivot_rid = transit_hops.back().rc.router_id();
-        // intro.pivot_hid = transit_hops.back()._txid;
-        intro.pivot_rid = hops.back().rc.router_id();
-        intro.pivot_rxid = hops.back().rxID;
+        intro.pivot_rid = hops.back().router_id();
+        intro.pivot_rxid = hops.back()._rxid;
 
-        log::info(
+        log::debug(
             logcat, "Path client intro holding pivot_rid ({}) and pivot_rxid ({})", intro.pivot_rid, intro.pivot_rxid);
     }
 
@@ -84,8 +87,8 @@ namespace llarp::path
     {
         auto& first_hop = hops.front();
         auto& other_first = other.hops.front();
-        return std::tie(first_hop.txID, first_hop.rxID, first_hop.upstream)
-            < std::tie(other_first.txID, other_first.rxID, other_first.upstream);
+        return std::tie(first_hop._txid, first_hop._rxid, first_hop._upstream)
+            < std::tie(other_first._txid, other_first._rxid, other_first._upstream);
     }
 
     bool Path::operator==(const Path& other) const
@@ -245,78 +248,73 @@ namespace llarp::path
         return _established ? !is_expired(now) : false;
     }
 
-    PathHopConfig Path::upstream()
-    {
-        return hops.front();
-    }
-
     RouterID Path::upstream_rid()
     {
-        return hops.front().rc.router_id();
+        return hops.front().router_id();
     }
 
     const RouterID& Path::upstream_rid() const
     {
-        return hops.front().rc.router_id();
+        return hops.front().router_id();
     }
 
     HopID Path::upstream_txid()
     {
-        return hops.front().txID;
+        return hops.front().txid();
     }
 
     const HopID& Path::upstream_txid() const
     {
-        return hops.front().txID;
+        return hops.front().txid();
     }
 
     HopID Path::upstream_rxid()
     {
-        return hops.front().rxID;
+        return hops.front().rxid();
     }
 
     const HopID& Path::upstream_rxid() const
     {
-        return hops.front().rxID;
+        return hops.front().rxid();
     }
 
     RouterID Path::pivot_rid()
     {
-        return hops.back().rc.router_id();
+        return hops.back().router_id();
     }
 
     const RouterID& Path::pivot_rid() const
     {
-        return hops.back().rc.router_id();
+        return hops.back().router_id();
     }
 
     HopID Path::pivot_txid()
     {
-        return hops.back().txID;
+        return hops.back().txid();
     }
 
     const HopID& Path::pivot_txid() const
     {
-        return hops.back().txID;
+        return hops.back().txid();
     }
 
     HopID Path::pivot_rxid()
     {
-        return hops.back().rxID;
+        return hops.back().rxid();
     }
 
     const HopID& Path::pivot_rxid() const
     {
-        return hops.back().rxID;
+        return hops.back().rxid();
     }
 
     std::string Path::to_string() const
     {
-        return "RID:{} -- TX:{}/RX:{}"_format(
+        return "Path:[ Local RID:{} -- Edge TX:{}/RX:{} ]"_format(
             _router.local_rid().ShortString(), upstream_txid().to_string(), upstream_rxid().to_string());
     }
 
-    std::string Path::HopsString() const
+    std::string Path::hop_string() const
     {
         std::string hops_str;
         hops_str.reserve(hops.size() * 62);  // 52 for the pkey, 6 for .snode, 4 for the ' -> ' joiner
@@ -324,20 +322,9 @@ namespace llarp::path
         {
             if (!hops.empty())
                 hops_str += " -> ";
-            hops_str += hop.rc.router_id().ShortString();
+            hops_str += hop.router_id().ShortString();
         }
         return hops_str;
-    }
-
-    nlohmann::json PathHopConfig::ExtractStatus() const
-    {
-        nlohmann::json obj{
-            {"ip", rc.addr().to_string()},
-            {"lifetime", to_json(lifetime)},
-            {"router", rc.router_id().ToHex()},
-            {"txid", txID.ToHex()},
-            {"rxid", rxID.ToHex()}};
-        return obj;
     }
 
     nlohmann::json Path::ExtractStatus() const
@@ -364,13 +351,67 @@ namespace llarp::path
     {
         if (auto parent = handler.lock())
         {
-            std::vector<RemoteRC> new_hops;
+            auto prev_upstream_rxid = upstream_rxid();
 
-            for (const auto& hop : hops)
-                new_hops.emplace_back(hop.rc);
+            if (auto new_hops = parent->aligned_hops_to_remote(pivot_rid()))
+            {
+                populate_internals(*new_hops);
+                log::info(logcat, "{} rebuilding new path to pivot {}", name(), to_string());
 
-            log::info(logcat, "{} rebuilding on {}", name(), to_string());
-            parent->build(new_hops);
+                auto self = shared_from_this();
+                auto payload = parent->build2(self);
+                auto upstream = upstream_rid();
+
+                if (not parent->build3(
+                        std::move(upstream),
+                        std::move(payload),
+                        [new_path = std::move(self), parent = parent, prev_rxid = prev_upstream_rxid](
+                            oxen::quic::message m) mutable {
+                            if (m)
+                            {
+                                log::critical(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
+                                parent->drop_path(prev_rxid);
+                                return parent->path_build_succeeded(std::move(new_path));
+                            }
+
+                            try
+                            {
+                                if (m.timed_out)
+                                {
+                                    log::warning(logcat, "Path build request timed out!");
+                                }
+                                else
+                                {
+                                    oxenc::bt_dict_consumer d{m.body()};
+                                    auto status = d.require<std::string_view>(messages::STATUS_KEY);
+                                    log::warning(logcat, "Path build returned failure status: {}", status);
+                                }
+                            }
+                            catch (const std::exception& e)
+                            {
+                                log::warning(
+                                    logcat,
+                                    "Exception caught parsing path build response: {}; input: {}",
+                                    e.what(),
+                                    m.body());
+                            }
+
+                            parent->path_build_failed(std::move(new_path), m.timed_out);
+                        }))
+                {
+                    log::warning(logcat, "Error sending path_build control message");
+                }
+            }
+            else
+            {
+                log::warning(logcat, "Could not find new hops to rebuild path to pivot {}", to_string());
+            }
+
+            parent->drop_path(prev_upstream_rxid);
+        }
+        else
+        {
+            log::warning(logcat, "Path ({}) died with no parent to rebuild!", to_string());
         }
     }
 

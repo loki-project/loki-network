@@ -1,6 +1,7 @@
 #pragma once
 
 #include "path_handler.hpp"
+#include "transit_hop.hpp"
 
 #include <llarp/constants/path.hpp>
 #include <llarp/contact/client_contact.hpp>
@@ -30,19 +31,16 @@ namespace llarp
 
     namespace path
     {
-        struct TransitHop;
-        struct PathHopConfig;
-
         using recv_session_dgram_cb = std::function<void(bstring data)>;
 
-        // TODO: replace vector of PathHopConfig with vector of TransitHops
+        /** TODO:
+                - we only need a vector of RID's for path-building, not RemoteRC's
+         */
 
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
         {
-            std::vector<PathHopConfig> hops;
-
-            // std::vector<TransitHop> transit_hops;
+            std::vector<TransitHop> hops;
 
             std::weak_ptr<PathHandler> handler;
 
@@ -63,7 +61,7 @@ namespace llarp
 
             nlohmann::json ExtractStatus() const;
 
-            std::string HopsString() const;
+            std::string hop_string() const;
 
             std::chrono::milliseconds LastRemoteActivityAt() const { return last_recv_msg; }
 
@@ -77,8 +75,6 @@ namespace llarp
 
             bool is_linked() const { return _is_linked; }
 
-            std::chrono::milliseconds ExpireTime() const { return buildStarted + hops[0].lifetime; }
-
             void enable_exit_traffic();
 
             void mark_exit_closed();
@@ -87,8 +83,7 @@ namespace llarp
 
             bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
-            /// build a new path on the same set of hops as us
-            /// regenerates keys
+            /// build a new path to the same pivot, but with different hops
             void rebuild();
 
             void Tick(std::chrono::milliseconds now);
@@ -124,8 +119,6 @@ namespace llarp
             bool send_path_data_message(std::string body);
 
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
-
-            PathHopConfig upstream();
 
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;
@@ -163,6 +156,8 @@ namespace llarp
           private:
             std::string make_path_message(std::string payload);
 
+            void populate_internals(const std::vector<RemoteRC>& _hops);
+
             bool SendLatencyMessage(Router* r);
 
             /// call obtained exit hooks
@@ -194,11 +189,11 @@ namespace std
         {
             auto& first_hop = p.hops[0];
             llarp::AlignedBuffer<PUBKEYSIZE> b;
-            std::memcpy(b.data(), first_hop.txID.data(), PATHIDSIZE);
-            std::memcpy(&b[PATHIDSIZE], first_hop.txID.data(), PATHIDSIZE);
+            std::memcpy(b.data(), first_hop._txid.data(), PATHIDSIZE);
+            std::memcpy(&b[PATHIDSIZE], first_hop._txid.data(), PATHIDSIZE);
 
             auto h = hash<llarp::AlignedBuffer<PUBKEYSIZE>>{}(b);
-            return h ^ hash<llarp::RouterID>{}(first_hop.upstream);
+            return h ^ hash<llarp::RouterID>{}(first_hop._upstream);
         }
     };
 }  //  namespace std

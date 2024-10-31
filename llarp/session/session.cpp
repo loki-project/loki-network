@@ -283,7 +283,7 @@ namespace llarp::session
 
         for (size_t i = 0; i < n; ++i)
         {
-            count += build_path_aligned_to_remote(_remote);
+            count += build_path_aligned_to_remote(_remote.router_id());
         }
 
         if (count == n)
@@ -296,7 +296,7 @@ namespace llarp::session
     {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true, _remote.is_client());
 
-        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
     }

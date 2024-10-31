@@ -221,7 +221,7 @@ namespace llarp
                 first = false;
             else
             {
-                auto& profile = _profiles[hop.rc.router_id()];
+                auto& profile = _profiles[hop.router_id()];
                 profile.path_fail += 1;
                 profile.last_update = llarp::time_now_ms();
             }
@@ -233,7 +233,7 @@ namespace llarp
         util::Lock lock{_m};
         for (const auto& hop : p->hops)
         {
-            auto& profile = _profiles[hop.rc.router_id()];
+            auto& profile = _profiles[hop.router_id()];
             profile.path_timeout += 1;
             profile.last_update = llarp::time_now_ms();
         }
@@ -245,7 +245,7 @@ namespace llarp
         const auto sz = p->hops.size();
         for (const auto& hop : p->hops)
         {
-            auto& profile = _profiles[hop.rc.router_id()];
+            auto& profile = _profiles[hop.router_id()];
             // redeem previous fails by halfing the fail count and setting timeout to zero
             profile.path_fail /= 2;
             profile.path_timeout = 0;

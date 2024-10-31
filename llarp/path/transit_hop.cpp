@@ -9,20 +9,6 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("transit-hop");
 
-    std::shared_ptr<TransitHop> TransitHop::from_hop_config(PathHopConfig hop_config)
-    {
-        auto hop = std::make_shared<TransitHop>();
-
-        hop->_txid = {hop_config.txID};
-        hop->_rxid = {hop_config.rxID};
-        hop->_upstream = {hop_config.upstream};
-        hop->shared = {hop_config.shared};
-        hop->nonce = {hop_config.nonce};
-        hop->nonceXOR = {hop_config.nonceXOR};
-
-        return hop;
-    }
-
     std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
         oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret)
     {
@@ -30,10 +16,7 @@ namespace llarp::path
 
         try
         {
-            hop->lifetime = btdc.require<uint64_t>("l") * 1ms;
-            hop->_rxid.from_string(btdc.require<std::string_view>("r"));
-            hop->_txid.from_string(btdc.require<std::string_view>("t"));
-            hop->_upstream.from_string(btdc.require<std::string_view>("u"));
+            hop->bt_decode(std::move(btdc));
         }
         catch (const std::exception& e)
         {
@@ -44,11 +27,11 @@ namespace llarp::path
         if (hop->rxid().is_zero() || hop->txid().is_zero())
             throw std::runtime_error{PATH::BUILD::BAD_PATHID};
 
-        if (hop->lifetime > path::DEFAULT_LIFETIME)
-            throw std::runtime_error{PATH::BUILD::BAD_LIFETIME};
-
         hop->_downstream = src;
         hop->shared = std::move(secret);
+
+        if (hop->_upstream == hop->_downstream)
+            hop->terminal_hop = true;
 
         if (r.path_context()->has_transit_hop(hop))
             throw std::runtime_error{PATH::BUILD::BAD_PATHID};
@@ -63,34 +46,40 @@ namespace llarp::path
         return hop;
     }
 
-    bool TransitHop::is_expired(std::chrono::milliseconds now) const
+    void TransitHop::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
-        return destroy || (now >= expiry_time());
+        _rxid.from_string(btdc.require<std::string_view>("r"));
+        _txid.from_string(btdc.require<std::string_view>("t"));
+        _upstream.from_string(btdc.require<std::string_view>("u"));
+        expiry = llarp::time_now_ms() + path::DEFAULT_LIFETIME;
     }
 
-    std::chrono::milliseconds TransitHop::expiry_time() const
+    std::string TransitHop::bt_encode() const
     {
-        return started + lifetime;
+        oxenc::bt_dict_producer btdp;
+
+        btdp.append("r", _rxid.to_view());
+        btdp.append("t", _txid.to_view());
+        btdp.append("u", _upstream.to_view());
+
+        return std::move(btdp).str();
+    }
+
+    nlohmann::json TransitHop::ExtractStatus() const
+    {
+        return {
+            {"rid", router_id().ToHex()},
+            {"rxid", rxid().ToHex()},
+            {"txid", txid().ToHex()},
+            {"expiry", to_json(expiry)},
+            {"txid", _txid.ToHex()},
+            {"rxid", _rxid.ToHex()}};
     }
 
     std::string TransitHop::to_string() const
     {
-        return "[TransitHop: tx={} rx={} upstream={} downstream={} started={} lifetime={}"_format(
-            _txid, _rxid, _upstream, _downstream, started.count(), lifetime.count());
+        return "TransitHop:[ tx={}, rx={}, upstream={}, downstream={}, expiry={} ]"_format(
+            _txid, _rxid, _upstream, _downstream, expiry.count());
     }
 
-    void TransitHop::Stop()
-    {
-        // TODO: still need this concept?
-    }
-
-    void TransitHop::SetSelfDestruct()
-    {
-        destroy = true;
-    }
-
-    void TransitHop::QueueDestroySelf(Router* r)
-    {
-        r->loop()->call([self = shared_from_this()] { self->SetSelfDestruct(); });
-    }
 }  // namespace llarp::path

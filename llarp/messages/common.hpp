@@ -4,7 +4,6 @@
 #include <llarp/contact/tag.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/key.hpp>
-#include <llarp/path/path_types.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 

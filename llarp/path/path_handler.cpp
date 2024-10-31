@@ -464,11 +464,11 @@ namespace llarp::path
         return false;
     }
 
-    bool PathHandler::build_path_aligned_to_remote(const NetworkAddress& remote)
+    bool PathHandler::build_path_aligned_to_remote(const RouterID& remote)
     {
         Lock_t l(paths_mutex);
 
-        if (auto maybe_hops = aligned_hops_to_remote(remote.router_id()))
+        if (auto maybe_hops = aligned_hops_to_remote(remote))
         {
             build(*maybe_hops);
             return true;
@@ -512,12 +512,12 @@ namespace llarp::path
             }
         }
 
-        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
     }
 
-    std::string PathHandler::build2(std::shared_ptr<Path>& path)
+    std::string PathHandler::build2(const std::shared_ptr<Path>& path)
     {
         std::vector<std::string> frames(path::MAX_LEN);
         auto& path_hops = path->hops;
@@ -538,8 +538,8 @@ namespace llarp::path
         // i from n_hops down to 0
         for (int i = n_hops - 1; i >= 0; --i)
         {
-            const auto& next_rid = i == n_hops - 1 ? path_hops[i].rc.router_id() : path_hops[i + 1].rc.router_id();
-            path_hops[i].upstream = next_rid;
+            const auto& next_rid = i == n_hops - 1 ? path_hops[i].router_id() : path_hops[i + 1].router_id();
+            path_hops[i]._upstream = next_rid;
 
             frames[i] = PATH::BUILD::serialize_hop(path_hops[i]);
 
@@ -593,42 +593,37 @@ namespace llarp::path
             assert(new_path);
 
             auto payload = build2(new_path);
-            auto pivot = new_path->pivot_rid();
             auto upstream = new_path->upstream_rid();
 
-            if (not build3(
-                    std::move(upstream), std::move(payload), [this, new_path, pivot](oxen::quic::message m) mutable {
-                        if (m)
-                        {
-                            log::critical(logcat, "PATH ESTABLISHED: {}", new_path->HopsString());
-                            return path_build_succeeded(std::move(new_path));
-                        }
+            if (not build3(std::move(upstream), std::move(payload), [this, new_path](oxen::quic::message m) mutable {
+                    if (m)
+                    {
+                        log::critical(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
+                        return path_build_succeeded(std::move(new_path));
+                    }
 
-                        try
+                    try
+                    {
+                        // TODO: inform failure (what this means needs revisiting, badly)
+                        if (m.timed_out)
                         {
-                            // TODO: inform failure (what this means needs revisiting, badly)
-                            if (m.timed_out)
-                            {
-                                log::warning(logcat, "Path build request timed out!");
-                            }
-                            else
-                            {
-                                oxenc::bt_dict_consumer d{m.body()};
-                                auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                                log::warning(logcat, "Path build returned failure status: {}", status);
-                            }
+                            log::warning(logcat, "Path build request timed out!");
                         }
-                        catch (const std::exception& e)
+                        else
                         {
-                            log::warning(
-                                logcat,
-                                "Exception caught parsing path build response: {}; input: {}",
-                                e.what(),
-                                m.body());
+                            oxenc::bt_dict_consumer d{m.body()};
+                            auto status = d.require<std::string_view>(messages::STATUS_KEY);
+                            log::warning(logcat, "Path build returned failure status: {}", status);
                         }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::warning(
+                            logcat, "Exception caught parsing path build response: {}; input: {}", e.what(), m.body());
+                    }
 
-                        path_build_failed(std::move(new_path), m.timed_out);
-                    }))
+                    path_build_failed(std::move(new_path), m.timed_out);
+                }))
             {
                 log::warning(logcat, "Error sending path_build control message");
                 path_build_failed(new_path);
@@ -646,9 +641,6 @@ namespace llarp::path
 
     void PathHandler::path_build_failed(std::shared_ptr<Path> p, bool timeout)
     {
-        // if (not timeout)
-        //     dissociate_hop_ids(p);
-
         drop_path(p->upstream_rxid());
 
         if (timeout)
@@ -684,24 +676,4 @@ namespace llarp::path
         log::warning(logcat, "Path {} died post-build", p->to_string());
         _build_stats.path_fails++;
     }
-
-    // void PathHandler::associate_hop_ids(std::shared_ptr<Path>& p)
-    // {
-    //     for (auto& h : p->hops)
-    //     {
-    //         auto rid = p->pivot_rid();
-    //         _path_lookup.emplace(h.rxID, rid);
-    //         _path_lookup.emplace(h.txID, rid);
-    //     }
-    // }
-
-    // void PathHandler::dissociate_hop_ids(std::shared_ptr<Path>& p)
-    // {
-    //     for (auto& h : p->hops)
-    //     {
-    //         _path_lookup.erase(h.txID);
-    //         _path_lookup.erase(h.rxID);
-    //     }
-    // }
-
 }  // namespace llarp::path

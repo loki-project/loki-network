@@ -22,9 +22,6 @@ namespace llarp::path
     {
         Lock_t l{paths_mutex};
 
-        // TESTNET: TODO: once PathHopConfig -> TransitHop, remove this association
-        put_transit_hop(TransitHop::from_hop_config(path->upstream()));
-
         _path_map.emplace(path->upstream_rxid(), path);
     }
 

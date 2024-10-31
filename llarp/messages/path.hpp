@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/path/transit_hop.hpp>
 #include <llarp/util/logging/buffer.hpp>
 
 namespace llarp
@@ -91,27 +92,15 @@ namespace llarp
                 - 'k' : shared pubkey used to derive symmetric key
                 - 'n' : symmetric nonce used for DH key-exchange
                 - 'x' : encrypted payload
-                    - 'l' : path lifetime
                     - 'r' : rxID (the path ID for messages going *to* the hop)
                     - 't' : txID (the path ID for messages coming *from* the client/path origin)
                     - 'u' : upstream hop RouterID
 
                 All of these 'frames' are inserted sequentially into the list and padded with any needed dummy frames
             */
-            inline static std::string serialize_hop(path::PathHopConfig& hop)
+            inline static std::string serialize_hop(path::TransitHop& hop)
             {
-                std::string hop_payload;
-
-                {
-                    oxenc::bt_dict_producer btdp;
-
-                    btdp.append("l", path::DEFAULT_LIFETIME.count());
-                    btdp.append("r", hop.rxID.to_view());
-                    btdp.append("t", hop.txID.to_view());
-                    btdp.append("u", hop.upstream.to_view());
-
-                    hop_payload = std::move(btdp).str();
-                }
+                std::string hop_payload = hop.bt_encode();
 
                 Ed25519SecretKey ephemeral_key;
                 crypto::identity_keygen(ephemeral_key);
@@ -119,7 +108,7 @@ namespace llarp
                 hop.nonce = SymmNonce::make_random();
 
                 crypto::derive_encrypt_outer_wrapping(
-                    ephemeral_key, hop.shared, hop.nonce, hop.rc.router_id(), to_uspan(hop_payload));
+                    ephemeral_key, hop.shared, hop.nonce, hop.router_id(), to_uspan(hop_payload));
 
                 // generate nonceXOR value self->hop->pathKey
                 ShortHash xor_hash;
@@ -131,7 +120,7 @@ namespace llarp
                     logcat,
                     "Hop serialized; nonce: {}, remote router_id: {}, shared pk: {}, shared secret: {}, payload: {}",
                     hop.nonce.to_string(),
-                    hop.rc.router_id().to_string(),
+                    hop.router_id().to_string(),
                     ephemeral_key.to_pubkey().to_string(),
                     hop.shared.to_string(),
                     buffer_printer{hop_payload});

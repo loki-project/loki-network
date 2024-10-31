@@ -539,7 +539,7 @@ namespace llarp::handlers
 
         auto path = std::make_shared<path::Path>(_router, std::move(hops), get_weak(), true, remote.is_client());
 
-        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         auto payload = build2(path);
 
