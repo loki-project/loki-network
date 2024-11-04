@@ -123,15 +123,39 @@ namespace llarp
 
     namespace PublishClientContact
     {
-        inline const auto SUCCESS = messages::serialize_response({{messages::STATUS_KEY, "SUCCESS"}});
         inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});
         inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
         inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
         inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
 
+        /** Bt-encoded contents:
+            - 'x' : EncryptedClientContact
+
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
         inline static std::string serialize(const EncryptedClientContact& ecc)
         {
-            return oxenc::bt_serialize(ecc.bt_payload());
+            oxenc::bt_dict_producer btdp;
+
+            btdp.append("x", ecc.bt_payload());
+
+            return std::move(btdp).str();
+        }
+
+        inline static EncryptedClientContact deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            EncryptedClientContact ecc;
+
+            try
+            {
+                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("x"));
+            }
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error{"Exception caught deserializing EncryptedClientContact: {}"_format(e.what())};
+            }
+
+            return ecc;
         }
 
         inline static EncryptedClientContact deserialize(std::string_view buf)

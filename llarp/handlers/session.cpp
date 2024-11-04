@@ -415,28 +415,29 @@ namespace llarp::handlers
             {
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
-                ret &= path->publish_client_contact(ecc, [](std::string response) {
-                    log::info(logcat, "Received response to PublishClientContact...");
-
-                    std::optional<std::string> status = std::nullopt;
-                    try
+                ret &= path->publish_client_contact2(ecc, [](oxen::quic::message m) {
+                    if (m)
                     {
-                        oxenc::bt_dict_consumer btdc{response};
-
-                        if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
-                            status = s;
+                        log::critical(logcat, "Call to PublishClientContact succeeded!");
                     }
-                    catch (const std::exception& e)
+                    else
                     {
-                        log::warning(logcat, "Exception: {}", e.what());
+                        std::optional<std::string> status = std::nullopt;
+                        try
+                        {
+                            oxenc::bt_dict_consumer btdc{m.body()};
+
+                            if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                                status = s;
+                        }
+                        catch (const std::exception& e)
+                        {
+                            log::warning(logcat, "Exception: {}", e.what());
+                        }
+
+                        log::critical(
+                            logcat, "Call to PublishClientContact FAILED; reason: {}", status.value_or("<none given>"));
                     }
-
-                    auto b = status.value_or("<none given>") == "SUCCESS";
-
-                    log::critical(
-                        logcat,
-                        "Call to PublishClientContact {}",
-                        b ? "SUCCEEDED" : "FAILED -- reason: {}"_format(status.value_or("<none given>")));
                 });
             }
         }

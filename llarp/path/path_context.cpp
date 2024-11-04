@@ -96,11 +96,8 @@ namespace llarp::path
     {
         Lock_t l{paths_mutex};
 
-        if (auto maybe_path = get_path(id); maybe_path)
-        {
-            if (auto parent = maybe_path->handler.lock())
-                return parent;
-        }
+        if (auto maybe_path = get_path(id))
+            return maybe_path->get_parent();
 
         return nullptr;
     }

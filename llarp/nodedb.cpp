@@ -1095,7 +1095,6 @@ namespace llarp
     {
         return _router.loop()->call_get([this, location, numRouters]() -> dht::rc_set {
             dht::rc_set ret{known_rcs.begin(), known_rcs.end(), dht::XorMetric{location}};
-
             ret.erase(std::next(ret.begin(), numRouters), ret.end());
             return ret;
         });

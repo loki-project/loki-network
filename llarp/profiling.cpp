@@ -1,5 +1,6 @@
 #include "profiling.hpp"
 
+#include "path/path.hpp"
 #include "util/file.hpp"
 
 #include <oxenc/bt_producer.h>

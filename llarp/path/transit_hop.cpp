@@ -20,7 +20,7 @@ namespace llarp::path
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "TransitHop caught bt parsing exception:{}", e.what());
+            log::warning(logcat, "TransitHop caught bt parsing exception: {}", e.what());
             throw std::runtime_error{messages::ERROR_RESPONSE};
         }
 
@@ -30,7 +30,7 @@ namespace llarp::path
         hop->_downstream = src;
         hop->shared = std::move(secret);
 
-        if (hop->_upstream == hop->_downstream)
+        if (hop->_upstream == r.local_rid())
             hop->terminal_hop = true;
 
         if (r.path_context()->has_transit_hop(hop))
@@ -78,8 +78,8 @@ namespace llarp::path
 
     std::string TransitHop::to_string() const
     {
-        return "TransitHop:[ tx={}, rx={}, upstream={}, downstream={}, expiry={} ]"_format(
-            _txid, _rxid, _upstream, _downstream, expiry.count());
+        return "TransitHop:[ terminal={}, tx={}, rx={}, upstream={}, downstream={}, expiry={} ]"_format(
+            terminal_hop, _txid, _rxid, _upstream, _downstream, expiry.count());
     }
 
 }  // namespace llarp::path

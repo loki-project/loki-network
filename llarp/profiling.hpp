@@ -1,7 +1,7 @@
 #pragma once
 
+#include "constants/proto.hpp"
 #include "contact/router_id.hpp"
-#include "path/path.hpp"
 #include "util/thread/threading.hpp"
 
 #include <map>
@@ -14,6 +14,11 @@ namespace oxenc
 
 namespace llarp
 {
+    namespace path
+    {
+        struct Path;
+    }
+
     struct RouterProfile
     {
         static constexpr size_t MaxSize = 256;

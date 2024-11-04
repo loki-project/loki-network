@@ -23,6 +23,7 @@
 namespace llarp
 {
     struct Router;
+    struct Profiling;
 
     namespace service
     {
@@ -40,13 +41,8 @@ namespace llarp
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
         {
-            std::vector<TransitHop> hops;
-
-            std::weak_ptr<PathHandler> handler;
-
-            ClientIntro intro{};
-
-            std::chrono::milliseconds buildStarted{0s};
+            friend struct PathHandler;
+            friend struct llarp::Profiling;
 
             Path(
                 Router& rtr,
@@ -55,6 +51,12 @@ namespace llarp
                 bool is_session = false,
                 bool is_client = false);
 
+          protected:
+            std::vector<TransitHop> hops;
+            std::weak_ptr<PathHandler> handler;
+            ClientIntro intro{};
+
+          public:
             std::shared_ptr<Path> get_self() { return shared_from_this(); }
 
             std::weak_ptr<Path> get_weak() { return weak_from_this(); }
@@ -96,6 +98,9 @@ namespace llarp
             bool publish_client_contact(
                 const EncryptedClientContact& ecc, std::function<void(std::string)> func = nullptr);
 
+            bool publish_client_contact2(
+                const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
+
             bool close_exit(
                 const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
 
@@ -116,9 +121,14 @@ namespace llarp
             bool send_path_control_message(
                 std::string method, std::string body, std::function<void(std::string)> func = nullptr);
 
+            bool send_path_control_message2(
+                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
+
             bool send_path_data_message(std::string body);
 
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
+
+            std::shared_ptr<PathHandler> get_parent();
 
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;
@@ -171,6 +181,8 @@ namespace llarp
             bool _is_session_path{false};
             bool _is_client{false};
 
+            const size_t num_hops;
+
             recv_session_dgram_cb _recv_dgram;
 
             std::chrono::milliseconds last_recv_msg{0s};
@@ -187,13 +199,8 @@ namespace std
     {
         size_t operator()(const llarp::path::Path& p) const
         {
-            auto& first_hop = p.hops[0];
-            llarp::AlignedBuffer<PUBKEYSIZE> b;
-            std::memcpy(b.data(), first_hop._txid.data(), PATHIDSIZE);
-            std::memcpy(&b[PATHIDSIZE], first_hop._txid.data(), PATHIDSIZE);
-
-            auto h = hash<llarp::AlignedBuffer<PUBKEYSIZE>>{}(b);
-            return h ^ hash<llarp::RouterID>{}(first_hop._upstream);
+            auto h = hash<llarp::HopID>{}(p.upstream_txid());
+            return h ^ hash<llarp::RouterID>{}(p.upstream_rid());
         }
     };
 }  //  namespace std

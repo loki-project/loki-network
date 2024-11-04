@@ -15,33 +15,58 @@ namespace llarp::path
 
     Path::Path(
         Router& rtr,
-        const std::vector<RemoteRC>& _hops,
+        const std::vector<RemoteRC>& hop_rcs,
         std::weak_ptr<PathHandler> _handler,
         bool is_session,
         bool is_client)
-        : handler{std::move(_handler)}, _router{rtr}, _is_session_path{is_session}, _is_client{is_client}
+        : handler{std::move(_handler)},
+          _router{rtr},
+          _is_session_path{is_session},
+          _is_client{is_client},
+          num_hops{hop_rcs.size()}
     {
-        populate_internals(_hops);
-
+        populate_internals(hop_rcs);
         log::info(logcat, "Path successfully constructed: {}", to_string());
     }
 
-    void Path::populate_internals(const std::vector<RemoteRC>& _hops)
+    void Path::populate_internals(const std::vector<RemoteRC>& hop_rcs)
     {
-        size_t n_hops = _hops.size();
-        hops.resize(n_hops);
+        hops.resize(num_hops);
 
-        for (size_t i = 0; i < n_hops; ++i)
+        for (size_t i = 0; i < num_hops; ++i)
         {
-            hops[i]._rid = _hops[i].router_id();
+            hops[i]._rid = hop_rcs[i].router_id();
             hops[i]._txid = HopID::make_random();
 
-            // First hop RXID is unique, the rest are the previous hop TXID
-            hops[i]._rxid = i ? hops[i - 1]._txid : HopID::make_random();
-            // First hop downstream is it's own RID, the rest are the previous hop RID
-            hops[i]._downstream = i ? hops[i - 1]._rid : hops[i]._rid;
-            // Last hop upstream is it's own RID, the rest are the next hop RID
-            hops[i]._upstream = i == n_hops - 1 ? hops[i]._rid : hops[i + 1]._rid;
+            /** Conditions:
+                - First hop RXID is unique, the rest are the previous hop TXID
+                - Last hop upstream is it's own RID, the rest are the next hop RID
+                - First hop downstream is client's RID, the rest are the previous hop RID
+            */
+
+            if (i == 0)
+            {
+                hops[i]._rxid = HopID::make_random();
+                hops[i]._upstream = hop_rcs[i + 1].router_id();
+                hops[i]._downstream = _router.local_rid();
+            }
+            else if (i == num_hops - 1)
+            {
+                hops[i]._rxid = hops[i - 1]._txid;
+                hops[i]._upstream = hops[i]._rid;
+                hops[i]._downstream = hops[i - 1]._rid;
+            }
+            else
+            {
+                hops[i]._rxid = hops[i - 1]._txid;
+                hops[i]._upstream = hop_rcs[i + 1].router_id();
+                hops[i]._downstream = hops[i - 1]._rid;
+            }
+
+            // Conditions written as ternaries
+            // hops[i]._rxid = i ? hops[i - 1]._txid : HopID::make_random();
+            // hops[i]._upstream = i == num_hops - 1 ? hops[i]._rid : hop_rcs[i + 1].router_id();
+            // hops[i]._downstream = i ? hops[i - 1]._rid : _router.local_rid();
         }
 
         hops.back().terminal_hop = true;
@@ -130,9 +155,14 @@ namespace llarp::path
             "find_cc", FindClientContact::serialize(location, order, is_relayed), std::move(func));
     }
 
+    bool Path::publish_client_contact2(const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
+    {
+        return send_path_control_message2("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
+    }
+
     bool Path::publish_client_contact(const EncryptedClientContact& ecc, std::function<void(std::string)> func)
     {
-        return send_path_control_message("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
+        return send_path_control_message("publish_cc_inner", PublishClientContact::serialize(ecc), std::move(func));
     }
 
     bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)
@@ -175,6 +205,15 @@ namespace llarp::path
         auto outer_payload = make_path_message(std::move(inner_payload));
 
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
+    }
+
+    bool Path::send_path_control_message2(
+        std::string endpoint, std::string body, std::function<void(oxen::quic::message)> func)
+    {
+        auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
+        auto outer_payload = make_path_message(std::move(inner_payload));
+
+        return _router.send_control_message(upstream_rid(), "path_control", std::move(outer_payload), std::move(func));
     }
 
     bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
@@ -246,6 +285,14 @@ namespace llarp::path
     bool Path::is_ready(std::chrono::milliseconds now) const
     {
         return _established ? !is_expired(now) : false;
+    }
+
+    std::shared_ptr<PathHandler> Path::get_parent()
+    {
+        if (auto parent = handler.lock())
+            return parent;
+
+        return nullptr;
     }
 
     RouterID Path::upstream_rid()

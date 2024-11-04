@@ -239,9 +239,7 @@ namespace llarp
 
         const Ed25519SecretKey& identity() const { return _key_manager->identity_key; }
 
-        const RouterID& router_id() const { return _key_manager->public_key; }
-
-        const RouterID& local_rid() const { return relay_contact.router_id(); }
+        const RouterID& local_rid() const { return _key_manager->public_key; }
 
         Profiling& router_profiling() { return _router_profiling; }
 
