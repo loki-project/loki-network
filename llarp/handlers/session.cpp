@@ -4,6 +4,7 @@
 #include <llarp/messages/dht.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
+#include <llarp/nodedb.hpp>
 #include <llarp/router/router.hpp>
 
 namespace llarp::handlers
@@ -118,13 +119,10 @@ namespace llarp::handlers
     void SessionEndpoint::build_more(size_t n)
     {
         size_t count{0};
-        log::debug(
-            logcat, "SessionEndpoint building {} paths to random remotes (needed: {})", n, path::DEFAULT_PATHS_HELD);
+        log::debug(logcat, "SessionEndpoint building {} paths to random remotes (needed: {})", n, num_paths_desired);
 
-        for (size_t i = 0; i < n; ++i)
-        {
+        while (count < n)
             count += build_path_to_random();
-        }
 
         if (count == n)
             log::debug(logcat, "SessionEndpoint successfully initiated {} path-builds", n);
@@ -432,6 +430,10 @@ namespace llarp::handlers
 
             for (const auto& [_, path] : _paths)
             {
+                // If path-build is underway, don't use it
+                if (not path)
+                    continue;
+
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
                 ret &= path->publish_client_contact2(ecc, [](oxen::quic::message m) {

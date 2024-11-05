@@ -7,7 +7,6 @@
 
 namespace llarp
 {
-
     namespace PublishClientContact
     {
         inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});

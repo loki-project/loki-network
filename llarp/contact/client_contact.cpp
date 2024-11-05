@@ -1,5 +1,7 @@
 #include "client_contact.hpp"
 
+#include <llarp/util/logging/buffer.hpp>
+
 namespace llarp
 {
     static auto logcat = log::Cat("client-intro");
@@ -200,10 +202,15 @@ namespace llarp
             nonce.from_string(btdc.require<std::string_view>("n"));
             blinded_pubkey.from_string(btdc.require<std::string_view>("i"));
             encrypted = btdc.require<std::vector<unsigned char>>("x");
+            sig.from_string(btdc.require<std::string_view>("~"));
         }
         catch (const std::exception& e)
         {
-            log::critical(logcat, "EncryptedClientContact deserialization failed: {}", e.what());
+            log::critical(
+                logcat,
+                "EncryptedClientContact deserialization failed: {} : payload: {}",
+                e.what(),
+                buffer_printer{_bt_payload});
             throw;
         }
     }

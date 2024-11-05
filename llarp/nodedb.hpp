@@ -88,13 +88,15 @@ namespace llarp
 
     class NodeDB
     {
+        friend struct Router;
+
         Router& _router;
         const fs::path _root;
         // const std::function<void(std::function<void()>)> _disk_hook;
 
-        bool _is_service_node;
+        bool _is_service_node{false};
 
-        std::chrono::milliseconds _next_flush_time;
+        std::chrono::milliseconds _next_flush_time{};
 
         /******** RouterID/RelayContacts ********/
 
@@ -141,8 +143,13 @@ namespace llarp
 
         // All registered relays (service nodes)
         std::set<RouterID> _registered_routers;
+
         // if populated from a config file, lists specific exclusively used as path first-hops
         std::set<RouterID> _pinned_edges;
+
+        // if true, ONLY use pinned edges for first hop
+        bool _strict_connect{false};
+
         // source of "truth" for RC updating. This relay will also mediate requests to the
         // 8 selected active RID's for RID fetching
         RouterID fetch_source;
@@ -194,6 +201,8 @@ namespace llarp
             _ensure_skiplist(_root);
             rid_result_counters.clear();
         }
+
+        bool strict_connect_enabled() const { return _strict_connect; }
 
         void start_tickers();
 
@@ -335,7 +344,7 @@ namespace llarp
 
         /** The following random conditional functions utilize a simple implementation of reservoir
             sampling to return either 1 or n random RC's using only one pass through the set of
-           RC's.
+            RC's.
 
             Pseudocode:
               - begin iterating through the set
@@ -347,7 +356,7 @@ namespace llarp
         std::optional<RemoteRC> get_random_rc_conditional(std::function<bool(RemoteRC)> hook) const;
 
         std::optional<std::vector<RemoteRC>> get_n_random_rcs_conditional(
-            size_t n, std::function<bool(RemoteRC)> hook, bool exact = false) const;
+            size_t n, std::function<bool(RemoteRC)> hook, bool exact = false, bool use_strict_connect = false) const;
 
         // Updates `current` to not contain any of the elements of `replace` and resamples (up to
         // `target_size`) from population to refill it.

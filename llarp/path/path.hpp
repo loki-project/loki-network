@@ -125,6 +125,8 @@ namespace llarp
 
             bool send_path_data_message(std::string body);
 
+            bool is_established() const { return _established; }
+
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
             std::shared_ptr<PathHandler> get_parent();

@@ -245,9 +245,14 @@ namespace llarp
         return _link_manager->send_control_message(remote, std::move(ep), std::move(body), std::move(func));
     }
 
-    void Router::for_each_connection(std::function<void(link::Connection&)> func)
+    std::set<RouterID> Router::get_current_remotes() const
     {
-        return _link_manager->for_each_connection(func);
+        return _loop->call_get([this]() { return _link_manager->get_current_remotes(); });
+    }
+
+    void Router::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
+    {
+        return _link_manager->for_each_connection(std::move(func));
     }
 
     bool Router::ensure_identity()
@@ -363,7 +368,7 @@ namespace llarp
         auto& conf = *_config;
 
         // Router config
-        client_router_connections = conf.router.client_router_connections;
+        min_client_outbounds = conf.router.client_router_connections;
 
         std::optional<std::string> paddr = (conf.router.public_ip) ? conf.router.public_ip
             : (conf.links.public_addr)                             ? conf.links.public_addr
@@ -529,50 +534,42 @@ namespace llarp
         }
 
         /// build a set of strictConnectPubkeys
-        if (not conf.strict_connect.empty())
+        if (auto& conf_edges = conf.pinned_edges; not conf_edges.empty())
         {
-            const auto& val = conf.strict_connect;
-
             if (is_service_node())
                 throw std::runtime_error("cannot use strict-connect option as service node");
 
-            if (val.size() < 2)
+            auto n_edges = conf_edges.size();
+            if (n_edges < 2)
                 throw std::runtime_error("Must specify more than one strict-connect router if using strict-connect");
 
-            _node_db->pinned_edges().insert(val.begin(), val.end());
-            log::debug(logcat, "{} strict-connect routers configured", val.size());
-        }
+            _node_db->pinned_edges() = std::move(conf_edges);
+            _node_db->_strict_connect = true;
 
-        // profiling
-        _profile_file = _config->router.data_dir / "profiles.dat";
+            log::info(logcat, "Local client configured to strictly use {} edge relays", n_edges);
 
-        // Network config
-        if (not _testnet and _config->network.enable_profiling)
-        {
-            log::debug(logcat, "Router profiling enabled");
-            if (not fs::exists(_profile_file))
+            if (min_client_outbounds > n_edges)
             {
-                log::debug(logcat, "No profiles file found at {}; skipping...", _profile_file);
-            }
-            else
-            {
-                log::debug(logcat, "Loading router profiles from {}", _profile_file);
-                _router_profiling.load(_profile_file);
+                min_client_outbounds = n_edges;
+                log::info(
+                    logcat,
+                    "Local client holds only {} strict-connect edge relays; adjusting minimum router connections "
+                    "commensurately",
+                    n_edges);
             }
         }
         else
-        {
-            _router_profiling.disable();
-            log::debug(logcat, "Router profiling disabled");
-        }
+            log::info(
+                logcat, "Local client configured to maintain {} router connections at minimum", min_client_outbounds);
+
+        if (min_client_outbounds < 2)
+            throw std::runtime_error{"Client cannot be configured to have less than 2 outbound router connections!"};
     }
 
     void Router::init_tun()
     {
         if (_tun = _loop->template make_shared<handlers::TunEndpoint>(*this); _tun != nullptr)
-        {
             _tun->configure();
-        }
         else
             throw std::runtime_error{"Failed to construct TunEndpoint API!"};
     }
@@ -711,24 +708,24 @@ namespace llarp
         return std::nullopt;
     }
 
-    bool Router::have_snode_whitelist() const
+    bool Router::has_whitelist() const
     {
         return whitelist_received;
     }
 
     bool Router::appears_decommed() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->greylist().count(local_rid());
+        return _is_service_node and has_whitelist() and node_db()->greylist().count(local_rid());
     }
 
     bool Router::appears_funded() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->is_connection_allowed(local_rid());
+        return _is_service_node and has_whitelist() and node_db()->is_connection_allowed(local_rid());
     }
 
     bool Router::appears_registered() const
     {
-        return _is_service_node and have_snode_whitelist() and node_db()->registered_routers().count(local_rid());
+        return _is_service_node and has_whitelist() and node_db()->registered_routers().count(local_rid());
     }
 
     bool Router::can_test_routers() const
@@ -860,10 +857,12 @@ namespace llarp
 
         if (num_router_conns < num_rcs)
         {
-            log::critical(
+            log::debug(
                 logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
             _link_manager->connect_to_keep_alive(FULL_MESH_ITERATION);
         }
+
+        _path_context->expire_hops(now);
     }
 
     void Router::_client_tick(std::chrono::milliseconds now)
@@ -872,7 +871,7 @@ namespace llarp
 
         llarp::sys::service_manager->report_periodic_stats();
         _pathbuild_limiter.Decay(now);
-        // _router_profiling.tick();
+        _router_profiling.tick();
 
         if (should_report_stats(now))
             report_stats();
@@ -887,31 +886,30 @@ namespace llarp
 
         // TODO: make "use_pinned_edges" boolean to only connect to pinned edges
         auto n_conns = num_router_connections();
-        auto num_needed = MIN_CLIENT_ROUTER_CONNS - n_conns;
 
         // if we need more sessions to routers we shall connect out to others
-        if (num_needed)
+        if (n_conns < min_client_outbounds)
         {
+            auto num_needed = min_client_outbounds - n_conns;
+
             log::critical(
                 logcat,
                 "Client connecting to {} random routers to keep alive (current:{}, needed:{})",
                 num_needed,
                 n_conns,
-                MIN_CLIENT_ROUTER_CONNS);
+                min_client_outbounds);
             _link_manager->connect_to_keep_alive(num_needed);
 
-            if (num_needed == MIN_CLIENT_ROUTER_CONNS)
+            if (num_needed == min_client_outbounds - 1)  // subtract bootstrap
             {
-                log::info(logcat, "Client has 0 router connections currently; bypassing SessionEndpoint tick...");
+                log::info(
+                    logcat,
+                    "Client has 0 non-bootstrap router connections currently; bypassing SessionEndpoint tick...");
                 return;
             }
         }
 
         _session_endpoint->tick(now);
-
-        // save profiles
-        if (_router_profiling.is_enabled() and _config->network.save_profiles and _router_profiling.should_save(now))
-            queue_disk_io([&]() { _router_profiling.save(_profile_file); });
     }
 
     void Router::tick()
@@ -979,10 +977,32 @@ namespace llarp
 
             log::info(logcat, "Router initialized as service node!");
         }
+        else if (not _testnet and _config->network.enable_profiling)
+        {
+            _router_profiling._profile_file = _config->router.data_dir / "profiles.dat";
+
+            log::debug(logcat, "Router profiling enabled");
+            if (not fs::exists(_router_profiling._profile_file))
+            {
+                log::debug(logcat, "No profiles file found at {}; skipping...", _router_profiling._profile_file);
+            }
+            else
+            {
+                log::debug(logcat, "Loading router profiles from {}", _router_profiling._profile_file);
+                _router_profiling.load_from_disk();
+            }
+
+            if (_config->network.save_profiles)
+            {
+                log::debug(logcat, "Router profile saving enabled");
+                _router_profiling.start_save_ticker(*this);
+            }
+        }
         else
         {
-            // TESTNET:
+            _config->network.enable_profiling = false;
             _router_profiling.disable();
+            log::info(logcat, "Router profiling disabled");
         }
 
         // This must be constructed AFTER router creates its LocalRC
@@ -1071,11 +1091,6 @@ namespace llarp
 
         llarp::sys::service_manager->ready();
         return _is_running.load();
-    }
-
-    bool Router::is_running() const
-    {
-        return _is_running;
     }
 
     std::chrono::milliseconds Router::Uptime() const
@@ -1182,12 +1197,10 @@ namespace llarp
 
         _session_endpoint->stop(true);
 
-        _loop->call_later(200ms, [this] { cleanup(); });
-    }
+        if (not _is_service_node)
+            _router_profiling.stop_save_ticker();
 
-    uint32_t Router::NextPathBuildNumber()
-    {
-        return _path_build_count++;
+        _loop->call_later(200ms, [this] { cleanup(); });
     }
 
     oxen::quic::Address Router::listen_addr() const

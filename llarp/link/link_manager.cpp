@@ -88,16 +88,18 @@ namespace llarp
             return link_manager.router().loop()->call_get([this, remote]() { return service_conns.count(remote); });
         }
 
-        void Endpoint::for_each_connection(std::function<void(link::Connection&)> hook)
+        void Endpoint::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
         {
-            link_manager.router().loop()->call([this, func = std::move(hook)]() {
-                for (const auto& [rid, conn] : service_conns)
-                    func(*conn);
+            link_manager.router().loop()->call([this, func = std::move(func)]() mutable {
+                for (auto& [rid, conn] : service_conns)
+                    if (conn)
+                        func(rid, *conn);
 
                 if (_is_service_node)
                 {
-                    for (const auto& [rid, conn] : client_conns)
-                        func(*conn);
+                    for (auto& [rid, conn] : client_conns)
+                        if (conn)
+                            func(rid, *conn);
                 }
             });
         }
@@ -143,17 +145,23 @@ namespace llarp
             return link_manager.router().loop()->call_get([this]() -> std::tuple<size_t, size_t, size_t, size_t> {
                 size_t in{0}, out{0};
 
-                for (const auto& c : service_conns)
+                for (const auto& [_, c] : service_conns)
                 {
-                    if (c.second->is_inbound())
+                    if (not c)
+                        continue;
+
+                    if (c->is_inbound())
                         ++in;
                     else
                         ++out;
                 }
 
-                for (const auto& c : client_conns)
+                for (const auto& [_, c] : client_conns)
                 {
-                    if (c.second->is_inbound())
+                    if (not c)
+                        continue;
+
+                    if (c->is_inbound())
                         ++in;
                     else
                         ++out;
@@ -170,7 +178,14 @@ namespace llarp
 
         size_t Endpoint::num_router_conns() const
         {
-            return link_manager.router().loop()->call_get([this]() { return service_conns.size(); });
+            return link_manager.router().loop()->call_get([this]() {
+                size_t n{};
+
+                for (const auto& [_, c] : service_conns)
+                    n += (c != nullptr);
+
+                return n;
+            });
         }
     }  // namespace link
 
@@ -191,12 +206,24 @@ namespace llarp
 
     using messages::serialize_response;
 
-    void LinkManager::for_each_connection(std::function<void(link::Connection&)> func)
+    std::set<RouterID> LinkManager::get_current_remotes() const
+    {
+        // invoke using Router method to wrap in call_get
+        std::set<RouterID> ret{};
+
+        for (auto& [rid, conn] : ep->service_conns)
+            if (conn)
+                ret.insert(rid);
+
+        return ret;
+    }
+
+    void LinkManager::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
     {
         if (is_stopping)
             return;
 
-        return ep->for_each_connection(func);
+        return ep->for_each_connection(std::move(func));
     }
 
     void LinkManager::register_commands(
@@ -562,7 +589,7 @@ namespace llarp
 
             if (auto rv = ep->establish_and_send(
                     KeyedAddress{router.to_view(), remote_addr},
-                    *rc,
+                    router,
                     std::move(endpoint),
                     std::move(body),
                     std::move(func));
@@ -593,7 +620,7 @@ namespace llarp
         auto remote_addr = rc.addr();
 
         if (auto rv = ep->establish_connection(
-                KeyedAddress{rid.to_view(), remote_addr}, rc, std::move(on_open), std::move(on_close));
+                KeyedAddress{rid.to_view(), remote_addr}, rid, std::move(on_open), std::move(on_close));
             rv)
         {
             log::info(logcat, "Begun establishing connection to {}", remote_addr);
@@ -692,6 +719,16 @@ namespace llarp
 
             return res;
         };
+
+        std::optional<std::vector<RemoteRC>> rcs = std::nullopt;
+
+        if (node_db->strict_connect_enabled())
+        {
+            assert(not _is_service_node);
+
+            // TESTNET: TODO: if given strict-connects, fetch their RCs SPECIFICALLY in bootstrapping
+            log::warning(logcat, "FINISH STRICT CONNECT (SEE COMMENT)");
+        }
 
         if (auto maybe = node_db->get_n_random_rcs_conditional(num_conns, filter))
         {
@@ -991,6 +1028,40 @@ namespace llarp
         m.respond(std::move(btdp).str());
     }
 
+    void LinkManager::_handle_resolve_sns(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::critical(logcat, "Received request to publish client contact!");
+
+        std::string name_hash;
+
+        try
+        {
+            if (inner_body)
+                name_hash = ResolveSNS::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                name_hash = ResolveSNS::deserialize(oxenc::bt_dict_consumer{m.body()});
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
+
+        _router.rpc_client()->lookup_ons_hash(
+            name_hash, [prev_msg = std::move(m)](std::optional<EncryptedSNSRecord> maybe_enc) mutable {
+                if (maybe_enc)
+                {
+                    log::info(logcat, "RPC lookup successfully returned encrypted SNS record!");
+                    prev_msg.respond(ResolveSNS::serialize_response(*maybe_enc));
+                }
+                else
+                {
+                    log::warning(logcat, "RPC lookup could not find SNS registry!");
+                    prev_msg.respond(ResolveSNS::NOT_FOUND, true);
+                }
+            });
+    }
+
     void LinkManager::handle_resolve_sns(oxen::quic::message m)
     {
         std::string name_hash;
@@ -1020,7 +1091,7 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_publish_cc(oxen::quic::message m)
+    void LinkManager::_handle_publish_cc(oxen::quic::message m, std::optional<std::string> inner_body)
     {
         log::critical(logcat, "Received request to publish client contact!");
 
@@ -1028,11 +1099,14 @@ namespace llarp
 
         try
         {
-            enc = PublishClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
+            if (inner_body)
+                enc = PublishClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                enc = PublishClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "Exception: {}", e.what());
+            log::warning(logcat, "Exception: {}: payload: {}", e.what(), buffer_printer{m.body()});
             return m.respond(messages::ERROR_RESPONSE, true);
         }
 
@@ -1085,13 +1159,23 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_find_cc(oxen::quic::message m)
+    void LinkManager::handle_publish_cc(oxen::quic::message m)
     {
+        return _handle_publish_cc(std::move(m));
+    }
+
+    void LinkManager::_handle_find_cc(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::critical(logcat, "Received request to find client contact!");
+
         dht::Key_t dht_key;
 
         try
         {
-            dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
+            if (inner_body)
+                dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
@@ -1131,6 +1215,11 @@ namespace llarp
                                         : "failed");
                 prev_msg.respond(msg.body_str(), msg.is_error());
             });
+    }
+
+    void LinkManager::handle_find_cc(oxen::quic::message m)
+    {
+        return _handle_find_cc(std::move(m));
     }
 
     void LinkManager::handle_path_build(oxen::quic::message m, const RouterID& from)
@@ -1416,7 +1505,7 @@ namespace llarp
         if (auto it = path_requests.find(endpoint); it != path_requests.end())
         {
             log::debug(logcat, "Received path control request (`{}`); invoking endpoint...", endpoint);
-            std::invoke(it->second, this, std::move(m));
+            std::invoke(it->second, this, std::move(m), std::move(body));
         }
         else
             log::warning(logcat, "Received path control request (`{}`), which has no local handler!", endpoint);

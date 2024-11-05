@@ -10,6 +10,7 @@
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/logging.hpp>
+#include <llarp/util/meta.hpp>
 
 #include <functional>
 
@@ -193,6 +194,8 @@ namespace llarp::path
     // called within the scope of locked mutex
     void PathHandler::expire_paths(std::chrono::milliseconds now)
     {
+        Lock_t lock{paths_mutex};
+
         if (_paths.size() == 0)
             return;
 
@@ -200,7 +203,7 @@ namespace llarp::path
 
         for (auto itr = _paths.begin(); itr != _paths.end();)
         {
-            if (itr->second->is_expired(now))
+            if (itr->second and itr->second->is_established() and itr->second->is_expired(now))
             {
                 droplist.push_back(std::move(itr->second));
                 itr = _paths.erase(itr);
@@ -256,7 +259,7 @@ namespace llarp::path
         now = llarp::time_now_ms();
         _router.pathbuild_limiter().Decay(now);
 
-        // expire_paths(now);
+        expire_paths(now);
 
         if (auto n = should_build_more(); n > 0)
             build_more(n);
@@ -288,26 +291,27 @@ namespace llarp::path
 
     std::optional<RemoteRC> PathHandler::select_first_hop(const std::set<RouterID>& exclude) const
     {
-        std::optional<RemoteRC> found = std::nullopt;
-        _router.for_each_connection([&](link::Connection& conn) {
-            RouterID rid{conn.conn->remote_key()};
+        std::set<RouterID> current_remotes;
 
-#ifndef TESTNET
-            if (_router.is_bootstrap_node(rid))
-                return;
-#endif
+        if (_router.node_db()->strict_connect_enabled())
+            current_remotes = _router.node_db()->pinned_edges();
+        else
+            current_remotes = _router.get_current_remotes();
+
+        std::function<bool(RouterID)> hook = [&](const RouterID& rid) {
             if (exclude.count(rid))
-                return;
-
+                return false;
             if (build_cooldown_hit(rid))
-                return;
-
+                return false;
+            // always returns false on testnet builds
             if (_router.router_profiling().is_bad_for_path(rid))
-                return;
+                return false;
+            return true;
+        };
 
-            found = _router.node_db()->get_rc(rid);
-        });
-        return found;
+        auto edge = meta::sample(current_remotes, hook);
+
+        return edge ? _router.node_db()->get_rc(*edge) : std::nullopt;
     }
 
     size_t PathHandler::num_active_paths() const
@@ -402,6 +406,8 @@ namespace llarp::path
 
         // make a copy here to reference rather than creating one in the lambda every iteration
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
+        to_exclude.insert(pivot);
+
         std::vector<RemoteRC> hops;
 
         if (auto maybe = select_first_hop(exclude))
@@ -412,16 +418,16 @@ namespace llarp::path
             return std::nullopt;
         }
 
-        RemoteRC remote_rc;
+        to_exclude.insert(hops.back().router_id());
 
-        if (const auto maybe = _router.node_db()->get_rc(pivot))
+        RemoteRC pivot_rc;
+
+        if (auto maybe = _router.node_db()->get_rc(pivot))
         {
-            remote_rc = *maybe;
+            pivot_rc = *maybe;
         }
         else
             return std::nullopt;
-
-        to_exclude.insert(remote_rc.router_id());  // we will manually add this last
 
         // leave one extra spot for the terminal node
         auto hops_needed = num_hops - hops.size() - 1;
@@ -429,25 +435,21 @@ namespace llarp::path
         auto filter = [&r = _router, &to_exclude](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
 
-            if (r.router_profiling().is_bad_for_path(rid, 1))
-                to_exclude.insert(rid);
-
-            if (to_exclude.count(rid))
+            // if its already excluded, fail; (we want it added even on success)
+            if (not to_exclude.insert(rid).second)
                 return false;
 
-            // add the rid on a success case so we don't select it again
-            to_exclude.insert(rid);
+            if (r.router_profiling().is_bad_for_path(rid, 1))
+                return false;
 
             return true;
         };
 
-        auto maybe_rcs = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter, true);
-
-        if (maybe_rcs)
+        if (auto maybe_rcs = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter, true))
         {
             auto& rcs = *maybe_rcs;
             hops.insert(hops.end(), rcs.begin(), rcs.end());
-            hops.emplace_back(remote_rc);
+            hops.emplace_back(pivot_rc);
 
 #ifndef TESTNET
             if (not path_config.check_rcs({hops.begin(), hops.end()}))
@@ -647,6 +649,8 @@ namespace llarp::path
 
         if (auto itr = _paths.find(upstream_rxid); itr != _paths.end())
             _paths.erase(itr);
+
+        _router.path_context()->drop_path(upstream_rxid);
     }
 
     void PathHandler::path_build_failed(std::shared_ptr<Path> p, bool timeout)

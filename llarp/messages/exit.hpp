@@ -2,6 +2,9 @@
 
 #include "common.hpp"
 
+#include <llarp/path/path_types.hpp>
+#include <llarp/util/random.hpp>
+
 namespace llarp
 {
     /*

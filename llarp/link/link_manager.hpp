@@ -39,9 +39,6 @@ namespace llarp
     inline const keep_alive RELAY_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
 
-    inline constexpr int MIN_CLIENT_ROUTER_CONNS{8};
-    inline constexpr int MAX_CLIENT_ROUTER_CONNS{10};
-
     namespace alpns
     {
         inline const auto SN_ALPNS = "SERVICE_NODE"_us;
@@ -93,18 +90,18 @@ namespace llarp
             size_t num_router_conns() const;
 
             template <typename... Opt>
-            bool establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts);
+            bool establish_connection(KeyedAddress remote, RouterID rid, Opt&&... opts);
 
             template <typename... Opt>
             bool establish_and_send(
                 KeyedAddress remote,
-                RemoteRC rc,
+                RouterID rid,
                 std::optional<std::string> endpoint,
                 std::string body,
                 std::function<void(oxen::quic::message m)> func = nullptr,
                 Opt&&... opts);
 
-            void for_each_connection(std::function<void(link::Connection&)> func);
+            void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
             void close_connection(RouterID rid);
 
@@ -239,7 +236,9 @@ namespace llarp
 
         nlohmann::json extract_status() const;
 
-        void for_each_connection(std::function<void(link::Connection&)> func);
+        std::set<RouterID> get_current_remotes() const;
+
+        void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
         // Attempts to connect to a number of random routers.
         //
@@ -257,6 +256,11 @@ namespace llarp
         void handle_publish_cc(oxen::quic::message);
         void handle_find_cc(oxen::quic::message);
         void handle_resolve_sns(oxen::quic::message);
+
+        // Inner handlers for relayed requests
+        void _handle_publish_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_find_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_resolve_sns(oxen::quic::message, std::optional<std::string> = std::nullopt);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
@@ -279,10 +283,11 @@ namespace llarp
         // These requests come over a path (as a "path_control" request),
         // we may or may not need to make a request to another relay,
         // then respond (onioned) back along the path.
-        std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message)> path_requests = {
-            {"publish_cc"sv, &LinkManager::handle_publish_cc},
-            {"find_cc"sv, &LinkManager::handle_find_cc},
-            {"resolve_sns"sv, &LinkManager::handle_resolve_sns}};
+        std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message, std::optional<std::string>)>
+            path_requests = {
+                {"publish_cc"sv, &LinkManager::_handle_publish_cc},
+                {"find_cc"sv, &LinkManager::_handle_find_cc},
+                {"resolve_sns"sv, &LinkManager::_handle_resolve_sns}};
 
         // Path relaying
         void handle_path_control(oxen::quic::message, const RouterID& from);
@@ -306,7 +311,7 @@ namespace llarp
         template <typename... Opt>
         bool Endpoint::establish_and_send(
             KeyedAddress remote,
-            RemoteRC rc,
+            RouterID rid,
             std::optional<std::string> ep,
             std::string body,
             std::function<void(oxen::quic::message m)> func,
@@ -315,7 +320,6 @@ namespace llarp
             return link_manager.router().loop()->call_get([&]() {
                 try
                 {
-                    const auto& rid = rc.router_id();
                     const auto& is_control = ep.has_value();
                     const auto us = _is_service_node ? "Relay"s : "Client"s;
 
@@ -371,13 +375,11 @@ namespace llarp
         }
 
         template <typename... Opt>
-        bool Endpoint::establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts)
+        bool Endpoint::establish_connection(KeyedAddress remote, RouterID rid, Opt&&... opts)
         {
             return link_manager.router().loop()->call_get([&]() {
                 try
                 {
-                    const auto& rid = rc.router_id();
-
                     log::debug(logcat, "Establishing connection to RID:{}", rid);
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);

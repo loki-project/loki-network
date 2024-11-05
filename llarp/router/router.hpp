@@ -73,7 +73,7 @@ namespace llarp
 
     struct Router : std::enable_shared_from_this<Router>
     {
-        friend class NodeDB;
+        // friend class NodeDB;
         friend struct LinkManager;
 
         explicit Router(
@@ -149,21 +149,15 @@ namespace llarp
 
         std::shared_ptr<Config> _config;
 
-        uint32_t _path_build_count{0};
-
         std::unique_ptr<rpc::RPCServer> _rpc_server;
-
-        const std::chrono::milliseconds _random_start_delay{
-            platform::is_simulation ? std::chrono::milliseconds{(llarp::randint() % 1250) + 2000} : 0s};
 
         std::shared_ptr<rpc::RPCClient> _rpc_client;
         bool whitelist_received{false};
 
         oxenmq::address rpc_addr;
         Profiling _router_profiling;
-        fs::path _profile_file;
 
-        int client_router_connections;
+        size_t min_client_outbounds{};
 
         // should we be sending padded messages every interval?
         bool send_padding{false};
@@ -209,9 +203,11 @@ namespace llarp
 
         bool is_bootstrap_seed() const { return _bootstrap_seed; }
 
-        int required_num_client_conns() const { return client_router_connections; }
+        size_t client_outbounds_needed() const { return min_client_outbounds; }
 
-        void for_each_connection(std::function<void(link::Connection&)> func);
+        std::set<RouterID> get_current_remotes() const;
+
+        void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
         const std::shared_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
 
@@ -282,7 +278,7 @@ namespace llarp
 
         /// Return true if we are operating as a service node and have received a service node
         /// whitelist
-        bool have_snode_whitelist() const;
+        bool has_whitelist() const;
 
         /// return true if we look like we are a decommissioned service node
         bool appears_decommed() const;
@@ -301,7 +297,7 @@ namespace llarp
 
         std::chrono::milliseconds Uptime() const;
 
-        std::chrono::milliseconds _last_tick = 0s;
+        std::chrono::milliseconds _last_tick{0s};
 
         std::function<void(void)> _router_close_cb;
 
@@ -317,7 +313,9 @@ namespace llarp
 
         std::string status_line();
 
-        bool is_running() const;
+        bool is_running() const { return _is_running; }
+
+        bool is_stopping() const { return _is_stopping; }
 
         bool is_service_node() const;
 
@@ -361,8 +359,6 @@ namespace llarp
 
         /// count the number of unique clients connected by pubkey
         size_t num_client_connections() const;
-
-        uint32_t NextPathBuildNumber();
 
         void teardown();
 

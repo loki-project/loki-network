@@ -7,7 +7,7 @@ namespace llarp
     ContactDB::ContactDB(Router& r) : _router{r}, _local_key{dht::Key_t::derive_from_rid(r.local_rid())}
     {
         timer_keepalive = std::make_shared<int>(0);
-        _cc_nodes = std::make_unique<dht::Bucket<dht::CCNode>>(_local_key, llarp::randint);
+        _cc_nodes = std::make_unique<dht::Bucket<dht::CCNode>>(_local_key, csrng);
     }
 
     std::optional<ClientContact> ContactDB::get_decrypted_cc(RouterID remote) const

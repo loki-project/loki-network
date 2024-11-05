@@ -34,7 +34,7 @@ namespace llarp
 
     inline constexpr uint16_t DEFAULT_LISTEN_PORT{1090};
     inline constexpr uint16_t DEFAULT_DNS_PORT{53};
-    inline constexpr int CLIENT_ROUTER_CONNECTIONS = 4;
+    inline constexpr size_t CLIENT_ROUTER_CONNECTIONS{4};
 
     // TODO: don't use these maps. they're sloppy and difficult to follow
     /// Small struct to gather all parameters needed for config generation to reduce the number of
@@ -56,7 +56,7 @@ namespace llarp
 
     struct RouterConfig
     {
-        int client_router_connections{CLIENT_ROUTER_CONNECTIONS};
+        size_t client_router_connections{CLIENT_ROUTER_CONNECTIONS};
 
         std::string net_id;
 
@@ -117,7 +117,7 @@ namespace llarp
     {
         bool enable_profiling;
         bool save_profiles;
-        std::set<RouterID> strict_connect;
+        std::set<RouterID> pinned_edges;
 
         std::optional<fs::path> keyfile;
 

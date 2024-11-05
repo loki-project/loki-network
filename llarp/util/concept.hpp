@@ -8,6 +8,9 @@ namespace llarp::concepts
     template <typename T>
     concept to_string_formattable = oxen::quic::concepts::ToStringFormattable<T>;
 
+    template <typename T, typename U = std::remove_cvref_t<T>>
+    concept forward_iterable = std::forward_iterator<typename U::iterator>;
+
 #ifndef __cpp_lib_is_scoped_enum
     template <typename T>
         struct is_scoped_enum_st : std::bool_constant < requires

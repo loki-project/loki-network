@@ -3,6 +3,7 @@
 #include "crypto/types.hpp"
 #include "link/link_manager.hpp"
 #include "messages/fetch.hpp"
+#include "util/meta.hpp"
 #include "util/time.hpp"
 
 #include <algorithm>
@@ -74,58 +75,13 @@ namespace llarp
                 return rc;
         }
 
-        size_t i = 0;
-        std::optional<RemoteRC> res = std::nullopt;
-
-        for (const auto& rc : known_rcs)
-        {
-            if (not hook(rc))
-                continue;
-
-            if (++i <= 1)
-            {
-                res = rc;
-                continue;
-            }
-
-            size_t x = csrng() % (i + 1);
-            if (x <= 1)
-                res = rc;
-        }
-
-        return res;
+        return meta::sample(known_rcs, std::move(hook));
     }
 
     std::optional<std::vector<RemoteRC>> NodeDB::get_n_random_rcs_conditional(
-        size_t n, std::function<bool(RemoteRC)> hook, bool exact) const
+        size_t n, std::function<bool(RemoteRC)> hook, bool exact, bool /* use_strict_connect */) const
     {
-        auto selected = std::make_optional<std::vector<RemoteRC>>();
-        selected->reserve(n);
-
-        size_t i = 0;
-
-        for (const auto& rc : known_rcs)
-        {
-            // ignore any RC's that do not pass the condition
-            if (not hook(rc))
-                continue;
-
-            // load the first n RC's that pass the condition into selected
-            if (++i <= n)
-            {
-                selected->push_back(rc);
-                continue;
-            }
-
-            // replace selections with decreasing probability per iteration
-            size_t x = csrng() % (i + 1);
-            if (x < n)
-                (*selected)[x] = rc;
-        }
-
-        if (selected->size() < (exact ? n : 1))
-            selected.reset();
-        return selected;
+        return meta::sample_n(known_rcs, std::move(hook), n, exact);
     }
 
     bool NodeDB::tick(std::chrono::milliseconds now)
@@ -227,7 +183,7 @@ namespace llarp
             }
 
             // if we don't have the whitelist yet don't remove the entry
-            if (not _router.whitelist_received)
+            if (not _router.has_whitelist())
             {
                 log::debug(logcat, "Skipping check on {}: don't have whitelist yet", rc.router_id());
                 return false;
@@ -419,7 +375,7 @@ namespace llarp
 
     void NodeDB::fetch_rcs()
     {
-        if (_router._is_stopping || not _router._is_running)
+        if (_router.is_stopping() || not _router.is_running())
         {
             log::info(logcat, "NodeDB unable to continue RC fetch -- router is stopped!");
             return stop_rc_fetch(false);
@@ -492,7 +448,7 @@ namespace llarp
 
     void NodeDB::fetch_rids()
     {
-        if (_router._is_stopping || not _router._is_running)
+        if (_router.is_stopping() || not _router.is_running())
         {
             log::info(logcat, "NodeDB unable to continue RouterID fetch -- router is stopped!");
             return stop_rid_fetch(false);
@@ -638,7 +594,7 @@ namespace llarp
 
     void NodeDB::configure()
     {
-        _is_service_node = _router._is_service_node;
+        _is_service_node = _router.is_service_node();
 
         bootstrap_init();
         load_from_disk();
@@ -708,7 +664,7 @@ namespace llarp
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        if (_router._is_stopping || not _router._is_running)
+        if (_router.is_stopping() || not _router.is_running())
         {
             log::info(logcat, "NodeDB unable to continue bootstrap fetch -- router is stopped!");
             return stop_bootstrap(false);
@@ -724,7 +680,7 @@ namespace llarp
         _router.link_manager()->fetch_bootstrap_rcs(
             rc,
             BootstrapFetchMessage::serialize(
-                _is_service_node ? std::make_optional(_router.relay_contact) : std::nullopt, num_needed),
+                _is_service_node ? std::make_optional(_router.rc()) : std::nullopt, num_needed),
             [this, src = source](oxen::quic::message m) mutable {
                 log::info(logcat, "Received response to BootstrapRC fetch request...");
 

@@ -2,6 +2,7 @@
 
 #include "constants/proto.hpp"
 #include "contact/router_id.hpp"
+#include "ev/types.hpp"
 #include "util/thread/threading.hpp"
 
 #include <map>
@@ -14,6 +15,8 @@ namespace oxenc
 
 namespace llarp
 {
+    struct Router;
+
     namespace path
     {
         struct Path;
@@ -21,14 +24,15 @@ namespace llarp
 
     struct RouterProfile
     {
-        static constexpr size_t MaxSize = 256;
-        uint64_t conn_timeout = 0;
-        uint64_t conn_success = 0;
-        uint64_t path_success = 0;
-        uint64_t path_fail = 0;
-        uint64_t path_timeout = 0;
-        std::chrono::milliseconds last_update = 0s;
-        std::chrono::milliseconds last_decay = 0s;
+        static constexpr size_t MaxSize{256};
+
+        uint64_t conn_timeout{};
+        uint64_t conn_success{};
+        uint64_t path_success{};
+        uint64_t path_fail{};
+        uint64_t path_timeout{};
+        std::chrono::milliseconds last_update{0s};
+        std::chrono::milliseconds last_decay{0s};
         uint64_t version = llarp::constants::proto_version;
 
         RouterProfile() = default;
@@ -50,14 +54,18 @@ namespace llarp
         void decay();
 
         // rotate stats if timeout reached
-        void Tick();
+        void tick();
     };
 
     struct Profiling
     {
-        Profiling();
+        static constexpr std::chrono::milliseconds SAVE_INTERVAL{10min};
 
-        inline static const int profiling_chances = 4;
+        friend struct Router;
+
+        Profiling() = default;
+
+        inline static const int profiling_chances{4};
 
         /// generic variant
         bool is_bad(const RouterID& r, uint64_t chances = profiling_chances);
@@ -84,9 +92,9 @@ namespace llarp
 
         void tick();
 
-        bool load(const fs::path fname);
+        bool load_from_disk();
 
-        bool save(const fs::path fname);
+        bool save_to_disk();
 
         bool should_save(std::chrono::milliseconds now) const;
 
@@ -97,14 +105,21 @@ namespace llarp
         bool is_enabled() const;
 
       private:
+        void start_save_ticker(Router& r);
+
+        void stop_save_ticker();
+
         void BEncode(oxenc::bt_dict_producer& dict) const;
 
         void BDecode(oxenc::bt_dict_consumer dict);
 
+        std::shared_ptr<EventTicker> _disk_saver;
+
         mutable util::Mutex _m;
+        fs::path _profile_file;
         std::map<RouterID, RouterProfile> _profiles;
-        std::chrono::milliseconds _last_save = 0s;
-        std::atomic<bool> _profiling_disabled;
+        std::chrono::milliseconds _last_save{0s};
+        std::atomic<bool> _profiling_disabled{false};
     };
 
 }  // namespace llarp

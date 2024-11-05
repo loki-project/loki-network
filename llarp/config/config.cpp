@@ -72,15 +72,16 @@ namespace llarp
                 net_id = std::move(arg);
             });
 
-        conf.define_option<int>(
+        conf.define_option<size_t>(
             "router",
             "relay-connections",
             Default{CLIENT_ROUTER_CONNECTIONS},
             ClientOnly,
             Comment{
                 "Minimum number of routers lokinet client will attempt to maintain connections to.",
-            },
-            [=, this](int arg) {
+                "If [network]:strict-connect is defined, the number of client <-> router connections",
+                "maintained by a client will be at MOST the number of pinned edges"},
+            [=, this](size_t arg) {
                 if (arg < CLIENT_ROUTER_CONNECTIONS)
                     throw std::invalid_argument{
                         "Client relay connections must be >= {}"_format(CLIENT_ROUTER_CONNECTIONS)};
@@ -392,9 +393,9 @@ namespace llarp
             [this](std::string value) {
                 RouterID router;
                 if (not router.from_relay_address(value))
-                    throw std::invalid_argument{"bad snode value: " + value};
-                if (not strict_connect.insert(router).second)
-                    throw std::invalid_argument{"duplicate strict connect snode: " + value};
+                    throw std::invalid_argument{"bad .snode pubkey: {}"_format(value)};
+                if (not pinned_edges.insert(router).second)
+                    throw std::invalid_argument{"duplicate strict connect .snode: {}"_format(value)};
             },
             Comment{
                 "Public keys of routers which will act as pinned first-hops. This may be used to",

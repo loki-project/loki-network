@@ -6,6 +6,8 @@
 
 namespace llarp::path
 {
+    static auto logcat = log::Cat("pathctx");
+
     PathContext::PathContext(RouterID local_rid) : _local_rid{std::move(local_rid)} {}
 
     void PathContext::allow_transit()
@@ -36,12 +38,38 @@ namespace llarp::path
         }
     }
 
-    void PathContext::drop_path(const std::shared_ptr<Path>& path)
+    void PathContext::expire_hops(std::chrono::milliseconds now)
     {
         Lock_t l{paths_mutex};
 
-        if (auto itr = _path_map.find(path->upstream_rxid()); itr != _path_map.end())
+        size_t n = 0;
+
+        for (auto itr = _transit_hops.begin(); itr != _transit_hops.end();)
+        {
+            if (itr->second->is_expired(now))
+            {
+                itr = _transit_hops.erase(itr);
+                n += 1;
+            }
+            else
+                ++itr;
+        }
+
+        if (n)
+            log::info(logcat, "{} expired TransitHops purged!", n);
+    }
+
+    void PathContext::drop_path(const HopID& hop_id)
+    {
+        Lock_t l{paths_mutex};
+        if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
             _path_map.erase(itr);
+    }
+
+    void PathContext::drop_path(const std::shared_ptr<Path>& path)
+    {
+        Lock_t l{paths_mutex};
+        drop_path(path->upstream_rxid());
     }
 
     bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop) const

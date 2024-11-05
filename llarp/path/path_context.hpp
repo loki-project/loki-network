@@ -40,9 +40,13 @@ namespace llarp::path
 
         void add_path(std::shared_ptr<Path> p);
 
+        void drop_path(const HopID& hop_id);
+
         void drop_path(const std::shared_ptr<Path>& p);
 
         void drop_paths(std::vector<std::shared_ptr<Path>> droplist);
+
+        void expire_hops(std::chrono::milliseconds now);
 
       private:
         const RouterID _local_rid;

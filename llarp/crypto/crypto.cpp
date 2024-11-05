@@ -1,6 +1,7 @@
 #include "crypto.hpp"
 
 #include <llarp/contact/keys.hpp>
+#include <llarp/util/random.hpp>
 
 #include <oxenc/endian.h>
 #include <sodium/core.h>
@@ -473,13 +474,6 @@ namespace llarp
         return sec.data() + 32;
     }
 
-    uint64_t randint()
-    {
-        uint64_t i;
-        randombytes((uint8_t*)&i, sizeof(i));
-        return i;
-    }
-
     // Called during static initialization to initialize libsodium.  (The CSRNG return is
     // not useful, but just here to get this called during static initialization of `csrng`).
     static CSRNG _initialize_crypto()
@@ -494,5 +488,4 @@ namespace llarp
     }
 
     CSRNG csrng = _initialize_crypto();
-
 }  // namespace llarp
