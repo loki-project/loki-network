@@ -136,23 +136,21 @@ namespace llarp::path
     }
 
     bool Path::obtain_exit(
-        const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
+        const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message(
+        return send_path_control_message2(
             "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
     }
 
-    bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message(
+        return send_path_control_message2(
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
     }
 
-    bool Path::find_client_contact(
-        const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
+    bool Path::find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message(
-            "find_cc", FindClientContact::serialize(location, order, is_relayed), std::move(func));
+        return send_path_control_message2("find_cc", FindClientContact::serialize(location), std::move(func));
     }
 
     bool Path::publish_client_contact2(const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
@@ -160,14 +158,9 @@ namespace llarp::path
         return send_path_control_message2("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
     }
 
-    bool Path::publish_client_contact(const EncryptedClientContact& ecc, std::function<void(std::string)> func)
+    bool Path::resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message("publish_cc_inner", PublishClientContact::serialize(ecc), std::move(func));
-    }
-
-    bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)
-    {
-        return send_path_control_message("resolve_ons", FindNameMessage::serialize(std::move(name)), std::move(func));
+        return send_path_control_message2("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
 
     void Path::enable_exit_traffic()

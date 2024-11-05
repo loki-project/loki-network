@@ -253,13 +253,10 @@ namespace llarp
 
       private:
         // DHT messages
-        void handle_resolve_ons_inner(std::string body, std::function<void(std::string)> respond);  // relay
-
         // TESTNET: // NEW CLIENT_CONTACT HANDLERS
-        void handle_find_cc(oxen::quic::message);
         void handle_publish_cc(oxen::quic::message);
-        void handle_find_cc_inner(std::string body, std::function<void(std::string)> respond);
-        void handle_publish_cc_inner(std::string body, std::function<void(std::string)> respond);
+        void handle_find_cc(oxen::quic::message);
+        void handle_resolve_sns(oxen::quic::message);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
@@ -279,24 +276,18 @@ namespace llarp
         // Misc
         void handle_convo_intro(oxen::quic::message);
 
-        std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message)> path_requests = {
-            {"publish_cc"sv, &LinkManager::handle_publish_cc}};
-
         // These requests come over a path (as a "path_control" request),
         // we may or may not need to make a request to another relay,
         // then respond (onioned) back along the path.
-        std::unordered_map<
-            std::string,
-            void (LinkManager::*)(std::string body, std::function<void(std::string)> respond)>
-            inner_requests = {
-                {"resolve_ons_inner"s, &LinkManager::handle_resolve_ons_inner},
-                {"publish_cc_inner"s, &LinkManager::handle_publish_cc_inner},
-                {"find_cc_inner"s, &LinkManager::handle_find_cc_inner}};
+        std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message)> path_requests = {
+            {"publish_cc"sv, &LinkManager::handle_publish_cc},
+            {"find_cc"sv, &LinkManager::handle_find_cc},
+            {"resolve_sns"sv, &LinkManager::handle_resolve_sns}};
 
         // Path relaying
         void handle_path_control(oxen::quic::message, const RouterID& from);
 
-        void handle_inner_request(oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop);
+        void handle_path_request(oxen::quic::message m, std::string payload);
 
         // Path responses
         void handle_path_latency_response(oxen::quic::message);

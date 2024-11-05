@@ -26,9 +26,8 @@ namespace llarp
 
         auto& clientcontacts = _cc_nodes->nodes;
 
-        if (auto itr = clientcontacts.find(key);
-            itr != clientcontacts.end() && not itr->second.client_contact.is_expired())
-            enc = itr->second.client_contact;
+        if (auto itr = clientcontacts.find(key); itr != clientcontacts.end() && not itr->second.ecc.is_expired())
+            enc = itr->second.ecc;
 
         return enc;
     }

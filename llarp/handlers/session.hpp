@@ -124,17 +124,13 @@ namespace llarp
             bool prefigure_session(
                 NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun);
 
-            // lookup ONS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
+            // lookup SNS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
             void resolve_ons(std::string name, std::function<void(std::optional<NetworkAddress>)> func = nullptr);
 
             void lookup_remote_srv(
                 std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler);
 
-            void lookup_client_intro(
-                RouterID remote,
-                bool is_relayed,
-                uint64_t order,
-                std::function<void(std::optional<ClientContact>)> func);
+            void lookup_client_intro(RouterID remote, std::function<void(std::optional<ClientContact>)> func);
 
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();

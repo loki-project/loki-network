@@ -90,25 +90,24 @@ namespace llarp
 
             void Tick(std::chrono::milliseconds now);
 
-            bool resolve_ons(std::string name, std::function<void(std::string)> func = nullptr);
+            bool resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func);
 
-            bool find_client_contact(
-                const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func);
+            bool find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func);
 
-            bool publish_client_contact(
-                const EncryptedClientContact& ecc, std::function<void(std::string)> func = nullptr);
+            // bool publish_client_contact(
+            //     const EncryptedClientContact& ecc, std::function<void(std::string)> func = nullptr);
 
             bool publish_client_contact2(
                 const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
 
             bool close_exit(
-                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
+                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> = nullptr);
 
             bool obtain_exit(
                 const Ed25519SecretKey& sk,
                 uint64_t flag,
                 std::string tx_id,
-                std::function<void(std::string)> func = nullptr);
+                std::function<void(oxen::quic::message)> func);
 
             /// sends a control request along a path
             ///

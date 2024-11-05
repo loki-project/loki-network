@@ -1,6 +1,7 @@
 #include "session.hpp"
 
 #include <llarp/contact/contactdb.hpp>
+#include <llarp/messages/dht.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
 #include <llarp/router/router.hpp>
@@ -161,7 +162,7 @@ namespace llarp::handlers
 
         if (auto n_ons_ranges = ons_ranges.size(); n_ons_ranges > 0)
         {
-            log::info(logcat, "SessionEndpoint resolving {} ONS addresses mapped to IP ranges", n_ons_ranges);
+            log::info(logcat, "SessionEndpoint resolving {} SNS addresses mapped to IP ranges", n_ons_ranges);
 
             for (auto itr = ons_ranges.begin(); itr != ons_ranges.end();)
             {
@@ -172,7 +173,7 @@ namespace llarp::handlers
                         {
                             log::debug(
                                 logcat,
-                                "Successfully resolved ONS lookup for {} mapped to IPRange:{}",
+                                "Successfully resolved SNS lookup for {} mapped to IPRange:{}",
                                 *maybe_addr,
                                 ip_range);
                             _range_map.insert_or_assign(std::move(ip_range), std::move(*maybe_addr));
@@ -199,7 +200,7 @@ namespace llarp::handlers
                         {
                             log::debug(
                                 logcat,
-                                "Successfully resolved ONS lookup for {} mapped to static auth token",
+                                "Successfully resolved SNS lookup for {} mapped to static auth token",
                                 *maybe_addr);
                             _auth_tokens.emplace(std::move(*maybe_addr), std::move(auth_token));
                         }
@@ -211,37 +212,43 @@ namespace llarp::handlers
         }
     }
 
-    void SessionEndpoint::resolve_ons(std::string ons, std::function<void(std::optional<NetworkAddress>)> func)
+    void SessionEndpoint::resolve_ons(std::string sns, std::function<void(std::optional<NetworkAddress>)> func)
     {
-        if (not is_valid_ons(ons))
+        if (not is_valid_sns(sns))
         {
-            log::debug(logcat, "Invalid ONS name ({}) queried for lookup", ons);
+            log::debug(logcat, "Invalid SNS name ({}) queried for lookup", sns);
             return func(std::nullopt);
         }
 
-        log::debug(logcat, "Looking up ONS name {}", ons);
+        log::debug(logcat, "Looking up SNS name {}", sns);
 
-        auto response_handler = [ons_name = ons, hook = std::move(func)](std::string response) {
-            if (auto record = EncryptedSNSRecord::construct(response); auto client_addr = record->decrypt(ons_name))
-            {
-                return hook(std::move(client_addr));
-            }
-
-            std::optional<std::string> status = std::nullopt;
-
+        auto response_handler = [sns_name = sns, hook = std::move(func)](oxen::quic::message m) mutable {
             try
             {
-                oxenc::bt_dict_consumer btdc{response};
+                if (m)
+                {
+                    log::critical(logcat, "Call to ResolveSNS succeeded!");
 
-                if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
-                    status = s;
+                    auto enc = ResolveSNS::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+
+                    if (auto client_addr = enc.decrypt(sns_name))
+                    {
+                        log::info(
+                            logcat,
+                            "Successfully decrypted SNS record (name: {}, address: {})",
+                            sns_name,
+                            client_addr->to_string());
+                        return hook(std::move(client_addr));
+                    }
+
+                    log::warning(logcat, "Failed to decrypt SNS record (name: {})", sns_name);
+                }
             }
             catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught parsing 'find_name' response: {}", e.what());
+                log::warning(logcat, "Exception: {}", e.what());
             }
 
-            log::warning(logcat, "Call to endpoint 'lookup_name' failed -- status:{}", status.value_or("<none given>"));
             hook(std::nullopt);
         };
 
@@ -250,15 +257,14 @@ namespace llarp::handlers
 
             for (const auto& [_, path] : _paths)
             {
-                log::info(logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid(), ons);
+                log::info(logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid(), sns);
 
-                path->resolve_ons(ons, response_handler);
+                path->resolve_sns(sns, response_handler);
             }
         }
     }
 
-    void SessionEndpoint::lookup_client_intro(
-        RouterID remote, bool is_relayed, uint64_t order, std::function<void(std::optional<ClientContact>)> func)
+    void SessionEndpoint::lookup_client_intro(RouterID remote, std::function<void(std::optional<ClientContact>)> func)
     {
         auto remote_key = dht::Key_t::derive_from_rid(remote);
 
@@ -270,26 +276,39 @@ namespace llarp::handlers
 
         log::debug(logcat, "Looking up clientcontact for remote (rid:{})", remote);
 
-        auto response_handler = [this, remote, hook = std::move(func)](std::string response) mutable {
+        auto response_handler = [this, remote, hook = std::move(func)](oxen::quic::message m) mutable {
             try
             {
-                auto enc = EncryptedClientContact::deserialize(response);
-
-                if (auto intro = enc.decrypt(remote))
+                if (m)
                 {
-                    log::info(logcat, "Storing ClientContact for remote rid:{}", remote);
-                    _router.contact_db().put_cc(std::move(enc));
-                    return hook(std::move(intro));
+                    log::critical(logcat, "Call to FindClientContact succeeded!");
+
+                    auto enc = FindClientContact::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+
+                    if (auto intro = enc.decrypt(remote))
+                    {
+                        log::info(logcat, "Storing ClientContact for remote rid:{}", remote);
+                        _router.contact_db().put_cc(std::move(enc));
+                        return hook(std::move(intro));
+                    }
+
+                    log::warning(logcat, "Failed to decrypt returned EncryptedClientContact!");
                 }
+                else
+                {
+                    std::optional<std::string> status = std::nullopt;
+                    oxenc::bt_dict_consumer btdc{m.body()};
 
-                oxenc::bt_dict_consumer btdc{response};
-                auto s = btdc.maybe<std::string_view>(messages::STATUS_KEY);
+                    if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                        status = s;
 
-                log::warning(logcat, "Call to `find_cc` failed -- status: {}", s.value_or("< NONE GIVEN >"));
+                    log::warning(
+                        logcat, "Call to FindClientContact FAILED; reason: {}", status.value_or("<none given>"));
+                }
             }
             catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught parsing FindClientContact response: {}", e.what());
+                log::warning(logcat, "Exception: {}", e.what());
             }
 
             hook(std::nullopt);
@@ -306,7 +325,7 @@ namespace llarp::handlers
                     path->pivot_rid(),
                     remote);
 
-                path->find_client_contact(remote_key, is_relayed, order, response_handler);
+                path->find_client_contact(remote_key, response_handler);
             }
         }
     }
@@ -460,6 +479,7 @@ namespace llarp::handlers
     {
         auto tag = service::SessionTag::make_random();
 
+        // TESTNET: TODO: make this take a quic message type
         path->send_path_control_message(
             "session_init",
             InitiateSession::serialize_encrypt(
@@ -595,8 +615,6 @@ namespace llarp::handlers
         _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() mutable {
             lookup_client_intro(
                 remote.router_id(),
-                false,
-                0,
                 [this, remote, hook = std::move(handler), is_exit, counter](std::optional<ClientContact> cc) {
                     if (*counter == 0)
                         return;

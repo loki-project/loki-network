@@ -1074,27 +1074,15 @@ namespace llarp
 
     RemoteRC NodeDB::find_closest_to(llarp::dht::Key_t location) const
     {
-        return _router.loop()->call_get([this, location]() -> RemoteRC {
-            RemoteRC rc{};
-            const llarp::dht::XorMetric compare(location);
-
-            visit_all([&rc, compare](const auto& otherRC) {
-                const auto& rid = rc.router_id();
-
-                if (rid.is_zero() || compare(dht::Key_t{otherRC.router_id()}, dht::Key_t{rid}))
-                {
-                    rc = otherRC;
-                    return;
-                }
-            });
-            return rc;
+        return _router.loop()->call_get([this, compare = dht::XorMetric{location}]() -> RemoteRC {
+            return *std::ranges::min_element(known_rcs, compare);
         });
     }
 
     dht::rc_set NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t numRouters) const
     {
-        return _router.loop()->call_get([this, location, numRouters]() -> dht::rc_set {
-            dht::rc_set ret{known_rcs.begin(), known_rcs.end(), dht::XorMetric{location}};
+        return _router.loop()->call_get([this, compare = dht::XorMetric{location}, numRouters]() -> dht::rc_set {
+            dht::rc_set ret{known_rcs.begin(), known_rcs.end(), compare};
             ret.erase(std::next(ret.begin(), numRouters), ret.end());
             return ret;
         });

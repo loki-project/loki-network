@@ -25,15 +25,15 @@ namespace llarp::dht
 
     struct CCNode
     {
-        EncryptedClientContact client_contact;
+        EncryptedClientContact ecc;
         Key_t ID;
 
         CCNode() { ID.zero(); }
 
-        CCNode(EncryptedClientContact other) : client_contact{std::move(other)}, ID{client_contact.blinded_pubkey} {}
+        CCNode(EncryptedClientContact other) : ecc{std::move(other)}, ID{ecc.blinded_pubkey} {}
 
-        nlohmann::json ExtractStatus() const { return nlohmann::json{{"key", client_contact.key().to_string()}}; }
+        nlohmann::json ExtractStatus() const { return nlohmann::json{{"key", ecc.key().to_string()}}; }
 
-        bool operator<(const CCNode& other) const { return client_contact.signed_at < other.client_contact.signed_at; }
+        bool operator<(const CCNode& other) const { return ecc.signed_at < other.ecc.signed_at; }
     };
 }  // namespace llarp::dht

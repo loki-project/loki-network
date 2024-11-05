@@ -7,55 +7,27 @@ namespace llarp
 {
     static auto logcat = llarp::log::Cat("ONSRecord");
 
-    std::optional<EncryptedSNSRecord> EncryptedSNSRecord::construct(std::string bt)
+    EncryptedSNSRecord EncryptedSNSRecord::deserialize(std::string_view bt)
     {
-        if (EncryptedSNSRecord ret; ret.bt_decode(std::move(bt)))
-            return ret;
-
-        return std::nullopt;
+        return EncryptedSNSRecord{bt};
     }
 
-    EncryptedSNSRecord::EncryptedSNSRecord(std::string bt)
+    EncryptedSNSRecord::EncryptedSNSRecord(std::string_view bt) : _bt_payload{bt}
     {
-        try
-        {
-            // The constructor calls the ::bt_decode() overload that re-throws any exception it hits
-            oxenc::bt_dict_consumer btdc{bt};
-            bt_decode(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "EncryptedSNSRecord exception: {}", e.what());
-        }
+        bt_decode(oxenc::bt_dict_consumer{_bt_payload});
     }
 
-    bool EncryptedSNSRecord::bt_decode(oxenc::bt_dict_consumer& btdc)
+    void EncryptedSNSRecord::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {
             ciphertext = btdc.require<std::string>("c");
             nonce.from_string(btdc.require<std::string>("n"));
-
-            return true;
         }
         catch (...)
         {
             log::warning(logcat, "EncryptedSNSRecord exception");
             throw;
-        }
-    }
-
-    bool EncryptedSNSRecord::bt_decode(std::string bt)
-    {
-        try
-        {
-            oxenc::bt_dict_consumer btdc{bt};
-            return bt_decode(btdc);
-        }
-        catch (...)
-        {
-            log::warning(logcat, "EncryptedSNSRecord exception");
-            return false;
         }
     }
 

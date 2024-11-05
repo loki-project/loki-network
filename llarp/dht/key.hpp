@@ -25,11 +25,11 @@ namespace llarp::dht
 
         std::string to_string() const { return oxenc::to_base32z(begin(), end()); }
 
-        static Key_t derive_from_rid(RouterID rid)
+        static Key_t derive_from_rid(PubKey root)
         {
-            PubKey pk;
-            crypto::derive_subkey(pk, PubKey{rid.data()}, 1);
-            return Key_t{pk.as_array()};
+            Key_t derived;
+            crypto::derive_subkey(derived.data(), derived.size(), root, 1);
+            return derived;
         }
 
         Key_t operator^(const Key_t& other) const

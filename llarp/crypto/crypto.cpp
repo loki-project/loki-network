@@ -330,11 +330,15 @@ namespace llarp
             && -1 != crypto_core_ed25519_from_uniform(out.data(), n.data());
     }
 
-    static AlignedBuffer<32> zero;
-
     bool crypto::derive_subkey(
-        PubKey& out_pubkey, const PubKey& root_pubkey, uint64_t key_n, const AlignedBuffer<32>* hash)
+        uint8_t* derived, size_t derived_len, const PubKey& root_pubkey, uint64_t key_n, const AlignedBuffer<32>* hash)
     {
+        if (derived_len != PubKey::SIZE)
+        {
+            log::error(logcat, "Derived pubkey must be {}!", PubKey::SIZE);
+            return false;
+        }
+
         // scalar h = H( BLIND-STRING || root_pubkey || key_n )
         AlignedBuffer<32> h;
         if (hash)
@@ -345,7 +349,7 @@ namespace llarp
             return false;
         }
 
-        return 0 == crypto_scalarmult_ed25519(out_pubkey.data(), h.data(), root_pubkey.data());
+        return 0 == crypto_scalarmult_ed25519(derived, h.data(), root_pubkey.data());
     }
 
     bool crypto::derive_subkey_private(

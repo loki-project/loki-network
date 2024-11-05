@@ -9,9 +9,9 @@ namespace llarp
 {
     struct NetworkAddress;
 
-    /** Holds an entire ONS Record returned from a succfessful request to the `lookup_name` endpoint.
-        When transmitted over the wire back to the calling instance, it is bt-encoded and the ONS hash
-        ('ciphertext') is decrypted using the ons_name.
+    /** Holds an entire SNS Record returned from a succfessful request to the `lookup_name` endpoint.
+        When transmitted over the wire back to the calling instance, it is bt-encoded and the SNS hash
+        ('ciphertext') is decrypted using the sns_name.
 
         bt-encoded keys:
             'c' : ciphertext
@@ -20,8 +20,10 @@ namespace llarp
     struct EncryptedSNSRecord
     {
       private:
-        explicit EncryptedSNSRecord(std::string bt);
-        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+        explicit EncryptedSNSRecord(std::string_view bt);
+        void bt_decode(oxenc::bt_dict_consumer&& btdc);
+
+        std::string _bt_payload;
 
       public:
         SymmNonce nonce;
@@ -29,27 +31,27 @@ namespace llarp
 
         EncryptedSNSRecord() = default;
 
-        static std::optional<EncryptedSNSRecord> construct(std::string bt);
+        std::string_view bt_payload() const { return _bt_payload; }
+
+        static EncryptedSNSRecord deserialize(std::string_view bt);
 
         std::string bt_encode() const;
 
-        bool bt_decode(std::string bt);
-
-        std::optional<NetworkAddress> decrypt(std::string_view ons_name) const;
+        std::optional<NetworkAddress> decrypt(std::string_view sns_name) const;
     };
 
-    /// check if an ons name complies with the registration rules
-    inline bool is_valid_ons(std::string_view ons_name)
+    /// check if an sns name complies with the registration rules
+    inline bool is_valid_sns(std::string_view sns_name)
     {
         // make sure it ends with .loki because no fucking shit right?
-        if (not ons_name.ends_with(".loki"))
+        if (not sns_name.ends_with(".loki"))
             return false;
 
         // strip off .loki suffix
-        ons_name.remove_suffix(5);
+        sns_name.remove_suffix(5);
 
         // ensure chars are sane
-        for (const auto ch : ons_name)
+        for (const auto ch : sns_name)
         {
             if (ch == '-')
                 continue;
@@ -63,7 +65,7 @@ namespace llarp
         }
 
         // split into domain parts
-        const auto parts = split(ons_name, ".");
+        const auto parts = split(sns_name, ".");
 
         // get root domain
         const auto primaryName = parts[parts.size() - 1];

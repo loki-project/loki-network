@@ -84,7 +84,11 @@ namespace llarp
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
         bool derive_subkey(
-            PubKey& derived, const PubKey& root, uint64_t key_n, const AlignedBuffer<32>* hash = nullptr);
+            uint8_t* derived,
+            size_t derived_len,
+            const PubKey& root,
+            uint64_t key_n,
+            const AlignedBuffer<32>* hash = nullptr);
 
         /// derive sub keys for private keys.  hash is really only intended for
         /// testing ands key_n if given.

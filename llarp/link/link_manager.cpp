@@ -241,20 +241,13 @@ namespace llarp
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_publish_cc(std::move(msg)); });
         });
 
-        for (auto& method : inner_requests)
-        {
-            s->register_handler(method.first, [this, func = std::move(method.second)](oxen::quic::message m) mutable {
-                _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
-                    auto body = msg.body_str();
-                    auto respond = [&, m = std::move(msg)](std::string response) mutable {
-                        // We only signal success using `messages::OK_RESPONSE`
-                        auto is_error = response != messages::OK_RESPONSE;
-                        m.respond(std::move(response), is_error);
-                    };
-                    std::invoke(func, this, std::move(body), std::move(respond));
-                });
-            });
-        }
+        s->register_handler("find_cc"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_find_cc(std::move(msg)); });
+        });
+
+        s->register_handler("resolve_sns"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_resolve_sns(std::move(msg)); });
+        });
 
         log::debug(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
@@ -998,30 +991,32 @@ namespace llarp
         m.respond(std::move(btdp).str());
     }
 
-    void LinkManager::handle_resolve_ons_inner(std::string body, std::function<void(std::string)> respond)
+    void LinkManager::handle_resolve_sns(oxen::quic::message m)
     {
         std::string name_hash;
 
         try
         {
-            oxenc::bt_dict_consumer btdp{body};
-
-            name_hash = btdp.require<std::string>("H");
+            name_hash = ResolveSNS::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            respond(messages::ERROR_RESPONSE);
-            return;
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
         _router.rpc_client()->lookup_ons_hash(
-            name_hash,
-            [respond = std::move(respond)]([[maybe_unused]] std::optional<EncryptedSNSRecord> maybe_enc) mutable {
+            name_hash, [prev_msg = std::move(m)](std::optional<EncryptedSNSRecord> maybe_enc) mutable {
                 if (maybe_enc)
-                    respond(maybe_enc->bt_encode());
+                {
+                    log::info(logcat, "RPC lookup successfully returned encrypted SNS record!");
+                    prev_msg.respond(ResolveSNS::serialize_response(*maybe_enc));
+                }
                 else
-                    respond(serialize_response({{messages::STATUS_KEY, FindNameMessage::NOT_FOUND}}));
+                {
+                    log::warning(logcat, "RPC lookup could not find SNS registry!");
+                    prev_msg.respond(ResolveSNS::NOT_FOUND, true);
+                }
             });
     }
 
@@ -1053,37 +1048,6 @@ namespace llarp
             return m.respond(PublishClientContact::INVALID, true);
         }
 
-        //
-    }
-
-    void LinkManager::handle_publish_cc_inner(std::string body, std::function<void(std::string)> respond)
-    {
-        log::critical(logcat, "Received request to publish client contact!");
-
-        EncryptedClientContact enc;
-
-        try
-        {
-            enc = PublishClientContact::deserialize(body);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return respond(messages::ERROR_RESPONSE);
-        }
-
-        if (enc.is_expired())
-        {
-            log::warning(logcat, "Received expired EncryptedClientContact!");
-            return respond(PublishClientContact::EXPIRED);
-        }
-
-        if (not enc.verify())
-        {
-            log::warning(logcat, "Received invalid EncryptedClientContact!");
-            return respond(PublishClientContact::INVALID);
-        }
-
         auto dht_key = enc.key();
         auto local_rid = _router.local_rid();
 
@@ -1098,7 +1062,7 @@ namespace llarp
                     "Received PublishClientContact (key: {}) for which we are a candidate; accepting...",
                     dht_key);
                 _router.contact_db().put_cc(std::move(enc));
-                return respond(messages::OK_RESPONSE);
+                return m.respond(messages::OK_RESPONSE);
             }
         }
 
@@ -1110,82 +1074,63 @@ namespace llarp
             peer_key,
             "publish_cc",
             PublishClientContact::serialize(std::move(enc)),
-            [respond = std::move(respond)](oxen::quic::message m) mutable {
-                if (m)
-                    log::info(logcat, "Relayed PublishClientContact returned successful! Relaying response...");
-                else if (m.timed_out)
-                    log::info(logcat, "Relayed PublishClientContact timed out! Relaying response...");
-                else
-                    log::info(logcat, "Relayed PublishClientContact failed! Relaying response...");
-
-                respond(m.body_str());
+            [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
+                log::info(
+                    logcat,
+                    "Relayed PublishClientContact {}! Relaying response...",
+                    msg                 ? "succeeded"
+                        : msg.timed_out ? "timed out"
+                                        : "failed");
+                prev_msg.respond(msg.body_str(), msg.is_error());
             });
     }
 
-    void LinkManager::handle_find_cc_inner(std::string body, std::function<void(std::string)> respond)
+    void LinkManager::handle_find_cc(oxen::quic::message m)
     {
         dht::Key_t dht_key;
-        bool is_relayed;
-        uint64_t relay_order;
 
         try
         {
-            std::tie(dht_key, relay_order, is_relayed) = FindClientContact::deserialize(body);
+            dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            return respond(messages::ERROR_RESPONSE);
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        auto local_rid = _router.local_rid();
-
-        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
-
-        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
+        if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
         {
-            log::warning(logcat, "Received FindClientContact message but only know {} nodes?", closest_rcs.size());
-            return respond(FindClientContact::INSUFFICIENT);
+            log::info(logcat, "Received FindClientContact request; returning local EncryptedClientContact...");
+            return m.respond(FindClientContact::serialize_response(*maybe_cc));
         }
 
-        if (is_relayed)
+        auto closest_peer = _router.node_db()->find_closest_to(dht_key).router_id();
+
+        if (closest_peer == _router.local_rid())
         {
-            if (relay_order >= path::DEFAULT_PATHS_HELD)
-            {
-                log::error(logcat, "Received FindClientContact with invalid relay order: {}", relay_order);
-                return respond(FindClientContact::INVALID_ORDER);
-            }
-
-            log::debug(logcat, "Relaying FindClientContactMessage for {}", dht_key);
-
-            const auto& peer_key = closest_rcs.begin()->router_id();
-
-            send_control_message(
-                peer_key,
-                "find_cc",
-                FindClientContact::serialize(dht_key, relay_order, is_relayed),
-                [respond = std::move(respond)](oxen::quic::message m) mutable {
-                    if (m)
-                        log::info(logcat, "Relayed FindClientContact returned successful! Relaying response...");
-                    else if (m.timed_out)
-                        log::info(logcat, "Relayed FindClientContact timed out! Relaying response...");
-                    else
-                        log::info(logcat, "Relayed FindClientContact failed! Relaying response...");
-
-                    respond(m.body_str());
-                });
+            log::warning(
+                logcat,
+                "We are closest peer for FindClientContact request (key: {}); no EncryptedClientContact found locally!",
+                dht_key);
+            return m.respond(FindClientContact::NOT_FOUND, true);
         }
-        else
-        {
-            if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
-            {
-                log::info(logcat, "Received non-relayed FindClientContact; returning local EncryptedClientContact...");
-                return respond(FindClientContact::serialize_response(maybe_cc->bt_payload()));
-            }
 
-            log::warning(logcat, "Received non-relayed FindClientContact; no local EncryptedClientContact found...");
-            return respond(FindClientContact::NOT_FOUND);
-        }
+        log::debug(logcat, "Relaying FindClientContactMessage for {}", dht_key);
+
+        send_control_message(
+            closest_peer,
+            "find_cc"s,
+            FindClientContact::serialize(dht_key),
+            [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
+                log::info(
+                    logcat,
+                    "Relayed FindClientContactMessage {}! Relaying response...",
+                    msg                 ? "succeeded"
+                        : msg.timed_out ? "timed out"
+                                        : "failed");
+                prev_msg.respond(msg.body_str(), msg.is_error());
+            });
     }
 
     void LinkManager::handle_path_build(oxen::quic::message m, const RouterID& from)
@@ -1315,7 +1260,7 @@ namespace llarp
         auto hop = _router.path_context()->get_transit_hop(hop_id);
 
         // TODO: when using path conrol messages for responses, check for the Path
-        // witht he corresponding ID, de-onion, etc
+        // with the corresponding ID, de-onion, etc
         if (not hop)
         {
             // if (auto path = _router.path_context()->get_path(hop_id))
@@ -1337,7 +1282,7 @@ namespace llarp
         if (hop->terminal_hop)
         {
             log::debug(logcat, "We are terminal hop for path request: {}", hop->to_string());
-            return handle_inner_request(std::move(m), std::move(payload), std::move(hop));
+            return handle_path_request(std::move(m), std::move(payload));
         }
 
         log::debug(logcat, "We are intermediate hop for path request: {}", hop->to_string());
@@ -1459,8 +1404,7 @@ namespace llarp
         }
     }
 
-    void LinkManager::handle_inner_request(
-        oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
+    void LinkManager::handle_path_request(oxen::quic::message m, std::string payload)
     {
         std::string endpoint, body;
 
@@ -1474,31 +1418,13 @@ namespace llarp
             return m.respond(messages::serialize_response({{messages::STATUS_KEY, e.what()}}), true);
         }
 
-        // If a handler exists for "method", call it; else drop request on the floor.
-        auto itr = inner_requests.find(endpoint);
-
-        if (itr == inner_requests.end())
+        if (auto it = path_requests.find(endpoint); it != path_requests.end())
         {
-            log::warning(logcat, "Received path control request (`{}`), which has no local handler!", endpoint);
-            return;
+            log::debug(logcat, "Received path control request (`{}`); invoking endpoint...", endpoint);
+            std::invoke(it->second, this, std::move(m));
         }
-
-        log::debug(logcat, "Received path control request: `{}`", endpoint);
-
-        auto respond = [m = std::move(m), hop_weak = hop->weak_from_this()](std::string response) mutable {
-            auto hop = hop_weak.lock();
-            if (not hop)
-                return;  // transit hop gone, drop response
-
-            auto is_error = response != messages::OK_RESPONSE;
-            m.respond(std::move(response), is_error);
-
-            // TODO: onion encrypt path message responses
-            // auto n = SymmNonce::make_random();
-            // m.respond(ONION::serialize_hop(hop->rxid().to_view(), n, response), false);
-        };
-
-        std::invoke(itr->second, this, std::move(body), std::move(respond));
+        else
+            log::warning(logcat, "Received path control request (`{}`), which has no local handler!", endpoint);
     }
 
     void LinkManager::handle_initiate_session(oxen::quic::message m)
