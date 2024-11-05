@@ -184,7 +184,10 @@ namespace llarp
             /// return true if we hit our soft limit for building paths too fast
             bool build_cooldown() const;
 
-            /// get the number of paths in this status
+            /// get the number of ACTIVE paths in this status
+            size_t num_active_paths() const;
+
+            /// get the number of ALL paths (both active and those being currently build)
             size_t num_paths() const;
 
             const BuildStats& build_stats() const { return _build_stats; }

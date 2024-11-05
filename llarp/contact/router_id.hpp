@@ -12,13 +12,9 @@ namespace llarp
     {
         static constexpr size_t SIZE = 32;
 
-        using Data = std::array<uint8_t, SIZE>;
-
         RouterID() = default;
 
         RouterID(const uint8_t* buf) : PubKey(buf) {}
-
-        RouterID(const Data& data) : PubKey(data) {}
 
         RouterID(ustring_view data) : PubKey(data.data()) {}
 

@@ -67,8 +67,6 @@ namespace llarp::path
 
         _paths.insert_or_assign(p->upstream_rxid(), p);
 
-        // associate_hop_ids(p);
-
         _router.path_context()->add_path(p);
     }
 
@@ -312,6 +310,18 @@ namespace llarp::path
         return found;
     }
 
+    size_t PathHandler::num_active_paths() const
+    {
+        Lock_t l(paths_mutex);
+
+        size_t n{};
+
+        for (const auto& [_, p] : _paths)
+            n += (p != nullptr);
+
+        return n;
+    }
+
     size_t PathHandler::num_paths() const
     {
         Lock_t l(paths_mutex);
@@ -345,7 +355,7 @@ namespace llarp::path
 
     bool PathHandler::should_remove() const
     {
-        return is_stopped() and num_paths() == 0;
+        return is_stopped() and num_active_paths() == 0;
     }
 
     bool PathHandler::build_cooldown_hit(RouterID edge) const
@@ -521,7 +531,7 @@ namespace llarp::path
     {
         std::vector<std::string> frames(path::MAX_LEN);
         auto& path_hops = path->hops;
-        int n_hops = static_cast<int>(path_hops.size());
+        int n_hops = static_cast<int>(path->num_hops);
         size_t last_len{0};
 
         // each hop will be able to read the outer part of its frame and decrypt
@@ -538,8 +548,8 @@ namespace llarp::path
         // i from n_hops down to 0
         for (int i = n_hops - 1; i >= 0; --i)
         {
-            const auto& next_rid = i == n_hops - 1 ? path_hops[i].router_id() : path_hops[i + 1].router_id();
-            path_hops[i]._upstream = next_rid;
+            // const auto& next_rid = i == n_hops - 1 ? path_hops[i].router_id() : path_hops[i + 1].router_id();
+            // path_hops[i]._upstream = next_rid;
 
             frames[i] = PATH::BUILD::serialize_hop(path_hops[i]);
 

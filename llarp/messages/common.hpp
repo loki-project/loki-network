@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/contact/tag.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/dht/key.hpp>

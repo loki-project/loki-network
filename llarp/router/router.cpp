@@ -862,7 +862,7 @@ namespace llarp
         {
             log::critical(
                 logcat, "Service Node connecting to {} random routers to achieve full mesh", FULL_MESH_ITERATION);
-            _link_manager->connect_to_random(FULL_MESH_ITERATION);
+            _link_manager->connect_to_keep_alive(FULL_MESH_ITERATION);
         }
     }
 
@@ -883,27 +883,28 @@ namespace llarp
             return;
         }
 
-        _link_manager->check_persisting_conns(now);
+        // _link_manager->check_persisting_conns(now);
 
-        auto _num_router_conns = num_router_connections();
-
-        const auto& pinned_edges = _node_db->pinned_edges();
-        const auto pinned_count = pinned_edges.size();
-
-        auto min_client_conns =
-            (pinned_count and MIN_CLIENT_ROUTER_CONNS > pinned_count) ? pinned_count : MIN_CLIENT_ROUTER_CONNS;
+        // TODO: make "use_pinned_edges" boolean to only connect to pinned edges
+        auto n_conns = num_router_connections();
+        auto num_needed = MIN_CLIENT_ROUTER_CONNS - n_conns;
 
         // if we need more sessions to routers we shall connect out to others
-        if (_num_router_conns < min_client_conns)
+        if (num_needed)
         {
-            size_t needed = min_client_conns - _num_router_conns;
             log::critical(
                 logcat,
                 "Client connecting to {} random routers to keep alive (current:{}, needed:{})",
-                needed,
-                _num_router_conns,
-                min_client_conns);
-            _link_manager->connect_to_random(needed);
+                num_needed,
+                n_conns,
+                MIN_CLIENT_ROUTER_CONNS);
+            _link_manager->connect_to_keep_alive(num_needed);
+
+            if (num_needed == MIN_CLIENT_ROUTER_CONNS)
+            {
+                log::info(logcat, "Client has 0 router connections currently; bypassing SessionEndpoint tick...");
+                return;
+            }
         }
 
         _session_endpoint->tick(now);

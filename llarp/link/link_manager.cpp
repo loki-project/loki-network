@@ -682,7 +682,7 @@ namespace llarp
         return {};
     }
 
-    void LinkManager::connect_to_random(size_t num_conns)
+    void LinkManager::connect_to_keep_alive(size_t num_conns)
     {
         auto filter = [this](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
@@ -1218,7 +1218,8 @@ namespace llarp
                     {
                         log::info(
                             logcat,
-                            "Upstream returned successful path build response; locally storing Hop and relaying");
+                            "Upstream returned successful path build response; locally storing Hop ({}) and relaying",
+                            transit_hop->to_string());
                         _router.path_context()->put_transit_hop(std::move(transit_hop));
                         return prev_message.respond(messages::OK_RESPONSE, false);
                     }
@@ -1259,16 +1260,10 @@ namespace llarp
 
         auto hop = _router.path_context()->get_transit_hop(hop_id);
 
-        // TODO: when using path conrol messages for responses, check for the Path
+        // TODO: when using path control messages for responses, check for the Path
         // with the corresponding ID, de-onion, etc
         if (not hop)
         {
-            // if (auto path = _router.path_context()->get_path(hop_id))
-            // {
-            //     log::info(logcat, "Received path control corresponding to known path!");
-            //     //
-            // }
-
             log::warning(logcat, "Received path control with unknown next hop (ID: {})", hop_id);
             return m.respond(messages::ERROR_RESPONSE, true);
         }

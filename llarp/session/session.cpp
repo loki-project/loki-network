@@ -316,7 +316,7 @@ namespace llarp::session
 
         const size_t expect = (1 + (num_paths_desired / 2));
 
-        return num_paths() >= expect;
+        return num_active_paths() >= expect;
     }
 
     bool OutboundSession::is_expired(std::chrono::milliseconds now) const

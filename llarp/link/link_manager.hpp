@@ -246,7 +246,7 @@ namespace llarp
         // This will try to connect to *up to* num_conns routers, but will not
         // check if we already have a connection to any of the random set, as making
         // that thread safe would be slow...I think.
-        void connect_to_random(size_t num_conns);
+        void connect_to_keep_alive(size_t num_conns);
 
         /// always maintain this many client connections to other routers
         int client_router_connections = 4;

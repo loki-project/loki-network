@@ -11,7 +11,6 @@
 namespace llarp
 {
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
-    using KeyExchangeNonce = AlignedBuffer<32>;
 
     struct PubKey;
     struct Ed25519PrivateData;
@@ -86,8 +85,6 @@ namespace llarp
     struct Signature final : public AlignedBuffer<SIGSIZE>
     {};
 
-    // using SymmNonce = AlignedBuffer<NONCESIZE>;
-
     struct SymmNonce final : public AlignedBuffer<NONCESIZE>
     {
         using AlignedBuffer<NONCESIZE>::AlignedBuffer;
@@ -104,9 +101,4 @@ namespace llarp
         static SymmNonce make_random();
     };
 
-    using TunnelNonce = AlignedBuffer<TUNNONCESIZE>;
-    using SymmKey = AlignedBuffer<32>;  // not used
-
-    /// PKE(result, publickey, secretkey, nonce)
-    using path_dh_func = bool (*)(SharedSecret&, const PubKey&, const Ed25519SecretKey&, const TunnelNonce&);
 }  // namespace llarp

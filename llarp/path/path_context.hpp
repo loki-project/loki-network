@@ -24,17 +24,17 @@ namespace llarp::path
 
         bool is_transit_allowed() const;
 
-        bool has_transit_hop(const std::shared_ptr<TransitHop>& hop);
+        bool has_transit_hop(const std::shared_ptr<TransitHop>& hop) const;
 
         void put_transit_hop(std::shared_ptr<TransitHop> hop);
 
-        std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop);
+        std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop) const;
 
-        std::shared_ptr<Path> get_path(const HopID& hop_id);
+        std::shared_ptr<Path> get_path(const HopID& hop_id) const;
 
         std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
-        std::shared_ptr<TransitHop> get_transit_hop(const HopID&);
+        std::shared_ptr<TransitHop> get_transit_hop(const HopID&) const;
 
         std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 

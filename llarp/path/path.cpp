@@ -35,14 +35,14 @@ namespace llarp::path
 
         for (size_t i = 0; i < num_hops; ++i)
         {
-            hops[i]._rid = hop_rcs[i].router_id();
-            hops[i]._txid = HopID::make_random();
-
             /** Conditions:
                 - First hop RXID is unique, the rest are the previous hop TXID
                 - Last hop upstream is it's own RID, the rest are the next hop RID
                 - First hop downstream is client's RID, the rest are the previous hop RID
             */
+
+            hops[i]._rid = hop_rcs[i].router_id();
+            hops[i]._txid = HopID::make_random();
 
             if (i == 0)
             {

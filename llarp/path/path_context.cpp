@@ -44,7 +44,7 @@ namespace llarp::path
             _path_map.erase(itr);
     }
 
-    bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop)
+    bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop) const
     {
         Lock_t l{paths_mutex};
 
@@ -59,7 +59,7 @@ namespace llarp::path
         _transit_hops.emplace(hop->txid(), hop);
     }
 
-    std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id)
+    std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id) const
     {
         Lock_t l{paths_mutex};
 
@@ -69,7 +69,7 @@ namespace llarp::path
         return nullptr;
     }
 
-    std::shared_ptr<Path> PathContext::get_path(const HopID& hop_id)
+    std::shared_ptr<Path> PathContext::get_path(const HopID& hop_id) const
     {
         Lock_t l{paths_mutex};
 
@@ -79,7 +79,7 @@ namespace llarp::path
         return nullptr;
     }
 
-    std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop)
+    std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop) const
     {
         Lock_t l{paths_mutex};
 
