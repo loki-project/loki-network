@@ -8,6 +8,9 @@
 
 namespace llarp::meta
 {
+    /** Aggregated generalized algorithms for sort, selection, etc
+     */
+
     /** One-pass random selection algorithm
         - https://en.wikipedia.org/wiki/Reservoir_sampling
     */

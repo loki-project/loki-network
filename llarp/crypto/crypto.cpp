@@ -317,22 +317,26 @@ namespace llarp
         "can't in the and by be or then before so just face it this text hurts "
         "to read? lokinet yolo!";
 
-    bool crypto::make_scalar(AlignedBuffer<32>& out, const PubKey& k, uint64_t i)
+    std::array<unsigned char, 32> crypto::make_scalar(const PubKey& k, uint64_t domain)
     {
         // b = BLIND-STRING || k || i
         std::array<uint8_t, 160 + PubKey::SIZE + sizeof(uint64_t)> buf;
         std::copy(derived_key_hash_str, derived_key_hash_str + 160, buf.begin());
         std::copy(k.begin(), k.end(), buf.begin() + 160);
-        oxenc::write_host_as_little(i, buf.data() + 160 + PubKey::SIZE);
+        oxenc::write_host_as_little(domain, buf.data() + 160 + PubKey::SIZE);
+
         // n = H(b)
         // h = make_point(n)
-        ShortHash n;
-        return -1 != crypto_generichash_blake2b(n.data(), ShortHash::SIZE, buf.data(), buf.size(), nullptr, 0)
-            && -1 != crypto_core_ed25519_from_uniform(out.data(), n.data());
+        std::array<unsigned char, 64> n;
+        std::array<unsigned char, 32> out;
+
+        crypto_generichash_blake2b(n.data(), n.size(), buf.data(), buf.size(), nullptr, 0);
+        crypto_core_ed25519_scalar_reduce(out.data(), n.data());
+
+        return out;
     }
 
-    bool crypto::derive_subkey(
-        uint8_t* derived, size_t derived_len, const PubKey& root_pubkey, uint64_t key_n, const AlignedBuffer<32>* hash)
+    bool crypto::derive_subkey(uint8_t* derived, size_t derived_len, const PubKey& root_pubkey, uint64_t key_n)
     {
         if (derived_len != PubKey::SIZE)
         {
@@ -341,78 +345,8 @@ namespace llarp
         }
 
         // scalar h = H( BLIND-STRING || root_pubkey || key_n )
-        AlignedBuffer<32> h;
-        if (hash)
-            h = *hash;
-        else if (not make_scalar(h, root_pubkey, key_n))
-        {
-            log::error(logcat, "cannot make scalar");
-            return false;
-        }
-
+        std::array<unsigned char, 32> h = crypto::make_scalar(root_pubkey, key_n);
         return 0 == crypto_scalarmult_ed25519(derived, h.data(), root_pubkey.data());
-    }
-
-    bool crypto::derive_subkey_private(
-        Ed25519PrivateData& out_key, const Ed25519SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
-    {
-        // Derives a private subkey from a root key.
-        //
-        // The basic idea is:
-        //
-        // h = H( BLIND-STRING || A || key_n )
-        // a - private key
-        // A = aB - public key
-        // s - signing hash
-        // a' = ah - derived private key
-        // A' = a'B = (ah)B - derived public key
-        // s' = H(h || s) - derived signing hash
-        //
-        // libsodium throws some wrenches in the mechanics which are a nuisance,
-        // the biggest of which is that sodium's secret key is *not* `a`; rather
-        // it is the seed.  If you want to get the private key (i.e. "a"), you
-        // need to SHA-512 hash it and then clamp that.
-        //
-        // This also makes signature verification harder: we can't just use
-        // sodium's sign function because it wants to be given the seed rather
-        // than the private key, and moreover we can't actually *get* the seed to
-        // make libsodium happy because we only have `ah` above; thus we
-        // reimplemented most of sodium's detached signing function but without
-        // the hash step.
-        //
-        // Lastly, for the signing hash s', we need some value that is both
-        // different from the root s but also unknowable from the public key
-        // (since otherwise `r` in the signing function would be known), so we
-        // generate it from a hash of `h` and the root key's (psuedorandom)
-        // signing hash, `s`.
-        //
-        const auto root_pubkey = root_key.to_pubkey();
-
-        AlignedBuffer<32> h;
-        if (hash)
-            h = *hash;
-        else if (not make_scalar(h, root_pubkey, key_n))
-        {
-            log::error(logcat, "cannot make scalar");
-            return false;
-        }
-
-        h[0] &= 248;
-        h[31] &= 63;
-        h[31] |= 64;
-
-        Ed25519PrivateData a = root_key.to_eddata();
-
-        // a' = ha
-        crypto_core_ed25519_scalar_mul(out_key.data(), h.data(), a.data());
-
-        // s' = H(h || s)
-        std::array<uint8_t, 64> buf;
-        std::copy(h.begin(), h.end(), buf.begin());
-        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
-        return -1 != crypto_generichash_blake2b(out_key.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0);
-
-        return true;
     }
 
     void crypto::randomize(uint8_t* buf, size_t len)

@@ -80,24 +80,11 @@ namespace llarp
             const SymmNonce& nonce,
             uspan encrypted);
 
-        bool make_scalar(AlignedBuffer<32>& out, const PubKey& k, uint64_t i);
+        std::array<unsigned char, 32> make_scalar(const PubKey& k, uint64_t domain);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
-        bool derive_subkey(
-            uint8_t* derived,
-            size_t derived_len,
-            const PubKey& root,
-            uint64_t key_n,
-            const AlignedBuffer<32>* hash = nullptr);
-
-        /// derive sub keys for private keys.  hash is really only intended for
-        /// testing ands key_n if given.
-        bool derive_subkey_private(
-            Ed25519PrivateData& derived,
-            const Ed25519SecretKey& root,
-            uint64_t key_n,
-            const AlignedBuffer<32>* hash = nullptr);
+        bool derive_subkey(uint8_t* derived, size_t derived_len, const PubKey& root, uint64_t key_n);
 
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);

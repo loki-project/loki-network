@@ -31,7 +31,7 @@ namespace llarp
         btdp.append_signature("~", [this](ustring_view to_sign) {
             std::array<unsigned char, 64> sig;
 
-            if (!crypto::sign(const_cast<unsigned char*>(sig.data()), _secret_key, to_sign))
+            if (!crypto::sign(sig.data(), _secret_key, to_sign))
                 throw std::runtime_error{"Failed to sign RC"};
 
             _signature = {sig.data(), sig.size()};

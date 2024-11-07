@@ -66,14 +66,7 @@ namespace llarp
     {
         Ed25519PrivateData ret{};
 
-        AlignedBuffer<32> h;
-
-        if (not crypto::make_scalar(h, to_pubkey(), domain))
-            throw std::runtime_error{"Call to `make_scalar` failed in deriving private subkey!"};
-
-        h[0] &= 248;
-        h[31] &= 63;
-        h[31] |= 64;
+        std::array<unsigned char, 32> h = crypto::make_scalar(to_pubkey(), domain);
 
         auto a = to_eddata();
 

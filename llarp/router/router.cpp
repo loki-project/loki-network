@@ -658,7 +658,7 @@ namespace llarp
             relay_contact =
                 LocalRC::make(identity(), _is_service_node and _public_address ? *_public_address : _listen_address);
 
-            _path_context = std::make_shared<path::PathContext>(local_rid());
+            _path_context = std::make_shared<path::PathContext>(*this);
 
             _session_endpoint = std::make_shared<handlers::SessionEndpoint>(*this);
             _session_endpoint->configure();

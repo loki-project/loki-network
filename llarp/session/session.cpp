@@ -34,9 +34,9 @@ namespace llarp::session
     }
 
     bool BaseSession::send_path_control_message(
-        std::string method, std::string body, std::function<void(std::string)> func)
+        std::string method, std::string body, std::function<void(oxen::quic::message)> func)
     {
-        return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
+        return _current_path->send_path_control_message2(std::move(method), std::move(body), std::move(func));
     }
 
     bool BaseSession::send_path_data_message(std::string data)

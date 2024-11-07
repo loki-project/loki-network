@@ -351,6 +351,9 @@ namespace llarp::handlers
         {
             auto enc = client_contact.encrypt_and_sign();
 
+            if (not enc.verify())
+                log::critical(logcat, "COULD NOT VERIFY ENCRYPTEDCLIENTCONTACT");
+
             if (publish_client_contact(enc))
                 log::info(logcat, "Successfully republished updated EncryptedClientContact!");
             else

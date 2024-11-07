@@ -210,10 +210,7 @@ namespace llarp
 
     bool NodeDB::want_rc(const RouterID& rid) const
     {
-        if (not _is_service_node)
-            return true;
-
-        return known_rids.count(rid);
+        return known_rids.count(rid) and not rc_lookup.contains(rid);
     }
 
     void NodeDB::set_bootstrap_routers(BootstrapList& from_router)
@@ -939,25 +936,6 @@ namespace llarp
             return itr->second;
 
         return std::nullopt;
-    }
-
-    void NodeDB::remove_stale_rcs()
-    {
-        auto cutoff_time = time_point_now();
-
-        cutoff_time -= _is_service_node ? RelayContact::OUTDATED_AGE : RelayContact::LIFETIME;
-
-        for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
-        {
-            if (cutoff_time > itr->second.timestamp())
-            {
-                log::info(logcat, "Pruning RC for {}, as it is too old to keep.", itr->first);
-                known_rcs.erase(itr->second);
-                itr = rc_lookup.erase(itr);
-                continue;
-            }
-            itr++;
-        }
     }
 
     bool NodeDB::put_rc(RemoteRC rc)

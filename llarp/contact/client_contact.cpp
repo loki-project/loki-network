@@ -184,7 +184,7 @@ namespace llarp
         btdp.append("i", blinded_pubkey.to_view());
         btdp.append("n", nonce.to_view());
         btdp.append("t", signed_at.count());
-        btdp.append("x", encrypted);
+        btdp.append("x", std::string_view{reinterpret_cast<const char*>(encrypted.data()), encrypted.size()});
     }
 
     /** EncryptedClientContact
@@ -200,8 +200,13 @@ namespace llarp
         {
             blinded_pubkey.from_string(btdc.require<std::string_view>("i"));
             nonce.from_string(btdc.require<std::string_view>("n"));
-            blinded_pubkey.from_string(btdc.require<std::string_view>("i"));
-            encrypted = btdc.require<std::vector<unsigned char>>("x");
+            signed_at = std::chrono::milliseconds{btdc.require<uint64_t>("t")};
+
+            // TESTNET: TOFIX: change this after oxenc span PR is merged
+            auto enc = btdc.require<std::string_view>("x");
+            encrypted.resize(enc.size());
+            std::memcpy(encrypted.data(), enc.data(), enc.size());
+
             sig.from_string(btdc.require<std::string_view>("~"));
         }
         catch (const std::exception& e)
@@ -226,14 +231,33 @@ namespace llarp
             log::debug(logcat, "EncryptedClientContact decrypted successfully...");
             cc = ClientContact{std::move(payload)};
         }
+        else
+            log::warning(logcat, "Failed to decrypt EncryptedClientContact!");
 
         return cc;
     }
 
     bool EncryptedClientContact::verify() const
     {
-        return crypto::verify(
-            blinded_pubkey, reinterpret_cast<const unsigned char*>(_bt_payload.data()), _bt_payload.size(), sig);
+        try
+        {
+            oxenc::bt_dict_consumer btdc{_bt_payload};
+
+            btdc.require_signature("~", [this](ustring_view m, ustring_view s) {
+                if (s.size() != 64)
+                    throw std::runtime_error{"Invalid signature: not 64 bytes"};
+
+                if (not crypto::verify(blinded_pubkey, m, s))
+                    throw std::runtime_error{"Failed to verify EncryptedClientContact signature!"};
+            });
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            return false;
+        }
+
+        return true;
     }
 
     bool EncryptedClientContact::is_expired(std::chrono::milliseconds now) const

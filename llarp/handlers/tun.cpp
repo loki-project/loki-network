@@ -267,142 +267,124 @@ namespace llarp::handlers
         }
     }
 
+    /** DISCUSS: Can the auth objects be further simplified?
+        - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
+            request to execute its aynchronous logic and queue the authentication job
+
+        Static Token Auth:
+        - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
+            operator
+        - The session initiator will automatically include any static tokens that are either (A) loaded into the
+            config mapping or (B) passed to the lokinet-vpn cli utility
+            - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+
+        RPC Auth:
+        - Why can't the functionality of this be entirely subsumed by the RPCClient?
+            - If the config specifies the auth_type as RPC plus
+    */
     void TunEndpoint::configure()
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
-        auto& net_conf = _router.config()->network;
+        return _router.loop()->call_get([&]() {
+            log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        /** DISCUSS: Can the auth objects be further simplified?
-            - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
-                request to execute its aynchronous logic and queue the authentication job
+            auto& net_conf = _router.config()->network;
 
-            Static Token Auth:
-            - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
-                operator
-            - The session initiator will automatically include any static tokens that are either (A) loaded into the
-                config mapping or (B) passed to the lokinet-vpn cli utility
-                - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+            _traffic_policy = net_conf.traffic_policy;
+            _base_ipv6_range = net_conf._base_ipv6_range;
 
-            RPC Auth:
-            - Why can't the functionality of this be entirely subsumed by the RPCClient?
-                - If the config specifies the auth_type as RPC plus
-
-        */
-        // switch (net_conf.auth_type)
-        // {
-        //     case auth::AuthType::WHITELIST:
-        //     case auth::AuthType::OMQ:
-        //         // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
-        //         _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
-        //             router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
-
-        //         std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
-        //         break;
-
-        //     case auth::AuthType::FILE:
-        //         _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
-        //             router(), net_conf.auth_files, net_conf.auth_file_type);
-        //         break;
-
-        //     case auth::AuthType::NONE:
-        //     default:
-        //         break;
-        // }
-
-        _traffic_policy = net_conf.traffic_policy;
-        _base_ipv6_range = net_conf._base_ipv6_range;
-
-        if (net_conf.path_alignment_timeout)
-        {
-            if (is_service_node())
-                throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
-
-            _path_alignment_timeout = *net_conf.path_alignment_timeout;
-        }
-
-        _if_name = *net_conf._if_name;
-        _local_range = *net_conf._local_ip_range;
-        _local_addr = *net_conf._local_addr;
-        _local_base_ip = *net_conf._local_base_ip;
-
-        ipv6_enabled = not _local_range.is_ipv4();
-        if (ipv6_enabled and not net_conf.enable_ipv6)
-            throw std::runtime_error{"Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
-
-        _persisting_addr_file = net_conf.addr_map_persist_file;
-
-        if (not net_conf._reserved_local_ips.empty())
-        {
-            for (auto& [remote, local] : net_conf._reserved_local_ips)
+            if (net_conf.path_alignment_timeout)
             {
-                _local_ip_mapping.insert_or_assign(local, remote);
+                if (is_service_node())
+                    throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
+
+                _path_alignment_timeout = *net_conf.path_alignment_timeout;
             }
-        }
 
-        log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
-        _local_range_iterator = IPRangeIterator(_local_range);
+            _if_name = *net_conf._if_name;
+            _local_range = *net_conf._local_ip_range;
+            _local_addr = *net_conf._local_addr;
+            _local_base_ip = *net_conf._local_base_ip;
 
-        _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
-        _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
+            ipv6_enabled = not _local_range.is_ipv4();
+            if (ipv6_enabled and not net_conf.enable_ipv6)
+                throw std::runtime_error{
+                    "Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
 
-        vpn::InterfaceInfo info;
-        info.ifname = _if_name;
-        info.if_info = net_conf._if_info;
-        info.addrs.emplace_back(_local_range);
+            _persisting_addr_file = net_conf.addr_map_persist_file;
 
-        if (net_conf.enable_ipv6 and _base_ipv6_range)
-        {
-            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
-            info.addrs.emplace_back(*_base_ipv6_range);
-        }
-
-        log::debug(logcat, "{} setting up network...", name());
-
-        _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
-
-        if (ipv6_enabled)
-        {
-            if constexpr (not llarp::platform::is_apple)
+            if (not net_conf._reserved_local_ips.empty())
             {
-                if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                for (auto& [remote, local] : net_conf._reserved_local_ips)
                 {
-                    _local_ipv6 = *maybe;
+                    _local_ip_mapping.insert_or_assign(local, remote);
                 }
             }
-        }
 
-        log::info(
-            logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+            log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
+            _local_range_iterator = IPRangeIterator(_local_range);
 
-        _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
-        _if_name = _net_if->interface_info().ifname;
+            _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
+            _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
 
-        log::info(logcat, "{} got network interface:{}", name(), _if_name);
+            vpn::InterfaceInfo info;
+            info.ifname = _if_name;
+            info.if_info = net_conf._if_info;
+            info.addrs.emplace_back(_local_range);
 
-        auto pkt_hook = [this]() {
-            for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+            if (net_conf.enable_ipv6 and _base_ipv6_range)
             {
-                log::trace(logcat, "packet router receiving {}", pkt.info_line());
-                _packet_router->handle_ip_packet(std::move(pkt));
+                log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+                info.addrs.emplace_back(*_base_ipv6_range);
             }
-        };
 
-        if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
-        {
-            auto err = "{} failed to add network interface!"_format(name());
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{std::move(err)};
-        }
+            log::debug(logcat, "{} setting up network...", name());
 
-        // if (auto* quic = GetQUICTunnel())
-        // {
-        // TODO:
-        // quic->listen([this](std::string_view, uint16_t port) {
-        //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
-        // });
-        // }
+            _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
 
-        setup_dns();
+            if (ipv6_enabled)
+            {
+                if constexpr (not llarp::platform::is_apple)
+                {
+                    if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                    {
+                        _local_ipv6 = *maybe;
+                    }
+                }
+            }
+
+            log::info(
+                logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+
+            _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
+            _if_name = _net_if->interface_info().ifname;
+
+            log::info(logcat, "{} got network interface:{}", name(), _if_name);
+
+            auto pkt_hook = [this]() {
+                for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+                {
+                    log::trace(logcat, "packet router receiving {}", pkt.info_line());
+                    _packet_router->handle_ip_packet(std::move(pkt));
+                }
+            };
+
+            if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
+            {
+                auto err = "{} failed to add network interface!"_format(name());
+                log::error(logcat, "{}", err);
+                throw std::runtime_error{std::move(err)};
+            }
+
+            // if (auto* quic = GetQUICTunnel())
+            // {
+            // TODO:
+            // quic->listen([this](std::string_view, uint16_t port) {
+            //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
+            // });
+            // }
+
+            setup_dns();
+        });
     }
 
     static bool is_random_snode(const dns::Message& msg)

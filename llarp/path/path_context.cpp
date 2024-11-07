@@ -8,7 +8,7 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("pathctx");
 
-    PathContext::PathContext(RouterID local_rid) : _local_rid{std::move(local_rid)} {}
+    PathContext::PathContext(Router& r) : _r{r} {}
 
     void PathContext::allow_transit()
     {
@@ -40,6 +40,9 @@ namespace llarp::path
 
     void PathContext::expire_hops(std::chrono::milliseconds now)
     {
+        _r.loop()->call_get([&]() {
+
+        });
         Lock_t l{paths_mutex};
 
         size_t n = 0;
@@ -89,32 +92,32 @@ namespace llarp::path
 
     std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id) const
     {
-        Lock_t l{paths_mutex};
+        return _r.loop()->call_get([&]() -> std::shared_ptr<TransitHop> {
+            if (auto itr = _transit_hops.find(path_id); itr != _transit_hops.end())
+                return itr->second;
 
-        if (auto itr = _transit_hops.find(path_id); itr != _transit_hops.end())
-            return itr->second;
-
-        return nullptr;
+            return nullptr;
+        });
     }
 
     std::shared_ptr<Path> PathContext::get_path(const HopID& hop_id) const
     {
-        Lock_t l{paths_mutex};
+        return _r.loop()->call_get([&]() -> std::shared_ptr<Path> {
+            if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
+                return itr->second;
 
-        if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
-            return itr->second;
-
-        return nullptr;
+            return nullptr;
+        });
     }
 
     std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop) const
     {
         Lock_t l{paths_mutex};
 
-        if (auto maybe_path = get_path(hop->rxid()); maybe_path)
+        if (auto maybe_path = get_path(hop->rxid()))
             return maybe_path;
 
-        if (auto maybe_path = get_path(hop->txid()); maybe_path)
+        if (auto maybe_path = get_path(hop->txid()))
             return maybe_path;
 
         return nullptr;

@@ -1312,6 +1312,7 @@ namespace llarp
                         _router.path_context()->put_transit_hop(std::move(transit_hop));
                         return prev_message.respond(messages::OK_RESPONSE, false);
                     }
+
                     if (m.timed_out)
                         log::info(logcat, "Upstream timed out on path build; relaying timeout");
                     else

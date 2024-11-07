@@ -90,7 +90,7 @@ namespace llarp
             NetworkAddress remote() { return _remote; }
 
             bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
+                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
 
             bool send_path_data_message(std::string data);
 

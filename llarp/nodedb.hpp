@@ -168,6 +168,7 @@ namespace llarp
             _router.queue_disk_io(std::forward<Callable>(f));
         }
 
+        // Returns true iff the RID is known, but not the RC
         bool want_rc(const RouterID& rid) const;
 
         /// asynchronously remove the files for a set of rcs on disk given their public ident key
@@ -459,12 +460,6 @@ namespace llarp
                 container.emplace(std::move(id));
             }
         }
-
-        /// remove rcs that are older than we want to keep.  For relays, this is when
-        /// they  become "outdated" (i.e. 12hrs).  Clients will hang on to them until
-        /// they are fully "expired" (i.e. 30 days), as the client may go offline for
-        /// some time and can still try to use those RCs to re-learn the network.
-        void remove_stale_rcs();
 
         /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
         bool put_rc(RemoteRC rc);

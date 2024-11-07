@@ -212,7 +212,11 @@ namespace llarp::path
                 ++itr;
         }
 
-        _router.path_context()->drop_paths(std::move(droplist));
+        if (not droplist.empty())
+        {
+            log::debug(logcat, "{} paths expired; giving path-ctx droplist", droplist.size());
+            _router.path_context()->drop_paths(std::move(droplist));
+        }
     }
 
     // called within the scope of locked mutex
