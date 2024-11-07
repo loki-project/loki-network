@@ -199,23 +199,23 @@ namespace llarp::path
         if (_paths.size() == 0)
             return;
 
-        std::vector<std::shared_ptr<Path>> droplist;
+        std::vector<HopID> to_drop;
 
         for (auto itr = _paths.begin(); itr != _paths.end();)
         {
             if (itr->second and itr->second->is_established() and itr->second->is_expired(now))
             {
-                droplist.push_back(std::move(itr->second));
+                to_drop.push_back(itr->second->upstream_rxid());
                 itr = _paths.erase(itr);
             }
             else
                 ++itr;
         }
 
-        if (not droplist.empty())
+        if (not to_drop.empty())
         {
-            log::debug(logcat, "{} paths expired; giving path-ctx droplist", droplist.size());
-            _router.path_context()->drop_paths(std::move(droplist));
+            log::debug(logcat, "{} paths expired; giving path-ctx droplist", to_drop.size());
+            _router.path_context()->drop_paths(std::move(to_drop));
         }
     }
 

@@ -158,6 +158,7 @@ namespace llarp
         Profiling _router_profiling;
 
         size_t min_client_outbounds{};
+        std::atomic<bool> initial_client_connect_complete{false};
 
         // should we be sending padded messages every interval?
         bool send_padding{false};

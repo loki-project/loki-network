@@ -4,10 +4,12 @@ namespace llarp
 {
     static auto logcat = log::Cat("client-intro");
 
-    ClientIntro::ClientIntro(std::string_view buf)
+    ClientIntro::ClientIntro(oxenc::bt_dict_consumer&& btdc)
     {
-        bt_decode(buf);
+        bt_decode(std::move(btdc));
     }
+
+    ClientIntro::ClientIntro(std::string_view buf) : ClientIntro{oxenc::bt_dict_consumer{buf}} {}
 
     void ClientIntro::bt_encode(oxenc::bt_dict_producer&& subdict) const
     {
@@ -35,7 +37,7 @@ namespace llarp
     {
         pivot_rid.from_string(btdc.require<std::string_view>("k"));
         pivot_rxid.from_string(btdc.require<std::string_view>("p"));
-        expiry = std::chrono::milliseconds{btdc.require<int64_t>("x")};
+        expiry = std::chrono::milliseconds{btdc.require<uint64_t>("x")};
     }
 
     std::string ClientIntro::to_string() const

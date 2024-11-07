@@ -764,9 +764,10 @@ namespace llarp
     {
         auto [_in, _out, _relay, _client] = _link_manager->connection_stats();
         auto [_rcs, _rids, _bstraps] = _node_db->db_stats();
+        auto [_npaths, _nhops] = _path_context->path_ctx_stats();
 
-        return "{} RCs, {} RIDs, {} bstraps, conns [{}:{} in:out, {}:{} relay:client]"_format(
-            _rcs, _rids, _bstraps, _in, _out, _relay, _client);
+        return "{} RCs, {} RIDs, {} bstraps, {} paths, {} hops, conns=[{}:{} in:out, {}:{} relay:client]"_format(
+            _rcs, _rids, _bstraps, _npaths, _nhops, _in, _out, _relay, _client);
     }
 
     void Router::report_stats()
@@ -803,7 +804,6 @@ namespace llarp
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        // auto now_timepoint = std::chrono::system_clock::time_point(now);
         const auto& local = local_rid();
 
         // TESTNET:
@@ -876,19 +876,15 @@ namespace llarp
         if (should_report_stats(now))
             report_stats();
 
-        if (auto should_proceed = _node_db->tick(now); should_proceed == false)
+        if (not _node_db->tick(now))
         {
-            log::debug(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
+            log::trace(logcat, "Router awaiting NodeDB completion to proceed with ::tick() logic...");
             return;
         }
 
-        // _link_manager->check_persisting_conns(now);
-
         // TODO: make "use_pinned_edges" boolean to only connect to pinned edges
-        auto n_conns = num_router_connections();
-
         // if we need more sessions to routers we shall connect out to others
-        if (n_conns < min_client_outbounds)
+        if (auto n_conns = num_router_connections(); n_conns < min_client_outbounds)
         {
             auto num_needed = min_client_outbounds - n_conns;
 
@@ -908,8 +904,11 @@ namespace llarp
                 return;
             }
         }
+        else
+            initial_client_connect_complete = true;
 
-        _session_endpoint->tick(now);
+        if (initial_client_connect_complete)
+            _session_endpoint->tick(now);
     }
 
     void Router::tick()

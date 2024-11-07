@@ -46,6 +46,13 @@ namespace llarp::net
         /// returns false otherwise
         bool matches_packet_proto(const IPPacket& pkt) const;
 
+        auto operator<=>(const ProtocolInfo& other) const
+        {
+            return std::tie(protocol, port) <=> std::tie(other.protocol, other.port);
+        }
+
+        bool operator==(const ProtocolInfo& other) const { return (*this <=> other) == 0; }
+
         bool operator<(const ProtocolInfo& other) const
         {
             return std::tie(protocol, port) < std::tie(other.protocol, other.port);
@@ -73,6 +80,13 @@ namespace llarp::net
 
         bool bt_decode(std::string_view buf);
         nlohmann::json ExtractStatus() const;
+
+        auto operator<=>(const ExitPolicy& other) const
+        {
+            return std::tie(ranges, protocols) <=> std::tie(other.ranges, other.protocols);
+        }
+
+        bool operator==(const ExitPolicy& other) const { return (*this <=> other) == 0; }
 
         /// returns true if we allow the traffic in this ip packet
         /// returns false otherwise

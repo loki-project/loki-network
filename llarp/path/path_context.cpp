@@ -22,72 +22,70 @@ namespace llarp::path
 
     void PathContext::add_path(std::shared_ptr<Path> path)
     {
-        Lock_t l{paths_mutex};
-
-        _path_map.emplace(path->upstream_rxid(), path);
+        _r.loop()->call([&]() { _path_map.emplace(path->upstream_rxid(), path); });
     }
 
-    void PathContext::drop_paths(std::vector<std::shared_ptr<Path>> droplist)
+    void PathContext::drop_paths(std::vector<HopID> droplist)
     {
-        Lock_t l{paths_mutex};
-
-        for (auto itr = droplist.begin(); itr != droplist.end();)
-        {
-            drop_path(*itr);
-            itr = droplist.erase(itr);
-        }
+        _r.loop()->call([&]() {
+            for (auto itr = droplist.begin(); itr != droplist.end();)
+            {
+                _drop_path(*itr);
+                itr = droplist.erase(itr);
+            }
+        });
     }
 
     void PathContext::expire_hops(std::chrono::milliseconds now)
     {
-        _r.loop()->call_get([&]() {
+        _r.loop()->call([&]() {
+            size_t n = 0;
 
-        });
-        Lock_t l{paths_mutex};
-
-        size_t n = 0;
-
-        for (auto itr = _transit_hops.begin(); itr != _transit_hops.end();)
-        {
-            if (itr->second->is_expired(now))
+            for (auto itr = _transit_hops.begin(); itr != _transit_hops.end();)
             {
-                itr = _transit_hops.erase(itr);
-                n += 1;
+                if (itr->second->is_expired(now))
+                {
+                    itr = _transit_hops.erase(itr);
+                    n += 1;
+                }
+                else
+                    ++itr;
             }
-            else
-                ++itr;
-        }
 
-        if (n)
-            log::info(logcat, "{} expired TransitHops purged!", n);
+            if (n)
+                log::info(logcat, "{} expired TransitHops purged!", n);
+        });
     }
 
     void PathContext::drop_path(const HopID& hop_id)
     {
-        Lock_t l{paths_mutex};
-        if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
-            _path_map.erase(itr);
+        _r.loop()->call([&]() { _drop_path(hop_id); });
     }
 
     void PathContext::drop_path(const std::shared_ptr<Path>& path)
     {
-        Lock_t l{paths_mutex};
-        drop_path(path->upstream_rxid());
+        _r.loop()->call([&]() { drop_path(path->upstream_rxid()); });
+    }
+
+    std::tuple<size_t, size_t> PathContext::path_ctx_stats() const
+    {
+        return _r.loop()->call_get([&]() -> std::tuple<size_t, size_t> {
+            return {_path_map.size(), _transit_hops.size()};
+        });
     }
 
     bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop) const
     {
-        Lock_t l{paths_mutex};
-
-        return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid());
+        return _r.loop()->call_get(
+            [&]() { return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid()); });
     }
 
     void PathContext::put_transit_hop(std::shared_ptr<TransitHop> hop)
     {
-        Lock_t l{paths_mutex};
-
-        _transit_hops.emplace(hop->rxid(), hop);
-        _transit_hops.emplace(hop->txid(), hop);
+        _r.loop()->call([&]() {
+            _transit_hops.emplace(hop->rxid(), hop);
+            _transit_hops.emplace(hop->txid(), hop);
+        });
     }
 
     std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id) const
@@ -100,47 +98,60 @@ namespace llarp::path
         });
     }
 
+    void PathContext::_drop_path(const HopID& hop_id)
+    {
+        assert(_r.loop()->in_event_loop());
+
+        if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
+            _path_map.erase(itr);
+    }
+
+    std::shared_ptr<Path> PathContext::_get_path(const HopID& hop_id) const
+    {
+        assert(_r.loop()->in_event_loop());
+
+        if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
+            return itr->second;
+
+        return nullptr;
+    }
+
     std::shared_ptr<Path> PathContext::get_path(const HopID& hop_id) const
     {
+        return _r.loop()->call_get([&]() -> std::shared_ptr<Path> { return _get_path(hop_id); });
+    }
+
+    std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop) const
+    {
         return _r.loop()->call_get([&]() -> std::shared_ptr<Path> {
-            if (auto itr = _path_map.find(hop_id); itr != _path_map.end())
-                return itr->second;
+            if (auto maybe_path = _get_path(hop->rxid()))
+                return maybe_path;
+
+            if (auto maybe_path = _get_path(hop->txid()))
+                return maybe_path;
 
             return nullptr;
         });
     }
 
-    std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop) const
-    {
-        Lock_t l{paths_mutex};
-
-        if (auto maybe_path = get_path(hop->rxid()))
-            return maybe_path;
-
-        if (auto maybe_path = get_path(hop->txid()))
-            return maybe_path;
-
-        return nullptr;
-    }
-
     std::shared_ptr<PathHandler> PathContext::get_path_handler(const HopID& id)
     {
-        Lock_t l{paths_mutex};
+        return _r.loop()->call_get([&]() -> std::shared_ptr<PathHandler> {
+            if (auto maybe_path = _get_path(id))
+                return maybe_path->get_parent();
 
-        if (auto maybe_path = get_path(id))
-            return maybe_path->get_parent();
-
-        return nullptr;
+            return nullptr;
+        });
     }
 
     std::shared_ptr<TransitHop> PathContext::get_path_for_transfer(const HopID& id)
     {
-        Lock_t l{paths_mutex};
+        return _r.loop()->call_get([&]() -> std::shared_ptr<TransitHop> {
+            if (auto itr = _transit_hops.find(id); itr != _transit_hops.end())
+                return itr->second;
 
-        if (auto itr = _transit_hops.find(id); itr != _transit_hops.end())
-            return itr->second;
-
-        return nullptr;
+            return nullptr;
+        });
     }
 
 }  // namespace llarp::path

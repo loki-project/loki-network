@@ -9,13 +9,16 @@ namespace llarp::link
 {
     struct Connection
     {
-        std::shared_ptr<oxen::quic::connection_interface> conn;
-        std::shared_ptr<oxen::quic::BTRequestStream> control_stream;
-
         Connection(
             std::shared_ptr<oxen::quic::connection_interface> c,
             std::shared_ptr<oxen::quic::BTRequestStream> s,
-            bool is_relay = true);
+            bool _is_relay = true,
+            bool _is_active = false);
+
+        std::shared_ptr<oxen::quic::connection_interface> conn;
+        std::shared_ptr<oxen::quic::BTRequestStream> control_stream;
+
+        std::atomic<bool> is_active{false};
 
         bool remote_is_relay{true};
 
@@ -27,8 +30,6 @@ namespace llarp::link
 
 /**
     TODO:
-        - add a boolean in this connection object
-        - do not continue to try to send things to the bootstarp until the connection
-            is actually established!
-
+    - add a boolean in this connection object
+    - do not continue to try to send things to the bootstrap until the connection is actually established!
  */

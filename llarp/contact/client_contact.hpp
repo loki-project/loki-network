@@ -117,7 +117,6 @@ namespace llarp
 
         intro_set intros;
         std::unordered_set<dns::SRVData> SRVs;
-        std::chrono::milliseconds signed_at{0s};
 
         uint16_t protos;
 
@@ -144,6 +143,20 @@ namespace llarp
         void handle_updated_field(std::unordered_set<dns::SRVData> srvs);
 
       public:
+        bool operator==(const ClientContact& other) const
+        {
+            return std::tie(derived_privatekey, pubkey, intros, SRVs, protos, exit_policy)
+                == std::tie(
+                       other.derived_privatekey,
+                       other.pubkey,
+                       other.intros,
+                       other.SRVs,
+                       other.protos,
+                       other.exit_policy);
+        }
+
+        bool operator!=(const ClientContact& other) const { return !(*this == other); }
+
         std::string to_string() const;
         static constexpr bool to_string_formattable = true;
     };

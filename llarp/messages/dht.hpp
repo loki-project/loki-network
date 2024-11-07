@@ -11,8 +11,6 @@ namespace llarp
     {
         inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});
         inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
-        inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
-        inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
 
         /** Bt-encoded contents:
             - 'x' : EncryptedClientContact

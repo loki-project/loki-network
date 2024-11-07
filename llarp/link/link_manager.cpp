@@ -69,8 +69,6 @@ namespace llarp
 
                 return nullptr;
             });
-
-            return nullptr;
         }
 
         bool Endpoint::have_conn(const RouterID& remote) const
@@ -182,7 +180,8 @@ namespace llarp
                 size_t n{};
 
                 for (const auto& [_, c] : service_conns)
-                    n += (c != nullptr);
+                    if (c and c->is_active)
+                        ++n;
 
                 return n;
             });
@@ -212,7 +211,7 @@ namespace llarp
         std::set<RouterID> ret{};
 
         for (auto& [rid, conn] : ep->service_conns)
-            if (conn)
+            if (conn and conn->is_active)
                 ret.insert(rid);
 
         return ret;
@@ -320,7 +319,7 @@ namespace llarp
               - stream constructor callback
                 - will return a BTRequestStream on the first call to get_new_stream<BTRequestStream>
                 - bt stream construction contains a stream close callback that shuts down the
-           connection if the btstream closes unexpectedly
+                    connection if the btstream closes unexpectedly
         */
         auto e = quic->endpoint(
             _router.listen_addr(),
@@ -353,7 +352,6 @@ namespace llarp
                     {
                         // verify as service node!
                         bool result = node_db->registered_routers().count(other);
-                        // result = true;  // TESTNET: turn this off for non-local testing
 
                         if (result)
                         {
@@ -374,7 +372,7 @@ namespace llarp
                                     itr->second = nullptr;
                                 }
 
-                                log::critical(
+                                log::debug(
                                     logcat,
                                     "{} received inbound with ongoing outbound to remote "
                                     "(RID:{}); {}!",
@@ -385,10 +383,10 @@ namespace llarp
                                 return defer_to_incoming;
                             }
 
-                            log::critical(logcat, "{} accepting inbound from registered remote (RID:{})", us, other);
+                            log::trace(logcat, "{} accepting inbound from registered remote (RID:{})", us, other);
                         }
                         else
-                            log::critical(
+                            log::info(
                                 logcat,
                                 "{} was unable to confirm remote (RID:{}) is registered; "
                                 "rejecting "
@@ -400,13 +398,11 @@ namespace llarp
                     }
 
                     log::critical(logcat, "{} received unknown ALPN; rejecting connection!", us);
-                    return false;
                 }
+                else
+                    log::critical(logcat, "Clients should not be validating inbound connections!");
 
-                // TESTNET: change this to an error message later; just because someone tries to
-                // erroneously connect to a local lokinet client doesn't mean we should kill the
-                // program?
-                throw std::runtime_error{"Clients should not be validating inbound connections!"};
+                return false;
             });
         });
 
@@ -437,27 +433,25 @@ namespace llarp
         RouterID rid{ci.remote_key()};
 
         auto control = make_control(ci, rid);
+        bool is_client_conn = false;
 
-        _router.loop()->call([&, ci_ptr = ci.shared_from_this(), bstream = std::move(control), rid]() {
-            bool is_client_conn = false;
-            if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
-            {
-                log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
-                it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream));
-            }
-            else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
-            {
-                is_client_conn = true;
-                log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
-                it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream), false);
-            }
+        if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
+        {
+            log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
+            it->second = std::make_shared<link::Connection>(ci.shared_from_this(), std::move(control), false, true);
+        }
+        else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
+        {
+            is_client_conn = true;
+            log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
+            it->second = std::make_shared<link::Connection>(ci.shared_from_this(), std::move(control), false, true);
+        }
 
-            log::critical(
-                logcat,
-                "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
-                _router.local_rid(),
-                rid.to_network_address(!is_client_conn));
-        });
+        log::critical(
+            logcat,
+            "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
+            _router.local_rid(),
+            rid.to_network_address(!is_client_conn));
     }
 
     void LinkManager::on_outbound_conn(oxen::quic::connection_interface& ci)
@@ -465,10 +459,13 @@ namespace llarp
         RouterID rid{ci.remote_key()};
         log::trace(logcat, "Outbound connection to {}", rid);
 
-        if (ep->have_service_conn(rid))
+        if (auto conn = ep->get_service_conn(rid))
         {
-            log::debug(logcat, "Fetched configured outbound connection to relay RID:{}", rid);
+            conn->is_active = true;
+            log::trace(logcat, "Fetched configured outbound connection to relay RID: {}", rid);
         }
+        else
+            log::warning(logcat, "Could not find outbound connection corresponding to RID: {}", rid);
 
         log::critical(
             logcat,
@@ -481,13 +478,9 @@ namespace llarp
     void LinkManager::on_conn_open(oxen::quic::connection_interface& ci)
     {
         if (ci.is_inbound())
-        {
             on_inbound_conn(ci);
-        }
         else
-        {
             on_outbound_conn(ci);
-        }
     }
 
     void LinkManager::on_conn_closed(oxen::quic::connection_interface& ci, uint64_t ec)
@@ -498,16 +491,16 @@ namespace llarp
 
                 if (auto s_itr = ep->service_conns.find(rid); s_itr != ep->service_conns.end())
                 {
-                    log::critical(logcat, "Quic connection to relay RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to relay RID:{} purged successfully", rid);
                     ep->service_conns.erase(s_itr);
                 }
                 else if (auto c_itr = ep->client_conns.find(rid); c_itr != ep->client_conns.end())
                 {
-                    log::critical(logcat, "Quic connection to client RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to client RID:{} purged successfully", rid);
                     ep->client_conns.erase(c_itr);
                 }
                 else
-                    log::critical(logcat, "Nothing to purge for quic connection {}", ref_id);
+                    log::trace(logcat, "Nothing to purge for quic connection {}", ref_id);
             });
     }
 
@@ -1122,6 +1115,15 @@ namespace llarp
             return m.respond(PublishClientContact::INVALID, true);
         }
 
+        // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
+        // allow it to continue propagating
+        if (not inner_body)
+        {
+            log::critical(logcat, "Received relayed PublishClientContact request; accepting...");
+            _router.contact_db().put_cc(std::move(enc));
+            return m.respond(messages::OK_RESPONSE);
+        }
+
         auto dht_key = enc.key();
         auto local_rid = _router.local_rid();
 
@@ -1129,6 +1131,7 @@ namespace llarp
 
         for (const auto& rc : closest_rcs)
         {
+            log::debug(logcat, "Closest RCs to received ClientContact: {}", rc.router_id());
             if (rc.router_id() == local_rid)
             {
                 log::info(
@@ -1142,6 +1145,10 @@ namespace llarp
 
         const auto& peer_key = closest_rcs.begin()->router_id();
 
+        // TESTNET: testing this method
+        auto other_closest = _router.node_db()->find_closest_to(dht_key).router_id();
+        log::info(logcat, "First-closest and closest are {}EQUAL", peer_key == other_closest ? "" : "NOT ");
+
         log::info(logcat, "Received PublishClientContact; propagating to peer (key: {})...", peer_key);
 
         send_control_message(
@@ -1152,9 +1159,10 @@ namespace llarp
                 log::info(
                     logcat,
                     "Relayed PublishClientContact {}! Relaying response...",
-                    msg                 ? "succeeded"
+                    msg                 ? "SUCCEEDED"
                         : msg.timed_out ? "timed out"
                                         : "failed");
+                log::info(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
                 prev_msg.respond(msg.body_str(), msg.is_error());
             });
     }
@@ -1266,6 +1274,7 @@ namespace llarp
                         logcat, "DANIEL FIX THIS: Hop is terminal hop; constructor should have flipped this boolean");
                     hop->terminal_hop = true;
                 }
+
                 _router.path_context()->put_transit_hop(std::move(hop));
                 return m.respond(messages::OK_RESPONSE, false);
             }

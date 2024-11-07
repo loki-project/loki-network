@@ -396,7 +396,7 @@ namespace llarp
                         _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
                         std::forward<Opt>(opts)...);
 
-                    log::critical(logcat, "Created outbound connection with path: {}", conn_interface->path());
+                    log::trace(logcat, "Created outbound connection with path: {}", conn_interface->path());
 
                     auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
                         [](oxen::quic::Stream&, uint64_t error_code) {

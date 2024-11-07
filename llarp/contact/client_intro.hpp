@@ -18,6 +18,7 @@ namespace llarp
         uint64_t version{llarp::constants::proto_version};
 
         ClientIntro() = default;
+        ClientIntro(oxenc::bt_dict_consumer&&);
         ClientIntro(std::string_view buf);
 
         bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const { return now >= expiry; }

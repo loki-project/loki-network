@@ -19,12 +19,11 @@ namespace llarp::dns
             throw std::invalid_argument{"Invalid SRVData!"};
     }
 
-    SRVData::SRVData(std::string_view bt)
+    SRVData::SRVData(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {
-            oxenc::bt_dict_consumer btdc{bt};
-            bt_decode(btdc);
+            bt_decode(std::move(btdc));
         }
         catch (const std::exception& e)
         {
@@ -127,8 +126,7 @@ namespace llarp::dns
     {
         try
         {
-            oxenc::bt_dict_consumer btdc{buf};
-            return bt_decode(btdc);
+            return bt_decode(oxenc::bt_dict_consumer{buf});
         }
         catch (const std::exception& e)
         {
@@ -137,7 +135,7 @@ namespace llarp::dns
         }
     }
 
-    bool SRVData::bt_decode(oxenc::bt_dict_consumer& btdc)
+    bool SRVData::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {

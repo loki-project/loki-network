@@ -62,7 +62,9 @@ namespace llarp
             return ret;
         }
 
-        bool operator==(const AlignedBuffer& other) const { return _data == other._data; }
+        auto operator<=>(const AlignedBuffer& other) const { return _data <=> other._data; }
+
+        bool operator==(const AlignedBuffer& other) const { return (*this <=> other) == 0; }
 
         bool operator!=(const AlignedBuffer& other) const { return _data != other._data; }
 

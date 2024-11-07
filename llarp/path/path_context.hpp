@@ -15,59 +15,63 @@
 namespace llarp
 {
     struct Router;
+}
 
-    namespace path
+namespace llarp::path
+{
+    struct PathContext
     {
-        struct PathContext
-        {
-            explicit PathContext(Router& r);
+        explicit PathContext(Router& r);
 
-            void allow_transit();
+      private:
+        Router& _r;
 
-            void reject_transit();
+        using Lock_t = util::NullLock;
+        mutable util::NullMutex paths_mutex;
 
-            bool is_transit_allowed() const;
+        // Paths are 1:1 with edge rxIDs
+        std::unordered_map<HopID, std::shared_ptr<Path>> _path_map;
 
-            bool has_transit_hop(const std::shared_ptr<TransitHop>& hop) const;
+        std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
 
-            void put_transit_hop(std::shared_ptr<TransitHop> hop);
+        bool _allow_transit{false};
 
-            std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop) const;
+        // internal unsafe methods
+        void _drop_path(const HopID& hop_id);
 
-            std::shared_ptr<Path> get_path(const HopID& hop_id) const;
+        std::shared_ptr<Path> _get_path(const HopID& hop_id) const;
 
-            std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
+      public:
+        std::tuple<size_t, size_t> path_ctx_stats() const;
 
-            std::shared_ptr<TransitHop> get_transit_hop(const HopID&) const;
+        bool has_transit_hop(const std::shared_ptr<TransitHop>& hop) const;
 
-            std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
+        void put_transit_hop(std::shared_ptr<TransitHop> hop);
 
-            void add_path(std::shared_ptr<Path> p);
+        std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop) const;
 
-            void drop_path(const HopID& hop_id);
+        std::shared_ptr<Path> get_path(const HopID& hop_id) const;
 
-            void drop_path(const std::shared_ptr<Path>& p);
+        std::shared_ptr<TransitHop> get_path_for_transfer(const HopID& topath);
 
-            void drop_paths(std::vector<std::shared_ptr<Path>> droplist);
+        std::shared_ptr<TransitHop> get_transit_hop(const HopID&) const;
 
-            void expire_hops(std::chrono::milliseconds now);
+        std::shared_ptr<PathHandler> get_path_handler(const HopID& id);
 
-          private:
-            Router& _r;
+        void add_path(std::shared_ptr<Path> p);
 
-            using Lock_t = util::NullLock;
-            mutable util::NullMutex paths_mutex;
+        void drop_path(const HopID& hop_id);
 
-            std::unordered_map<HopID, std::shared_ptr<TransitHop>> _transit_hops;
+        void drop_path(const std::shared_ptr<Path>& p);
 
-            /** TODO:
-                - paths are not 1:1 with upstream RID
-                - paths are 1:1 with edge rxIDs
-            */
+        void drop_paths(std::vector<HopID> droplist);
 
-            std::unordered_map<HopID, std::shared_ptr<Path>> _path_map;
+        void expire_hops(std::chrono::milliseconds now);
 
-            bool _allow_transit{false};
-        };
-    }  // namespace path
-}  // namespace llarp
+        void allow_transit();
+
+        void reject_transit();
+
+        bool is_transit_allowed() const;
+    };
+}  // namespace llarp::path

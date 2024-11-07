@@ -21,7 +21,7 @@ namespace llarp
 
     ClientContact::ClientContact(std::string&& buf)
     {
-        bt_decode(oxenc::bt_dict_consumer{std::move(buf)});
+        bt_decode(oxenc::bt_dict_consumer{buf});
     }
 
     ClientContact ClientContact::generate(
@@ -67,7 +67,7 @@ namespace llarp
 
     size_t ClientContact::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
-        btdp.append("", ClientContact::CC_VERSION);
+        btdp.append<uint8_t>("", ClientContact::CC_VERSION);
 
         btdp.append("a", pubkey.to_view());
 
@@ -81,7 +81,7 @@ namespace llarp
                 i.bt_encode(sublist.append_dict());
         }
 
-        btdp.append("p", protos);
+        btdp.append<uint16_t>("p", protos);
 
         if (not SRVs.empty())
         {
@@ -96,6 +96,7 @@ namespace llarp
     void ClientContact::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         auto version = btdc.require<uint8_t>("");
+
         if (ClientContact::CC_VERSION != version)
             throw std::runtime_error{
                 "Deserialized ClientContact with incorrect version! (Received:{}, expected:{})"_format(
@@ -103,9 +104,9 @@ namespace llarp
 
         pubkey.from_string(btdc.require<std::string_view>("a"));
 
-        if (auto maybe_subdict = btdc.maybe<std::string_view>("e"))
+        if (btdc.skip_until("e"))
         {
-            exit_policy->bt_decode(oxenc::bt_dict_consumer{*maybe_subdict});
+            exit_policy->bt_decode(btdc.consume_dict_consumer());
         }
 
         btdc.required("i");
@@ -114,7 +115,7 @@ namespace llarp
             auto sublist = btdc.consume_list_consumer();
 
             while (not sublist.is_finished())
-                intros.emplace(sublist.consume_string_view());
+                intros.emplace(sublist.consume_dict_consumer());
         }
 
         protos = btdc.require<uint16_t>("p");
@@ -124,7 +125,7 @@ namespace llarp
             auto sublist = btdc.consume_list_consumer();
 
             while (not sublist.is_finished())
-                SRVs.emplace(sublist.consume_string_view());
+                SRVs.emplace(sublist.consume_dict_consumer());
         }
     }
 
@@ -223,7 +224,7 @@ namespace llarp
     std::optional<ClientContact> EncryptedClientContact::decrypt(const PubKey& root)
     {
         std::optional<ClientContact> cc = std::nullopt;
-        std::string payload{_bt_payload};
+        std::string payload{reinterpret_cast<char*>(encrypted.data()), encrypted.size()};
 
         if (crypto::xchacha20(
                 reinterpret_cast<unsigned char*>(payload.data()), payload.size(), root.data(), nonce.data()))
@@ -256,6 +257,8 @@ namespace llarp
             log::warning(logcat, "Exception: {}", e.what());
             return false;
         }
+
+        log::info(logcat, "Successfully verified EncryptedClientContact!");
 
         return true;
     }

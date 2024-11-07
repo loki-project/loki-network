@@ -354,6 +354,14 @@ namespace llarp::handlers
             if (not enc.verify())
                 log::critical(logcat, "COULD NOT VERIFY ENCRYPTEDCLIENTCONTACT");
 
+            if (auto decrypt = enc.decrypt(_router.local_rid()))
+            {
+                auto is_equal = client_contact == *decrypt;
+                log::critical(logcat, "Decrypted ClientContact is {}EQUAL to the original!", is_equal ? "" : "NOT ");
+            }
+            else
+                log::critical(logcat, "COULD NOT DECRYPT ENCRYPTEDCLIENTCONTACT");
+
             if (publish_client_contact(enc))
                 log::info(logcat, "Successfully republished updated EncryptedClientContact!");
             else
