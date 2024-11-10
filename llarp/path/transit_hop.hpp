@@ -1,8 +1,9 @@
 #pragma once
 
+#include "path_types.hpp"
+
 #include <llarp/constants/path.hpp>
 #include <llarp/contact/router_id.hpp>
-#include <llarp/path/path_types.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/queue.hpp>
 

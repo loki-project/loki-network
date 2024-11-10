@@ -9,6 +9,12 @@
 #include <set>
 #include <vector>
 
+namespace llarp::concepts
+{
+    template <typename T, typename U = std::remove_cvref_t<T>>
+    concept XOR_comparable = U::SIZE == PUBKEYSIZE && (std::same_as<RouterID, U> || std::same_as<dht::Key_t, U>);
+}
+
 namespace llarp::dht
 {
     static auto logcat = log::Cat("dht.bucket");
@@ -24,6 +30,12 @@ namespace llarp::dht
         bool operator()(const RemoteRC& left, const RemoteRC& right) const
         {
             return (left.router_id() ^ us) < (right.router_id() ^ us);
+        }
+
+        template <concepts::XOR_comparable T, concepts::XOR_comparable U>
+        bool operator()(const T& left, const U& right) const
+        {
+            return (left ^ us) < (right < us);
         }
     };
 

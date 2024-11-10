@@ -3,7 +3,6 @@
 #include "common.hpp"
 
 #include <llarp/address/address.hpp>
-#include <llarp/path/transit_hop.hpp>
 #include <llarp/util/logging/buffer.hpp>
 
 namespace llarp

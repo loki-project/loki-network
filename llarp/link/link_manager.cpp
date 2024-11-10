@@ -174,13 +174,13 @@ namespace llarp
             return link_manager.router().loop()->call_get([this]() { return client_conns.size(); });
         }
 
-        size_t Endpoint::num_router_conns() const
+        size_t Endpoint::num_router_conns(bool active_only) const
         {
-            return link_manager.router().loop()->call_get([this]() {
+            return link_manager.router().loop()->call_get([&]() {
                 size_t n{};
 
                 for (const auto& [_, c] : service_conns)
-                    if (c and c->is_active)
+                    if (c and (active_only ? c->is_active.load() : true))
                         ++n;
 
                 return n;
@@ -193,9 +193,9 @@ namespace llarp
         return ep->connection_stats();
     }
 
-    size_t LinkManager::get_num_connected_routers() const
+    size_t LinkManager::get_num_connected_routers(bool active_only) const
     {
-        return ep->num_router_conns();
+        return ep->num_router_conns(active_only);
     }
 
     size_t LinkManager::get_num_connected_clients() const
@@ -1128,11 +1128,18 @@ namespace llarp
         auto local_rid = _router.local_rid();
 
         auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+        const auto& closest_peer = closest_rcs.begin()->router_id();
+
+        // TESTNET: testing this method
+        auto other_closest = _router.node_db()->find_closest_to(dht_key).router_id();
+        log::info(logcat, "First-closest and closest are {}EQUAL", closest_peer == other_closest ? "" : "NOT ");
 
         for (const auto& rc : closest_rcs)
         {
-            log::debug(logcat, "Closest RCs to received ClientContact: {}", rc.router_id());
-            if (rc.router_id() == local_rid)
+            auto& _rid = rc.router_id();
+
+            log::debug(logcat, "Closest RCs to received ClientContact: {}", _rid);
+            if (_rid == local_rid)
             {
                 log::info(
                     logcat,
@@ -1143,16 +1150,10 @@ namespace llarp
             }
         }
 
-        const auto& peer_key = closest_rcs.begin()->router_id();
-
-        // TESTNET: testing this method
-        auto other_closest = _router.node_db()->find_closest_to(dht_key).router_id();
-        log::info(logcat, "First-closest and closest are {}EQUAL", peer_key == other_closest ? "" : "NOT ");
-
-        log::info(logcat, "Received PublishClientContact; propagating to peer (key: {})...", peer_key);
+        log::info(logcat, "Received PublishClientContact; propagating to closest peer (key: {})...", closest_peer);
 
         send_control_message(
-            peer_key,
+            closest_peer,
             "publish_cc",
             PublishClientContact::serialize(std::move(enc)),
             [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
@@ -1212,7 +1213,7 @@ namespace llarp
 
         send_control_message(
             closest_peer,
-            "find_cc"s,
+            "find_cc",
             FindClientContact::serialize(dht_key),
             [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
                 log::info(
@@ -1221,6 +1222,7 @@ namespace llarp
                     msg                 ? "succeeded"
                         : msg.timed_out ? "timed out"
                                         : "failed");
+                log::info(logcat, "Relayed FindClientContactMessage response: {}", buffer_printer{msg.body()});
                 prev_msg.respond(msg.body_str(), msg.is_error());
             });
     }
@@ -1523,12 +1525,6 @@ namespace llarp
 
     void LinkManager::handle_initiate_session(oxen::quic::message m)
     {
-        if (not m)
-        {
-            log::info(logcat, "Initiate session message timed out!");
-            return;
-        }
-
         NetworkAddress initiator;
         service::SessionTag tag;
         HopID pivot_txid;
@@ -1543,7 +1539,7 @@ namespace llarp
             std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
                 InitiateSession::decrypt_deserialize(btdc, _router.identity());
 
-            if (not _router.session_endpoint()->validate(initiator, maybe_auth))
+            if (maybe_auth and not _router.session_endpoint()->validate(initiator, maybe_auth))
             {
                 log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
                 return m.respond(InitiateSession::AUTH_DENIED, true);

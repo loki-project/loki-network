@@ -33,6 +33,7 @@ namespace llarp
     using ConfigMap = llarp::ConfigParser::ConfigMap;
 
     inline constexpr uint16_t DEFAULT_LISTEN_PORT{1090};
+    inline const oxen::quic::Address DEFAULT_CLIENT_LISTEN_ADDR{"0.0.0.0", DEFAULT_LISTEN_PORT};
     inline constexpr uint16_t DEFAULT_DNS_PORT{53};
     inline constexpr size_t CLIENT_ROUTER_CONNECTIONS{4};
 
@@ -91,6 +92,10 @@ namespace llarp
         /// return true if this set of router contacts is acceptable against this config
         bool check_rcs(const std::set<RemoteRC>& hops) const;
     };
+
+    /** TODO:
+        - finalize supervenience of ExitConfig over deprecated config entries
+     */
 
     /// Config options related to exit node services
     struct ExitConfig

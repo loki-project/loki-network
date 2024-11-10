@@ -84,7 +84,7 @@ namespace llarp
         return meta::sample_n(known_rcs, std::move(hook), n, exact);
     }
 
-    bool NodeDB::tick(std::chrono::milliseconds now)
+    bool NodeDB::tick([[maybe_unused]] std::chrono::milliseconds now)
     {
         if (_is_bootstrapping or _is_connecting_bstrap)
         {
@@ -144,7 +144,8 @@ namespace llarp
             return false;
         }
 
-        purge_rcs(now);
+        // TODO: make this its own ticker
+        // purge_rcs(now);
         return true;
     }
 
@@ -358,11 +359,10 @@ namespace llarp
     {
         return _router.loop()->call_get([this]() {
             std::vector<RouterID> needed;
-            const auto now = time_point_now();
 
             for (const auto& [rid, rc] : rc_lookup)
             {
-                if (now - rc.timestamp() > RelayContact::OUTDATED_AGE)
+                if (rc.is_outdated())
                     needed.push_back(rid);
             }
 
@@ -579,6 +579,9 @@ namespace llarp
             save_to_disk();
         });
 
+        _purge_ticker = _router.loop()->call_every(
+            5min, [this]() { purge_rcs(); }, not _needs_bootstrap);
+
         if (not _is_service_node)
         {
             // start these immediately if we do not need to bootstrap
@@ -636,6 +639,12 @@ namespace llarp
         if (success)
         {
             log::info(logcat, "{} completed processing BootstrapRC fetch!", _is_service_node ? "Relay" : "Client");
+
+            if (not _purge_ticker->is_running())
+            {
+                log::debug(logcat, "{} activating NodeDB purge ticker", _is_service_node ? "Relay" : "Client");
+                _purge_ticker->start();
+            }
 
             if (not _is_service_node)
             {
@@ -907,9 +916,16 @@ namespace llarp
 
         if (_rc_fetch_ticker)
         {
-            log::debug(logcat, "NodeDB clearing rc fetch ticker...");
+            log::debug(logcat, "NodeDB clearing RC fetch ticker...");
             _rc_fetch_ticker->stop();
             _rc_fetch_ticker.reset();
+        }
+
+        if (_purge_ticker)
+        {
+            log::debug(logcat, "NodeDB clearing purge ticker...");
+            _purge_ticker->stop();
+            _purge_ticker.reset();
         }
 
         if (_flush_ticker)
@@ -1013,11 +1029,12 @@ namespace llarp
         });
     }
 
-    dht::rc_set NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t numRouters) const
+    dht::rc_set NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t num_routers) const
     {
-        return _router.loop()->call_get([this, compare = dht::XorMetric{location}, numRouters]() -> dht::rc_set {
+        return _router.loop()->call_get([this, compare = dht::XorMetric{location}, num_routers]() -> dht::rc_set {
             dht::rc_set ret{known_rcs.begin(), known_rcs.end(), compare};
-            ret.erase(std::next(ret.begin(), numRouters), ret.end());
+            if (num_routers)
+                ret.erase(std::next(ret.begin(), num_routers), ret.end());
             return ret;
         });
     }

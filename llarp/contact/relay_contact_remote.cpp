@@ -6,12 +6,12 @@ namespace llarp
 {
     static auto logcat = log::Cat("relay-contact");
 
-    RemoteRC::RemoteRC(oxenc::bt_dict_consumer btdc)
+    RemoteRC::RemoteRC(oxenc::bt_dict_consumer btdc, bool accept_expired)
     {
         try
         {
             bt_load(btdc);
-            bt_verify(btdc, /*reject_expired=*/true);
+            bt_verify(btdc, not accept_expired);
         }
         catch (const std::exception& e)
         {

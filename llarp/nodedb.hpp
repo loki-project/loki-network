@@ -62,6 +62,7 @@ namespace llarp
     // threshold amount of verifications to promote an unconfirmed rc/rid
     inline constexpr int CONFIRMATION_THRESHOLD{3};
 
+    inline constexpr auto PURGE_INTERVAL{1min};
     inline constexpr auto FLUSH_INTERVAL{15min};
 
     template <
@@ -188,6 +189,7 @@ namespace llarp
         std::shared_ptr<EventTicker> _rid_fetch_ticker;
         std::shared_ptr<EventTicker> _rc_fetch_ticker;
 
+        std::shared_ptr<EventTicker> _purge_ticker;
         std::shared_ptr<EventTicker> _flush_ticker;
 
       public:
@@ -229,19 +231,19 @@ namespace llarp
         // TESTNET: new bootstrap/initial fetch functions
         void fetch_rcs();
         void fetch_rids();
-        void bootstrap();  //  private
+        void bootstrap();
 
         void stop_rid_fetch(bool success = true);
         void stop_rc_fetch(bool success = true);
 
         void rid_fetch_result(const RouterID& via);
         void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
-        void stop_bootstrap(bool success = true);  //  private
+        void stop_bootstrap(bool success = true);
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }
         bool bootstrap_completed() const { return not(_is_bootstrapping or _needs_bootstrap); }
         bool is_bootstrap_node(RouterID rid) const;
-        void purge_rcs(std::chrono::milliseconds now);
+        void purge_rcs(std::chrono::milliseconds now = llarp::time_now_ms());
 
         //  Bootstrap fallback fetching
         // void fallback_to_bootstrap();
@@ -325,8 +327,8 @@ namespace llarp
         /// find the absolute closets router to a dht location
         RemoteRC find_closest_to(dht::Key_t location) const;
 
-        /// find many routers closest to dht key
-        dht::rc_set find_many_closest_to(dht::Key_t location, uint32_t numRouters) const;
+        /// find many routers closest to dht key; if num_routers = 0, return ALL routers
+        dht::rc_set find_many_closest_to(dht::Key_t location, uint32_t num_routers = 0) const;
 
         /// return true if we have an rc by its ident pubkey
         bool has_rc(const RouterID& pk) const;

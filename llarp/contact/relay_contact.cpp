@@ -144,9 +144,14 @@ namespace llarp
         return _addr.is_addressable();
     }
 
+    bool RelayContact::is_outdated(std::chrono::milliseconds now) const
+    {
+        return now >= _timestamp.time_since_epoch() + OUTDATED_AGE;
+    }
+
     bool RelayContact::is_expired(std::chrono::milliseconds now) const
     {
-        return age(now) >= _timestamp.time_since_epoch() + LIFETIME;
+        return now >= _timestamp.time_since_epoch() + LIFETIME;
     }
 
     std::chrono::milliseconds RelayContact::time_to_expiry(std::chrono::milliseconds now) const

@@ -52,10 +52,6 @@ namespace llarp
 
         inline static constexpr size_t MAX_RC_SIZE{1024};
 
-        /// How long (from its signing time) before an RC is considered "stale".  Relays republish
-        /// their RCs slightly more frequently than this so that ideally this won't happen.
-        inline static constexpr auto STALE_AGE{6h};
-
         /// How long (from its signing time) before an RC becomes "outdated".  Outdated records are
         /// used (e.g. for path building) only if there are no newer records available, such as
         /// might be the case when a client has been turned off for a while.
@@ -131,6 +127,9 @@ namespace llarp
 
         /// does this RC expire soon? default delta is 1 minute
         bool expires_within_delta(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 1min) const;
+
+        /// returns true if this RC is outdated and should be fetched
+        bool is_outdated(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
         /// returns true if this RC is expired and should be removed
         bool is_expired(std::chrono::milliseconds now) const;
@@ -243,15 +242,20 @@ namespace llarp
     {
       private:
         // this ctor is private because it doesn't set ::_payload
-        explicit RemoteRC(oxenc::bt_dict_consumer btdc);
+        explicit RemoteRC(oxenc::bt_dict_consumer btdc, bool accept_expired = false);
 
       public:
         RemoteRC() = default;
-        explicit RemoteRC(std::string_view data) : RemoteRC{oxenc::bt_dict_consumer{data}}
+        explicit RemoteRC(std::string_view data, bool accept_expired = false)
+            : RemoteRC{oxenc::bt_dict_consumer{data}, accept_expired}
         {
             _payload = {reinterpret_cast<const unsigned char*>(data.data()), data.size()};
         }
-        explicit RemoteRC(ustring_view data) : RemoteRC{oxenc::bt_dict_consumer{data}} { _payload = data; }
+        explicit RemoteRC(ustring_view data, bool accept_expired = false)
+            : RemoteRC{oxenc::bt_dict_consumer{data}, accept_expired}
+        {
+            _payload = data;
+        }
         ~RemoteRC() = default;
 
         std::string_view view() const { return {reinterpret_cast<const char*>(_payload.data()), _payload.size()}; }

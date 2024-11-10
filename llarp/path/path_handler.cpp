@@ -342,15 +342,6 @@ namespace llarp::path
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         _running = false;
-
-        // Lock_t l{paths_mutex};
-
-        // for (auto& [_, p] : _path_map)
-        // {
-        //     if (p)
-        //         dissociate_hop_ids(p);
-        // }
-
         _paths.clear();
 
         return true;
@@ -554,9 +545,6 @@ namespace llarp::path
         // i from n_hops down to 0
         for (int i = n_hops - 1; i >= 0; --i)
         {
-            // const auto& next_rid = i == n_hops - 1 ? path_hops[i].router_id() : path_hops[i + 1].router_id();
-            // path_hops[i]._upstream = next_rid;
-
             frames[i] = PATH::BUILD::serialize_hop(path_hops[i]);
 
             if (last_len and frames[i].size() != last_len)

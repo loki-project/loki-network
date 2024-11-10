@@ -310,7 +310,11 @@ namespace llarp::handlers
                 throw std::runtime_error{
                     "Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
 
-            _persisting_addr_file = net_conf.addr_map_persist_file;
+            if (net_conf.addr_map_persist_file)
+            {
+                _persisting_addr_file = net_conf.addr_map_persist_file;
+                persist_addrs = true;
+            }
 
             if (not net_conf._reserved_local_ips.empty())
             {

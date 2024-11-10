@@ -272,7 +272,7 @@ namespace llarp::handlers
             return func(std::move(maybe_intro));
         }
 
-        log::debug(logcat, "Looking up clientcontact for remote (rid:{})", remote);
+        log::info(logcat, "Looking up clientcontact for remote (rid:{})", remote);
 
         auto response_handler = [this, remote, hook = std::move(func)](oxen::quic::message m) mutable {
             try
@@ -554,7 +554,11 @@ namespace llarp::handlers
 
         if (auto path = _router.path_context()->get_path(intro.pivot_rxid))
         {
-            log::info(logcat, "Found path to pivot (hopid: {}); initiating session!", intro.pivot_rxid);
+            log::info(
+                logcat,
+                "Found path to pivot (rid: {}, rx_id: {}); initiating session!",
+                intro.pivot_rid,
+                intro.pivot_rxid);
             return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
         }
 

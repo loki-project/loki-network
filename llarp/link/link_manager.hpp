@@ -87,7 +87,7 @@ namespace llarp
 
             size_t num_client_conns() const;
 
-            size_t num_router_conns() const;
+            size_t num_router_conns(bool active_only = true) const;
 
             template <typename... Opt>
             bool establish_connection(KeyedAddress remote, RouterID rid, Opt&&... opts);
@@ -226,7 +226,7 @@ namespace llarp
 
         std::tuple<size_t, size_t, size_t, size_t> connection_stats() const;
 
-        size_t get_num_connected_routers() const;
+        size_t get_num_connected_routers(bool active_only = true) const;
 
         size_t get_num_connected_clients() const;
 

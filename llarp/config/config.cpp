@@ -79,8 +79,8 @@ namespace llarp
             ClientOnly,
             Comment{
                 "Minimum number of routers lokinet client will attempt to maintain connections to.",
-                "If [network]:strict-connect is defined, the number of client <-> router connections",
-                "maintained by a client will be at MOST the number of pinned edges"},
+                "If [network]:strict-connect is defined, the number of maintained client <-> router",
+                "connections set by [router]:relay-connections will be at MOST the number of pinned edges"},
             [=, this](size_t arg) {
                 if (arg < CLIENT_ROUTER_CONNECTIONS)
                     throw std::invalid_argument{
@@ -556,7 +556,6 @@ namespace llarp
             "exit",
             Hidden,
             ClientOnly,
-            Default{false},
             [this](bool arg) {
                 allow_exit = arg;
                 log::warning(logcat, "This option is deprecated! Use [exit]:enable instead!");
@@ -908,7 +907,6 @@ namespace llarp
             "network",
             "persist-addrmap-file",
             ClientOnly,
-            Default{fs::path{params.default_data_dir / "addrmap.dat"}},
             Comment{
                 "If given this specifies a file in which to record mapped local tunnel addresses so",
                 "the same local address will be used for the same lokinet address on reboot. If this",
@@ -956,6 +954,7 @@ namespace llarp
 
                     log::warning(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
                 }
+
                 if (not data.empty())
                 {
                     std::string_view bdata{data.data(), data.size()};

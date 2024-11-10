@@ -356,7 +356,7 @@ namespace llarp
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 
         /// count the number of unique service nodes connected via pubkey
-        size_t num_router_connections() const;
+        size_t num_router_connections(bool active_only = true) const;
 
         /// count the number of unique clients connected by pubkey
         size_t num_client_connections() const;

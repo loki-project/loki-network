@@ -380,10 +380,15 @@ namespace llarp
         if (pport.has_value() and not paddr.has_value())
             throw std::runtime_error{"If public-port is specified, public-addr must be as well!"};
 
-        if (conf.links.listen_addr)
+        if (conf.links.listen_addr or not _is_service_node)
         {
-            _listen_address = *conf.links.listen_addr;
-            log::critical(logcat, "Using listen address from link config: {}", _listen_address);
+            _listen_address = conf.links.listen_addr.value_or(DEFAULT_CLIENT_LISTEN_ADDR);
+
+            log::critical(
+                logcat,
+                "Using {} listen address: {}",
+                conf.links.listen_addr ? "link config" : "default",
+                _listen_address);
         }
         else
         {
@@ -416,7 +421,8 @@ namespace llarp
             if (auto maybe_addr = net().get_best_public_address(true, _port))
                 _public_address = std::move(*maybe_addr);
             else
-                throw std::runtime_error{"Could not find net interface on current platform!"};
+                log::critical(logcat, "Could not find net interface on current platform!");
+            // throw std::runtime_error{"Could not find net interface on current platform!"};
         }
 
         RelayContact::BLOCK_BOGONS = conf.router.block_bogons;
@@ -436,20 +442,13 @@ namespace llarp
 
         bool find_if_addr = true;
 
-        // If an ip range is set in the config, then the address and ip optionls are as well
+        // If an ip range is set in the config, then the address and ip optionals are as well
         if (not(conf._local_ip_range and !conf._local_addr->is_any_addr()))
         {
-            log::debug(
-                logcat,
-                "Finding free range for config values (range:{}, addr:{})",
-                conf._local_ip_range,
-                conf._local_addr);
             const auto maybe = net().find_free_range(ipv6_enabled);
 
             if (not maybe.has_value())
-            {
-                throw std::runtime_error("cannot find free address range");
-            }
+                throw std::runtime_error("cannot find free address range!");
 
             _local_range = *maybe;
             _local_addr = _local_range.address();
@@ -533,18 +532,25 @@ namespace llarp
             }
         }
 
-        /// build a set of strictConnectPubkeys
+        // parse strict-connet pubkeys
         if (auto& conf_edges = conf.pinned_edges; not conf_edges.empty())
         {
             if (is_service_node())
                 throw std::runtime_error("cannot use strict-connect option as service node");
 
             auto n_edges = conf_edges.size();
-            if (n_edges < 2)
-                throw std::runtime_error("Must specify more than one strict-connect router if using strict-connect");
+
+            // bad inputs throw in config parsing, so we should never have 0 pinned_edges
+            assert(n_edges);
+
+            if (not n_edges)
+                throw std::runtime_error(
+                    "Must specify at least ONE valid strict-connect relay if using [network]:strict-connect");
 
             _node_db->pinned_edges() = std::move(conf_edges);
             _node_db->_strict_connect = true;
+
+            // TODO: load strict-connects as bootstraps as well
 
             log::info(logcat, "Local client configured to strictly use {} edge relays", n_edges);
 
@@ -562,8 +568,8 @@ namespace llarp
             log::info(
                 logcat, "Local client configured to maintain {} router connections at minimum", min_client_outbounds);
 
-        if (min_client_outbounds < 2)
-            throw std::runtime_error{"Client cannot be configured to have less than 2 outbound router connections!"};
+        if (not min_client_outbounds)
+            throw std::runtime_error{"Client must be configured to have at least 1 outbound router connection!"};
     }
 
     void Router::init_tun()
@@ -588,7 +594,9 @@ namespace llarp
             const auto& netid = conf.router.net_id;
 
             _is_service_node = conf.router.is_relay;
-            _is_exit_node = conf.network.allow_exit;
+
+            // accept either config entry
+            _is_exit_node = conf.network.allow_exit || conf.exit.exit_enabled;
 
             if (_is_exit_node and _is_service_node)
                 throw std::runtime_error{
@@ -642,7 +650,11 @@ namespace llarp
 
             process_routerconfig();
 
-            log::critical(logcat, "public addr={}, listen addr={}", *_public_address, _listen_address);
+            log::critical(
+                logcat,
+                "public addr={}, listen addr={}",
+                _public_address ? _public_address->to_string() : "< NONE >",
+                _listen_address);
 
             // We process the relevant netconfig values (ip_range, address, and ip) here; in case the range or interface
             // is bad, we search for a free one and set it BACK into the config. Every subsequent object configuring
@@ -733,9 +745,9 @@ namespace llarp
         return appears_funded() and not _testing_disabled;
     }
 
-    size_t Router::num_router_connections() const
+    size_t Router::num_router_connections(bool active_only) const
     {
-        return _link_manager->get_num_connected_routers();
+        return _link_manager->get_num_connected_routers(active_only);
     }
 
     size_t Router::num_client_connections() const
@@ -828,7 +840,8 @@ namespace llarp
         _link_manager->check_persisting_conns(now);
 
         const bool is_decommed = appears_decommed();
-        auto num_router_conns = num_router_connections();
+        // we want ALL router-connections, including in-progress connections because full-mesh
+        auto num_router_conns = num_router_connections(false);
         auto num_rcs = node_db()->num_rcs();
 
         if (now >= _next_decomm_warning)
@@ -886,6 +899,7 @@ namespace llarp
         // if we need more sessions to routers we shall connect out to others
         if (auto n_conns = num_router_connections(); n_conns < min_client_outbounds)
         {
+            // result could maybe be negative with this subtraction, so we HAVE to check nconns < min in the conditional
             auto num_needed = min_client_outbounds - n_conns;
 
             log::critical(

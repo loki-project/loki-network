@@ -45,7 +45,7 @@ namespace llarp::handlers
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
-        bool ipv6_enabled;
+        bool ipv6_enabled{};
 
         std::string _if_name;
 
@@ -60,6 +60,7 @@ namespace llarp::handlers
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;
+        bool persist_addrs{false};
 
         /// how long to wait for path alignment
         std::chrono::milliseconds _path_alignment_timeout{30s};

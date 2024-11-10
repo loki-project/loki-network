@@ -32,7 +32,7 @@ namespace llarp
 
         try
         {
-            ret &= emplace(buf).second;
+            ret &= emplace(buf, true).second;
         }
         catch (...)
         {
@@ -55,7 +55,7 @@ namespace llarp
             oxenc::bt_list_consumer btlc{buf};
 
             while (not btlc.is_finished())
-                ret &= emplace(btlc.consume_dict_data()).second;
+                ret &= emplace(btlc.consume_dict_data(), true).second;
         }
         catch (const std::exception& e)
         {
