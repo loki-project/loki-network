@@ -21,10 +21,6 @@ namespace llarp
     //
     // Keys are either read from disk if they exist and are valid (see below) or
     // are generated and written to disk.
-    //
-    // In addition, the KeyManager detects when the keys obsolete (e.g. as a
-    // result of a software upgrade) and backs up existing keys before writing
-    // out new ones.
     struct KeyManager
     {
         friend struct Router;
@@ -53,8 +49,6 @@ namespace llarp
         Ed25519PrivateData derive_subkey(uint64_t domain = 1) const;
 
       public:
-        void encrypt(uint8_t* buf, size_t size);
-
         const RouterID& router_id() const { return public_key; }
     };
 

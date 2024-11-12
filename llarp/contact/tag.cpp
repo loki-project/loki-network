@@ -1,6 +1,6 @@
 #include "tag.hpp"
 
-namespace llarp::service
+namespace llarp
 {
     SessionTag SessionTag::make_random()
     {
@@ -15,4 +15,4 @@ namespace llarp::service
         /// ensure we are in the fc00 range
         llarp::AlignedBuffer<16>::operator[](0) = 0xfc;
     }
-}  // namespace llarp::service
+}  // namespace llarp

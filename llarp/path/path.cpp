@@ -39,6 +39,8 @@ namespace llarp::path
                 - First hop RXID is unique, the rest are the previous hop TXID
                 - Last hop upstream is it's own RID, the rest are the next hop RID
                 - First hop downstream is client's RID, the rest are the previous hop RID
+                - Local hop RXID is random, TXID is first hop RXID
+                - Local hop upstream is first hop RID, downstream is local instance RID
             */
 
             hops[i]._rid = hop_rcs[i].router_id();
@@ -71,14 +73,22 @@ namespace llarp::path
 
         hops.back().terminal_hop = true;
 
+        // _local_hop = std::make_shared<TransitHop>();
+        // _local_hop->_rid = _router.local_rid();
+        // _local_hop->_upstream = hops.front()._rid;
+        // _local_hop->_downstream = _local_hop->_rid;
+        // _local_hop->_rxid = HopID::make_random();
+        // _local_hop->_txid = hops.front()._rxid;
+        // _local_hop->terminal_hop = true;
+
         log::info(logcat, "Path populated with hops: {}", hop_string());
 
         // initialize parts of the clientintro
         intro.pivot_rid = hops.back().router_id();
-        intro.pivot_rxid = hops.back()._rxid;
+        intro.pivot_txid = hops.back()._txid;
 
         log::debug(
-            logcat, "Path client intro holding pivot_rid ({}) and pivot_rxid ({})", intro.pivot_rid, intro.pivot_rxid);
+            logcat, "Path client intro holding pivot_rid ({}) and pivot_rxid ({})", intro.pivot_rid, intro.pivot_txid);
     }
 
     void Path::link_session(recv_session_dgram_cb cb)
@@ -138,41 +148,39 @@ namespace llarp::path
     bool Path::obtain_exit(
         const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message2(
+        return send_path_control_message(
             "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
     }
 
     bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message2(
+        return send_path_control_message(
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
     }
 
     bool Path::find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message2("find_cc", FindClientContact::serialize(location), std::move(func));
+        return send_path_control_message("find_cc", FindClientContact::serialize(location), std::move(func));
     }
 
-    bool Path::publish_client_contact2(const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
+    bool Path::publish_client_contact(const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message2("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
+        return send_path_control_message("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
     }
 
     bool Path::resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func)
     {
-        return send_path_control_message2("resolve_sns", ResolveSNS::serialize(name), std::move(func));
+        return send_path_control_message("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
 
     void Path::enable_exit_traffic()
     {
         log::info(logcat, "{} {} granted exit", name(), pivot_rid());
-        // _role |= ePathRoleExit;
     }
 
     void Path::mark_exit_closed()
     {
         log::info(logcat, "{} hd its exit closed", name());
-        // _role &= ePathRoleExit;
     }
 
     std::string Path::make_path_message(std::string inner_payload)
@@ -200,79 +208,13 @@ namespace llarp::path
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
-    bool Path::send_path_control_message2(
+    bool Path::send_path_control_message(
         std::string endpoint, std::string body, std::function<void(oxen::quic::message)> func)
     {
         auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
         auto outer_payload = make_path_message(std::move(inner_payload));
 
         return _router.send_control_message(upstream_rid(), "path_control", std::move(outer_payload), std::move(func));
-    }
-
-    bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
-    {
-        auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
-        auto outer_payload = make_path_message(std::move(inner_payload));
-
-        return _router.send_control_message(
-            upstream_rid(),
-            "path_control",
-            std::move(outer_payload),
-            [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) mutable {
-                auto self = weak.lock();
-                if (not self)
-                {
-                    log::warning(logcat, "Received response to path control message with non-existent path!");
-                    return;
-                }
-
-                // TODO: DISCUSS: do we want to allow empty callback here?
-                if (not response_cb)
-                {
-                    log::warning(logcat, "Received response to path control message with no response callback!");
-                    return;
-                }
-
-                log::debug(logcat, "Received response to path control message: {}", buffer_printer{m.body()});
-
-                if (m)
-                    log::info(logcat, "Path control message returned successfully!");
-                else if (m.timed_out)
-                    log::warning(logcat, "Path control message returned as time out!");
-                else
-                    log::warning(logcat, "Path control message returned as error!");
-
-                return response_cb(m.body_str());
-
-                // TODO: onion encrypt path message responses
-                // HopID hop_id;
-                // SymmNonce nonce;
-                // std::string payload;
-
-                // try
-                // {
-                //     std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{m.body()});
-                // }
-                // catch (const std::exception& e)
-                // {
-                //     log::warning(logcat, "Exception parsing path control message response: {}", e.what());
-                //     return response_cb(messages::ERROR_RESPONSE);
-                // }
-
-                // for (const auto& hop : self->hops)
-                // {
-                //     nonce = crypto::onion(
-                //         reinterpret_cast<unsigned char*>(payload.data()),
-                //         payload.size(),
-                //         hop.shared,
-                //         nonce,
-                //         hop.nonceXOR);
-                // }
-
-                // // TODO: DISCUSS:
-                // // Parsing and handling of the contents (errors, etc.) is the currently responsibility of the
-                // callback response_cb(std::move(payload));
-            });
     }
 
     bool Path::is_ready(std::chrono::milliseconds now) const
@@ -287,6 +229,16 @@ namespace llarp::path
 
         return nullptr;
     }
+
+    // std::shared_ptr<TransitHop> Path::local_hop()
+    // {
+    //     return _local_hop;
+    // }
+
+    // const std::shared_ptr<TransitHop>& Path::local_hop() const
+    // {
+    //     return _local_hop;
+    // }
 
     RouterID Path::upstream_rid()
     {
@@ -385,74 +337,6 @@ namespace llarp::path
         obj["hops"] = hopsObj;
 
         return obj;
-    }
-
-    void Path::rebuild()
-    {
-        if (auto parent = handler.lock())
-        {
-            auto prev_upstream_rxid = upstream_rxid();
-
-            if (auto new_hops = parent->aligned_hops_to_remote(pivot_rid()))
-            {
-                populate_internals(*new_hops);
-                log::info(logcat, "{} rebuilding new path to pivot {}", name(), to_string());
-
-                auto self = shared_from_this();
-                auto payload = parent->build2(self);
-                auto upstream = upstream_rid();
-
-                if (not parent->build3(
-                        std::move(upstream),
-                        std::move(payload),
-                        [new_path = std::move(self), parent = parent, prev_rxid = prev_upstream_rxid](
-                            oxen::quic::message m) mutable {
-                            if (m)
-                            {
-                                log::critical(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
-                                parent->drop_path(prev_rxid);
-                                return parent->path_build_succeeded(std::move(new_path));
-                            }
-
-                            try
-                            {
-                                if (m.timed_out)
-                                {
-                                    log::warning(logcat, "Path build request timed out!");
-                                }
-                                else
-                                {
-                                    oxenc::bt_dict_consumer d{m.body()};
-                                    auto status = d.require<std::string_view>(messages::STATUS_KEY);
-                                    log::warning(logcat, "Path build returned failure status: {}", status);
-                                }
-                            }
-                            catch (const std::exception& e)
-                            {
-                                log::warning(
-                                    logcat,
-                                    "Exception caught parsing path build response: {}; input: {}",
-                                    e.what(),
-                                    m.body());
-                            }
-
-                            parent->path_build_failed(std::move(new_path), m.timed_out);
-                        }))
-                {
-                    log::warning(logcat, "Error sending path_build control message");
-                }
-            }
-            else
-            {
-                log::warning(logcat, "Could not find new hops to rebuild path to pivot {}", to_string());
-            }
-
-            parent->drop_path(prev_upstream_rxid);
-        }
-        else
-        {
-            log::warning(logcat, "Path ({}) died with no parent to rebuild!", to_string());
-        }
     }
 
     bool Path::SendLatencyMessage(Router*)

@@ -421,7 +421,7 @@ namespace llarp::handlers
         //       [this, snode, msg, reply, isV6](
         //           const RouterID&,
         //           std::shared_ptr<session::BaseSession> s,
-        //           [[maybe_unused]] service::SessionTag tag) {
+        //           [[maybe_unused]] SessionTag tag) {
         //         SendDNSReply(snode, s, msg, reply, isV6);
         //       });
         // };

@@ -60,7 +60,7 @@ namespace llarp
 
         // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
         // or '.snode'
-        static std::optional<NetworkAddress> from_network_addr(const std::string& arg);
+        static std::optional<NetworkAddress> from_network_addr(std::string_view arg);
 
         // Assumes that the pubkey passed is NOT terminated in either a '.loki' or '.snode' suffix
         static NetworkAddress from_pubkey(const RouterID& rid, bool is_client);

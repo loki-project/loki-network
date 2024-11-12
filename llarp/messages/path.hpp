@@ -39,6 +39,26 @@ namespace llarp
             return std::move(btdp).str();
         }
 
+        inline static std::tuple<RouterID, SymmNonce, std::string> deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            RouterID rid;
+            std::string payload;
+            SymmNonce nonce;
+
+            try
+            {
+                rid.from_string(btdc.require<std::string_view>("k"));
+                nonce.from_string(btdc.require<std::string_view>("n"));
+                payload = btdc.require<std::string_view>("x");
+            }
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error{"Exception caught deserializing onion data: {}"_format(e.what())};
+            }
+
+            return {std::move(rid), std::move(nonce), std::move(payload)};
+        }
+
         inline static std::tuple<HopID, SymmNonce, std::string> deserialize_hop(oxenc::bt_dict_consumer&& btdc)
         {
             HopID hop_id;
@@ -109,7 +129,7 @@ namespace llarp
                 crypto::derive_encrypt_outer_wrapping(
                     ephemeral_key, hop.shared, hop.nonce, hop.router_id(), to_uspan(hop_payload));
 
-                // generate nonceXOR value self->hop->pathKey
+                // generate nonceXOR value
                 ShortHash xor_hash;
                 crypto::shorthash(xor_hash, hop.shared.data(), hop.shared.size());
 

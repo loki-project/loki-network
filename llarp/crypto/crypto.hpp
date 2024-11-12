@@ -43,7 +43,7 @@ namespace llarp
         bool shorthash(ShortHash&, uint8_t*, size_t size);
 
         /// blake2s 256 bit hmac
-        bool hmac(uint8_t*, uint8_t*, size_t, const SharedSecret&);
+        bool hmac(uint8_t*, const uint8_t*, size_t, const SharedSecret&);
 
         /// ed25519 sign
         bool sign(Signature&, const Ed25519SecretKey&, uint8_t* buf, size_t size);

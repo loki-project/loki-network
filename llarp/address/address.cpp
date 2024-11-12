@@ -6,7 +6,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("address");
 
-    std::optional<NetworkAddress> NetworkAddress::from_network_addr(const std::string& arg)
+    std::optional<NetworkAddress> NetworkAddress::from_network_addr(std::string_view arg)
     {
         std::optional<NetworkAddress> ret = std::nullopt;
 

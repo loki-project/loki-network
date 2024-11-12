@@ -18,7 +18,7 @@ namespace llarp::session
         std::shared_ptr<path::Path> _p,
         handlers::SessionEndpoint& parent,
         NetworkAddress remote,
-        service::SessionTag _t,
+        SessionTag _t,
         bool use_tun,
         bool is_exit,
         bool is_outbound)
@@ -36,7 +36,7 @@ namespace llarp::session
     bool BaseSession::send_path_control_message(
         std::string method, std::string body, std::function<void(oxen::quic::message)> func)
     {
-        return _current_path->send_path_control_message2(std::move(method), std::move(body), std::move(func));
+        return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
     }
 
     bool BaseSession::send_path_data_message(std::string data)
@@ -56,7 +56,7 @@ namespace llarp::session
 
         _current_path = std::move(_new_path);
 
-        _current_hop_id = _current_path->pivot_rxid();
+        _pivot_txid = _current_path->pivot_rxid();
 
         if (_use_tun)
             _current_path->link_session([this](bstring data) {
@@ -154,7 +154,7 @@ namespace llarp::session
         NetworkAddress remote,
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
-        service::SessionTag _t,
+        SessionTag _t,
         bool is_exit)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
@@ -183,10 +183,10 @@ namespace llarp::session
 
     OutboundSession::~OutboundSession() = default;
 
-    void OutboundSession::path_died(std::shared_ptr<path::Path> p)
+    void OutboundSession::path_died([[maybe_unused]] std::shared_ptr<path::Path> p)
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
-        p->rebuild();
+        // p->rebuild();
     }
 
     nlohmann::json OutboundSession::ExtractStatus() const
@@ -282,9 +282,7 @@ namespace llarp::session
             _remote);
 
         for (size_t i = 0; i < n; ++i)
-        {
             count += build_path_aligned_to_remote(_remote.router_id());
-        }
 
         if (count == n)
             log::debug(logcat, "OutboundSession successfully initiated {} path-builds", n);
@@ -311,7 +309,7 @@ namespace llarp::session
 
     bool OutboundSession::is_ready() const
     {
-        if (_current_hop_id.is_zero())
+        if (_pivot_txid.is_zero())
             return false;
 
         const size_t expect = (1 + (num_paths_desired / 2));
@@ -328,7 +326,7 @@ namespace llarp::session
         NetworkAddress remote,
         std::shared_ptr<path::Path> _path,
         handlers::SessionEndpoint& parent,
-        service::SessionTag _t,
+        SessionTag _t,
         bool use_tun)
         : BaseSession{
             parent._router,
@@ -345,7 +343,7 @@ namespace llarp::session
                 "NetworkAddress and Path do not agree on InboundSession remote's identity (client vs server)!"};
     }
 
-    void InboundSession::set_new_tag(const service::SessionTag& tag)
+    void InboundSession::set_new_tag(const SessionTag& tag)
     {
         _tag = tag;
     }

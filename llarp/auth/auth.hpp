@@ -86,7 +86,7 @@ namespace llarp
             const std::set<fs::path> _files;
             const AuthFileType _type;
             mutable util::Mutex _m;
-            std::unordered_set<service::SessionTag> _pending;
+            std::unordered_set<SessionTag> _pending;
             /// returns an auth result for a auth info challange, opens every file until it finds a
             /// token matching it this is expected to be done in the IO thread
             AuthResult check_files(const AuthInfo& info) const;
@@ -114,7 +114,7 @@ namespace llarp
 
             std::shared_ptr<oxenmq::OxenMQ> _omq;
             std::optional<oxenmq::ConnectionID> _omq_conn;
-            std::unordered_set<service::SessionTag> _pending_sessions;
+            std::unordered_set<SessionTag> _pending_sessions;
         };
     }  // namespace auth
 

@@ -67,8 +67,22 @@ namespace llarp::path
         Lock_t l(paths_mutex);
 
         _paths.insert_or_assign(p->upstream_rxid(), p);
+        // _paths.insert_or_assign(p->pivot_txid(), p);
 
         _router.path_context()->add_path(p);
+    }
+
+    void PathHandler::drop_path(const std::shared_ptr<Path>& p)
+    {
+        Lock_t l{paths_mutex};
+
+        if (auto itr = _paths.find(p->upstream_rxid()); itr != _paths.end())
+            _paths.erase(itr);
+
+        // if (auto itr = _paths.find(p->pivot_txid()); itr != _paths.end())
+        //     _paths.erase(itr);
+
+        _router.path_context()->drop_path(p);
     }
 
     std::optional<std::shared_ptr<Path>> PathHandler::get_random_path()
@@ -375,7 +389,9 @@ namespace llarp::path
         if (build_cooldown())
             return {};
 
-        return num_paths_desired - num_paths();
+        auto n_paths = num_paths();
+
+        return num_paths_desired >= n_paths ? num_paths_desired - n_paths : 0;
     }
 
     std::optional<std::vector<RemoteRC>> PathHandler::get_hops_to_random()
@@ -635,19 +651,9 @@ namespace llarp::path
         }
     }
 
-    void PathHandler::drop_path(const HopID& upstream_rxid)
-    {
-        Lock_t l{paths_mutex};
-
-        if (auto itr = _paths.find(upstream_rxid); itr != _paths.end())
-            _paths.erase(itr);
-
-        _router.path_context()->drop_path(upstream_rxid);
-    }
-
     void PathHandler::path_build_failed(std::shared_ptr<Path> p, bool timeout)
     {
-        drop_path(p->upstream_rxid());
+        drop_path(p);
 
         if (timeout)
         {
@@ -655,7 +661,7 @@ namespace llarp::path
             _build_stats.timeouts += 1;
         }
         else
-            _build_stats.build_fails -= 1;
+            _build_stats.build_fails += 1;
 
         path_build_backoff();
     }

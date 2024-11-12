@@ -919,7 +919,9 @@ namespace llarp
             }
         }
         else
+        {
             initial_client_connect_complete = true;
+        }
 
         if (initial_client_connect_complete)
             _session_endpoint->tick(now);

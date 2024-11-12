@@ -13,7 +13,8 @@ namespace llarp
     struct ClientIntro
     {
         RouterID pivot_rid;
-        HopID pivot_rxid;  // RXID at the pivot
+
+        HopID pivot_txid;  // TXID at the pivot
         std::chrono::milliseconds expiry{0s};
         uint64_t version{llarp::constants::proto_version};
 
@@ -35,16 +36,16 @@ namespace llarp
       public:
         auto operator<=>(const ClientIntro& other) const
         {
-            return std::tie(pivot_rid, pivot_rxid, expiry, version)
-                <=> std::tie(other.pivot_rid, other.pivot_rxid, other.expiry, other.version);
+            return std::tie(pivot_rid, pivot_txid, expiry, version)
+                <=> std::tie(other.pivot_rid, other.pivot_txid, other.expiry, other.version);
         }
 
         bool operator==(const ClientIntro& other) const { return (*this <=> other) == 0; }
 
         bool operator<(const ClientIntro& other) const
         {
-            return std::tie(pivot_rid, pivot_rxid, expiry, version)
-                < std::tie(other.pivot_rid, other.pivot_rxid, other.expiry, other.version);
+            return std::tie(pivot_rid, pivot_txid, expiry, version)
+                < std::tie(other.pivot_rid, other.pivot_txid, other.expiry, other.version);
         }
 
         std::string to_string() const;
@@ -68,7 +69,7 @@ namespace std
     {
         size_t operator()(const llarp::ClientIntro& i) const
         {
-            return std::hash<llarp::PubKey>{}(i.pivot_rid) ^ std::hash<llarp::HopID>{}(i.pivot_rxid);
+            return std::hash<llarp::PubKey>{}(i.pivot_rid) ^ std::hash<llarp::HopID>{}(i.pivot_txid);
         }
     };
 }  //  namespace std

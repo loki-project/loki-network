@@ -18,7 +18,7 @@ namespace llarp
     struct session_map
     {
       protected:
-        std::unordered_map<service::SessionTag, net_addr_t> _session_lookup;
+        std::unordered_map<SessionTag, net_addr_t> _session_lookup;
         std::unordered_map<net_addr_t, std::shared_ptr<session_t>> _sessions;
 
         using Lock_t = util::NullLock;
@@ -81,7 +81,7 @@ namespace llarp
             return {_2->second, b1 & b2};
         }
 
-        std::optional<net_addr_t> get_remote(const service::SessionTag& tag) const
+        std::optional<net_addr_t> get_remote(const SessionTag& tag) const
         {
             Lock_t l{session_mutex};
 
@@ -105,7 +105,7 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
+        std::shared_ptr<session_t> get_session(const SessionTag& tag) const
         {
             Lock_t l{session_mutex};
 
@@ -117,7 +117,7 @@ namespace llarp
             return ret;
         }
 
-        void unmap(const service::SessionTag& tag)
+        void unmap(const SessionTag& tag)
         {
             Lock_t l{session_mutex};
 
@@ -147,7 +147,7 @@ namespace llarp
             }
         }
 
-        bool have_session(const service::SessionTag& tag) const
+        bool have_session(const SessionTag& tag) const
         {
             Lock_t l{session_mutex};
 
@@ -164,7 +164,7 @@ namespace llarp
             return _sessions.count(local);
         }
 
-        std::shared_ptr<session_t> operator[](const service::SessionTag& tag) { return get_session(tag); }
+        std::shared_ptr<session_t> operator[](const SessionTag& tag) { return get_session(tag); }
 
         std::shared_ptr<session_t> operator[](const net_addr_t& local) { return get_session(local); }
     };

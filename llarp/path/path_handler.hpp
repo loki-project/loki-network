@@ -115,7 +115,7 @@ namespace llarp
             /// return true if we hit our soft limit for building paths too fast on a first hop
             bool build_cooldown_hit(RouterID edge) const;
 
-            void drop_path(const HopID& remote);
+            void drop_path(const std::shared_ptr<Path>& p);
 
             virtual void path_died(std::shared_ptr<Path> p);
 
@@ -154,12 +154,6 @@ namespace llarp
             std::optional<std::shared_ptr<Path>> get_path(HopID id) const;
 
             intro_set get_current_client_intros() const;
-
-            // service::intro_que_old get_recent_path_intros(
-            //     std::chrono::milliseconds stale_threshold = path::INTRO_STALE_THRESHOLD) const;
-
-            // std::optional<service::IntroductionSet_old> get_path_intros_conditional(
-            //     std::function<bool(const service::Introduction&)> filter) const;
 
             nlohmann::json ExtractStatus() const;
 

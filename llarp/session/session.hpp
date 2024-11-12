@@ -45,7 +45,7 @@ namespace llarp
             Router& _r;
             handlers::SessionEndpoint& _parent;
 
-            service::SessionTag _tag;
+            SessionTag _tag;
             NetworkAddress _remote;
 
             bool _use_tun;
@@ -54,7 +54,7 @@ namespace llarp
             const bool _is_exit_session{false};
 
             std::shared_ptr<path::Path> _current_path;
-            HopID _current_hop_id;
+            HopID _pivot_txid;
 
             // manually routed QUIC endpoint
             std::shared_ptr<oxen::quic::Endpoint> _ep;
@@ -76,7 +76,7 @@ namespace llarp
                 std::shared_ptr<path::Path> _p,
                 handlers::SessionEndpoint& parent,
                 NetworkAddress remote,
-                service::SessionTag _t,
+                SessionTag _t,
                 bool use_tun,
                 bool is_exit,
                 bool is_outbound);
@@ -104,9 +104,9 @@ namespace llarp
 
             bool using_tun() const { return _use_tun; }
 
-            service::SessionTag tag() { return _tag; }
+            SessionTag tag() { return _tag; }
 
-            const service::SessionTag& tag() const { return _tag; }
+            const SessionTag& tag() const { return _tag; }
 
             bool is_exit_session() const { return _is_exit_session; }
         };
@@ -120,7 +120,7 @@ namespace llarp
                 NetworkAddress _remote,
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
-                service::SessionTag _t,
+                SessionTag _t,
                 bool is_exit);
 
             ~OutboundSession() override;
@@ -163,12 +163,12 @@ namespace llarp
 
             const RouterID& remote_endpoint() const { return _remote.router_id(); }
 
-            std::optional<HopID> current_hop_id() const
+            std::optional<HopID> current_pivot_txid() const
             {
-                if (_current_hop_id.is_zero())
+                if (_pivot_txid.is_zero())
                     return std::nullopt;
 
-                return _current_hop_id;
+                return _pivot_txid;
             }
 
             bool is_expired(std::chrono::milliseconds now) const;
@@ -180,12 +180,12 @@ namespace llarp
                 NetworkAddress _remote,
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
-                service::SessionTag _t,
+                SessionTag _t,
                 bool use_tun);
 
             ~InboundSession() = default;
 
-            void set_new_tag(const service::SessionTag& tag);
+            void set_new_tag(const SessionTag& tag);
         };
     }  // namespace session
 

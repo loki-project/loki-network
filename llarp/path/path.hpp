@@ -42,6 +42,7 @@ namespace llarp
         struct Path : public std::enable_shared_from_this<Path>
         {
             friend struct PathHandler;
+            friend class handlers::SessionEndpoint;
             friend struct llarp::Profiling;
 
             Path(
@@ -52,7 +53,10 @@ namespace llarp
                 bool is_client = false);
 
           protected:
+            // hops on constructed path
             std::vector<TransitHop> hops;
+            // local hop info for onioned responses and session messages
+            // std::shared_ptr<TransitHop> _local_hop{};
             std::weak_ptr<PathHandler> handler;
             ClientIntro intro{};
 
@@ -85,19 +89,13 @@ namespace llarp
 
             bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
-            /// build a new path to the same pivot, but with different hops
-            void rebuild();
-
             void Tick(std::chrono::milliseconds now);
 
             bool resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func);
 
             bool find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func);
 
-            // bool publish_client_contact(
-            //     const EncryptedClientContact& ecc, std::function<void(std::string)> func = nullptr);
-
-            bool publish_client_contact2(
+            bool publish_client_contact(
                 const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
 
             bool close_exit(
@@ -118,9 +116,6 @@ namespace llarp
             /// func is called with a bt-encoded response string (if applicable), and
             /// a timeout flag (if set, response string will be empty)
             bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
-
-            bool send_path_control_message2(
                 std::string method, std::string body, std::function<void(oxen::quic::message)> func);
 
             bool send_path_data_message(std::string body);

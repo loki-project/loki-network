@@ -258,9 +258,11 @@ namespace llarp
         void handle_resolve_sns(oxen::quic::message);
 
         // Inner handlers for relayed requests
+        void _handle_path_control(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_publish_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_find_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_resolve_sns(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_initiate_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
@@ -285,12 +287,14 @@ namespace llarp
         // then respond (onioned) back along the path.
         std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message, std::optional<std::string>)>
             path_requests = {
+                {"path_control"sv, &LinkManager::_handle_path_control},
                 {"publish_cc"sv, &LinkManager::_handle_publish_cc},
                 {"find_cc"sv, &LinkManager::_handle_find_cc},
-                {"resolve_sns"sv, &LinkManager::_handle_resolve_sns}};
+                {"resolve_sns"sv, &LinkManager::_handle_resolve_sns},
+                {"session_init"sv, &LinkManager::_handle_initiate_session}};
 
         // Path relaying
-        void handle_path_control(oxen::quic::message, const RouterID& from);
+        void handle_path_control(oxen::quic::message);
 
         void handle_path_request(oxen::quic::message m, std::string payload);
 

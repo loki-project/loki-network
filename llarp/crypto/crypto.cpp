@@ -153,14 +153,9 @@ namespace llarp
         return crypto_generichash_blake2b(result.data(), ShortHash::SIZE, buf, size, nullptr, 0) != -1;
     }
 
-    bool crypto::hmac(uint8_t* result, uint8_t* buf, size_t size, const SharedSecret& secret)
+    bool crypto::hmac(uint8_t* result, const uint8_t* buf, size_t size, const SharedSecret& secret)
     {
-        return crypto_generichash_blake2b(result, HMACSIZE, buf, size, secret.data(), HMACSECSIZE) != -1;
-    }
-
-    static bool hash(uint8_t* result, const llarp_buffer_t& buff)
-    {
-        return crypto_generichash_blake2b(result, HASHSIZE, buff.base, buff.sz, nullptr, 0) != -1;
+        return crypto_generichash_blake2b(result, HMACSIZE, buf, size, secret.data(), SharedSecret::SIZE) != -1;
     }
 
     bool crypto::sign(Signature& sig, const Ed25519SecretKey& secret, uint8_t* buf, size_t size)

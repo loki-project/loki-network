@@ -87,7 +87,7 @@ namespace llarp
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
             template <concepts::SessionType session_t = session::BaseSession>
-            std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
+            std::shared_ptr<session_t> get_session(const SessionTag& tag) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(tag));
             }
@@ -122,7 +122,7 @@ namespace llarp
             bool validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth = std::nullopt);
 
             bool prefigure_session(
-                NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun);
+                NetworkAddress initiator, SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun);
 
             // lookup SNS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
             void resolve_ons(std::string name, std::function<void(std::optional<NetworkAddress>)> func = nullptr);
@@ -172,7 +172,11 @@ namespace llarp
             void _make_session_path(intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
             void _make_session(
-                NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);
+                NetworkAddress remote,
+                ClientIntro remote_intro,
+                std::shared_ptr<path::Path> path,
+                on_session_init_hook cb,
+                bool is_exit);
         };
 
     }  // namespace handlers

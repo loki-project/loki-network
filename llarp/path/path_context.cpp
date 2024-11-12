@@ -22,7 +22,10 @@ namespace llarp::path
 
     void PathContext::add_path(std::shared_ptr<Path> path)
     {
-        _r.loop()->call([&]() { _path_map.emplace(path->upstream_rxid(), path); });
+        _r.loop()->call([&]() {
+            _path_map.emplace(path->upstream_rxid(), path);
+            _path_map.emplace(path->pivot_txid(), path);
+        });
     }
 
     void PathContext::drop_paths(std::vector<HopID> droplist)
@@ -64,13 +67,16 @@ namespace llarp::path
 
     void PathContext::drop_path(const std::shared_ptr<Path>& path)
     {
-        _r.loop()->call([&]() { drop_path(path->upstream_rxid()); });
+        _r.loop()->call([&]() {
+            _drop_path(path->upstream_rxid());
+            _drop_path(path->pivot_txid());
+        });
     }
 
     std::tuple<size_t, size_t> PathContext::path_ctx_stats() const
     {
         return _r.loop()->call_get([&]() -> std::tuple<size_t, size_t> {
-            return {_path_map.size(), _transit_hops.size()};
+            return {_path_map.size() / 2, _transit_hops.size() / 2};
         });
     }
 

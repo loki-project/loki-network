@@ -3,7 +3,7 @@
 #include <llarp/net/net.hpp>
 #include <llarp/util/aligned.hpp>
 
-namespace llarp::service
+namespace llarp
 {
     struct SessionTag final : AlignedBuffer<16>
     {
@@ -13,14 +13,14 @@ namespace llarp::service
 
         void Randomize() override;
     };
-}  // namespace llarp::service
+}  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::service::SessionTag>
+    struct hash<llarp::SessionTag>
     {
-        size_t operator()(const llarp::service::SessionTag& tag) const
+        size_t operator()(const llarp::SessionTag& tag) const
         {
             std::hash<std::string_view> h{};
             return h(std::string_view{reinterpret_cast<const char*>(tag.data()), tag.size()});

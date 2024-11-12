@@ -387,7 +387,7 @@ namespace llarp::handlers
     }
 
     bool SessionEndpoint::prefigure_session(
-        NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun)
+        NetworkAddress initiator, SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun)
     {
         bool ret = true;
         assert(path->is_client_path());
@@ -442,12 +442,12 @@ namespace llarp::handlers
             for (const auto& [_, path] : _paths)
             {
                 // If path-build is underway, don't use it
-                if (not path)
+                if (not path or not path->is_ready())
                     continue;
 
                 log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
 
-                ret &= path->publish_client_contact2(ecc, [](oxen::quic::message m) {
+                ret &= path->publish_client_contact(ecc, [](oxen::quic::message m) {
                     if (m)
                     {
                         log::critical(logcat, "Call to PublishClientContact succeeded!");
@@ -487,52 +487,127 @@ namespace llarp::handlers
         return ret;
     }
 
-    void SessionEndpoint::_make_session(
-        NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit)
-    {
-        auto tag = service::SessionTag::make_random();
+    /**
 
-        // TESTNET: TODO: make this take a quic message type
+        - 'k' : next HopID
+        - 'n' : symmetric nonce
+        - 'x' : encrypted payload
+            PATH MESSAGE ONION LAYER ('outer payload')
+            - 'e' : request endpoint ('path_control')
+            - 'p' : request payload
+                - 'k' : next HopID
+                - 'n' : symmetric nonce
+                - 'x' : encrypted payload
+                    PIVOT RELAY LAYER ('intermediate payload')
+                    - 'e' : request endpoint ('path_control')
+                    - 'p' : request payload
+                        - 'k' : remote client intro pivot txid, (NOT rx)
+                        - 'n' : symmetric nonce
+                        - 'x' : encrypted payload
+                            REMOTE CLIENT LAYER ('inner payload')
+                            - 'e' : request endpoint ('session_init')
+                            - 'p' : request payload
+                                - 'k' : shared pubkey used to derive symmetric key
+                                - 'n' : symmetric nonce
+                                - 'x' : encrypted payload
+                                    - 'i' : RouterID of initiator
+                                    - 'p' : HopID at the pivot taken from remote ClientIntro
+                                    - 's' : SessionTag for current session
+                                    - 't' : Use Tun interface (bool)
+                                    - 'u' : Authentication field
+                                        - bt-encoded dict, values TBD
+     */
+
+    void SessionEndpoint::_make_session(
+        NetworkAddress remote,
+        ClientIntro remote_intro,
+        std::shared_ptr<path::Path> path,
+        on_session_init_hook cb,
+        bool is_exit)
+    {
+        auto tag = SessionTag::make_random();
+
+        // internal payload for remote client
+        auto client_payload = InitiateSession::serialize_encrypt(
+            _router.local_rid(),
+            remote.router_id(),
+            tag,
+            remote_intro.pivot_txid,
+            fetch_auth_token(remote),
+            _router.using_tun_if());
+
+        auto inner_payload = PATH::CONTROL::serialize("session_init", std::move(client_payload));
+
+        // add path-control wrapping for pivot to relay to aligned path
+        auto& pivot = path->hops.back();
+        auto onion_nonce = SymmNonce::make_random();
+        crypto::onion(
+            reinterpret_cast<unsigned char*>(inner_payload.data()),
+            inner_payload.size(),
+            pivot.shared,
+            onion_nonce,
+            onion_nonce);
+
+        auto pivot_payload = ONION::serialize_hop(remote_intro.pivot_txid.to_view(), onion_nonce, inner_payload);
+
+        auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(pivot_payload));
+
         path->send_path_control_message(
-            "session_init",
-            InitiateSession::serialize_encrypt(
-                _router.local_rid(),
-                remote.router_id(),
-                tag,
-                path->pivot_txid(),
-                fetch_auth_token(remote),
-                _router.using_tun_if()),
-            [this, remote, tag, path, hook = std::move(cb), is_exit](std::string response) mutable {
-                if (response == messages::OK_RESPONSE)
+            "path_control",
+            std::move(intermediate_payload),
+            [this, remote, tag, path, hook = std::move(cb), is_exit](oxen::quic::message m) mutable {
+                if (m)
                 {
+                    log::critical(logcat, "Call to InitiateSession succeeded!");
+
                     auto outbound = std::make_shared<session::OutboundSession>(
                         remote, *this, std::move(path), std::move(tag), is_exit);
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 
-                    auto msg = "SessionEndpoint successfully created and mapped InboundSession object!";
+                    log::info(logcat, "Outbound session to {} successfully created...", session->remote());
 
                     // TESTNET:
                     if (session->using_tun())
                     {
-                        log::info(logcat, "{} Instructing lokinet TUN device to create mapped route...", msg);
+                        log::info(logcat, "Instructing lokinet TUN device to create mapped route...");
                         if (auto maybe_ip = _router.tun_endpoint()->map_session_to_local_ip(session->remote()))
                         {
                             log::info(
                                 logcat, "TUN device successfully routing session to remote: {}", session->remote());
 
-                            hook(*maybe_ip);
+                            return hook(*maybe_ip);
                         }
-                        else
-                        {
-                            // TODO: if this fails, we should close the session
-                        }
+
+                        log::critical(
+                            logcat,
+                            "Lokinet TUN failed to map route for session traffic to remote: {}",
+                            session->remote());
+                        // TESTNET: TODO: CLOSE THIS BISH HERE
                     }
                     else
                     {
-                        log::info(logcat, "{} Starting TCP listener to route session traffic to backend...", msg);
+                        log::info(logcat, "Starting TCP listener to route session traffic to backend...");
                         session->tcp_backend_listen(std::move(hook));
                     }
+                }
+                else
+                {
+                    std::optional<std::string> status = std::nullopt;
+                    try
+                    {
+                        oxenc::bt_dict_consumer btdc{m.body()};
+
+                        if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                            status = s;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::warning(logcat, "Exception: {}", e.what());
+                    }
+
+                    log::critical(
+                        logcat, "Call to InitiateSession FAILED; reason: {}", status.value_or("<none given>"));
                 }
             });
     }
@@ -552,15 +627,16 @@ namespace llarp::handlers
         auto intro = intros.extract(intros.begin()).value();
         auto& pivot = intro.pivot_rid;
 
-        if (auto path = _router.path_context()->get_path(intro.pivot_rxid))
-        {
-            log::info(
-                logcat,
-                "Found path to pivot (rid: {}, rx_id: {}); initiating session!",
-                intro.pivot_rid,
-                intro.pivot_rxid);
-            return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
-        }
+        // TOTHINK: why would we ever have a path keyed to remote client intro pivot txid?
+        // if (auto path = _router.path_context()->get_path(intro.pivot_txid))
+        // {
+        //     log::info(
+        //         logcat,
+        //         "Found path to pivot (rid: {}, tx_id: {}); initiating session!",
+        //         intro.pivot_rid,
+        //         intro.pivot_txid);
+        //     return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
+        // }
 
         log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
 
@@ -580,17 +656,25 @@ namespace llarp::handlers
         log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         auto payload = build2(path);
+        auto upstream = path->upstream_rid();
 
         if (not build3(
-                path->upstream_rid(),
+                std::move(upstream),
                 std::move(payload),
-                [this, path, intros, remote, hook = std::move(cb), is_exit](oxen::quic::message m) mutable {
+                [this,
+                 path = std::move(path),
+                 remote_intro = std::move(intro),
+                 intros = std::move(intros),
+                 remote,
+                 hook = std::move(cb),
+                 is_exit](oxen::quic::message m) mutable {
                     if (m)
                     {
                         // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will
                         // take care of both path storage and logging in PathContext
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
-                        return _make_session(std::move(remote), std::move(path), std::move(hook), is_exit);
+                        return _make_session(
+                            std::move(remote), std::move(remote_intro), std::move(path), std::move(hook), is_exit);
                     }
 
                     try
@@ -618,7 +702,7 @@ namespace llarp::handlers
                     _make_session_path(std::move(intros), std::move(remote), std::move(hook), is_exit);
                 }))
         {
-            log::critical(logcat, "Error sending path_build control message for session initiation!");
+            log::critical(logcat, "Error sending `path_build` control message for session initiation!");
         }
     }
 
@@ -639,11 +723,11 @@ namespace llarp::handlers
                     if (cc)
                     {
                         *counter = 0;
-                        log::info(logcat, "Session initiation returned successful 'lookup_client_intro'...");
+                        log::info(logcat, "Session initiation returned successful 'find_cc'...");
                         _make_session_path(std::move(cc->intros), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)
-                        log::warning(logcat, "Failed to initiate session at 'lookup_client_intro' (target:{})", remote);
+                        log::warning(logcat, "Failed to initiate session at 'find_cc' (target:{})", remote);
                 });
         });
 

@@ -81,8 +81,4 @@ namespace llarp
         return identity_key.derive_private_subkey_data(domain);
     }
 
-    // void KeyManager::encrypt(uint8_t* buf, size_t size)
-    // {
-
-    // }
 }  // namespace llarp

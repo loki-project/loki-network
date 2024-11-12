@@ -80,7 +80,6 @@ namespace llarp
     };
 
     using ShortHash = AlignedBuffer<SHORTHASHSIZE>;
-    using LongHash = AlignedBuffer<HASHSIZE>;
 
     struct Signature final : public AlignedBuffer<SIGSIZE>
     {};
