@@ -186,6 +186,15 @@ namespace llarp
         bt_decode(oxenc::bt_dict_consumer{_bt_payload});
     }
 
+    std::string EncryptedClientContact::bt_encode()
+    {
+        oxenc::bt_dict_producer btdp;
+        bt_encode(btdp);
+        btdp.append("~", sig.to_view());
+        _bt_payload = std::move(btdp).str();
+        return _bt_payload;
+    }
+
     void EncryptedClientContact::bt_encode(oxenc::bt_dict_producer& btdp) const
     {
         btdp.append("i", blinded_pubkey.to_view());

@@ -79,9 +79,6 @@ namespace llarp::path
         if (auto itr = _paths.find(p->upstream_rxid()); itr != _paths.end())
             _paths.erase(itr);
 
-        // if (auto itr = _paths.find(p->pivot_txid()); itr != _paths.end())
-        //     _paths.erase(itr);
-
         _router.path_context()->drop_path(p);
     }
 

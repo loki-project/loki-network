@@ -173,7 +173,7 @@ namespace llarp
         friend struct dht::CCNode;
         friend struct ClientContact;
 
-        EncryptedClientContact() : nonce{SymmNonce::make_random()}, encrypted(ClientContact::MAX_CC_SIZE) {}
+        explicit EncryptedClientContact() : nonce{SymmNonce::make_random()}, encrypted(ClientContact::MAX_CC_SIZE) {}
 
         static EncryptedClientContact deserialize(std::string_view buf);
 
@@ -192,6 +192,8 @@ namespace llarp
         void bt_encode(oxenc::bt_dict_producer& btdp) const;
 
         void bt_decode(oxenc::bt_dict_consumer&& btdc);
+
+        std::string bt_encode();
 
       public:
         dht::Key_t key() const { return dht::Key_t{blinded_pubkey.data()}; }

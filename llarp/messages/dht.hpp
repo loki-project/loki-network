@@ -85,7 +85,7 @@ namespace llarp
 
             Note: we are bt-encoding to leave space for future fields (ex: version)
          */
-        inline static std::string serialize_response(const EncryptedClientContact& ecc)
+        inline static std::string serialize_response(EncryptedClientContact ecc)
         {
             oxenc::bt_dict_producer btdp;
 

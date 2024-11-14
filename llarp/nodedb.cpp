@@ -295,7 +295,7 @@ namespace llarp
 
             for (const auto& [rid, count] : rid_result_counters)
             {
-                log::info(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
+                log::trace(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
                 if (count >= MIN_RID_FETCH_FREQ)
                     union_set.insert(rid);
                 else

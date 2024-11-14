@@ -161,11 +161,11 @@ namespace llarp
         void handle_path_data_message(bstring dgram);
 
         std::shared_ptr<oxen::quic::BTRequestStream> make_control(
-            oxen::quic::connection_interface& ci, const RouterID& rid);
+            const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& rid);
 
-        void on_inbound_conn(oxen::quic::connection_interface& ci);
+        void on_inbound_conn(std::shared_ptr<oxen::quic::connection_interface> ci);
 
-        void on_outbound_conn(oxen::quic::connection_interface& ci);
+        void on_outbound_conn(RouterID id);
 
         void on_conn_open(oxen::quic::connection_interface& ci);
 

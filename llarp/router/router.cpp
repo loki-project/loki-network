@@ -246,7 +246,7 @@ namespace llarp
 
     std::set<RouterID> Router::get_current_remotes() const
     {
-        return _loop->call_get([this]() { return _link_manager->get_current_remotes(); });
+        return _link_manager->get_current_remotes();
     }
 
     void Router::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)

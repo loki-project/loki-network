@@ -22,8 +22,6 @@ namespace llarp::handlers
         return _router.loop();
     }
 
-    // static std::atomic<bool> testnet_trigger = false;
-
     void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -32,18 +30,6 @@ namespace llarp::handlers
         _sessions.tick_outbounds(now);
 
         path::PathHandler::tick(now);
-
-        // if (not testnet_trigger)
-        // {
-        //     testnet_trigger = true;
-        //     if (auto rclient =
-        //             NetworkAddress::from_network_addr("4odrxxn5rekt99yb5jqksb3gncpb91s1ue56kpx58p3doen5cxey.loki"sv))
-        //     {
-        //         initiate_remote_exit_session(*rclient, [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
-        //     }
-        //     else
-        //         log::critical(logcat, "Failed to parse client netaddr!");
-        // }
     }
 
     bool SessionEndpoint::stop(bool send_close)
@@ -286,7 +272,7 @@ namespace llarp::handlers
             return func(std::move(maybe_intro));
         }
 
-        log::info(logcat, "Looking up clientcontact for remote (rid:{})", remote);
+        log::info(logcat, "Looking up clientcontact for remote (rid:{})", remote.to_network_address(false));
 
         auto response_handler = [this, remote, hook = std::move(func)](oxen::quic::message m) mutable {
             try
@@ -331,6 +317,9 @@ namespace llarp::handlers
 
             for (const auto& [_, path] : _paths)
             {
+                if (not path or not path->is_ready())
+                    continue;
+
                 log::debug(
                     logcat,
                     "Querying pivot (rid:{}) for clientcontact lookup target (rid:{})",
@@ -448,7 +437,7 @@ namespace llarp::handlers
     {
         bool ret{true};
 
-        log::critical(logcat, "Publishing new EncryptedClientContact: {}", buffer_printer{ecc.bt_payload()});
+        log::critical(logcat, "Publishing new EncryptedClientContact: {}", ecc.bt_payload());
 
         {
             Lock_t l{paths_mutex};
@@ -737,7 +726,7 @@ namespace llarp::handlers
                     if (cc)
                     {
                         *counter = 0;
-                        log::info(logcat, "Session initiation returned successful 'find_cc'...");
+                        log::info(logcat, "Session initiation returned client contact: {}", cc->to_string());
                         _make_session_path(std::move(cc->intros), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)

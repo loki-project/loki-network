@@ -82,26 +82,24 @@ namespace llarp::path
 
     bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop) const
     {
-        return _r.loop()->call_get(
-            [&]() { return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid()); });
+        assert(_r.loop()->in_event_loop());
+        return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid());
     }
 
     void PathContext::put_transit_hop(std::shared_ptr<TransitHop> hop)
     {
-        _r.loop()->call([&]() {
-            _transit_hops.emplace(hop->rxid(), hop);
-            _transit_hops.emplace(hop->txid(), hop);
-        });
+        assert(_r.loop()->in_event_loop());
+        _transit_hops.emplace(hop->rxid(), hop);
+        _transit_hops.emplace(hop->txid(), hop);
     }
 
     std::shared_ptr<TransitHop> PathContext::get_transit_hop(const HopID& path_id) const
     {
-        return _r.loop()->call_get([&]() -> std::shared_ptr<TransitHop> {
-            if (auto itr = _transit_hops.find(path_id); itr != _transit_hops.end())
-                return itr->second;
+        assert(_r.loop()->in_event_loop());
+        if (auto itr = _transit_hops.find(path_id); itr != _transit_hops.end())
+            return itr->second;
 
-            return nullptr;
-        });
+        return nullptr;
     }
 
     void PathContext::_drop_path(const HopID& hop_id)

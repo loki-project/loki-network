@@ -413,9 +413,9 @@ namespace llarp
     }
 
     std::shared_ptr<oxen::quic::BTRequestStream> LinkManager::make_control(
-        oxen::quic::connection_interface& ci, const RouterID& remote)
+        const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& remote)
     {
-        auto control_stream = ci.template queue_incoming_stream<oxen::quic::BTRequestStream>(
+        auto control_stream = ci->template queue_incoming_stream<oxen::quic::BTRequestStream>(
             [](oxen::quic::Stream&, uint64_t error_code) {
                 log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
             });
@@ -427,10 +427,10 @@ namespace llarp
         return control_stream;
     }
 
-    void LinkManager::on_inbound_conn(oxen::quic::connection_interface& ci)
+    void LinkManager::on_inbound_conn(std::shared_ptr<oxen::quic::connection_interface> ci)
     {
         assert(_is_service_node);
-        RouterID rid{ci.remote_key()};
+        RouterID rid{ci->remote_key()};
 
         auto control = make_control(ci, rid);
         bool is_client_conn = false;
@@ -438,13 +438,13 @@ namespace llarp
         if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
         {
             log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
-            it->second = std::make_shared<link::Connection>(ci.shared_from_this(), std::move(control), false, true);
+            it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
         }
         else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
         {
             is_client_conn = true;
             log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
-            it->second = std::make_shared<link::Connection>(ci.shared_from_this(), std::move(control), false, true);
+            it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
         }
 
         log::critical(
@@ -454,9 +454,8 @@ namespace llarp
             rid.to_network_address(!is_client_conn));
     }
 
-    void LinkManager::on_outbound_conn(oxen::quic::connection_interface& ci)
+    void LinkManager::on_outbound_conn(RouterID rid)
     {
-        RouterID rid{ci.remote_key()};
         log::trace(logcat, "Outbound connection to {}", rid);
 
         if (auto conn = ep->get_service_conn(rid))
@@ -475,12 +474,24 @@ namespace llarp
             rid);
     }
 
-    void LinkManager::on_conn_open(oxen::quic::connection_interface& ci)
+    void LinkManager::on_conn_open(oxen::quic::connection_interface& _ci)
     {
-        if (ci.is_inbound())
-            on_inbound_conn(ci);
-        else
-            on_outbound_conn(ci);
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        _router.loop()->call([this, wci = _ci.weak_from_this()]() {
+            auto ci = wci.lock();
+
+            if (not ci)
+            {
+                log::warning(logcat, "Connection died before connection open callback execution!");
+                return;
+            }
+
+            if (ci->is_inbound())
+                on_inbound_conn(std::move(ci));
+            else
+                on_outbound_conn(RouterID{ci->remote_key()});
+        });
     }
 
     void LinkManager::on_conn_closed(oxen::quic::connection_interface& ci, uint64_t ec)
@@ -1171,7 +1182,14 @@ namespace llarp
         if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
         {
             log::info(logcat, "Received FindClientContact request; returning local EncryptedClientContact...");
-            return m.respond(FindClientContact::serialize_response(*maybe_cc));
+            return m.respond(FindClientContact::serialize_response(std::move(*maybe_cc)));
+        }
+        // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
+        // allow it to continue propagating
+        if (not inner_body)
+        {
+            log::critical(logcat, "Received relayed FindClientContact request; could not find locally, relaying error...");
+            return m.respond(FindClientContact::NOT_FOUND, true);
         }
 
         auto closest_peer = _router.node_db()->find_closest_to(dht_key).router_id();
@@ -1185,7 +1203,7 @@ namespace llarp
             return m.respond(FindClientContact::NOT_FOUND, true);
         }
 
-        log::debug(logcat, "Relaying FindClientContactMessage for {}", dht_key);
+        log::debug(logcat, "Relaying FindClientContactMessage for {} to {}", dht_key, closest_peer);
 
         send_control_message(
             closest_peer,
@@ -1195,7 +1213,7 @@ namespace llarp
                 log::info(
                     logcat,
                     "Relayed FindClientContactMessage {}! Relaying response...",
-                    msg                 ? "succeeded"
+                    msg                 ? "SUCCEEDED"
                         : msg.timed_out ? "timed out"
                                         : "failed");
                 log::info(logcat, "Relayed FindClientContactMessage response: {}", buffer_printer{msg.body()});
