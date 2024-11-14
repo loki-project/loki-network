@@ -413,16 +413,40 @@ namespace llarp::path
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        const auto& path_config = _router.config()->paths;
+        assert(num_hops);
+
+        auto hops_needed = num_hops;
+
+        std::vector<RemoteRC> hops{};
+        RemoteRC pivot_rc{};
+
+        if (auto maybe = _router.node_db()->get_rc(pivot))
+        {
+            // if we only need one hop, return
+            if (hops_needed == 1)
+            {
+                hops.emplace_back(std::move(*maybe));
+                return hops;
+            }
+
+            // leave space to add the pivot last
+            --hops_needed;
+            pivot_rc = *maybe;
+        }
+        else
+            return std::nullopt;
+
+        auto netmask = _router.config()->paths.unique_hop_netmask;
 
         // make a copy here to reference rather than creating one in the lambda every iteration
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
         to_exclude.insert(pivot);
 
-        std::vector<RemoteRC> hops;
-
-        if (auto maybe = select_first_hop(exclude))
+        if (auto maybe = select_first_hop(to_exclude))
+        {
             hops.push_back(*maybe);
+            --hops_needed;
+        }
         else
         {
             log::warning(logcat, "No first hop candidate for aligned hops!");
@@ -431,46 +455,45 @@ namespace llarp::path
 
         to_exclude.insert(hops.back().router_id());
 
-        RemoteRC pivot_rc;
-
-        if (auto maybe = _router.node_db()->get_rc(pivot))
-        {
-            pivot_rc = *maybe;
-        }
-        else
-            return std::nullopt;
-
-        // leave one extra spot for the terminal node
-        auto hops_needed = num_hops - hops.size() - 1;
-
-        auto filter = [&r = _router, &to_exclude](const RemoteRC& rc) -> bool {
+        auto filter = [&](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
 
             // if its already excluded, fail; (we want it added even on success)
             if (not to_exclude.insert(rid).second)
                 return false;
 
-            if (r.router_profiling().is_bad_for_path(rid, 1))
+            if (_router.router_profiling().is_bad_for_path(rid, 1))
                 return false;
 
-            return true;
+            if (pivot_rc.has_ip_overlap(rc, netmask))
+                return false;
+
+            return not std::any_of(hops.begin(), hops.end(), [&](const RemoteRC& other) -> bool {
+                return other.has_ip_overlap(rc, netmask);
+            });
         };
 
-        if (auto maybe_rcs = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter, true))
+        while (hops_needed)
         {
-            auto& rcs = *maybe_rcs;
-            hops.insert(hops.end(), rcs.begin(), rcs.end());
-            hops.emplace_back(pivot_rc);
-
-#ifndef TESTNET
-            if (not path_config.check_rcs({hops.begin(), hops.end()}))
+            // do this 1 at a time so we can check for IP range overlap
+            if (auto maybe_rc = _router.node_db()->get_random_rc_conditional(filter))
+            {
+                hops.emplace_back(std::move(*maybe_rc));
+            }
+            else
+            {
+                log::warning(
+                    logcat, "Failed to find RC for aligned path! (needed:{}, found:{})", num_hops, hops_needed);
                 return std::nullopt;
-#endif
+            }
 
-            return hops;
+            --hops_needed;
         }
 
-        return std::nullopt;
+        // add pivot rc last
+        hops.emplace_back(std::move(pivot_rc));
+
+        return hops;
     }
 
     bool PathHandler::build_path_to_random()

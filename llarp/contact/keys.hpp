@@ -7,7 +7,6 @@
 
 /** TODO:
     - re-configure string_view and ustring_view methods after deprecating RouterID
-
 */
 
 namespace llarp

@@ -19,7 +19,7 @@ namespace llarp::thread
     {
         // This class provides a thread-safe, lock-free, fixed-size queue.
       public:
-        static constexpr size_t Alignment = 64;
+        static constexpr size_t Alignment{64};
 
       private:
         Type* m_data;

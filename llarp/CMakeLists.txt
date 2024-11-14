@@ -212,18 +212,16 @@ lokinet_add_library(lokinet-path
   path/transit_hop.cpp
 )
 
+#target_link_libraries(lokinet-core PUBLIC lokinet-core-utils)
+#target_link_libraries(lokinet-core-utils PUBLIC lokinet-dns)
+#target_link_libraries(lokinet-dns PUBLIC lokinet-dns-platform)
+#target_link_libraries(lokinet-dns PUBLIC lokinet-utils lokinet-cryptography lokinet-config lokinet-dns-platform)
+
 # Link libraries to their internals
-target_link_libraries(lokinet-core-utils PUBLIC lokinet-dns)
-target_link_libraries(lokinet-core PUBLIC lokinet-core-utils)
-
-# Link lokinet-dns to alternate libraries
-target_link_libraries(lokinet-dns PUBLIC lokinet-dns-platform)
-
 target_link_libraries(lokinet-wire PUBLIC lokinet-addressing)
-target_link_libraries(lokinet-dns PUBLIC lokinet-utils lokinet-cryptography lokinet-config)
 target_link_libraries(lokinet-nodedb PUBLIC lokinet-addressing lokinet-cryptography)
 target_link_libraries(lokinet-platform PUBLIC lokinet-cryptography)
-target_link_libraries(lokinet-rpc PUBLIC lokinet-wire)
+target_link_libraries(lokinet-rpc PUBLIC lokinet-wire lokinet-contact)
 target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography lokinet-contact)
 target_link_libraries(lokinet-wire PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-config PUBLIC lokinet-cryptography)
@@ -231,6 +229,9 @@ target_link_libraries(lokinet-config PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-dns
   PUBLIC
   lokinet-addressing
+  lokinet-cryptography 
+  lokinet-config 
+  lokinet-dns-platform
 )
 
 target_link_libraries(lokinet-path
@@ -240,6 +241,7 @@ target_link_libraries(lokinet-path
 
 target_link_libraries(lokinet-core-utils 
   PUBLIC 
+  lokinet-dns
   lokinet-config
   lokinet-platform
   lokinet-rpc 
@@ -259,6 +261,7 @@ target_link_libraries(lokinet-utils
 # cross linkage
 target_link_libraries(lokinet-core 
   PUBLIC 
+  lokinet-core-utils
   lokinet-cryptography
   lokinet-nodedb
   lokinet-path

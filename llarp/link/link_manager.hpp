@@ -11,7 +11,6 @@
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/logging.hpp>
-#include <llarp/util/priority_queue.hpp>
 
 #include <oxen/quic.hpp>
 #include <oxen/quic/format.hpp>

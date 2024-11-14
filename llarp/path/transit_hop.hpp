@@ -5,7 +5,6 @@
 #include <llarp/constants/path.hpp>
 #include <llarp/contact/router_id.hpp>
 #include <llarp/util/compare_ptr.hpp>
-#include <llarp/util/thread/queue.hpp>
 
 namespace llarp
 {

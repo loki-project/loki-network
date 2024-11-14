@@ -164,8 +164,6 @@ namespace llarp
 
             void populate_internals(const std::vector<RemoteRC>& _hops);
 
-            bool SendLatencyMessage(Router* r);
-
             /// call obtained exit hooks
             bool InformExitResult(std::chrono::milliseconds b);
 

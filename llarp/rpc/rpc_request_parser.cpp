@@ -38,6 +38,11 @@ namespace llarp::rpc
             quiclistener.request.srvProto);
     }
 
+    void parse_request(FindCC& findcc, rpc_input input)
+    {
+        get_values(input, "pk", findcc.request.pk);
+    }
+
     void parse_request(LookupSnode& lookupsnode, rpc_input input)
     {
         get_values(input, "routerID", lookupsnode.request.routerID);

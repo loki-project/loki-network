@@ -67,7 +67,6 @@ namespace llarp
             {"running", true}, {"numNodesKnown", _node_db->num_rcs()}, {"links", _link_manager->extract_status()}};
     }
 
-    // TODO: investigate changes needed for libquic integration
     nlohmann::json Router::ExtractSummaryStatus() const
     {
         // if (!is_running)
@@ -634,10 +633,11 @@ namespace llarp
 
             init_rpc();
 
+            log::trace(logcat, "Starting OMQ server");
+            _lmq->start();
+
             if (_is_service_node)
             {
-                log::trace(logcat, "Starting OMQ server");
-                _lmq->start();
                 log::trace(logcat, "RPC client connecting to RPC bind address");
                 _rpc_client->connect_async(rpc_addr);
             }
@@ -762,10 +762,10 @@ namespace llarp
         queue_disk_io([&]() { relay_contact.write(our_rc_file); });
     }
 
-    bool Router::is_bootstrap_node(const RouterID r) const
-    {
-        return _node_db->is_bootstrap_node(r);
-    }
+    // bool Router::is_bootstrap_node(const RouterID r) const
+    // {
+    //     return _node_db->is_bootstrap_node(r);
+    // }
 
     bool Router::should_report_stats(std::chrono::milliseconds now) const
     {
@@ -794,7 +794,7 @@ namespace llarp
         }
 
         if (_last_stats_report > 0s)
-            log::info(logcat, "Last reported stats time {}", now - _last_stats_report);
+            log::trace(logcat, "Last reported stats time {}", now - _last_stats_report);
 
         _last_stats_report = now;
 
@@ -919,9 +919,7 @@ namespace llarp
             }
         }
         else
-        {
             initial_client_connect_complete = true;
-        }
 
         if (initial_client_connect_complete)
             _session_endpoint->tick(now);

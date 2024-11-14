@@ -122,17 +122,6 @@ namespace llarp
             {"identity", _router_id.to_string()},
             {"address", _addr.to_string()}};
 
-        // if (routerVersion)
-        // {
-        //   obj["routerVersion"] = routerVersion->to_string();
-        // }
-        // std::vector<nlohmann::json> srv;
-        // for (const auto& record : srvRecords)
-        // {
-        //   srv.emplace_back(record.ExtractStatus());
-        // }
-        // obj["srvRecords"] = srv;
-
         return obj;
     }
 
@@ -142,6 +131,11 @@ namespace llarp
             return false;
 
         return _addr.is_addressable();
+    }
+
+    bool RelayContact::has_ip_overlap(const RelayContact& other, uint8_t netmask) const
+    {
+        return (_addr.to_ipv4() / netmask).contains(other._addr.to_ipv4());
     }
 
     bool RelayContact::is_outdated(std::chrono::milliseconds now) const

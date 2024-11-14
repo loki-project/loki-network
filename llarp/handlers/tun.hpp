@@ -4,7 +4,6 @@
 #include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/util/priority_queue.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
 #include <llarp/vpn/platform.hpp>

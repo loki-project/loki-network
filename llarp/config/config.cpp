@@ -1544,7 +1544,8 @@ namespace llarp
     {
         (void)params;
 
-        constexpr Default DefaultUniqueCIDR{32};
+        constexpr Default DefaultUniqueCIDR{24};
+
         conf.define_option<int>(
             "paths",
             "unique-range-size",

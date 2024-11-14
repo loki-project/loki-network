@@ -144,8 +144,6 @@ namespace llarp
             return false;
         }
 
-        // TODO: make this its own ticker
-        // purge_rcs(now);
         return true;
     }
 
@@ -153,7 +151,7 @@ namespace llarp
     {
         remove_if([&](const RemoteRC& rc) -> bool {
             // don't purge bootstrap nodes from nodedb
-            if (is_bootstrap_node(rc.router_id()))
+            if (is_bootstrap_node(rc))
             {
                 log::trace(logcat, "Not removing {}: is bootstrap node", rc.router_id());
                 return false;
@@ -189,6 +187,7 @@ namespace llarp
                 log::debug(logcat, "Skipping check on {}: don't have whitelist yet", rc.router_id());
                 return false;
             }
+
             // if we have no whitelist enabled or we have
             // the whitelist enabled and we got the whitelist
             // check against the whitelist and remove if it's not
@@ -198,6 +197,7 @@ namespace llarp
                 log::debug(logcat, "Removing {}: not a valid router", rc.router_id());
                 return true;
             }
+
             return false;
         });
 
@@ -429,7 +429,7 @@ namespace llarp
 
             if (process_fetched_rcs(*result))
             {
-                log::info(logcat, "Accumulated RID's accepted by trust model");
+                log::info(logcat, "Accumulated RC's accepted by trust model");
                 return stop_rc_fetch(true);
             }
 
@@ -565,9 +565,9 @@ namespace llarp
         reselect_router_id_sources(fail_sources);
     }
 
-    bool NodeDB::is_bootstrap_node(RouterID rid) const
+    bool NodeDB::is_bootstrap_node(const RemoteRC& rc) const
     {
-        return has_bootstraps() ? _bootstraps.contains(rid) : false;
+        return has_bootstraps() ? _bootstraps.contains(rc) : false;
     }
 
     void NodeDB::start_tickers()
@@ -580,7 +580,7 @@ namespace llarp
         });
 
         _purge_ticker = _router.loop()->call_every(
-            5min, [this]() { purge_rcs(); }, not _needs_bootstrap);
+            PURGE_INTERVAL, [this]() mutable { purge_rcs(); }, not _needs_bootstrap);
 
         if (not _is_service_node)
         {

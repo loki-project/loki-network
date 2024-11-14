@@ -23,6 +23,8 @@ namespace llarp
     // TESTNET: the following constants have been shortened for testing purposes
 
     inline constexpr auto FETCH_INTERVAL{10min};
+    inline constexpr auto PURGE_INTERVAL{5min};
+    inline constexpr auto FLUSH_INTERVAL{15min};
 
     /*  RC Fetch Constants  */
     // fallback to bootstrap if we have less than this many RCs
@@ -62,9 +64,6 @@ namespace llarp
     // threshold amount of verifications to promote an unconfirmed rc/rid
     inline constexpr int CONFIRMATION_THRESHOLD{3};
 
-    inline constexpr auto PURGE_INTERVAL{1min};
-    inline constexpr auto FLUSH_INTERVAL{15min};
-
     template <
         typename ID_t,
         std::enable_if_t<std::is_same_v<ID_t, RouterID> || std::is_same_v<ID_t, RemoteRC>, int> = 0>
@@ -93,11 +92,8 @@ namespace llarp
 
         Router& _router;
         const fs::path _root;
-        // const std::function<void(std::function<void()>)> _disk_hook;
 
         bool _is_service_node{false};
-
-        std::chrono::milliseconds _next_flush_time{};
 
         /******** RouterID/RelayContacts ********/
 
@@ -198,8 +194,7 @@ namespace llarp
             return std::make_shared<NodeDB>(std::move(rootdir), r);
         }
 
-        explicit NodeDB(fs::path rootdir, Router* r)
-            : _router{*r}, _root{std::move(rootdir)}, _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
+        explicit NodeDB(fs::path rootdir, Router* r) : _router{*r}, _root{std::move(rootdir)}
         {
             _ensure_skiplist(_root);
             rid_result_counters.clear();
@@ -242,7 +237,7 @@ namespace llarp
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }
         bool bootstrap_completed() const { return not(_is_bootstrapping or _needs_bootstrap); }
-        bool is_bootstrap_node(RouterID rid) const;
+        bool is_bootstrap_node(const RemoteRC& rc) const;
         void purge_rcs(std::chrono::milliseconds now = llarp::time_now_ms());
 
         //  Bootstrap fallback fetching

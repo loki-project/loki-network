@@ -125,6 +125,8 @@ namespace llarp
 
         bool is_public_addressable() const;
 
+        bool has_ip_overlap(const RelayContact& other, uint8_t netmask) const;
+
         /// does this RC expire soon? default delta is 1 minute
         bool expires_within_delta(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 1min) const;
 

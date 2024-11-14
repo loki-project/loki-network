@@ -22,6 +22,8 @@ namespace llarp::handlers
         return _router.loop();
     }
 
+    // static std::atomic<bool> testnet_trigger = false;
+
     void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -30,6 +32,18 @@ namespace llarp::handlers
         _sessions.tick_outbounds(now);
 
         path::PathHandler::tick(now);
+
+        // if (not testnet_trigger)
+        // {
+        //     testnet_trigger = true;
+        //     if (auto rclient =
+        //             NetworkAddress::from_network_addr("4odrxxn5rekt99yb5jqksb3gncpb91s1ue56kpx58p3doen5cxey.loki"sv))
+        //     {
+        //         initiate_remote_exit_session(*rclient, [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
+        //     }
+        //     else
+        //         log::critical(logcat, "Failed to parse client netaddr!");
+        // }
     }
 
     bool SessionEndpoint::stop(bool send_close)

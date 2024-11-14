@@ -92,6 +92,7 @@ namespace llarp::rpc
         void invoke(QuicConnect& quicconnect);
         void invoke(QuicListener& quiclistener);
         void invoke(LookupSnode& lookupsnode);
+        void invoke(FindCC& findcc);
         void invoke(MapExit& mapexit);
         void invoke(ListExits& listexits);
         void invoke(UnmapExit& unmapexit);
@@ -100,7 +101,7 @@ namespace llarp::rpc
         void invoke(Config& config);
 
         LMQ_ptr m_LMQ;
-        Router& m_Router;
+        Router& _router;
         oxen::log::PubsubLogger log_subs;
     };
 

@@ -5,9 +5,11 @@
 #include <llarp/config/config.hpp>
 #include <llarp/config/ini.hpp>
 #include <llarp/constants/version.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/dns/server.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>
+#include <llarp/util/logging/buffer.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -71,7 +73,7 @@ namespace llarp::rpc
     }
 
     RPCServer::RPCServer(LMQ_ptr lmq, Router& r)
-        : m_LMQ{std::move(lmq)}, m_Router(r), log_subs{*m_LMQ, llarp::logRingBuffer}
+        : m_LMQ{std::move(lmq)}, _router(r), log_subs{*m_LMQ, llarp::logRingBuffer}
     {
         // copied logic loop as placeholder
         for (const auto& addr : r.config()->api.rpc_bind_addrs)
@@ -113,31 +115,31 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Halt& halt)
     {
-        if (not m_Router.is_running())
+        if (not _router.is_running())
         {
             SetJSONError("Router is not running", halt.response);
             return;
         }
         SetJSONResponse("OK", halt.response);
-        m_Router.stop();
+        _router.stop();
     }
 
     void RPCServer::invoke(Version& version)
     {
-        nlohmann::json result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
+        nlohmann::json result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(_router.Uptime())}};
 
         SetJSONResponse(result, version.response);
     }
 
     void RPCServer::invoke(Status& status)
     {
-        (m_Router.is_running()) ? SetJSONResponse(m_Router.ExtractStatus(), status.response)
-                                : SetJSONError("Router is not yet ready", status.response);
+        (_router.is_running()) ? SetJSONResponse(_router.ExtractStatus(), status.response)
+                               : SetJSONError("Router is not yet ready", status.response);
     }
 
     void RPCServer::invoke(GetStatus& getstatus)
     {
-        SetJSONResponse(m_Router.ExtractSummaryStatus(), getstatus.response);
+        SetJSONResponse(_router.ExtractSummaryStatus(), getstatus.response);
     }
 
     void RPCServer::invoke(QuicConnect& quicconnect)
@@ -157,7 +159,7 @@ namespace llarp::rpc
         }
 
         // auto endpoint =
-        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     (req.endpoint.empty()) ? GetEndpointByName(_router, "default") : GetEndpointByName(_router,
         //     req.endpoint);
 
         // if (not endpoint)
@@ -213,7 +215,7 @@ namespace llarp::rpc
         }
 
         // auto endpoint =
-        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     (req.endpoint.empty()) ? GetEndpointByName(_router, "default") : GetEndpointByName(_router,
         //     req.endpoint);
 
         // if (not endpoint)
@@ -270,10 +272,49 @@ namespace llarp::rpc
         }
     }
 
+    void RPCServer::invoke(FindCC& findcc)
+    {
+        if (_router.is_service_node())
+        {
+            SetJSONError("Not supported", findcc.response);
+            return;
+        }
+
+        RouterID pk;
+
+        if (findcc.request.pk.empty())
+        {
+            SetJSONError("No pubkey provided!", findcc.response);
+            return;
+        }
+
+        if (not pk.from_string(oxenc::from_base32z(findcc.request.pk)))
+        {
+            SetJSONError("Invalid pubkey provided: " + findcc.request.pk, findcc.response);
+            return;
+        }
+
+        _router.loop()->call([&]() {
+            _router.session_endpoint()->lookup_client_intro(pk, [&](std::optional<llarp::ClientContact> cc) {
+                if (cc)
+                {
+                    auto cc_str = "{}"_format(*cc);
+                    log::info(logcat, "RPC call to `find_cc` returned successfully: {}", cc_str);
+                    SetJSONResponse(cc_str, findcc.response);
+                }
+                else
+                {
+                    log::warning(logcat, "RPC call to `find_cc` failed!");
+                    SetJSONError("ERROR", findcc.response);
+                }
+            });
+        });
+    }
+
     // TODO: fix this because it's bad
     void RPCServer::invoke(LookupSnode& lookupsnode)
     {
-        if (not m_Router.is_service_node())
+        if (not _router.is_service_node())
         {
             SetJSONError("Not supported", lookupsnode.response);
             return;
@@ -292,8 +333,8 @@ namespace llarp::rpc
             return;
         }
 
-        // m_Router.loop()->call([&]() {
-        //   auto endpoint = m_Router.exit_context().get_exit_endpoint("default");
+        // _router.loop()->call([&]() {
+        //   auto endpoint = _router.exit_context().get_exit_endpoint("default");
 
         //   if (endpoint == nullptr)
         //   {
@@ -323,7 +364,7 @@ namespace llarp::rpc
         exit_request.replier.emplace(mapexit.move());
 
         // TODO: connect this to remote service session management (service::Handler)
-        // m_Router.hidden_service_context().GetDefault()->map_exit(
+        // _router.hidden_service_context().GetDefault()->map_exit(
         //     mapexit.request.address,
         //     mapexit.request.token,
         //     mapexit.request.ip_range,
@@ -338,13 +379,13 @@ namespace llarp::rpc
     void RPCServer::invoke(ListExits& listexits)
     {
         (void)listexits;
-        // if (not m_Router.hidden_service_context().hasEndpoints())
+        // if (not _router.hidden_service_context().hasEndpoints())
         // {
         //   SetJSONError("No mapped endpoints found", listexits.response);
         //   return;
         // }
 
-        // auto status = m_Router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
+        // auto status = _router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
 
         // SetJSONResponse((status.empty()) ? "No exits" : status, listexits.response);
     }
@@ -354,7 +395,7 @@ namespace llarp::rpc
         try
         {
             // for (auto& ip : unmapexit.request.ip_range)
-            //   m_Router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
+            //   _router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
         }
         catch (std::exception& e)
         {
@@ -375,7 +416,7 @@ namespace llarp::rpc
         (void)swapexits;
         // MapExit map_request;
         // UnmapExit unmap_request;
-        // auto endpoint = m_Router.hidden_service_context().GetDefault();
+        // auto endpoint = _router.hidden_service_context().GetDefault();
         // auto current_exits = endpoint->ExtractStatus()["exitMap"];
 
         // if (current_exits.empty())
@@ -452,8 +493,8 @@ namespace llarp::rpc
 
         dns::Message msg{dns::Question{qname, qtype}};
 
-        // auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(m_Router, "default")
-        //                                                     : GetEndpointByName(m_Router, dnsquery.request.endpoint);
+        // auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(_router, "default")
+        //                                                     : GetEndpointByName(_router, dnsquery.request.endpoint);
 
         // if (endpoint == nullptr)
         // {

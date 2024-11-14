@@ -351,7 +351,7 @@ namespace llarp
             std::string body,
             std::function<void(oxen::quic::message m)> func = nullptr);
 
-        bool is_bootstrap_node(RouterID rid) const;
+        // bool is_bootstrap_node(RouterID rid) const;
 
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 

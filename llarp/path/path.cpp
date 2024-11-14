@@ -230,16 +230,6 @@ namespace llarp::path
         return nullptr;
     }
 
-    // std::shared_ptr<TransitHop> Path::local_hop()
-    // {
-    //     return _local_hop;
-    // }
-
-    // const std::shared_ptr<TransitHop>& Path::local_hop() const
-    // {
-    //     return _local_hop;
-    // }
-
     RouterID Path::upstream_rid()
     {
         return hops.front().router_id();
@@ -339,22 +329,6 @@ namespace llarp::path
         return obj;
     }
 
-    bool Path::SendLatencyMessage(Router*)
-    {
-        // const auto now = r->now();
-        // // send path latency test
-        // routing::PathLatencyMessage latency{};
-        // latency.sent_time = randint();
-        // latency.sequence_number = NextSeqNo();
-        // m_LastLatencyTestID = latency.sent_time;
-        // m_LastLatencyTestTime = now;
-        // LogDebug(name(), " send latency test id=", latency.sent_time);
-        // if (not SendRoutingMessage(latency, r))
-        //   return false;
-        // FlushUpstream(r);
-        return true;
-    }
-
     bool Path::update_exit(uint64_t)
     {
         // TODO: do we still want this concept?
@@ -372,60 +346,7 @@ namespace llarp::path
         if (_is_linked)
         {
         }
-
-        // m_LastRXRate = m_RXRate;
-        // m_LastTXRate = m_TXRate;
-
-        // m_RXRate = 0;
-        // m_TXRate = 0;
-
-        // if (_status == PathStatus::BUILDING)
-        // {
-        //   if (buildStarted == 0s)
-        //     return;
-        //   if (now >= buildStarted)
-        //   {
-        //     const auto dlt = now - buildStarted;
-        //     if (dlt >= path::BUILD_TIMEOUT)
-        //     {
-        //       LogWarn(name(), " waited for ", to_string(dlt), " and no path was built");
-        //       r->router_profiling().MarkPathFail(this);
-        //       EnterState(PathStatus::EXPIRED, now);
-        //       return;
-        //     }
-        //   }
-        // }
-        // check to see if this path is dead
-        // if (_status == PathStatus::ESTABLISHED)
-        // {
-        //   auto dlt = now - last_latency_test;
-        //   if (dlt > path::LATENCY_INTERVAL && last_latency_test_id == 0)
-        //   {
-        //     SendLatencyMessage(r);
-        //     // latency test FEC
-        //     r->loop()->call_later(2s, [self = shared_from_this(), r]() {
-        //       if (self->last_latency_test_id)
-        //         self->SendLatencyMessage(r);
-        //     });
-        //     return;
-        //   }
-        //   dlt = now - last_recv_msg;
-        //   if (dlt >= path::ALIVE_TIMEOUT)
-        //   {
-        //     LogWarn(name(), " waited for ", to_string(dlt), " and path looks dead");
-        //     r->router_profiling().MarkPathFail(this);
-        //     EnterState(PathStatus::TIMEOUT, now);
-        //   }
-        // }
-        // if (_status == PathStatus::IGNORE and now - last_recv_msg >= path::ALIVE_TIMEOUT)
-        // {
-        //   // clean up this path as we dont use it anymore
-        //   EnterState(PathStatus::EXPIRED, now);
-        // }
     }
-
-    /// how long we wait for a path to become active again after it times out
-    // constexpr auto PathReanimationTimeout = 45s;
 
     void Path::set_established()
     {
