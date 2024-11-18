@@ -1,5 +1,6 @@
 #include "keys.hpp"
 
+#include <oxenc/base32z.h>
 #include <oxenc/hex.h>
 
 namespace llarp
@@ -14,7 +15,7 @@ namespace llarp
 
     std::string PubKey::to_string() const
     {
-        return oxenc::to_hex(begin(), end());
+        return oxenc::to_base32z(begin(), end());
     }
 
     PubKey& PubKey::operator=(const uint8_t* ptr)

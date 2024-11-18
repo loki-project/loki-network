@@ -145,14 +145,8 @@ namespace llarp
       public:
         bool operator==(const ClientContact& other) const
         {
-            return std::tie(derived_privatekey, pubkey, intros, SRVs, protos, exit_policy)
-                == std::tie(
-                       other.derived_privatekey,
-                       other.pubkey,
-                       other.intros,
-                       other.SRVs,
-                       other.protos,
-                       other.exit_policy);
+            return std::tie(pubkey, intros, SRVs, protos, exit_policy)
+                == std::tie(other.pubkey, other.intros, other.SRVs, other.protos, other.exit_policy);
         }
 
         bool operator!=(const ClientContact& other) const { return !(*this == other); }

@@ -40,7 +40,7 @@ namespace llarp
 
     void ContactDB::put_cc(EncryptedClientContact enc)
     {
-        _router.loop()->call([&]() { _cc_nodes->put_node(enc); });
+        _cc_nodes->put_node(enc);
     }
 
 }  //  namespace llarp

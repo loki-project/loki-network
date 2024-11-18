@@ -57,18 +57,19 @@ namespace llarp
 
         std::shared_ptr<link::Connection> Endpoint::get_conn(const RouterID& remote) const
         {
-            return link_manager.router().loop()->call_get([this, rid = remote]() -> std::shared_ptr<link::Connection> {
-                if (auto itr = service_conns.find(rid); itr != service_conns.end())
+            if (auto itr = service_conns.find(remote); itr != service_conns.end())
+                return itr->second;
+
+            if (_is_service_node)
+            {
+                if (auto itr = client_conns.find(remote); itr != client_conns.end())
                     return itr->second;
+            }
 
-                if (_is_service_node)
-                {
-                    if (auto itr = client_conns.find(rid); itr != client_conns.end())
-                        return itr->second;
-                }
-
-                return nullptr;
-            });
+            return nullptr;
+            // return link_manager.router().loop()->call_get([this, rid = remote]() -> std::shared_ptr<link::Connection>
+            // {
+            // });
         }
 
         bool Endpoint::have_conn(const RouterID& remote) const
@@ -1106,7 +1107,7 @@ namespace llarp
         // allow it to continue propagating
         if (not inner_body)
         {
-            log::critical(logcat, "Received relayed PublishClientContact request; accepting...");
+            log::critical(logcat, "Received relayed PublishClientContact request (key: {}); accepting...", enc.key());
             _router.contact_db().put_cc(std::move(enc));
             return m.respond(messages::OK_RESPONSE);
         }
@@ -1137,7 +1138,11 @@ namespace llarp
             }
         }
 
-        log::info(logcat, "Received PublishClientContact; propagating to closest peer (key: {})...", closest_peer);
+        log::info(
+            logcat,
+            "Received PublishClientContact (key: {}); propagating to closest peer (rid: {})...",
+            enc.key(),
+            closest_peer);
 
         send_control_message(
             closest_peer,
@@ -1181,44 +1186,72 @@ namespace llarp
 
         if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
         {
-            log::info(logcat, "Received FindClientContact request; returning local EncryptedClientContact...");
+            log::info(
+                logcat,
+                "Received FindClientContact request (key: {}); returning local EncryptedClientContact...",
+                dht_key);
             return m.respond(FindClientContact::serialize_response(std::move(*maybe_cc)));
         }
+
         // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
         // allow it to continue propagating
         if (not inner_body)
         {
-            log::critical(logcat, "Received relayed FindClientContact request; could not find locally, relaying error...");
-            return m.respond(FindClientContact::NOT_FOUND, true);
-        }
-
-        auto closest_peer = _router.node_db()->find_closest_to(dht_key).router_id();
-
-        if (closest_peer == _router.local_rid())
-        {
-            log::warning(
+            log::critical(
                 logcat,
-                "We are closest peer for FindClientContact request (key: {}); no EncryptedClientContact found locally!",
+                "Received relayed FindClientContact request (key: {}); could not find locally, relaying error...",
                 dht_key);
             return m.respond(FindClientContact::NOT_FOUND, true);
         }
 
-        log::debug(logcat, "Relaying FindClientContactMessage for {} to {}", dht_key, closest_peer);
+        auto local_rid = _router.local_rid();
 
-        send_control_message(
-            closest_peer,
-            "find_cc",
-            FindClientContact::serialize(dht_key),
-            [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
-                log::info(
+        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+        auto n_closest = closest_rcs.size();
+
+        for (const auto& rc : closest_rcs)
+        {
+            auto& _rid = rc.router_id();
+
+            if (_rid == local_rid)
+            {
+                log::warning(
                     logcat,
-                    "Relayed FindClientContactMessage {}! Relaying response...",
-                    msg                 ? "SUCCEEDED"
-                        : msg.timed_out ? "timed out"
-                                        : "failed");
-                log::info(logcat, "Relayed FindClientContactMessage response: {}", buffer_printer{msg.body()});
-                prev_msg.respond(msg.body_str(), msg.is_error());
-            });
+                    "We are closest peer for FindClientContact request (key: {}); no EncryptedClientContact found"
+                    "locally!",
+                    dht_key);
+                return m.respond(FindClientContact::NOT_FOUND, true);
+            }
+        }
+
+        auto counter = std::make_shared<size_t>(n_closest);
+
+        auto hook = [prev_msg = std::move(m), counter](oxen::quic::message msg) mutable {
+            if (*counter == 0)
+                return;
+
+            if (msg)
+            {
+                *counter = 0;
+                log::info(logcat, "Relayed FindClientContact request SUCCEEDED! Relaying response...");
+                log::info(logcat, "Relayed FindClientContact response: {}", buffer_printer{msg.body()});
+            }
+            else if (--*counter == 0)
+            {
+                log::warning(logcat, "All FindClientContact requests FAILED! Relaying response...");
+            }
+            else
+                return;
+
+            prev_msg.respond(msg.body_str(), msg.is_error());
+        };
+
+        log::info(logcat, "Relaying FindClientContactMessage (key: {}) to {} peers", dht_key, n_closest);
+
+        for (const auto& rc : closest_rcs)
+        {
+            send_control_message(rc.router_id(), "find_cc", FindClientContact::serialize(dht_key), hook);
+        }
     }
 
     void LinkManager::handle_find_cc(oxen::quic::message m)
@@ -1353,6 +1386,7 @@ namespace llarp
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
+            log::warning(logcat, "Payload: {}", inner_body ? buffer_printer{*inner_body} : buffer_printer{m.body()});
             return m.respond(messages::ERROR_RESPONSE, true);
         }
 
@@ -1596,7 +1630,6 @@ namespace llarp
             log::warning(logcat, "Exception: {}", e.what());
         }
 
-        _router.path_context()->drop_path(path_ptr);
         m.respond(messages::ERROR_RESPONSE, true);
     }
 

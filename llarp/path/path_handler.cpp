@@ -67,7 +67,6 @@ namespace llarp::path
         Lock_t l(paths_mutex);
 
         _paths.insert_or_assign(p->upstream_rxid(), p);
-        // _paths.insert_or_assign(p->pivot_txid(), p);
 
         _router.path_context()->add_path(p);
     }
@@ -217,6 +216,7 @@ namespace llarp::path
             if (itr->second and itr->second->is_established() and itr->second->is_expired(now))
             {
                 to_drop.push_back(itr->second->upstream_rxid());
+                to_drop.push_back(itr->second->pivot_txid());
                 itr = _paths.erase(itr);
             }
             else
@@ -405,6 +405,73 @@ namespace llarp::path
         return std::nullopt;
     }
 
+    // std::optional<std::vector<RemoteRC>> PathHandler::specific_hops_to_remote(std::vector<RouterID> specifgic)
+    // {
+    //     log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+    //     assert(num_hops);
+
+    //     auto hops_needed = num_hops;
+    //     std::vector<RemoteRC> hops{};
+
+    // }
+
+    std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_between(const RouterID& edge, const RouterID& pivot)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        assert(num_hops);
+        auto hops_needed = num_hops;
+
+        if (hops_needed == 1)
+        {
+            log::error(logcat, "Stop using debug methods for stupid path structures");
+            return std::nullopt;
+        }
+
+        std::vector<RemoteRC> hops{};
+
+        RemoteRC pivot_rc{};
+
+        if (auto maybe = _router.node_db()->get_rc(pivot))
+        {
+            // leave space to add the pivot last
+            --hops_needed;
+            pivot_rc = std::move(*maybe);
+        }
+        else
+            return std::nullopt;
+
+        if (auto maybe = _router.node_db()->get_rc(edge))
+        {
+            // leave space to add the pivot last
+            --hops_needed;
+            hops.emplace_back(std::move(*maybe));
+        }
+        else
+            return std::nullopt;
+
+        auto filter = [&](const RemoteRC& rc) -> bool {
+            const auto& rid = rc.router_id();
+
+            if (rid == edge || rid == pivot)
+                return false;
+
+            return true;
+        };
+
+        if (auto maybe_rcs = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter))
+        {
+            log::info(logcat, "Found {} RCs for aligned path (needed: {})", maybe_rcs->size(), hops_needed);
+            hops.insert(hops.end(), maybe_rcs->begin(), maybe_rcs->end());
+            hops.emplace_back(std::move(pivot_rc));
+            return hops;
+        }
+
+        log::warning(logcat, "Failed to find RC for aligned path! (needed:{})", num_hops);
+        return std::nullopt;
+    }
+
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_to_remote(
         const RouterID& pivot, const std::set<RouterID>& exclude)
     {
@@ -470,6 +537,8 @@ namespace llarp::path
             });
         };
 
+        log::debug(logcat, "First/last hop selected, {} hops remaining to select", hops_needed);
+
         while (hops_needed)
         {
             // do this 1 at a time so we can check for IP range overlap
@@ -480,7 +549,13 @@ namespace llarp::path
             else
             {
                 log::warning(
-                    logcat, "Failed to find RC for aligned path! (needed:{}, found:{})", num_hops, hops_needed);
+                    logcat, "Failed to find RC for aligned path! (needed:{}, remaining:{})", num_hops, hops_needed);
+
+                if (not hops.empty())
+                {
+                    for (auto& h : hops)
+                        log::info(logcat, "{}", h);
+                }
                 return std::nullopt;
             }
 

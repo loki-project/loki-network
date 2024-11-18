@@ -121,6 +121,10 @@ namespace llarp::handlers
         size_t count{0};
         log::debug(logcat, "SessionEndpoint building {} paths to random remotes (needed: {})", n, num_paths_desired);
 
+        // TESTNET: ensure one path is built to pivot
+        RouterID pivot{oxenc::from_base32z("55fxrybf3jtausbnmxpgwcsz9t8qkf5pr8t5f4xyto4omjrkorpy")};
+        count += build_path_aligned_to_remote(pivot);
+
         while (count < n)
             count += build_path_to_random();
 
@@ -136,6 +140,8 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
+    static std::atomic<bool> testnet_trigger = false;
+
     void SessionEndpoint::start_tickers()
     {
         if (should_publish_cc)
@@ -148,6 +154,25 @@ namespace llarp::handlers
                     update_and_publish_localcc(get_current_client_intros());
                 },
                 true);
+
+            if (not testnet_trigger)
+            {
+                testnet_trigger = true;
+
+                _router.loop()->call_later(15s, [this]() {
+                    try
+                    {
+                        RouterID cpk{oxenc::from_base32z("mu44r4peshzwmcx5fcaj7eb6sdp9xbx5xw5iyc18hfg4q11zjfry")};
+                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+                        _initiate_session(
+                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+                    }
+                });
+            }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -268,49 +293,62 @@ namespace llarp::handlers
 
         if (auto maybe_intro = _router.contact_db().get_decrypted_cc(remote))
         {
-            log::info(logcat, "Decrypted clientcontact for remote (rid: {}) found locally!", remote);
+            log::info(logcat, "Decrypted ClientContact for remote (rid: {}) found locally!", remote);
             return func(std::move(maybe_intro));
         }
 
-        log::info(logcat, "Looking up clientcontact for remote (rid:{})", remote.to_network_address(false));
+        log::info(
+            logcat,
+            "Looking up ClientContact (key: {}) for remote (rid:{})",
+            remote_key,
+            remote.to_network_address(false));
 
-        auto response_handler = [this, remote, hook = std::move(func)](oxen::quic::message m) mutable {
-            try
-            {
-                if (m)
+        auto ignore_remaining = std::make_shared<std::atomic_bool>(false);
+
+        auto response_handler =
+            [this, remote, hook = std::move(func), ignore_remaining](oxen::quic::message m) mutable {
+                if (ignore_remaining->load())
                 {
-                    log::critical(logcat, "Call to FindClientContact succeeded!");
-
-                    auto enc = FindClientContact::deserialize_response(oxenc::bt_dict_consumer{m.body()});
-
-                    if (auto intro = enc.decrypt(remote))
+                    log::trace(logcat, "Dropping subsequent `find_cc` response (success: {})...", not m.is_error());
+                    return;
+                }
+                try
+                {
+                    if (m)
                     {
-                        log::info(logcat, "Storing ClientContact for remote rid:{}", remote);
-                        _router.contact_db().put_cc(std::move(enc));
-                        return hook(std::move(intro));
+                        log::critical(logcat, "Call to FindClientContact succeeded!");
+
+                        auto enc = FindClientContact::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+
+                        if (auto intro = enc.decrypt(remote))
+                        {
+                            log::info(logcat, "Storing ClientContact for remote rid:{}", remote);
+                            _router.contact_db().put_cc(std::move(enc));
+                            ignore_remaining->store(true);
+                            return hook(std::move(intro));
+                        }
+
+                        log::warning(logcat, "Failed to decrypt returned EncryptedClientContact!");
                     }
+                    else
+                    {
+                        std::optional<std::string> status = std::nullopt;
+                        oxenc::bt_dict_consumer btdc{m.body()};
 
-                    log::warning(logcat, "Failed to decrypt returned EncryptedClientContact!");
+                        if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                            status = s;
+
+                        log::warning(
+                            logcat, "Call to FindClientContact FAILED; reason: {}", status.value_or("<none given>"));
+                    }
                 }
-                else
+                catch (const std::exception& e)
                 {
-                    std::optional<std::string> status = std::nullopt;
-                    oxenc::bt_dict_consumer btdc{m.body()};
-
-                    if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
-                        status = s;
-
-                    log::warning(
-                        logcat, "Call to FindClientContact FAILED; reason: {}", status.value_or("<none given>"));
+                    log::warning(logcat, "Exception: {}", e.what());
                 }
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Exception: {}", e.what());
-            }
 
-            hook(std::nullopt);
-        };
+                hook(std::nullopt);
+            };
 
         {
             Lock_t l{paths_mutex};
@@ -322,7 +360,7 @@ namespace llarp::handlers
 
                 log::debug(
                     logcat,
-                    "Querying pivot (rid:{}) for clientcontact lookup target (rid:{})",
+                    "Querying pivot (rid:{}) for ClientContact lookup target (rid:{})",
                     path->pivot_rid(),
                     remote);
 
@@ -618,6 +656,7 @@ namespace llarp::handlers
     void SessionEndpoint::_make_session_path(
         intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         // we can recurse through this function as we remove the first pivot of the set of introductions every
         // invocation
         if (intros.empty())
@@ -627,7 +666,28 @@ namespace llarp::handlers
             return;
         }
 
-        auto intro = intros.extract(intros.begin()).value();
+        // TESTNET:
+        RouterID edge{oxenc::from_base32z("55fxrybf3jtausbnmxpgwcsz9t8qkf5pr8t5f4xyto4omjrkorpy")};
+        bool using_hacky_bullshit{false};
+
+        ClientIntro intro;
+
+        for (auto itr = intros.begin(); itr != intros.end(); ++itr)
+        {
+            log::debug(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
+            if (itr->pivot_rid == edge)
+            {
+                using_hacky_bullshit = true;
+                intro = intros.extract(itr).value();
+                break;
+            }
+        }
+
+        if (not using_hacky_bullshit)
+        {
+            intro = intros.extract(intros.begin()).value();
+        }
+
         auto& pivot = intro.pivot_rid;
 
         // TOTHINK: why would we ever have a path keyed to remote client intro pivot txid?
@@ -648,7 +708,7 @@ namespace llarp::handlers
         if (not maybe_hops)
         {
             log::error(logcat, "Failed to get hops for path-build to pivot:{}", pivot);
-            return;
+            return _make_session_path(std::move(intros), std::move(remote), std::move(cb), is_exit);
         }
 
         auto& hops = *maybe_hops;
@@ -675,6 +735,7 @@ namespace llarp::handlers
                     {
                         // Do not call ::add_path() or ::path_build_succeeded() here; OutboundSession constructor will
                         // take care of both path storage and logging in PathContext
+                        log::critical(logcat, "PATH ESTABLISHED: {}", path->hop_string());
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
                         return _make_session(
                             std::move(remote), std::move(remote_intro), std::move(path), std::move(hook), is_exit);
@@ -719,7 +780,7 @@ namespace llarp::handlers
         _router.loop()->call([this, remote, handler = std::move(cb), is_exit, counter]() mutable {
             lookup_client_intro(
                 remote.router_id(),
-                [this, remote, hook = std::move(handler), is_exit, counter](std::optional<ClientContact> cc) {
+                [this, remote, hook = std::move(handler), is_exit, counter](std::optional<ClientContact> cc) mutable {
                     if (*counter == 0)
                         return;
 
@@ -730,7 +791,7 @@ namespace llarp::handlers
                         _make_session_path(std::move(cc->intros), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)
-                        log::warning(logcat, "Failed to initiate session at 'find_cc' (target:{})", remote);
+                        log::warning(logcat, "Failed to initiate session at 'find_cc' (target:{})", remote.router_id());
                 });
         });
 

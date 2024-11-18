@@ -105,9 +105,7 @@ namespace llarp
         pubkey.from_string(btdc.require<std::string_view>("a"));
 
         if (btdc.skip_until("e"))
-        {
             exit_policy->bt_decode(btdc.consume_dict_consumer());
-        }
 
         btdc.required("i");
 

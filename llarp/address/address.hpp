@@ -40,7 +40,9 @@ namespace llarp
         explicit NetworkAddress(std::string_view addr, std::string_view tld);
 
         // This private constructor expects NO '.snode' or '.loki' suffix
-        explicit NetworkAddress(RouterID rid, bool is_client) : _pubkey{std::move(rid)}, _is_client{is_client} {}
+        explicit NetworkAddress(RouterID rid, bool is_client)
+            : _pubkey{std::move(rid)}, _is_client{is_client}, _tld{_is_client ? TLD::LOKI : TLD::SNODE}
+        {}
 
       public:
         NetworkAddress() = default;

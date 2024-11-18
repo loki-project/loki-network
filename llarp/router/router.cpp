@@ -1100,7 +1100,7 @@ namespace llarp
                 false);
         }
 
-        log::critical(logcat, "\n\n\tLOCAL INSTANCE ROUTER ID: {}\n", local_rid());
+        log::critical(logcat, "\n\n\tLOCAL INSTANCE ROUTER ID: {}\n", local_rid().to_network_address(_is_service_node));
 
         llarp::sys::service_manager->ready();
         return _is_running.load();

@@ -341,7 +341,7 @@ namespace llarp
 
         // scalar h = H( BLIND-STRING || root_pubkey || key_n )
         std::array<unsigned char, 32> h = crypto::make_scalar(root_pubkey, key_n);
-        return 0 == crypto_scalarmult_ed25519(derived, h.data(), root_pubkey.data());
+        return 0 == crypto_scalarmult_ed25519_noclamp(derived, h.data(), root_pubkey.data());
     }
 
     void crypto::randomize(uint8_t* buf, size_t len)

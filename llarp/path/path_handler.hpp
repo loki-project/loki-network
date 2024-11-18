@@ -207,6 +207,11 @@ namespace llarp
 
             bool build_path_aligned_to_remote(const RouterID& remote);
 
+            // TESTNET: testing methods
+            // std::optional<std::vector<RemoteRC>> specific_hops_to_remote(std::vector<RouterID> hops);
+
+            std::optional<std::vector<RemoteRC>> aligned_hops_between(const RouterID& edge, const RouterID& pivot);
+
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
                 const RouterID& pivot, const std::set<RouterID>& exclude = {});
 
