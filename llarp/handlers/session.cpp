@@ -162,7 +162,7 @@ namespace llarp::handlers
                 _router.loop()->call_later(15s, [this]() {
                     try
                     {
-                        RouterID cpk{oxenc::from_base32z("mu44r4peshzwmcx5fcaj7eb6sdp9xbx5xw5iyc18hfg4q11zjfry")};
+                        RouterID cpk{oxenc::from_base32z("dwdumrr58ce9hkabciq7q8e8f3o31is3gciw8zi4chdzrc5a6u4o")};
                         log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
                         _initiate_session(
                             NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
@@ -580,18 +580,19 @@ namespace llarp::handlers
         auto inner_payload = PATH::CONTROL::serialize("session_init", std::move(client_payload));
 
         // add path-control wrapping for pivot to relay to aligned path
-        auto& pivot = path->hops.back();
+        // auto& pivot = path->hops.back();
         auto onion_nonce = SymmNonce::make_random();
-        crypto::onion(
-            reinterpret_cast<unsigned char*>(inner_payload.data()),
-            inner_payload.size(),
-            pivot.shared,
-            onion_nonce,
-            onion_nonce);
+        // crypto::onion(
+        //     reinterpret_cast<unsigned char*>(inner_payload.data()),
+        //     inner_payload.size(),
+        //     pivot.shared,
+        //     onion_nonce,
+        //     onion_nonce);
 
         auto pivot_payload = ONION::serialize_hop(remote_intro.pivot_txid.to_view(), onion_nonce, inner_payload);
 
         auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(pivot_payload));
+        // auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(inner_payload));
 
         path->send_path_control_message(
             "path_control",

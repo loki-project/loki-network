@@ -505,10 +505,13 @@ namespace llarp::path
         // make a copy here to reference rather than creating one in the lambda every iteration
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
         to_exclude.insert(pivot);
+        std::vector<ipv4_range> excluded_ranges{};
+        excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() / netmask);
 
         if (auto maybe = select_first_hop(to_exclude))
         {
             hops.push_back(*maybe);
+            excluded_ranges.emplace_back(maybe->addr().to_ipv4() / netmask);
             --hops_needed;
         }
         else
@@ -521,6 +524,15 @@ namespace llarp::path
 
         auto filter = [&](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
+            auto v4 = rc.addr().to_ipv4();
+
+            for (auto& e : excluded_ranges)
+            {
+                if (e.contains(v4))
+                    return false;
+            }
+
+            excluded_ranges.emplace_back(v4 / netmask);
 
             // if its already excluded, fail; (we want it added even on success)
             if (not to_exclude.insert(rid).second)
@@ -529,15 +541,21 @@ namespace llarp::path
             if (_router.router_profiling().is_bad_for_path(rid, 1))
                 return false;
 
-            if (pivot_rc.has_ip_overlap(rc, netmask))
-                return false;
-
-            return not std::any_of(hops.begin(), hops.end(), [&](const RemoteRC& other) -> bool {
-                return other.has_ip_overlap(rc, netmask);
-            });
+            return true;
         };
 
         log::debug(logcat, "First/last hop selected, {} hops remaining to select", hops_needed);
+
+        if (auto maybe_hops = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter))
+        {
+            log::info(logcat, "Found {} RCs for aligned path (needed: {})", maybe_hops->size(), hops_needed);
+            hops.insert(hops.end(), maybe_hops->begin(), maybe_hops->end());
+            hops.emplace_back(std::move(pivot_rc));
+            return hops;
+        }
+
+        log::warning(logcat, "Failed to find {} RCs for aligned path to pivot: {}", hops_needed, pivot);
+        return std::nullopt;
 
         while (hops_needed)
         {

@@ -1563,6 +1563,13 @@ namespace llarp
         try
         {
             std::tie(endpoint, body) = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{payload});
+
+            if (endpoint == "path_control")
+            {
+                log::info(logcat, "Received path control relay request; deserializing intermediate payload...");
+                auto [_, i_body] = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{std::move(body)});
+                return _handle_path_control(std::move(m), std::move(i_body));
+            }
         }
         catch (const std::exception& e)
         {
@@ -1574,12 +1581,6 @@ namespace llarp
         {
             log::debug(logcat, "Received path control request (`{}`); invoking endpoint...", endpoint);
             std::invoke(it->second, this, std::move(m), std::move(body));
-        }
-        else if (endpoint == "path_control")
-        {
-            log::warning(logcat, "Path control should have been invoked in the last conditional!");
-            log::debug(logcat, "Received path control relay request...");
-            return _handle_path_control(std::move(m), std::move(body));
         }
         else
             log::warning(logcat, "Received path control request (`{}`), which has no local handler!", endpoint);
