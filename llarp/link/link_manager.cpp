@@ -1280,17 +1280,7 @@ namespace llarp
 
             log::trace(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
-            SymmNonce nonce;
-            ustring hop_payload;
-            SharedSecret shared;
-
-            std::tie(nonce, shared, hop_payload) =
-                PATH::BUILD::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
-
-            log::trace(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
-
-            auto hop = path::TransitHop::deserialize_hop(
-                oxenc::bt_dict_consumer{hop_payload}, from, _router, std::move(shared));
+            auto hop = PATH::BUILD::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router, from);
 
             // we are terminal hop and everything is okay
             if (hop->upstream() == _router.local_rid())
@@ -1314,7 +1304,7 @@ namespace llarp
             // clear our frame, to be randomized after onion step and appended
             frames.back().clear();
 
-            auto onion_nonce = nonce ^ hop->nonceXOR;
+            auto onion_nonce = hop->kx.nonce ^ hop->kx.xor_nonce;
 
             // (de-)onion each further frame using the established shared secret and
             // onion_nonce = nonce ^ nonceXOR
@@ -1326,7 +1316,7 @@ namespace llarp
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frames[i].data()),
                     frames[i].size(),
-                    hop->shared,
+                    hop->kx.shared_secret,
                     onion_nonce,
                     onion_nonce);
             }
@@ -1356,7 +1346,7 @@ namespace llarp
                     else
                         log::info(logcat, "Upstream returned path build failure; relaying response");
 
-                    return prev_message.respond(m.body(), m.is_error());
+                    return prev_message.respond(m.body_str(), m.is_error());
                 });
         }
         catch (const std::exception& e)
@@ -1390,39 +1380,53 @@ namespace llarp
             return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        auto hop = _router.path_context()->get_transit_hop(hop_id);
-
-        // TODO: when using path control messages for responses/downstream messages, check for the Path
-        // with the corresponding ID, de-onion, etc
-        if (not hop)
+        if (!_is_service_node)
         {
-            if (_is_service_node)
+            auto path = _router.path_context()->get_path(hop_id);
+
+            if (not path)
             {
-                log::warning(logcat, "Received path control with unknown next hop (ID: {})", hop_id);
+                log::warning(logcat, "Client received path control with unknown rxID: {}", hop_id);
                 return m.respond(messages::ERROR_RESPONSE, true);
             }
 
-            if (auto path = _router.path_context()->get_path(hop_id))
+            log::info(logcat, "Received path control for local client: {}", buffer_printer{payload});
+
+            for (size_t i = 0; i < path->hops.size() - 1; ++i)
             {
-                log::info(logcat, "Received path control for local client!");
+                auto& hop = path->hops[i];
+                nonce = crypto::onion(
+                    reinterpret_cast<unsigned char*>(payload.data()),
+                    payload.size(),
+                    hop.kx.shared_secret,
+                    nonce,
+                    hop.kx.xor_nonce);
+
+                log::info(logcat, "xchacha20 -> {}", buffer_printer{payload});
             }
+
+            return handle_path_request(std::move(m), std::move(payload));
         }
 
-        auto onion_nonce = nonce ^ hop->nonceXOR;
+        auto hop = _router.path_context()->get_transit_hop(hop_id);
 
-        // if we are relaying a path control (inner_body.has_value()), then we do NOT de-onion
-        if (inner_body)
+        if (not hop)
         {
-            log::info(logcat, "We are pivot for relayed path request! Forwarding downstream ({})", hop->to_string());
+            log::warning(logcat, "Received path control with unknown next hop (ID: {})", hop_id);
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
-        else
+
+        auto onion_nonce = nonce ^ hop->kx.xor_nonce;
+
+        // we only de-onion if we are NOT bridging a request over aligned paths
+        if (not inner_body.has_value())
         {
             crypto::onion(
                 reinterpret_cast<unsigned char*>(payload.data()),
                 payload.size(),
-                hop->shared,
+                hop->kx.shared_secret,
                 onion_nonce,
-                hop->nonceXOR);
+                hop->kx.xor_nonce);
 
             // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
             if (hop->terminal_hop)
@@ -1433,6 +1437,12 @@ namespace llarp
 
             log::debug(logcat, "We are intermediate hop for path request: {}", hop->to_string());
         }
+        else
+            log::info(
+                logcat,
+                "We are bridge node for aligned path request ({})! Forwarding downstream: {}",
+                hop->to_string(),
+                buffer_printer{*inner_body});
 
         auto hop_is_rx = hop->rxid() == hop_id;
 
@@ -1476,8 +1486,9 @@ namespace llarp
                 // }
                 // catch (const std::exception& e)
                 // {
-                //     log::warning(logcat, "Exception: {}; payload: {}", e.what(), buffer_printer{response.body()});
-                //     return prev_message.respond(messages::ERROR_RESPONSE, true);
+                //     log::warning(logcat, "Exception: {}; payload: {}", e.what(),
+                //     buffer_printer{response.body()}); return prev_message.respond(messages::ERROR_RESPONSE,
+                //     true);
                 // }
 
                 // auto resp_payload = ONION::serialize_hop(hop_id.to_view(), nonce, std::move(payload));
@@ -1515,7 +1526,11 @@ namespace llarp
         }
 
         nonce = crypto::onion(
-            reinterpret_cast<unsigned char*>(payload.data()), payload.size(), hop->shared, nonce, hop->nonceXOR);
+            reinterpret_cast<unsigned char*>(payload.data()),
+            payload.size(),
+            hop->kx.shared_secret,
+            nonce,
+            hop->kx.xor_nonce);
 
         // if terminal hop, pass to the correct path expecting to receive this message
         if (hop->terminal_hop)
@@ -1564,7 +1579,7 @@ namespace llarp
         {
             std::tie(endpoint, body) = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{payload});
 
-            if (endpoint == "path_control")
+            if (_is_service_node and endpoint == "path_control")
             {
                 log::info(logcat, "Received path control relay request; deserializing intermediate payload...");
                 auto [_, i_body] = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{std::move(body)});
@@ -1588,20 +1603,23 @@ namespace llarp
 
     void LinkManager::_handle_initiate_session(oxen::quic::message m, std::optional<std::string> inner_body)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
         NetworkAddress initiator;
         SessionTag tag;
         HopID pivot_txid;
         bool use_tun;
+        shared_kx_data kx_data;
         std::optional<std::string> maybe_auth = std::nullopt;
         std::shared_ptr<path::Path> path_ptr;
 
         try
         {
             if (inner_body)
-                std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, pivot_txid, tag, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{*inner_body}, _router.identity());
             else
-                std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, pivot_txid, tag, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{m.body()}, _router.identity());
 
             if (maybe_auth and not _router.session_endpoint()->validate(initiator, maybe_auth))
@@ -1614,13 +1632,14 @@ namespace llarp
 
             if (not path_ptr)
             {
-                log::warning(logcat, "Failed to find local path corresponding to session over pivot: {}", pivot_txid);
+                log::warning(logcat, "Failed to find local path for new inbound session over pivot: {}", pivot_txid);
                 return m.respond(InitiateSession::BAD_PATH, true);
             }
 
             if (_router.session_endpoint()->prefigure_session(
-                    std::move(initiator), std::move(tag), std::move(path_ptr), use_tun))
+                    std::move(initiator), std::move(tag), std::move(path_ptr), std::move(kx_data), use_tun))
             {
+                log::critical(logcat, "InboundSession configured successfully!");
                 return m.respond(messages::OK_RESPONSE);
             }
 
@@ -1634,8 +1653,10 @@ namespace llarp
         m.respond(messages::ERROR_RESPONSE, true);
     }
 
+    // TESTNET: pretty sure this isn't called ever -> do not register it
     void LinkManager::handle_initiate_session(oxen::quic::message m)
     {
+        log::critical(logcat, "{} called, LOOK AT WHY", __PRETTY_FUNCTION__);
         return _handle_initiate_session(std::move(m));
     }
 

@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <llarp/address/address.hpp>
+#include <llarp/router/router.hpp>
 #include <llarp/util/logging/buffer.hpp>
 
 namespace llarp
@@ -11,6 +12,8 @@ namespace llarp
 
     namespace ONION
     {
+        static auto logcat = llarp::log::Cat("onion");
+
         inline static std::string serialize_frames(std::vector<std::string>&& frames)
         {
             return oxenc::bt_serialize(std::move(frames));
@@ -37,6 +40,44 @@ namespace llarp
             btdp.append("x", encrypted);
 
             return std::move(btdp).str();
+        }
+
+        inline static std::tuple<std::string, shared_kx_data> deserialize_decrypt(
+            oxenc::bt_dict_consumer&& btdc, const Ed25519SecretKey& local_sk)
+        {
+            std::string payload;
+            shared_kx_data kx_data{};
+
+            try
+            {
+                kx_data.pubkey.from_string(btdc.require<std::string_view>("k"));
+                kx_data.nonce.from_string(btdc.require<std::string_view>("n"));
+                payload = btdc.require<std::string_view>("x");
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing onion data: {}", e.what());
+                throw std::runtime_error{messages::ERROR_RESPONSE};
+            }
+
+            log::info(logcat, "payload: {}", buffer_printer{payload});
+
+            try
+            {
+                kx_data.server_dh(local_sk);
+                kx_data.decrypt(to_uspan(payload));
+
+                log::info(logcat, "xchacha -> payload: {}", buffer_printer{payload});
+
+                kx_data.generate_xor();
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Failed to derive and decrypt outer wrapping!");
+                throw std::runtime_error{messages::ERROR_RESPONSE};
+            }
+
+            return {std::move(payload), std::move(kx_data)};
         }
 
         inline static std::tuple<RouterID, SymmNonce, std::string> deserialize(oxenc::bt_dict_consumer&& btdc)
@@ -121,45 +162,36 @@ namespace llarp
             {
                 std::string hop_payload = hop.bt_encode();
 
-                Ed25519SecretKey ephemeral_key;
-                crypto::identity_keygen(ephemeral_key);
-
-                hop.nonce = SymmNonce::make_random();
-
-                crypto::derive_encrypt_outer_wrapping(
-                    ephemeral_key, hop.shared, hop.nonce, hop.router_id(), to_uspan(hop_payload));
-
+                // client dh key derivation
+                hop.kx.client_dh(hop.router_id());
+                // encrypt payload
+                hop.kx.encrypt(to_uspan(hop_payload));
                 // generate nonceXOR value
-                ShortHash xor_hash;
-                crypto::shorthash(xor_hash, hop.shared.data(), hop.shared.size());
-
-                hop.nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+                hop.kx.generate_xor();
 
                 log::trace(
                     logcat,
                     "Hop serialized; nonce: {}, remote router_id: {}, shared pk: {}, shared secret: {}, payload: {}",
-                    hop.nonce.to_string(),
+                    hop.kx.nonce.to_string(),
                     hop.router_id().to_string(),
-                    ephemeral_key.to_pubkey().to_string(),
-                    hop.shared.to_string(),
+                    hop.kx.pubkey.to_string(),
+                    hop.kx.shared_secret.to_string(),
                     buffer_printer{hop_payload});
 
-                return ONION::serialize_hop(ephemeral_key.to_pubkey().to_view(), hop.nonce, hop_payload);
+                return ONION::serialize_hop(hop.kx.pubkey.to_view(), hop.kx.nonce, hop_payload);
             }
 
-            inline static std::tuple<SymmNonce, SharedSecret, ustring> deserialize_hop(
-                oxenc::bt_dict_consumer&& btdc, const Ed25519SecretKey& local_sk)
+            inline static std::shared_ptr<path::TransitHop> deserialize_hop(
+                oxenc::bt_dict_consumer&& btdc, Router& r, const RouterID& src)
             {
-                SymmNonce nonce;
-                PubKey remote_pk;
-                ustring hop_payload;
-                SharedSecret shared;
+                std::string payload;
+                auto hop = std::make_shared<path::TransitHop>();
 
                 try
                 {
-                    remote_pk.from_string(btdc.require<std::string_view>("k"));
-                    nonce.from_string(btdc.require<std::string_view>("n"));
-                    hop_payload = btdc.require<ustring_view>("x");
+                    hop->kx.pubkey.from_string(btdc.require<std::string_view>("k"));
+                    hop->kx.nonce.from_string(btdc.require<std::string_view>("n"));
+                    payload = btdc.require<std::string_view>("x");
                 }
                 catch (const std::exception& e)
                 {
@@ -170,13 +202,24 @@ namespace llarp
                 log::trace(
                     logcat,
                     "Hop deserialized; nonce: {}, remote pk: {}, payload: {}",
-                    nonce.to_string(),
-                    remote_pk.to_string(),
-                    buffer_printer{hop_payload});
+                    hop->kx.nonce.to_string(),
+                    hop->kx.pubkey.to_string(),
+                    buffer_printer{payload});
 
                 try
                 {
-                    crypto::derive_decrypt_outer_wrapping(local_sk, shared, remote_pk, nonce, to_uspan(hop_payload));
+                    hop->kx.server_dh(r.identity());
+                    hop->kx.decrypt(to_uspan(payload));
+                    hop->kx.generate_xor();
+
+                    log::trace(
+                        logcat,
+                        "Hop decrypted; nonce: {}, remote pk: {}, payload: {}",
+                        hop->kx.nonce.to_string(),
+                        hop->kx.pubkey.to_string(),
+                        buffer_printer{payload});
+
+                    hop->deserialize(oxenc::bt_dict_consumer{std::move(payload)}, src, r);
                 }
                 catch (...)
                 {
@@ -184,14 +227,8 @@ namespace llarp
                     throw std::runtime_error{BAD_CRYPTO};
                 }
 
-                log::trace(
-                    logcat,
-                    "Hop decrypted; nonce: {}, remote pk: {}, payload: {}",
-                    nonce.to_string(),
-                    remote_pk.to_string(),
-                    buffer_printer{hop_payload});
-
-                return {std::move(nonce), std::move(shared), std::move(hop_payload)};
+                log::critical(logcat, "TransitHop data successfully deserialized: {}", hop->to_string());
+                return hop;
             }
         }  // namespace BUILD
 

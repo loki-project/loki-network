@@ -31,7 +31,7 @@ namespace llarp
             //  - Directly pre-loaded from config
             address_map<IPRange, NetworkAddress> _range_map;
 
-            ClientContact client_contact;  // TODO: TESTNET: replacement for service::Introset
+            ClientContact client_contact;
 
             std::shared_ptr<EventTicker> _cc_publisher;
 
@@ -122,7 +122,11 @@ namespace llarp
             bool validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth = std::nullopt);
 
             bool prefigure_session(
-                NetworkAddress initiator, SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun);
+                NetworkAddress initiator,
+                SessionTag tag,
+                std::shared_ptr<path::Path> path,
+                shared_kx_data kx_data,
+                bool use_tun);
 
             // lookup SNS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
             void resolve_ons(std::string name, std::function<void(std::optional<NetworkAddress>)> func = nullptr);

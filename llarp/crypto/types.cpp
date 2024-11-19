@@ -1,6 +1,6 @@
 #include "types.hpp"
 
-#include <llarp/contact/keys.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>
@@ -118,6 +118,50 @@ namespace llarp
         SymmNonce n;
         n.Randomize();
         return n;
+    }
+
+    shared_kx_data::shared_kx_data(Ed25519SecretKey&& sk) : ephemeral_key{std::move(sk)}
+    {
+        pubkey = ephemeral_key.to_pubkey();
+    }
+
+    void shared_kx_data::generate_xor()
+    {
+        ShortHash xhash;
+        crypto::shorthash(xhash, shared_secret.data(), shared_secret.size());
+        xor_nonce = xhash.data();  // truncate 32 -> 24
+    }
+
+    shared_kx_data shared_kx_data::generate()
+    {
+        return shared_kx_data{crypto::generate_identity()};
+    }
+
+    // TESTNET: TODO: check if the libsodium functions ever actually fail...
+
+    void shared_kx_data::client_dh(const RouterID& remote)
+    {
+        if (!crypto::dh_client(shared_secret, remote, ephemeral_key, nonce))
+            throw std::runtime_error{"Client DH failed -- should this even ever happen?"};
+    }
+
+    void shared_kx_data::server_dh(const Ed25519SecretKey& local_sk)
+    {
+        if (!crypto::dh_server(shared_secret, pubkey, local_sk, nonce))
+            throw std::runtime_error{"Server DH failed -- should this even ever happen?"};
+    }
+
+    void shared_kx_data::encrypt(uspan data)
+    {
+        if (!crypto::xchacha20(data.data(), data.size(), shared_secret, nonce))
+            throw std::runtime_error{"xchacha20 encryption failed -- should this even ever happen?"};
+    }
+
+    // identical methods, separated for clarity of use/logging for now
+    void shared_kx_data::decrypt(uspan data)
+    {
+        if (!crypto::xchacha20(data.data(), data.size(), shared_secret, nonce))
+            throw std::runtime_error{"xchacha20 decryption failed -- should this even ever happen?"};
     }
 
 }  // namespace llarp

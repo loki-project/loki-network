@@ -295,6 +295,8 @@ namespace llarp
         // Path relaying
         void handle_path_control(oxen::quic::message);
 
+        void relay_path_request(oxen::quic::message m, std::string payload);
+
         void handle_path_request(oxen::quic::message m, std::string payload);
 
         // Path responses

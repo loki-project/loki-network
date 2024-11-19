@@ -20,16 +20,19 @@ namespace llarp::session
         NetworkAddress remote,
         SessionTag _t,
         bool use_tun,
-        bool is_exit,
-        bool is_outbound)
+        bool is_outbound,
+        std::optional<shared_kx_data> kx_data)
         : _r{r},
           _parent{parent},
           _tag{std::move(_t)},
           _remote{std::move(remote)},
           _use_tun{use_tun},
           _is_outbound{is_outbound},
-          _is_exit_session{is_exit}
+          _is_exit_session{kx_data.has_value()}
     {
+        if (kx_data.has_value())
+            session_keys = std::move(*kx_data);
+
         set_new_current_path(std::move(_p));
     }
 
@@ -146,7 +149,7 @@ namespace llarp::session
             _r.quic_tunnel()->creds(),
             [addr = *bind, hook = std::move(cb)](oxen::quic::connection_interface&) { hook(addr.to_ipv4()); },
             [](oxen::quic::connection_interface&, uint64_t) {
-                //
+                // TESTNET: TODO:
             });
     }
 
@@ -155,7 +158,7 @@ namespace llarp::session
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
         SessionTag _t,
-        bool is_exit)
+        std::optional<shared_kx_data> kx_data)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
               _router,
@@ -164,21 +167,16 @@ namespace llarp::session
               std::move(remote),
               std::move(_t),
               _router.using_tun_if(),
-              is_exit,
-              true},
-          _last_use{_router.now()},
-          _is_snode_session{not _remote.is_client()}
+              true,
+              std::move(kx_data)},
+          _is_snode_session{not _remote.is_client()},
+          _last_use{_router.now()}
     {
         // These can both be false but CANNOT both be true
         if (_is_exit_session and _is_snode_session)
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
-
-        if (_is_snode_session)
-            _session_key = _router.identity();
-        else
-            crypto::identity_keygen(_session_key);
     }
 
     OutboundSession::~OutboundSession() = default;
@@ -258,8 +256,11 @@ namespace llarp::session
 
                 for (auto& [_, p] : _paths)
                 {
-                    log::debug(logcat, "Sending close message on path {}", p->to_string());
-                    send_path_close(p);
+                    if (p and p->is_ready())
+                    {
+                        log::debug(logcat, "Sending close message on path {}", p->to_string());
+                        // send_path_close(p);
+                    }
                 }
             });
 
@@ -275,11 +276,7 @@ namespace llarp::session
     {
         size_t count{0};
         log::debug(
-            logcat,
-            "OutboundSession building {} paths (needed: {}) to remote:{}",
-            n,
-            path::DEFAULT_PATHS_HELD,
-            _remote);
+            logcat, "OutboundSession building {} paths (needed:{}) to remote:{}", n, path::DEFAULT_PATHS_HELD, _remote);
 
         for (size_t i = 0; i < n; ++i)
             count += build_path_aligned_to_remote(_remote.router_id());
@@ -301,10 +298,11 @@ namespace llarp::session
 
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
-        if (p->close_exit(_session_key, p->upstream_txid().to_string()))
-            log::info(logcat, "Sent path close on path {}", p->to_string());
-        else
-            log::warning(logcat, "Failed to send path close on path {}", p->to_string());
+        (void)p;
+        // if (p->close_exit(_session_key, p->upstream_txid().to_string()))
+        //     log::info(logcat, "Sent path close on path {}", p->to_string());
+        // else
+        //     log::warning(logcat, "Failed to send path close on path {}", p->to_string());
     }
 
     bool OutboundSession::is_ready() const
@@ -327,7 +325,8 @@ namespace llarp::session
         std::shared_ptr<path::Path> _path,
         handlers::SessionEndpoint& parent,
         SessionTag _t,
-        bool use_tun)
+        bool use_tun,
+        std::optional<shared_kx_data> kx_data)
         : BaseSession{
             parent._router,
             std::move(_path),
@@ -335,13 +334,9 @@ namespace llarp::session
             std::move(remote),
             std::move(_t),
             use_tun,
-            parent.is_exit_node(),
-            false}
-    {
-        if (not _current_path->is_client_path() and _remote.is_client())
-            throw std::runtime_error{
-                "NetworkAddress and Path do not agree on InboundSession remote's identity (client vs server)!"};
-    }
+            false,
+            std::move(kx_data)}
+    {}
 
     void InboundSession::set_new_tag(const SessionTag& tag)
     {

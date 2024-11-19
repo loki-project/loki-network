@@ -9,14 +9,11 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("transit-hop");
 
-    std::shared_ptr<TransitHop> TransitHop::deserialize_hop(
-        oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret)
+    void TransitHop::deserialize(oxenc::bt_dict_consumer&& btdc, const RouterID& src, const Router& r)
     {
-        auto hop = std::make_shared<TransitHop>();
-
         try
         {
-            hop->bt_decode(std::move(btdc));
+            bt_decode(std::move(btdc));
         }
         catch (const std::exception& e)
         {
@@ -24,26 +21,21 @@ namespace llarp::path
             throw std::runtime_error{messages::ERROR_RESPONSE};
         }
 
-        if (hop->rxid().is_zero() || hop->txid().is_zero())
+        if (_rxid.is_zero() || _txid.is_zero())
             throw std::runtime_error{PATH::BUILD::BAD_PATHID};
 
-        hop->_downstream = src;
-        hop->shared = std::move(secret);
-
-        if (hop->_upstream == r.local_rid())
-            hop->terminal_hop = true;
-
-        if (r.path_context()->has_transit_hop(hop))
+        if (r.path_context()->has_transit_hop(_rxid) || r.path_context()->has_transit_hop(_txid))
             throw std::runtime_error{PATH::BUILD::BAD_PATHID};
+
+        _downstream = src;
+
+        if (_upstream == r.local_rid())
+            terminal_hop = true;
 
         // generate hash of hop key for nonce mutation
-        ShortHash xor_hash;
-        crypto::shorthash(xor_hash, hop->shared.data(), hop->shared.size());
-        hop->nonceXOR = xor_hash.data();  // nonceXOR is 24 bytes, ShortHash is 32; this will truncate
+        kx.generate_xor();
 
-        log::critical(logcat, "TransitHop data successfully deserialized: {}", hop->to_string());
-
-        return hop;
+        log::critical(logcat, "TransitHop data successfully deserialized: {}", to_string());
     }
 
     void TransitHop::bt_decode(oxenc::bt_dict_consumer&& btdc)

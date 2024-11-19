@@ -26,7 +26,7 @@ namespace llarp
         inline const auto AUTH_ERROR = messages::serialize_response({{messages::STATUS_KEY, "AUTH ERROR"}});
         inline const auto BAD_PATH = messages::serialize_response({{messages::STATUS_KEY, "BAD PATH"}});
 
-        inline static std::string serialize_encrypt(
+        inline static std::tuple<std::string, shared_kx_data> serialize_encrypt(
             const RouterID& local,
             const RouterID& remote,
             SessionTag& tag,
@@ -45,22 +45,22 @@ namespace llarp
                     btdp.append("p", pivot_txid.to_view());
                     btdp.append("s", tag.to_view());
                     btdp.append("t", use_tun);
-                    // DISCUSS: this auth field
+                    // TOTHINK: this auth field
                     if (auth_token)
                         btdp.append("u", *auth_token);
 
                     payload = std::move(btdp).str();
                 }
 
-                Ed25519SecretKey ephemeral_key;
-                crypto::identity_keygen(ephemeral_key);
+                auto kx_data = shared_kx_data::generate();
 
-                SharedSecret shared;
-                auto nonce = SymmNonce::make_random();
+                kx_data.client_dh(remote);
+                kx_data.encrypt(to_uspan(payload));
+                kx_data.generate_xor();
 
-                crypto::derive_encrypt_outer_wrapping(ephemeral_key, shared, nonce, remote, to_uspan(payload));
+                auto new_payload = ONION::serialize_hop(kx_data.pubkey.to_view(), kx_data.nonce, std::move(payload));
 
-                return ONION::serialize_hop(ephemeral_key.to_pubkey().to_view(), nonce, std::move(payload));
+                return {PATH::CONTROL::serialize("session_init", std::move(new_payload)), std::move(kx_data)};
             }
             catch (const std::exception& e)
             {
@@ -69,48 +69,50 @@ namespace llarp
             }
         };
 
-        inline static std::tuple<NetworkAddress, HopID, SessionTag, bool, std::optional<std::string>>
-        decrypt_deserialize(oxenc::bt_dict_consumer&& btdc, const Ed25519SecretKey& local)
+        inline static std::tuple<shared_kx_data, NetworkAddress, HopID, SessionTag, bool, std::optional<std::string>>
+        decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
             PubKey shared_pubkey;
             std::string payload;
             SharedSecret shared;
+            shared_kx_data kx_data{};
 
             try
             {
-                std::tie(shared_pubkey, nonce, payload) = ONION::deserialize(std::move(btdc));
+                std::tie(payload, kx_data) = ONION::deserialize_decrypt(std::move(outer_btdc), local);
             }
             catch (const std::exception& e)
             {
-                log::warning(logcat, "Exception caught deserializing hop dict: {}", e.what());
+                log::warning(logcat, "Exception caught deserializing/decrypting hop dict: {}", e.what());
                 throw;
             }
 
             try
             {
-                crypto::derive_decrypt_outer_wrapping(local, shared, shared_pubkey, nonce, to_uspan(payload));
+                oxenc::bt_dict_consumer btdc{payload};
 
-                {
-                    NetworkAddress initiator;
-                    SessionTag tag;
-                    HopID pivot_txid;
-                    bool use_tun;
-                    std::optional<std::string> maybe_auth = std::nullopt;
+                NetworkAddress initiator;
+                RouterID init_rid;
+                SessionTag tag;
+                HopID pivot_txid;
+                bool use_tun;
+                std::optional<std::string> maybe_auth = std::nullopt;
 
-                    if (auto maybe_remote = NetworkAddress::from_network_addr(btdc.require<std::string_view>("i")))
-                        initiator = *maybe_remote;
-                    else
-                        throw std::runtime_error{"Invalid NetworkAddress!"};
+                init_rid.from_string(btdc.require<std::string_view>("i"));
+                initiator = NetworkAddress::from_pubkey(init_rid, true);
+                pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                tag.from_string(btdc.require<std::string_view>("s"));
+                use_tun = btdc.require<bool>("t");
+                maybe_auth = btdc.maybe<std::string>("u");
 
-                    pivot_txid.from_string(btdc.require<std::string_view>("p"));
-                    tag.from_string(btdc.require<std::string_view>("s"));
-                    use_tun = btdc.require<bool>("t");
-                    maybe_auth = btdc.maybe<std::string>("u");
-
-                    return {
-                        std::move(initiator), std::move(pivot_txid), std::move(tag), use_tun, std::move(maybe_auth)};
-                }
+                return {
+                    std::move(kx_data),
+                    std::move(initiator),
+                    std::move(pivot_txid),
+                    std::move(tag),
+                    use_tun,
+                    std::move(maybe_auth)};
             }
             catch (const std::exception& e)
             {

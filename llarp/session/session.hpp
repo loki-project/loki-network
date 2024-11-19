@@ -19,7 +19,7 @@ namespace llarp
     namespace link
     {
         class TunnelManager;
-    }
+    }  //  namespace link
 
     namespace handlers
     {
@@ -31,7 +31,6 @@ namespace llarp
         - client to snode:
           - the traffic to the pivot is encrypted
           - the pivot is the terminus, so data doesn't need to be encrypted
-          - could set HopID to 0 to indicate
     */
 
     namespace session
@@ -47,6 +46,8 @@ namespace llarp
 
             SessionTag _tag;
             NetworkAddress _remote;
+
+            shared_kx_data session_keys{};
 
             bool _use_tun;
             bool _is_outbound;
@@ -78,8 +79,8 @@ namespace llarp
                 NetworkAddress remote,
                 SessionTag _t,
                 bool use_tun,
-                bool is_exit,
-                bool is_outbound);
+                bool is_outbound,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             virtual ~BaseSession() = default;
 
@@ -121,16 +122,13 @@ namespace llarp
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
                 SessionTag _t,
-                bool is_exit);
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
 
           private:
-            Ed25519SecretKey _session_key;  // DISCUSS: is this useful?
-
-            std::chrono::milliseconds _last_use;
-
             const bool _is_snode_session{false};
+            std::chrono::milliseconds _last_use;
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
@@ -181,7 +179,8 @@ namespace llarp
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
                 SessionTag _t,
-                bool use_tun);
+                bool use_tun,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~InboundSession() = default;
 

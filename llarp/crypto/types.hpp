@@ -3,6 +3,7 @@
 #include "constants.hpp"
 
 #include <llarp/constants/files.hpp>
+#include <llarp/contact/keys.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/buffer.hpp>
 
@@ -12,6 +13,7 @@ namespace llarp
 {
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
 
+    struct RouterID;
     struct PubKey;
     struct Ed25519PrivateData;
 
@@ -98,6 +100,34 @@ namespace llarp
         static SymmNonce make(std::string n);
 
         static SymmNonce make_random();
+    };
+
+    /// Holds all the data used for symmetric DH key-exchange (ex: path-build, session-init, etc)
+    struct shared_kx_data
+    {
+        shared_kx_data() = default;
+
+      private:
+        shared_kx_data(Ed25519SecretKey&& sk);
+
+      public:
+        Ed25519SecretKey ephemeral_key;
+        PubKey pubkey{};
+        SharedSecret shared_secret{};
+        SymmNonce nonce{SymmNonce::make_random()};
+        SymmNonce xor_nonce{SymmNonce::make_random()};
+
+        void generate_xor();
+
+        static shared_kx_data generate();
+
+        void client_dh(const RouterID& remote);
+
+        void server_dh(const Ed25519SecretKey& local_sk);
+
+        void encrypt(uspan data);
+
+        void decrypt(uspan enc);
     };
 
 }  // namespace llarp

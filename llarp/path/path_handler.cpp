@@ -506,12 +506,12 @@ namespace llarp::path
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
         to_exclude.insert(pivot);
         std::vector<ipv4_range> excluded_ranges{};
-        excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() / netmask);
+        // excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() / netmask);
 
         if (auto maybe = select_first_hop(to_exclude))
         {
-            hops.push_back(*maybe);
-            excluded_ranges.emplace_back(maybe->addr().to_ipv4() / netmask);
+            hops.emplace_back(std::move(*maybe));
+            // excluded_ranges.emplace_back(hops.back().addr().to_ipv4() / netmask);
             --hops_needed;
         }
         else
@@ -532,11 +532,11 @@ namespace llarp::path
                     return false;
             }
 
-            excluded_ranges.emplace_back(v4 / netmask);
-
             // if its already excluded, fail; (we want it added even on success)
             if (not to_exclude.insert(rid).second)
                 return false;
+
+            excluded_ranges.emplace_back(v4 / netmask);
 
             if (_router.router_profiling().is_bad_for_path(rid, 1))
                 return false;
@@ -544,11 +544,11 @@ namespace llarp::path
             return true;
         };
 
-        log::debug(logcat, "First/last hop selected, {} hops remaining to select", hops_needed);
+        log::trace(logcat, "First/last hop selected, {} hops remaining to select", hops_needed);
 
         if (auto maybe_hops = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter))
         {
-            log::info(logcat, "Found {} RCs for aligned path (needed: {})", maybe_hops->size(), hops_needed);
+            log::trace(logcat, "Found {} RCs for aligned path (needed: {})", maybe_hops->size(), hops_needed);
             hops.insert(hops.end(), maybe_hops->begin(), maybe_hops->end());
             hops.emplace_back(std::move(pivot_rc));
             return hops;
@@ -686,12 +686,12 @@ namespace llarp::path
 
             for (auto j = i + 1; j < n_hops; ++j)
             {
-                auto _onion_nonce = path_hops[i].nonce ^ path_hops[i].nonceXOR;
+                auto _onion_nonce = path_hops[i].kx.nonce ^ path_hops[i].kx.xor_nonce;
 
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frames[j].data()),
                     frames[j].size(),
-                    path_hops[i].shared,
+                    path_hops[i].kx.shared_secret,
                     _onion_nonce,
                     _onion_nonce);
             }

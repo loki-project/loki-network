@@ -46,7 +46,11 @@ namespace llarp::path
 
         bool has_transit_hop(const std::shared_ptr<TransitHop>& hop) const;
 
+        bool has_transit_hop(const HopID& hop_id) const;
+
         void put_transit_hop(std::shared_ptr<TransitHop> hop);
+
+        bool has_path(const HopID& hop_id) const;
 
         std::shared_ptr<Path> get_path(const std::shared_ptr<TransitHop>& hop) const;
 

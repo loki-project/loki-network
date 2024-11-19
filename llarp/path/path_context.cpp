@@ -75,7 +75,13 @@ namespace llarp::path
     bool PathContext::has_transit_hop(const std::shared_ptr<TransitHop>& hop) const
     {
         assert(_r.loop()->in_event_loop());
-        return _transit_hops.count(hop->rxid()) or _transit_hops.count(hop->txid());
+        return has_transit_hop(hop->rxid()) or has_transit_hop(hop->txid());
+    }
+
+    bool PathContext::has_transit_hop(const HopID& hop_id) const
+    {
+        assert(_r.loop()->in_event_loop());
+        return _transit_hops.count(hop_id);
     }
 
     void PathContext::put_transit_hop(std::shared_ptr<TransitHop> hop)
@@ -116,6 +122,12 @@ namespace llarp::path
     {
         assert(_r.loop()->in_event_loop());
         return _get_path(hop_id);
+    }
+
+    bool PathContext::has_path(const HopID& hop_id) const
+    {
+        assert(_r.loop()->in_event_loop());
+        return _path_map.contains(hop_id);
     }
 
     std::shared_ptr<Path> PathContext::get_path(const std::shared_ptr<TransitHop>& hop) const

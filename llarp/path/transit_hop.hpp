@@ -22,15 +22,9 @@ namespace llarp
 
             TransitHop() = default;
 
-            // This static factory function is used in path-build logic. The exceptions thrown are the exact response
-            // bodies passed to message::respond(...) function
-            static std::shared_ptr<TransitHop> deserialize_hop(
-                oxenc::bt_dict_consumer&& btdc, const RouterID& src, Router& r, SharedSecret secret);
+            void deserialize(oxenc::bt_dict_consumer&& btdc, const RouterID& src, const Router& r);
 
-            SharedSecret shared;
-
-            SymmNonce nonce;
-            SymmNonce nonceXOR;
+            shared_kx_data kx{};
 
             std::chrono::milliseconds expiry{0s};
 

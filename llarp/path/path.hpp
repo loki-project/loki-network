@@ -25,6 +25,11 @@ namespace llarp
     struct Router;
     struct Profiling;
 
+    // namespace link
+    // {
+    //     struct LinkManager;
+    // }
+
     namespace service
     {
         struct EncryptedIntroSet;
@@ -44,6 +49,7 @@ namespace llarp
             friend struct PathHandler;
             friend class handlers::SessionEndpoint;
             friend struct llarp::Profiling;
+            friend struct LinkManager;
 
             Path(
                 Router& rtr,
@@ -52,7 +58,6 @@ namespace llarp
                 bool is_session = false,
                 bool is_client = false);
 
-          protected:
             // hops on constructed path
             std::vector<TransitHop> hops;
             // local hop info for onioned responses and session messages
@@ -60,7 +65,6 @@ namespace llarp
             std::weak_ptr<PathHandler> handler;
             ClientIntro intro{};
 
-          public:
             std::shared_ptr<Path> get_self() { return shared_from_this(); }
 
             std::weak_ptr<Path> get_weak() { return weak_from_this(); }
@@ -125,6 +129,8 @@ namespace llarp
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
             std::shared_ptr<PathHandler> get_parent();
+
+            TransitHop edge() const;
 
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;

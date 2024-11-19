@@ -162,7 +162,7 @@ namespace llarp::handlers
                 _router.loop()->call_later(15s, [this]() {
                     try
                     {
-                        RouterID cpk{oxenc::from_base32z("dwdumrr58ce9hkabciq7q8e8f3o31is3gciw8zi4chdzrc5a6u4o")};
+                        RouterID cpk{oxenc::from_base32z("4bfu94cyd5t1976qubcwc3nirarri34o4pxq865xrd4krcs8tzxo")};
                         log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
                         _initiate_session(
                             NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
@@ -428,13 +428,17 @@ namespace llarp::handlers
     }
 
     bool SessionEndpoint::prefigure_session(
-        NetworkAddress initiator, SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun)
+        NetworkAddress initiator,
+        SessionTag tag,
+        std::shared_ptr<path::Path> path,
+        shared_kx_data kx_data,
+        bool use_tun)
     {
         bool ret = true;
-        assert(path->is_client_path());
+        // assert(path->is_client_path());
 
-        auto inbound =
-            std::make_shared<session::InboundSession>(initiator, std::move(path), *this, std::move(tag), use_tun);
+        auto inbound = std::make_shared<session::InboundSession>(
+            initiator, std::move(path), *this, std::move(tag), use_tun, std::move(kx_data));
 
         auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
 
@@ -557,19 +561,26 @@ namespace llarp::handlers
                                     - 't' : Use Tun interface (bool)
                                     - 'u' : Authentication field
                                         - bt-encoded dict, values TBD
-     */
 
+        TODO:
+            - update logic: sessions to relays do not need a shared_kx_data type
+                - client <-> client rely on symmetric DH across aligned paths
+                - client <-> relay end at the pivot
+     */
     void SessionEndpoint::_make_session(
         NetworkAddress remote,
         ClientIntro remote_intro,
         std::shared_ptr<path::Path> path,
         on_session_init_hook cb,
-        bool is_exit)
+        bool /* is_exit */)
     {
         auto tag = SessionTag::make_random();
 
+        std::string inner_payload;
+        shared_kx_data kx_data;
+
         // internal payload for remote client
-        auto client_payload = InitiateSession::serialize_encrypt(
+        std::tie(inner_payload, kx_data) = InitiateSession::serialize_encrypt(
             _router.local_rid(),
             remote.router_id(),
             tag,
@@ -577,7 +588,7 @@ namespace llarp::handlers
             fetch_auth_token(remote),
             _router.using_tun_if());
 
-        auto inner_payload = PATH::CONTROL::serialize("session_init", std::move(client_payload));
+        log::trace(logcat, "inner payload: {}", buffer_printer{inner_payload});
 
         // add path-control wrapping for pivot to relay to aligned path
         // auto& pivot = path->hops.back();
@@ -590,20 +601,23 @@ namespace llarp::handlers
         //     onion_nonce);
 
         auto pivot_payload = ONION::serialize_hop(remote_intro.pivot_txid.to_view(), onion_nonce, inner_payload);
+        log::trace(logcat, "pivot payload: {}", buffer_printer{pivot_payload});
 
         auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(pivot_payload));
         // auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(inner_payload));
+        log::trace(logcat, "intermediate payload: {}", buffer_printer{intermediate_payload});
 
         path->send_path_control_message(
             "path_control",
             std::move(intermediate_payload),
-            [this, remote, tag, path, hook = std::move(cb), is_exit](oxen::quic::message m) mutable {
+            [this, remote, tag, path, hook = std::move(cb), session_keys = std::move(kx_data)](
+                oxen::quic::message m) mutable {
                 if (m)
                 {
                     log::critical(logcat, "Call to InitiateSession succeeded!");
 
                     auto outbound = std::make_shared<session::OutboundSession>(
-                        remote, *this, std::move(path), std::move(tag), is_exit);
+                        remote, *this, std::move(path), std::move(tag), std::move(session_keys));
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 
@@ -652,6 +666,7 @@ namespace llarp::handlers
                         logcat, "Call to InitiateSession FAILED; reason: {}", status.value_or("<none given>"));
                 }
             });
+        log::info(logcat, "mesage sent...");
     }
 
     void SessionEndpoint::_make_session_path(
@@ -675,7 +690,7 @@ namespace llarp::handlers
 
         for (auto itr = intros.begin(); itr != intros.end(); ++itr)
         {
-            log::debug(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
+            log::trace(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
             if (itr->pivot_rid == edge)
             {
                 using_hacky_bullshit = true;

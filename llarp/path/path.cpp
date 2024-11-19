@@ -65,6 +65,9 @@ namespace llarp::path
                 hops[i]._downstream = hops[i - 1]._rid;
             }
 
+            // generate dh kx components
+            hops[i].kx = shared_kx_data::generate();
+
             // Conditions written as ternaries
             // hops[i]._rxid = i ? hops[i - 1]._txid : HopID::make_random();
             // hops[i]._upstream = i == num_hops - 1 ? hops[i]._rid : hop_rcs[i + 1].router_id();
@@ -81,7 +84,7 @@ namespace llarp::path
         // _local_hop->_txid = hops.front()._rxid;
         // _local_hop->terminal_hop = true;
 
-        log::info(logcat, "Path populated with hops: {}", hop_string());
+        log::trace(logcat, "Path populated with hops: {}", hop_string());
 
         // initialize parts of the clientintro
         intro.pivot_rid = hops.back().router_id();
@@ -94,6 +97,7 @@ namespace llarp::path
     void Path::link_session(recv_session_dgram_cb cb)
     {
         _recv_dgram = std::move(cb);
+        _is_linked = true;
         _is_session_path = true;
     }
 
@@ -192,9 +196,9 @@ namespace llarp::path
             nonce = crypto::onion(
                 reinterpret_cast<unsigned char*>(inner_payload.data()),
                 inner_payload.size(),
-                hop.shared,
+                hop.kx.shared_secret,
                 nonce,
-                hop.nonceXOR);
+                hop.kx.xor_nonce);
         }
 
         return ONION::serialize_hop(upstream_rxid().to_view(), nonce, std::move(inner_payload));
@@ -228,6 +232,11 @@ namespace llarp::path
             return parent;
 
         return nullptr;
+    }
+
+    TransitHop Path::edge() const
+    {
+        return {hops.front()};
     }
 
     RouterID Path::upstream_rid()

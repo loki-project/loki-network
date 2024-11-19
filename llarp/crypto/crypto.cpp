@@ -264,7 +264,7 @@ namespace llarp
         const SymmNonce& nonce,
         uspan encrypted)
     {
-        // derive shared secret using ephemeral pubkey and our secret key (and nonce)
+        // derive shared secret using shared secret and our secret key (and nonce)
         if (!crypto::dh_server(shared, remote, local_sk, nonce))
         {
             auto err = "DH server failed during shared key derivation!"s;
@@ -354,13 +354,15 @@ namespace llarp
         randombytes((unsigned char*)ptr, sz);
     }
 
-    void crypto::identity_keygen(Ed25519SecretKey& keys)
+    Ed25519SecretKey crypto::generate_identity()
     {
+        Ed25519SecretKey ret{};
         PubKey pk;
-        int result = crypto_sign_ed25519_keypair(pk.data(), keys.data());
+        int result = crypto_sign_ed25519_keypair(pk.data(), ret.data());
         assert(result != -1);
-        const PubKey sk_pk = keys.to_pubkey();
+        const PubKey sk_pk = ret.to_pubkey();
         assert(pk == sk_pk);
+        return ret;
     }
 
     bool crypto::check_identity_privkey(const Ed25519SecretKey& keys)
@@ -373,13 +375,6 @@ namespace llarp
         if (crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data()) == -1)
             return false;
         return keys.to_pubkey() == pk && sk == keys;
-    }
-
-    void crypto::encryption_keygen(Ed25519SecretKey& keys)
-    {
-        auto d = keys.data();
-        randbytes(d, 32);
-        crypto_scalarmult_curve25519_base(d + 32, d);  //  expects xkey
     }
 
 #ifdef HAVE_CRYPT
