@@ -1223,7 +1223,8 @@ namespace llarp
 
         auto parse_addr_for_link = [net_ptr](const std::string& arg, bool& given_port_only) {
             std::optional<oxen::quic::Address> maybe = std::nullopt;
-            std::string_view arg_v{arg}, host;
+            std::string_view arg_v{arg};
+            std::string host;
             uint16_t p{};
 
             if (auto pos = arg_v.find(':'); pos != arg_v.npos)
@@ -1242,7 +1243,7 @@ namespace llarp
                 maybe = net_ptr->get_best_public_address(true, p);
             }
             else
-                maybe = oxen::quic::Address{std::string{host}, p};
+                maybe = oxen::quic::Address{host, p};
 
             if (maybe and maybe->is_loopback())
                 throw std::invalid_argument{"{} is a loopback address"_format(arg)};

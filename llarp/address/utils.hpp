@@ -40,7 +40,7 @@ namespace llarp
     namespace detail
     {
         // inline auto utilcat = log::Cat("addrutils");
-        inline static std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
+        inline std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
         {
             std::optional<std::string> ret = std::nullopt;
 
@@ -61,22 +61,22 @@ namespace llarp
             return ret;
         };
 
-        inline static std::pair<std::string, uint16_t> parse_addr(
-            std::string_view addr, std::optional<uint16_t> default_port)
+        inline std::pair<std::string, uint16_t> parse_addr(std::string_view addr, std::optional<uint16_t> default_port)
         {
             std::pair<std::string, uint16_t> result;
+            auto &[host, port] = result;
 
             if (auto p = addr.find_last_not_of("0123456789");
                 p != std::string_view::npos && p + 2 <= addr.size() && addr[p] == ':')
             {
-                if (!parse_int(addr.substr(p + 1), result.second))
+                if (!parse_int(addr.substr(p + 1), port))
                     throw std::invalid_argument{"Invalid address: could not parse port"};
                 addr.remove_suffix(addr.size() - p);
             }
             else if (default_port)
             {
                 // log::critical(utilcat, "Setting default port for addr parse!");
-                result.second = *default_port;
+                port = *default_port;
             }
             else
             {
@@ -96,7 +96,7 @@ namespace llarp
             {
                 if (auto q = addr.find_first_not_of("0123456789abcdef:."); q != std::string_view::npos)
                     throw std::invalid_argument{"Invalid address: does not look like IPv4 or IPv6!"};
-                else if (!had_sq_brackets)
+                if (!had_sq_brackets)
                     throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
             }
 
@@ -106,7 +106,7 @@ namespace llarp
             //     // addr = "::";
             // }
 
-            result.first = addr;
+            host = addr;
             return result;
         }
 
