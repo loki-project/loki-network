@@ -128,16 +128,6 @@ namespace llarp
 
         BootstrapList _bootstraps{};
 
-        /** RouterID lists    // TODO: get rid of all these, replace with better decom/not staked
-           sets
-            - white: active routers
-            - gray: fully funded, but decommissioned routers
-            - green: registered, but not fully-staked routers
-        */
-        std::set<RouterID> _router_whitelist{};
-        std::set<RouterID> _router_greylist{};
-        std::set<RouterID> _router_greenlist{};
-
         // All registered relays (service nodes)
         std::set<RouterID> _registered_routers;
 
@@ -250,12 +240,9 @@ namespace llarp
         // variable ::known_rids
         bool reselect_router_id_sources(std::set<RouterID> specific);
 
-        void set_router_whitelist(
-            const std::vector<RouterID>& whitelist,
-            const std::vector<RouterID>& greylist,
-            const std::vector<RouterID>& greenlist);
+        void set_router_whitelist(const std::vector<RouterID>& whitelist);
 
-        std::optional<RouterID> get_random_whitelist_router() const;
+        std::optional<RouterID> get_random_registered_router() const;
 
         // client:
         //   if pinned edges were specified, connections are allowed only to those and
@@ -291,10 +278,6 @@ namespace llarp
         BootstrapList& bootstrap_list() { return _bootstraps; }
 
         void set_bootstrap_routers(BootstrapList& from_router);
-
-        const std::set<RouterID>& whitelist() const { return _router_whitelist; }
-
-        const std::set<RouterID>& greylist() const { return _router_greylist; }
 
         std::set<RouterID>& registered_routers() { return _registered_routers; }
 
@@ -401,6 +384,7 @@ namespace llarp
                     if (visit(itr->second))
                     {
                         removed.insert(itr->first);
+                        known_rids.erase(itr->first);
                         known_rcs.erase(itr->second);
                         itr = rc_lookup.erase(itr);
                     }

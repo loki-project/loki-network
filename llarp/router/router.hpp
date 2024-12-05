@@ -260,10 +260,7 @@ namespace llarp
 
         const std::set<RouterID>& get_whitelist() const;
 
-        void set_router_whitelist(
-            const std::vector<RouterID>& whitelist,
-            const std::vector<RouterID>& greylist,
-            const std::vector<RouterID>& unfunded);
+        void set_router_whitelist(const std::vector<RouterID>& whitelist);
 
         template <std::invocable Callable>
         void queue_work(Callable&& func)

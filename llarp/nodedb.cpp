@@ -753,46 +753,24 @@ namespace llarp
         });
     }
 
-    void NodeDB::set_router_whitelist(
-        const std::vector<RouterID>& whitelist,
-        const std::vector<RouterID>& greylist,
-        const std::vector<RouterID>& greenlist)
+    void NodeDB::set_router_whitelist(const std::vector<RouterID>& whitelist)
     {
-        log::critical(
-            logcat,
-            "Oxend provided {}/{}/{} (white/gray/green) routers",
-            whitelist.size(),
-            greylist.size(),
-            greenlist.size());
+        log::critical(logcat, "Oxend provided {} whitelisted routers", whitelist.size());
 
         if (whitelist.empty())
             return;
 
         _registered_routers.clear();
         _registered_routers.insert(whitelist.begin(), whitelist.end());
-        _registered_routers.insert(greylist.begin(), greylist.end());
-        _registered_routers.insert(greenlist.begin(), greenlist.end());
-
-        _router_whitelist.clear();
-        _router_whitelist.insert(whitelist.begin(), whitelist.end());
-        _router_greylist.clear();
-        _router_greylist.insert(greylist.begin(), greylist.end());
-        _router_greenlist.clear();
-        _router_greenlist.insert(greenlist.begin(), greenlist.end());
 
         log::critical(
-            logcat,
-            "Service node holding {}:{} (whitelist:registered) after oxend integration",
-            _router_whitelist.size(),
-            _registered_routers.size());
+            logcat, "Service node holding {} registered relays after oxend integration", _registered_routers.size());
     }
 
-    std::optional<RouterID> NodeDB::get_random_whitelist_router() const
+    std::optional<RouterID> NodeDB::get_random_registered_router() const
     {
-        std::optional<RouterID> rand = std::nullopt;
-
-        std::sample(_router_whitelist.begin(), _router_whitelist.end(), &*rand, 1, csrng);
-        return rand;
+        std::function<bool(RouterID)> hook = [](const auto&) -> bool { return true; };
+        return meta::sample(_registered_routers, hook);
     }
 
     bool NodeDB::is_connection_allowed(const RouterID& remote) const
@@ -801,10 +779,11 @@ namespace llarp
         {
             if (_pinned_edges.size() && _pinned_edges.count(remote) == 0 && not _bootstraps.contains(remote))
                 return false;
+
+            return known_rids.count(remote);
         }
 
-        // TESTNET: make this check an updated registry
-        return known_rids.count(remote) or _registered_routers.count(remote);
+        return known_rids.count(remote) and _registered_routers.empty() ? true : _registered_routers.count(remote);
     }
 
     bool NodeDB::is_first_hop_allowed(const RouterID& remote) const

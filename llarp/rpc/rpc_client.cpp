@@ -213,7 +213,7 @@ namespace llarp::rpc
     void RPCClient::handle_new_service_node_list(const nlohmann::json& j)
     {
         std::unordered_map<RouterID, PubKey> keymap;
-        std::vector<RouterID> activeNodeList, decommNodeList, unfundedNodeList;
+        std::vector<RouterID> active_list;
         if (not j.is_array())
             throw std::runtime_error{"Invalid service node list: expected array of service node states"};
 
@@ -229,10 +229,6 @@ namespace llarp::rpc
             if (active_itr == snode.end() or not active_itr->is_boolean())
                 continue;
             const bool active = active_itr->get<bool>();
-            const auto funded_itr = snode.find("funded");
-            if (funded_itr == snode.end() or not funded_itr->is_boolean())
-                continue;
-            const bool funded = funded_itr->get<bool>();
 
             RouterID rid;
             PubKey pk;
@@ -240,10 +236,11 @@ namespace llarp::rpc
                 continue;
 
             keymap[rid] = pk;
-            (active ? activeNodeList : funded ? decommNodeList : unfundedNodeList).push_back(std::move(rid));
+            if (active)
+                active_list.emplace_back(std::move(rid));
         }
 
-        if (activeNodeList.empty())
+        if (active_list.empty())
         {
             log::warning(logcat, "Received empty service node list, ignoring.");
             return;
@@ -254,14 +251,11 @@ namespace llarp::rpc
         {
             auto& loop = router->loop();
             loop->call([this,
-                        active = std::move(activeNodeList),
-                        decomm = std::move(decommNodeList),
-                        unfunded = std::move(unfundedNodeList),
+                        active = std::move(active_list),
                         keymap = std::move(keymap),
                         router = std::move(router)]() mutable {
                 _key_map = std::move(keymap);
-
-                router->set_router_whitelist(active, decomm, unfunded);
+                router->set_router_whitelist(active);
             });
         }
         else

@@ -358,9 +358,10 @@ namespace llarp
     {
         Ed25519SecretKey ret{};
         PubKey pk;
-        int result = crypto_sign_ed25519_keypair(pk.data(), ret.data());
+        [[maybe_unused]] int result = crypto_sign_ed25519_keypair(pk.data(), ret.data());
         assert(result != -1);
         const PubKey sk_pk = ret.to_pubkey();
+        (void)sk_pk;
         assert(pk == sk_pk);
         return ret;
     }

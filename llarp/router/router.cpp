@@ -727,7 +727,7 @@ namespace llarp
 
     bool Router::appears_decommed() const
     {
-        return _is_service_node and has_whitelist() and node_db()->greylist().count(local_rid());
+        return _is_service_node and has_whitelist() and not node_db()->registered_routers().count(local_rid());
     }
 
     bool Router::appears_funded() const
@@ -953,15 +953,12 @@ namespace llarp
 
     const std::set<RouterID>& Router::get_whitelist() const
     {
-        return _node_db->whitelist();
+        return _node_db->registered_routers();
     }
 
-    void Router::set_router_whitelist(
-        const std::vector<RouterID>& whitelist,
-        const std::vector<RouterID>& greylist,
-        const std::vector<RouterID>& unfundedlist)
+    void Router::set_router_whitelist(const std::vector<RouterID>& whitelist)
     {
-        node_db()->set_router_whitelist(whitelist, greylist, unfundedlist);
+        node_db()->set_router_whitelist(whitelist);
         whitelist_received = true;
     }
 
