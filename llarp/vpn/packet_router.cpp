@@ -1,7 +1,11 @@
 #include "packet_router.hpp"
 
+#include <llarp/util/logging.hpp>
+
 namespace llarp::vpn
 {
+    static auto logcat = log::Cat("ip_packet");
+
     struct UDPPacketHandler : public Layer4Handler
     {
         ip_pkt_hook _base_handler;
@@ -16,6 +20,7 @@ namespace llarp::vpn
 
         void handle_ip_packet(IPPacket pkt) override
         {
+            log::debug(logcat, "inbound pkt: ", pkt.info_line());
             auto dstport = pkt.dest_port();
 
             if (not dstport)
@@ -38,8 +43,9 @@ namespace llarp::vpn
 
         explicit GenericLayer4Handler(ip_pkt_hook baseHandler) : _base_handler{std::move(baseHandler)} {}
 
-        void handle_ip_packet(IPPacket) override
+        void handle_ip_packet(IPPacket pkt) override
         {
+            log::debug(logcat, "inbound pkt: {}", pkt.info_line());
             // TOFIX:
             // _base_handler(IPPacket::from_udp(std::move(pkt)));
         }
@@ -49,6 +55,7 @@ namespace llarp::vpn
 
     void PacketRouter::handle_ip_packet(IPPacket pkt)
     {
+        log::debug(logcat, "inbound pkt: {}", pkt.info_line());
         auto dest_port = pkt.dest_port();
 
         if (not dest_port)

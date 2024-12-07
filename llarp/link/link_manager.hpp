@@ -158,8 +158,6 @@ namespace llarp
 
         std::atomic<bool> is_stopping;
 
-        void handle_path_data_message(bstring dgram);
-
         std::shared_ptr<oxen::quic::BTRequestStream> make_control(
             const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& rid);
 
@@ -293,6 +291,7 @@ namespace llarp
                 {"session_init"sv, &LinkManager::_handle_initiate_session}};
 
         // Path relaying
+        void handle_path_data_message(bstring dgram);
         void handle_path_control(oxen::quic::message);
 
         void relay_path_request(oxen::quic::message m, std::string payload);

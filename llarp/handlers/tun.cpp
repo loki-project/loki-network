@@ -965,6 +965,8 @@ namespace llarp::handlers
 
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
+        log::trace(logcat, "outbound packet is ipv{}", pkt_is_ipv4 ? "4" : "6");
+
         if (pkt_is_ipv4)
         {
             src = pkt.source_ipv4();

@@ -501,7 +501,7 @@ namespace llarp::dns
             if (parent_ptr)
             {
                 parent_ptr->call(
-                    [self = shared_from_this(), parent_ptr = std::move(parent_ptr), buf = std::move(data)] {
+                    [self = shared_from_this(), parent_ptr = std::move(parent_ptr), buf = std::move(data)]() mutable {
                         log::trace(
                             logcat,
                             "forwarding dns response from libunbound to userland (resolverAddr: {}, "

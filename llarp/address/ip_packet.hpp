@@ -32,7 +32,7 @@ namespace llarp
     struct IPPacket
     {
       private:
-        std::vector<uint8_t> _buf;
+        std::vector<uint8_t> _buf{};
 
         ip_header* _header{};
         ipv6_header* _v6_header{};
@@ -40,7 +40,7 @@ namespace llarp
         oxen::quic::Address _src_addr{};
         oxen::quic::Address _dst_addr{};
 
-        bool _is_v4{false};
+        bool _is_v4{true};
         bool _is_udp{false};
 
         void _init_internals();
@@ -50,7 +50,7 @@ namespace llarp
         explicit IPPacket(size_t sz);
         explicit IPPacket(bstring_view data);
         explicit IPPacket(ustring_view data);
-        explicit IPPacket(std::vector<uint8_t> data);
+        explicit IPPacket(std::vector<uint8_t>&& data);
         explicit IPPacket(const uint8_t* buf, size_t len);
 
         static IPPacket from_netpkt(NetworkPacket pkt);
@@ -108,12 +108,6 @@ namespace llarp
         size_t size() const { return _buf.size(); }
 
         bool empty() const { return _buf.empty(); }
-
-        bool load(ustring_view data);
-
-        bool load(std::string_view data);
-
-        bool load(std::vector<uint8_t> data);
 
         bool load(const uint8_t* buf, size_t len);
 

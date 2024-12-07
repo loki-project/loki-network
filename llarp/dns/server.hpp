@@ -136,7 +136,7 @@ namespace llarp::dns
             : QueryJob_Base{query}, src{std::move(source)}, resolver{to_}, asker{from_}
         {}
 
-        void send_reply(std::vector<uint8_t> buf) override { src->send_to(asker, resolver, IPPacket{buf}); }
+        void send_reply(std::vector<uint8_t> buf) override { src->send_to(asker, resolver, IPPacket{std::move(buf)}); }
     };
 
     /// handler of dns query hooking

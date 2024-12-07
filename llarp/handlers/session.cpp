@@ -140,7 +140,7 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    static std::atomic<bool> testnet_trigger = false;
+    // static std::atomic<bool> testnet_trigger = false;
 
     void SessionEndpoint::start_tickers()
     {
@@ -155,24 +155,25 @@ namespace llarp::handlers
                 },
                 true);
 
-            if (not testnet_trigger)
-            {
-                testnet_trigger = true;
+            // if (not testnet_trigger)
+            // {
+            //     testnet_trigger = true;
 
-                _router.loop()->call_later(15s, [this]() {
-                    try
-                    {
-                        RouterID cpk{oxenc::from_base32z("4bfu94cyd5t1976qubcwc3nirarri34o4pxq865xrd4krcs8tzxo")};
-                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-                        _initiate_session(
-                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
-                    }
-                    catch (const std::exception& e)
-                    {
-                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-                    }
-                });
-            }
+            //     _router.loop()->call_later(10s, [this]() {
+            //         try
+            //         {
+            //             RouterID cpk{oxenc::from_base32z("bx13pza3snxgnccpbz1dpry6zsmspn718f9kyo9sipp3bdc848oy")};
+            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+            //             _initiate_session(
+            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
+            //                 });
+            //         }
+            //         catch (const std::exception& e)
+            //         {
+            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+            //         }
+            //     });
+            // }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -590,21 +591,11 @@ namespace llarp::handlers
 
         log::trace(logcat, "inner payload: {}", buffer_printer{inner_payload});
 
-        // add path-control wrapping for pivot to relay to aligned path
-        // auto& pivot = path->hops.back();
-        auto onion_nonce = SymmNonce::make_random();
-        // crypto::onion(
-        //     reinterpret_cast<unsigned char*>(inner_payload.data()),
-        //     inner_payload.size(),
-        //     pivot.shared,
-        //     onion_nonce,
-        //     onion_nonce);
-
-        auto pivot_payload = ONION::serialize_hop(remote_intro.pivot_txid.to_view(), onion_nonce, inner_payload);
+        auto pivot_payload =
+            ONION::serialize_hop(remote_intro.pivot_txid.to_view(), SymmNonce::make_random(), inner_payload);
         log::trace(logcat, "pivot payload: {}", buffer_printer{pivot_payload});
 
         auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(pivot_payload));
-        // auto intermediate_payload = PATH::CONTROL::serialize("path_control", std::move(inner_payload));
         log::trace(logcat, "intermediate payload: {}", buffer_printer{intermediate_payload});
 
         path->send_path_control_message(

@@ -3,6 +3,7 @@
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/link/tunnel.hpp>
+#include <llarp/messages/path.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/formattable.hpp>
@@ -44,7 +45,10 @@ namespace llarp::session
 
     bool BaseSession::send_path_data_message(std::string data)
     {
-        return _current_path->send_path_data_message(std::move(data));
+        auto inner_payload = PATH::DATA::serialize(std::move(data), _r.local_rid());
+        auto intermediate_payload =
+            PATH::DATA::serialize_intermediate(std::move(inner_payload), _current_path->intro.pivot_txid);
+        return _r.send_data_message(_current_path->upstream_rid(), std::move(data));
     }
 
     void BaseSession::recv_path_data_message(bstring body)

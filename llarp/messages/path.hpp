@@ -268,7 +268,7 @@ namespace llarp
         {
             /** Fields for transmitting Path Data:
                 - 'i' : RouterID of sender
-                - 'p' : request/command payload
+                - 'p' : messages payload
                 NOTE: more fields may be added later as needed, hence the namespacing
             */
             inline static std::string serialize(std::string payload, const RouterID& local)
@@ -279,18 +279,44 @@ namespace llarp
                 return std::move(btdp).str();
             }
 
+            inline static std::string serialize_intermediate(std::string payload, const HopID& pivot_txid)
+            {
+                oxenc::bt_dict_producer btdp;
+                btdp.append("i", pivot_txid.to_view());
+                btdp.append("p", payload);
+                return std::move(btdp).str();
+            }
+
             inline static std::tuple<NetworkAddress, bstring> deserialize(oxenc::bt_dict_consumer& btdc)
             {
                 RouterID remote;
-                bstring body;
+                bstring payload;
 
                 try
                 {
                     remote.from_string(btdc.require<std::string_view>("i"));
-                    body = btdc.require<bstring>("p");
+                    payload = btdc.require<bstring>("p");
                     auto sender = NetworkAddress::from_pubkey(remote, true);
 
-                    return {std::move(sender), std::move(body)};
+                    return {std::move(sender), std::move(payload)};
+                }
+                catch (const std::exception& e)
+                {
+                    throw std::runtime_error{"Exception caught deserializing path data:{}"_format(e.what())};
+                }
+            }
+
+            inline static std::tuple<HopID, std::string> deserialize_intermediate(oxenc::bt_dict_consumer&& btdc)
+            {
+                HopID hop_id;
+                std::string payload;
+
+                try
+                {
+                    hop_id.from_string(btdc.require<std::string_view>("i"));
+                    payload = btdc.require<std::string>("p");
+
+                    return {std::move(hop_id), std::move(payload)};
                 }
                 catch (const std::exception& e)
                 {

@@ -329,7 +329,8 @@ namespace llarp
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
             [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
-            is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND);
+            is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
+            oxen::quic::opt::enable_datagrams{});
 
         // While only service nodes accept inbound connections, clients must have this key verify
         // callback set. It will reject any attempted inbound connection to a lokinet client prior
@@ -1392,9 +1393,9 @@ namespace llarp
 
             log::info(logcat, "Received path control for local client: {}", buffer_printer{payload});
 
-            for (size_t i = 0; i < path->hops.size() - 1; ++i)
+            // TESTNET:
+            for (auto& hop : path->hops)
             {
-                auto& hop = path->hops[i];
                 nonce = crypto::onion(
                     reinterpret_cast<unsigned char*>(payload.data()),
                     payload.size(),
@@ -1402,7 +1403,7 @@ namespace llarp
                     nonce,
                     hop.kx.xor_nonce);
 
-                log::info(logcat, "xchacha20 -> {}", buffer_printer{payload});
+                log::trace(logcat, "xchacha20 -> {}", buffer_printer{payload});
             }
 
             return handle_path_request(std::move(m), std::move(payload));
@@ -1418,16 +1419,15 @@ namespace llarp
 
         auto onion_nonce = nonce ^ hop->kx.xor_nonce;
 
-        // we only de-onion if we are NOT bridging a request over aligned paths
+        crypto::onion(
+            reinterpret_cast<unsigned char*>(payload.data()),
+            payload.size(),
+            hop->kx.shared_secret,
+            onion_nonce,
+            hop->kx.xor_nonce);
+
         if (not inner_body.has_value())
         {
-            crypto::onion(
-                reinterpret_cast<unsigned char*>(payload.data()),
-                payload.size(),
-                hop->kx.shared_secret,
-                onion_nonce,
-                hop->kx.xor_nonce);
-
             // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
             if (hop->terminal_hop)
             {
@@ -1517,24 +1517,30 @@ namespace llarp
             return;
         }
 
-        auto hop = _router.path_context()->get_transit_hop(hop_id);
-
-        if (not hop)
+        if (!_is_service_node)
         {
-            log::warning(logcat, "Received path data with unknown next hop (ID: {})", hop_id);
-            return;
-        }
+            auto path = _router.path_context()->get_path(hop_id);
 
-        nonce = crypto::onion(
-            reinterpret_cast<unsigned char*>(payload.data()),
-            payload.size(),
-            hop->kx.shared_secret,
-            nonce,
-            hop->kx.xor_nonce);
+            if (not path)
+            {
+                log::warning(logcat, "Client received path data with unknown rxID: {}", hop_id);
+                return;
+            }
 
-        // if terminal hop, pass to the correct path expecting to receive this message
-        if (hop->terminal_hop)
-        {
+            log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
+
+            for (auto& hop : path->hops)
+            {
+                nonce = crypto::onion(
+                    reinterpret_cast<unsigned char*>(payload.data()),
+                    payload.size(),
+                    hop.kx.shared_secret,
+                    nonce,
+                    hop.kx.xor_nonce);
+
+                log::trace(logcat, "xchacha20 -> {}", buffer_printer{payload});
+            }
+
             NetworkAddress sender;
             bstring data;
 
@@ -1556,19 +1562,61 @@ namespace llarp
             {
                 log::warning(logcat, "Exception: {}", e.what());
             }
+            return;
         }
-        else
+
+        auto hop = _router.path_context()->get_transit_hop(hop_id);
+
+        if (not hop)
         {
-            // if not terminal hop, relay datagram onwards
-            auto hop_is_rx = hop->rxid() == hop_id;
-
-            const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-            const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
-
-            std::string new_payload = ONION::serialize_hop(next_id.to_view(), nonce, std::move(payload));
-
-            send_data_message(next_router, std::move(new_payload));
+            log::warning(logcat, "Received path data with unknown next hop (ID: {})", hop_id);
+            return;
         }
+
+        nonce = crypto::onion(
+            reinterpret_cast<unsigned char*>(payload.data()),
+            payload.size(),
+            hop->kx.shared_secret,
+            nonce,
+            hop->kx.xor_nonce);
+
+        // if terminal hop, pass to the correct path expecting to receive this message
+        if (hop->terminal_hop)
+        {
+            HopID hop_id;
+            std::string intermediate;
+
+            try
+            {
+                std::tie(hop_id, intermediate) = PATH::DATA::deserialize_intermediate(oxenc::bt_dict_consumer{payload});
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Path data intermediate payload exception: {}", e.what());
+                return;
+            }
+
+            hop = _router.path_context()->get_transit_hop(hop_id);
+
+            if (not hop)
+            {
+                log::warning(logcat, "We are bridge node for path data message with unknown rxID: {}", hop_id);
+                return;
+            }
+
+            payload = std::move(intermediate);
+            log::debug(logcat, "Bridging path data message on hop: {}", hop->to_string());
+        }
+
+        // if not terminal hop, relay datagram onwards
+        auto hop_is_rx = hop->rxid() == hop_id;
+
+        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
+        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
+
+        std::string new_payload = ONION::serialize_hop(next_id.to_view(), nonce, std::move(payload));
+
+        send_data_message(next_router, std::move(new_payload));
     }
 
     void LinkManager::handle_path_request(oxen::quic::message m, std::string payload)

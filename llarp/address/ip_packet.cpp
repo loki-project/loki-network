@@ -3,6 +3,7 @@
 #include "utils.hpp"
 
 #include <llarp/util/buffer.hpp>
+#include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/time.hpp>
 
 #include <oxenc/endian.h>
@@ -27,18 +28,14 @@ namespace llarp
 
     IPPacket::IPPacket(ustring_view data) : IPPacket{data.data(), data.size()} {}
 
-    IPPacket::IPPacket(std::vector<uint8_t> data) : IPPacket{data.data(), data.size()} {}
+    IPPacket::IPPacket(std::vector<uint8_t>&& data) : IPPacket{data.data(), data.size()} {}
 
     IPPacket::IPPacket(const uint8_t* buf, size_t len)
     {
-        if (len < MIN_PACKET_SIZE)
-        {
-            _buf.resize(0);
-        }
-        else
+        if (len >= MIN_PACKET_SIZE)
         {
             _buf.resize(len);
-            std::copy_n(buf, len, _buf.data());
+            std::memcpy(_buf.data(), buf, len);
         }
 
         _init_internals();
@@ -65,7 +62,14 @@ namespace llarp
         _header = reinterpret_cast<ip_header*>(data());
         _v6_header = reinterpret_cast<ipv6_header*>(data());
 
-        _is_v4 = _header->protocol == uint8_t{4};
+        if (_buf.empty())
+            return;
+
+        // log::trace(logcat, "ippkt header: {}", buffer_printer{_buf});
+        // log::trace(logcat, "ippkt protocol: {}", _header->protocol);
+        // log::trace(logcat, "ippkt version: {}", _header->version);
+
+        _is_v4 = _header->version == oxenc::host_to_big(uint8_t{4});
         _is_udp = _header->protocol == uint8_t{17};
 
         uint16_t src_port =
@@ -76,20 +80,24 @@ namespace llarp
 
         if (_is_v4)
         {
-            auto src = in_addr{_header->src};
-            auto dest = in_addr{_header->dest};
+            auto srcv4 = ipv4{oxenc::big_to_host(_header->src)};
+            auto dstv4 = ipv4{oxenc::big_to_host(_header->dest)};
 
-            _src_addr.set_addr(&src);
-            _dst_addr.set_addr(&dest);
+            log::trace(logcat, "srcv4={}:{}, dstv4={}:{}", srcv4, src_port, dstv4, dest_port);
+
+            _src_addr = oxen::quic::Address{srcv4, src_port};
+            _dst_addr = oxen::quic::Address{dstv4, dest_port};
         }
         else
         {
-            _src_addr.set_addr(&_v6_header->srcaddr);
-            _dst_addr.set_addr(&_v6_header->dstaddr);
-        }
+            auto srcv6 = ipv6{&_v6_header->srcaddr};
+            auto dstv6 = ipv6{&_v6_header->dstaddr};
 
-        _src_addr.set_port(src_port);
-        _dst_addr.set_port(dest_port);
+            log::trace(logcat, "srcv6={}:{}, dstv6={}:{}", srcv6, src_port, dstv6, dest_port);
+
+            _src_addr = oxen::quic::Address{srcv6, src_port};
+            _dst_addr = oxen::quic::Address{dstv6, dest_port};
+        }
     }
 
     std::optional<std::pair<const char*, size_t>> IPPacket::l4_data() const
@@ -283,7 +291,7 @@ namespace llarp
             itr += 2;
 
             // copy ip header and first 8 bytes of datagram for icmp rject
-            std::copy_n(data(), ip_hdr_sz + ICMP_HEADER_SIZE, itr);
+            std::memcpy(itr, _buf.data(), ip_hdr_sz + ICMP_HEADER_SIZE);
             itr += ip_hdr_sz + ICMP_HEADER_SIZE;
 
             // calculate checksum of ip header
@@ -302,21 +310,6 @@ namespace llarp
         return NetworkPacket{oxen::quic::Path{_src_addr, _dst_addr}, bview()};
     }
 
-    bool IPPacket::load(ustring_view data)
-    {
-        return load(data.data(), data.size());
-    }
-
-    bool IPPacket::load(std::string_view data)
-    {
-        return load(reinterpret_cast<const uint8_t*>(data.data()), data.size());
-    }
-
-    bool IPPacket::load(std::vector<uint8_t> data)
-    {
-        return load(data.data(), data.size());
-    }
-
     bool IPPacket::load(const uint8_t* buf, size_t len)
     {
         if (len < MIN_PACKET_SIZE)
@@ -324,7 +317,7 @@ namespace llarp
 
         _buf.clear();
         _buf.resize(len);
-        std::copy_n(buf, len, _buf.data());
+        std::memcpy(_buf.data(), buf, len);
 
         _init_internals();
 
@@ -376,7 +369,7 @@ namespace llarp
 
     std::string IPPacket::info_line() const
     {
-        return "IPPacket (src:{}, dest:{}, size:{})"_format(_src_addr, _dst_addr, size());
+        return "IPPacket:[src={} | dest={} | size={}]"_format(_src_addr, _dst_addr, size());
     }
 
 }  // namespace llarp
