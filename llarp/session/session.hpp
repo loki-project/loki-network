@@ -49,6 +49,8 @@ namespace llarp
 
             shared_kx_data session_keys{};
 
+            ClientIntro remote_intro;
+
             bool _use_tun;
             bool _is_outbound;
 
@@ -80,7 +82,8 @@ namespace llarp
                 SessionTag _t,
                 bool use_tun,
                 bool is_outbound,
-                std::optional<shared_kx_data> kx_data = std::nullopt);
+                std::optional<shared_kx_data> kx_data = std::nullopt,
+                std::optional<ClientIntro> remote_intro = std::nullopt);
 
             virtual ~BaseSession() = default;
 
@@ -122,7 +125,8 @@ namespace llarp
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
                 SessionTag _t,
-                std::optional<shared_kx_data> kx_data = std::nullopt);
+                std::optional<shared_kx_data> kx_data = std::nullopt,
+                std::optional<ClientIntro> remote_intro = std::nullopt);
 
             ~OutboundSession() override;
 

@@ -60,14 +60,14 @@ namespace llarp
                 throw std::runtime_error{messages::ERROR_RESPONSE};
             }
 
-            log::info(logcat, "payload: {}", buffer_printer{payload});
+            log::trace(logcat, "payload: {}", buffer_printer{payload});
 
             try
             {
                 kx_data.server_dh(local_sk);
                 kx_data.decrypt(to_uspan(payload));
 
-                log::info(logcat, "xchacha -> payload: {}", buffer_printer{payload});
+                log::trace(logcat, "xchacha -> payload: {}", buffer_printer{payload});
 
                 kx_data.generate_xor();
             }
@@ -227,7 +227,7 @@ namespace llarp
                     throw std::runtime_error{BAD_CRYPTO};
                 }
 
-                log::critical(logcat, "TransitHop data successfully deserialized: {}", hop->to_string());
+                log::trace(logcat, "TransitHop data successfully deserialized: {}", hop->to_string());
                 return hop;
             }
         }  // namespace BUILD

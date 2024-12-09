@@ -179,6 +179,8 @@ namespace llarp
 
         const oxen::quic::Address& local() { return addr; }
 
+        void regenerate_and_gossip_rc();
+
         void gossip_rc(const RouterID& last_sender, const RemoteRC& rc);
 
         void handle_gossip_rc(oxen::quic::message m);
@@ -346,7 +348,6 @@ namespace llarp
                         _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
                         std::forward<Opt>(opts)...);
 
-                    // auto
                     auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
                         [](oxen::quic::Stream&, uint64_t error_code) {
                             log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
@@ -365,7 +366,7 @@ namespace llarp
                                  : conn_interface->send_datagram(std::move(body));
 
                     itr->second =
-                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream));
 
                     log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
@@ -410,7 +411,7 @@ namespace llarp
                     link_manager.register_commands(control_stream, rid, not _is_service_node);
 
                     itr->second =
-                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream));
 
                     log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;

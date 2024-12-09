@@ -51,6 +51,8 @@ namespace llarp
             HopID txid() { return _txid; }
             const HopID& txid() const { return _txid; }
 
+            std::optional<std::pair<RouterID, HopID>> next_id(const HopID& h) const;
+
             bool operator<(const TransitHop& other) const
             {
                 return std::tie(_txid, _rxid, _upstream, _downstream)

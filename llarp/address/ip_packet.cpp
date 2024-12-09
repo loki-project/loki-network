@@ -305,9 +305,12 @@ namespace llarp
         return std::nullopt;
     }
 
-    NetworkPacket IPPacket::make_netpkt()
+    NetworkPacket IPPacket::make_netpkt() &&
     {
-        return NetworkPacket{oxen::quic::Path{_src_addr, _dst_addr}, bview()};
+        bstring data{};
+        data.reserve(_buf.size());
+        std::memcpy(data.data(), _buf.data(), _buf.size());
+        return NetworkPacket{oxen::quic::Path{_src_addr, _dst_addr}, std::move(data)};
     }
 
     bool IPPacket::load(const uint8_t* buf, size_t len)
@@ -341,10 +344,7 @@ namespace llarp
 
     std::vector<uint8_t> IPPacket::steal_buffer() &&
     {
-        std::vector<uint8_t> b;
-        b.resize(size());
-        _buf.swap(b);
-        return b;
+        return std::move(_buf);
     }
 
     std::string IPPacket::steal_payload() &&
@@ -356,10 +356,7 @@ namespace llarp
 
     std::vector<uint8_t> IPPacket::give_buffer()
     {
-        std::vector<uint8_t> b;
-        b.resize(size());
-        std::memcpy(b.data(), data(), size());
-        return b;
+        return {_buf};
     }
 
     std::string IPPacket::to_string()

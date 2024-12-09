@@ -56,7 +56,7 @@ namespace llarp
         static IPPacket from_netpkt(NetworkPacket pkt);
         static std::optional<IPPacket> from_buffer(const uint8_t* buf, size_t len);
 
-        NetworkPacket make_netpkt();
+        NetworkPacket make_netpkt() &&;
 
         bool is_ipv4() const { return _is_v4; }
 

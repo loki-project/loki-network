@@ -22,7 +22,8 @@ namespace llarp::session
         SessionTag _t,
         bool use_tun,
         bool is_outbound,
-        std::optional<shared_kx_data> kx_data)
+        std::optional<shared_kx_data> kx_data,
+        std::optional<ClientIntro> _remote_intro)
         : _r{r},
           _parent{parent},
           _tag{std::move(_t)},
@@ -33,6 +34,8 @@ namespace llarp::session
     {
         if (kx_data.has_value())
             session_keys = std::move(*kx_data);
+        if (_remote_intro.has_value())
+            remote_intro = std::move(*_remote_intro);
 
         set_new_current_path(std::move(_p));
     }
@@ -45,10 +48,12 @@ namespace llarp::session
 
     bool BaseSession::send_path_data_message(std::string data)
     {
+        // session_keys.encrypt(to_uspan(data));
         auto inner_payload = PATH::DATA::serialize(std::move(data), _r.local_rid());
         auto intermediate_payload =
-            PATH::DATA::serialize_intermediate(std::move(inner_payload), _current_path->intro.pivot_txid);
-        return _r.send_data_message(_current_path->upstream_rid(), std::move(data));
+            PATH::DATA::serialize_intermediate(std::move(inner_payload), remote_intro.pivot_txid);
+        return _r.send_data_message(
+            _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
     }
 
     void BaseSession::recv_path_data_message(bstring body)
@@ -62,8 +67,7 @@ namespace llarp::session
             _current_path->unlink_session();
 
         _current_path = std::move(_new_path);
-
-        _pivot_txid = _current_path->pivot_rxid();
+        _pivot_txid = _current_path->pivot_txid();
 
         if (_use_tun)
             _current_path->link_session([this](bstring data) {
@@ -162,7 +166,8 @@ namespace llarp::session
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
         SessionTag _t,
-        std::optional<shared_kx_data> kx_data)
+        std::optional<shared_kx_data> kx_data,
+        std::optional<ClientIntro> remote_intro)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
               _router,
@@ -172,7 +177,8 @@ namespace llarp::session
               std::move(_t),
               _router.using_tun_if(),
               true,
-              std::move(kx_data)},
+              std::move(kx_data),
+              std::move(remote_intro)},
           _is_snode_session{not _remote.is_client()},
           _last_use{_router.now()}
     {

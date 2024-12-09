@@ -76,14 +76,6 @@ namespace llarp::path
 
         hops.back().terminal_hop = true;
 
-        // _local_hop = std::make_shared<TransitHop>();
-        // _local_hop->_rid = _router.local_rid();
-        // _local_hop->_upstream = hops.front()._rid;
-        // _local_hop->_downstream = _local_hop->_rid;
-        // _local_hop->_rxid = HopID::make_random();
-        // _local_hop->_txid = hops.front()._rxid;
-        // _local_hop->terminal_hop = true;
-
         log::trace(logcat, "Path populated with hops: {}", hop_string());
 
         // initialize parts of the clientintro
@@ -208,7 +200,6 @@ namespace llarp::path
     {
         auto inner_payload = PATH::DATA::serialize(std::move(data), _router.local_rid());
         auto outer_payload = make_path_message(std::move(inner_payload));
-
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
@@ -217,7 +208,6 @@ namespace llarp::path
     {
         auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
         auto outer_payload = make_path_message(std::move(inner_payload));
-
         return _router.send_control_message(upstream_rid(), "path_control", std::move(outer_payload), std::move(func));
     }
 

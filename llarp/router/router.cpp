@@ -687,7 +687,7 @@ namespace llarp
             //  All relays have TUN
             if (_using_tun = conf.network.init_tun; _using_tun)
             {
-                log::critical(logcat, "Initializing virtual TUN device...");
+                log::debug(logcat, "Initializing virtual TUN device...");
                 init_tun();
             }
 
@@ -757,15 +757,9 @@ namespace llarp
 
     void Router::save_rc()
     {
-        // _node_db->put_rc(router_contact.view());
         log::info(logcat, "Saving RC file to {}", our_rc_file);
         queue_disk_io([&]() { relay_contact.write(our_rc_file); });
     }
-
-    // bool Router::is_bootstrap_node(const RouterID r) const
-    // {
-    //     return _node_db->is_bootstrap_node(r);
-    // }
 
     bool Router::should_report_stats(std::chrono::milliseconds now) const
     {

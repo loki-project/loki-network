@@ -466,10 +466,6 @@ namespace llarp
 
         auto& src = fetch_source;
 
-        // TESTNET:
-        // rid_sources.emplace(oxenc::from_base32z("55fxrrdt9ggkra9yoi58gbespa13is1sqqrykdzjamgkxrq91tto"));
-        // auto& src = _bootstraps.current().router_id();
-
         for (const auto& target : rid_sources)
         {
             if (target == src)
@@ -943,8 +939,18 @@ namespace llarp
         if (rid == _router.local_rid())
             return false;
 
-        known_rcs.erase(rc);
-        rc_lookup.erase(rid);
+        // Use the rc_lookup RemoteRC to delete from known_rcs, as the differing timestamp between the old and new will
+        // result in set::insert not matching to the previous value
+        if (auto it = rc_lookup.find(rid); it != rc_lookup.end())
+        {
+            known_rcs.erase(it->second);
+            rc_lookup.erase(it);
+        }
+        else
+        {
+            known_rcs.erase(rc);
+            rc_lookup.erase(rid);
+        }
 
         auto [itr, b] = known_rcs.insert(std::move(rc));
         ret &= b;
@@ -980,7 +986,8 @@ namespace llarp
                 return false;
         }
 
-        return put_rc(rc);
+        put_rc(std::move(rc));
+        return true;
     }
 
     void NodeDB::remove_many_from_disk_async(std::unordered_set<RouterID> remove) const

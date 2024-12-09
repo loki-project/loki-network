@@ -67,9 +67,6 @@ namespace llarp
             }
 
             return nullptr;
-            // return link_manager.router().loop()->call_get([this, rid = remote]() -> std::shared_ptr<link::Connection>
-            // {
-            // });
         }
 
         bool Endpoint::have_conn(const RouterID& remote) const
@@ -282,15 +279,7 @@ namespace llarp
     void LinkManager::start_tickers()
     {
         log::debug(logcat, "Starting gossip ticker...");
-        _gossip_ticker = _router.loop()->call_every(
-            _router._gossip_interval,
-            [this]() {
-                log::critical(logcat, "Regenerating and gossiping RC...");
-                _router.relay_contact.resign();
-                _router.save_rc();
-                gossip_rc(_router.local_rid(), _router.relay_contact.to_remote());
-            },
-            true);
+        _gossip_ticker = _router.loop()->call_every(_router._gossip_interval, [this]() { regenerate_and_gossip_rc(); });
     }
 
     LinkManager::LinkManager(Router& r)
@@ -327,7 +316,7 @@ namespace llarp
             make_static_secret(_router.identity()),
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
-            [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },
+            [this](oxen::quic::dgram_interface&, bstring dgram) { return handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
             oxen::quic::opt::enable_datagrams{});
@@ -747,33 +736,38 @@ namespace llarp
             log::warning(logcat, "NodeDB query for {} random RCs for connection returned none", num_conns);
     }
 
+    void LinkManager::regenerate_and_gossip_rc()
+    {
+        log::info(logcat, "Regenerating and gossiping RC...");
+        gossip_rc(_router.local_rid(), _router.relay_contact.to_remote());
+        _router.save_rc();
+    }
+
     void LinkManager::gossip_rc(const RouterID& last_sender, const RemoteRC& rc)
     {
-        _router.loop()->call([this, last_sender, rc]() {
-            int count = 0;
-            const auto& gossip_src = rc.router_id();
+        int count{};
+        const auto& gossip_src = rc.router_id();
 
-            for (auto& [rid, conn] : ep->service_conns)
-            {
-                // don't send back to the gossip source or the last sender
-                if (rid == gossip_src or rid == last_sender)
-                    continue;
+        for (auto& [rid, conn] : ep->service_conns)
+        {
+            if (not conn or not conn->is_active)
+                continue;
 
-                send_control_message(
-                    rid, "gossip_rc"s, GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
-                        log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
-                    });
-                ++count;
-            }
+            // don't send back to the gossip source or the last sender
+            if (rid == gossip_src or rid == last_sender)
+                continue;
 
-            log::critical(logcat, "Dispatched {} GossipRC requests!", count);
-        });
+            count += send_control_message(
+                rid, "gossip_rc"s, GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
+                    log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
+                });
+        }
+
+        log::critical(logcat, "Dispatched {} GossipRC requests!", count);
     }
 
     void LinkManager::handle_gossip_rc(oxen::quic::message m)
     {
-        log::debug(logcat, "Handling GossipRC request...");
-
         // RemoteRC constructor wraps deserialization in a try/catch
         RemoteRC rc;
         RouterID src;
@@ -792,13 +786,15 @@ namespace llarp
             return;
         }
 
+        log::trace(logcat, "Handling GossipRC request (sender:{}, rc:{})...", src, rc);
+
         if (node_db->verify_store_gossip_rc(rc))
         {
-            log::critical(logcat, "Received updated RC, forwarding to relay peers.");
+            log::info(logcat, "Received updated RC (rid:{}), forwarding to peers", rc.router_id());
             gossip_rc(_router.local_rid(), rc);
         }
         else
-            log::debug(logcat, "Received known or old RC, not storing or forwarding.");
+            log::trace(logcat, "Received known or old RC, not storing or forwarding.");
     }
 
     // TODO: can probably use ::send_control_message instead. Need to discuss the potential
@@ -1342,10 +1338,11 @@ namespace llarp
                         return prev_message.respond(messages::OK_RESPONSE, false);
                     }
 
-                    if (m.timed_out)
-                        log::info(logcat, "Upstream timed out on path build; relaying timeout");
-                    else
-                        log::info(logcat, "Upstream returned path build failure; relaying response");
+                    log::info(
+                        logcat,
+                        "Upstream ({}) returned path build {}; relaying...",
+                        transit_hop->upstream(),
+                        m.timed_out ? "time out" : "failure");
 
                     return prev_message.respond(m.body_str(), m.is_error());
                 });
@@ -1393,7 +1390,6 @@ namespace llarp
 
             log::info(logcat, "Received path control for local client: {}", buffer_printer{payload});
 
-            // TESTNET:
             for (auto& hop : path->hops)
             {
                 nonce = crypto::onion(
@@ -1444,15 +1440,18 @@ namespace llarp
                 hop->to_string(),
                 buffer_printer{*inner_body});
 
-        auto hop_is_rx = hop->rxid() == hop_id;
+        auto next_ids = hop->next_id(hop_id);
 
-        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
+        if (not next_ids)
+        {
+            log::error(logcat, "Failed to query hop ({}) for next ids (input: {})", hop->to_string(), hop_id);
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
 
-        std::string new_payload = ONION::serialize_hop(next_id.to_view(), onion_nonce, std::move(payload));
+        std::string new_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(payload));
 
         send_control_message(
-            next_router,
+            next_ids->first,
             "path_control",
             std::move(new_payload),
             [hop_weak = hop->weak_from_this(), hop_id, prev_message = std::move(m)](
@@ -1501,122 +1500,161 @@ namespace llarp
         return _handle_path_control(std::move(m));
     }
 
-    void LinkManager::handle_path_data_message(bstring message)
+    void LinkManager::handle_path_data_message(bstring data)
     {
-        HopID hop_id;
-        std::string payload;
-        SymmNonce nonce;
-
-        try
-        {
-            std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{message});
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (!_is_service_node)
-        {
-            auto path = _router.path_context()->get_path(hop_id);
-
-            if (not path)
-            {
-                log::warning(logcat, "Client received path data with unknown rxID: {}", hop_id);
-                return;
-            }
-
-            log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
-
-            for (auto& hop : path->hops)
-            {
-                nonce = crypto::onion(
-                    reinterpret_cast<unsigned char*>(payload.data()),
-                    payload.size(),
-                    hop.kx.shared_secret,
-                    nonce,
-                    hop.kx.xor_nonce);
-
-                log::trace(logcat, "xchacha20 -> {}", buffer_printer{payload});
-            }
-
-            NetworkAddress sender;
-            bstring data;
+        _router.loop()->call([this, message = std::move(data)]() {
+            HopID hop_id;
+            std::string payload;
+            SymmNonce nonce;
 
             try
             {
-                oxenc::bt_dict_consumer btdc{payload};
-                std::tie(sender, data) = PATH::DATA::deserialize(btdc);
-
-                if (auto session = _router.session_endpoint()->get_session(sender))
-                {
-                    session->recv_path_data_message(std::move(data));
-                }
-                else
-                {
-                    log::warning(logcat, "Could not find session (remote:{}) to relay path data message!", sender);
-                }
+                std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{message});
             }
             catch (const std::exception& e)
             {
                 log::warning(logcat, "Exception: {}", e.what());
-            }
-            return;
-        }
-
-        auto hop = _router.path_context()->get_transit_hop(hop_id);
-
-        if (not hop)
-        {
-            log::warning(logcat, "Received path data with unknown next hop (ID: {})", hop_id);
-            return;
-        }
-
-        nonce = crypto::onion(
-            reinterpret_cast<unsigned char*>(payload.data()),
-            payload.size(),
-            hop->kx.shared_secret,
-            nonce,
-            hop->kx.xor_nonce);
-
-        // if terminal hop, pass to the correct path expecting to receive this message
-        if (hop->terminal_hop)
-        {
-            HopID hop_id;
-            std::string intermediate;
-
-            try
-            {
-                std::tie(hop_id, intermediate) = PATH::DATA::deserialize_intermediate(oxenc::bt_dict_consumer{payload});
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Path data intermediate payload exception: {}", e.what());
                 return;
             }
 
-            hop = _router.path_context()->get_transit_hop(hop_id);
+            if (!_is_service_node)
+            {
+                auto path = _router.path_context()->get_path(hop_id);
+
+                if (not path)
+                {
+                    log::warning(logcat, "Client received path data with unknown rxID: {}", hop_id);
+                    return;
+                }
+
+                log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
+
+                for (auto& hop : path->hops)
+                {
+                    nonce = crypto::onion(
+                        reinterpret_cast<unsigned char*>(payload.data()),
+                        payload.size(),
+                        hop.kx.shared_secret,
+                        nonce,
+                        hop.kx.xor_nonce);
+
+                    log::debug(logcat, "xchacha20 -> {}", buffer_printer{payload});
+                }
+
+                NetworkAddress sender;
+                bstring data;
+
+                try
+                {
+                    oxenc::bt_dict_consumer btdc{payload};
+                    std::tie(sender, data) = PATH::DATA::deserialize(btdc);
+
+                    if (auto session = _router.session_endpoint()->get_session(sender))
+                    {
+                        session->recv_path_data_message(std::move(data));
+                    }
+                    else
+                    {
+                        log::warning(logcat, "Could not find session (remote:{}) to relay path data message!", sender);
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(logcat, "Exception: {}: {}", e.what(), buffer_printer{data});
+                }
+                return;
+            }
+
+            log::debug(logcat, "Received path data for local relay: {}", buffer_printer{payload});
+
+            auto hop = _router.path_context()->get_transit_hop(hop_id);
 
             if (not hop)
             {
-                log::warning(logcat, "We are bridge node for path data message with unknown rxID: {}", hop_id);
+                log::warning(logcat, "Received path data with unknown next hop (ID: {})", hop_id);
                 return;
             }
 
-            payload = std::move(intermediate);
-            log::debug(logcat, "Bridging path data message on hop: {}", hop->to_string());
-        }
+            auto onion_nonce = nonce ^ hop->kx.xor_nonce;
 
-        // if not terminal hop, relay datagram onwards
-        auto hop_is_rx = hop->rxid() == hop_id;
+            crypto::onion(
+                reinterpret_cast<unsigned char*>(payload.data()),
+                payload.size(),
+                hop->kx.shared_secret,
+                onion_nonce,
+                hop->kx.xor_nonce);
 
-        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
+            std::optional<std::pair<RouterID, HopID>> next_ids = std::nullopt;
+            std::string next_payload;
 
-        std::string new_payload = ONION::serialize_hop(next_id.to_view(), nonce, std::move(payload));
+            // if terminal hop, pass to the correct path expecting to receive this message
+            if (hop->terminal_hop)
+            {
+                log::debug(
+                    logcat, "We are terminal hop for path data: {}: {}", hop->to_string(), buffer_printer{payload});
 
-        send_data_message(next_router, std::move(new_payload));
+                HopID ihid;
+                std::string intermediate;
+
+                try
+                {
+                    std::tie(ihid, intermediate) =
+                        PATH::DATA::deserialize_intermediate(oxenc::bt_dict_consumer{payload});
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(
+                        logcat, "Path data intermediate payload exception: {}: {}", e.what(), buffer_printer{payload});
+                    return;
+                }
+
+                log::debug(logcat, "Inbound path rxid:{}, outbound path txid:{}", hop_id, ihid);
+
+                auto next_hop = _router.path_context()->get_transit_hop(ihid);
+
+                if (not next_hop)
+                {
+                    log::warning(logcat, "We are bridge node for path data message with unknown txID: {}", ihid);
+                    return;
+                }
+
+                log::debug(logcat, "Bridging path data message on hop: {}", next_hop->to_string());
+
+                next_ids = next_hop->next_id(ihid);
+
+                onion_nonce ^= next_hop->kx.xor_nonce;
+
+                crypto::onion(
+                    reinterpret_cast<unsigned char*>(intermediate.data()),
+                    intermediate.size(),
+                    next_hop->kx.shared_secret,
+                    onion_nonce,
+                    next_hop->kx.xor_nonce);
+
+                if (not next_ids)
+                {
+                    log::error(
+                        logcat, "Failed to query hop ({}) for next ids (input: {})", next_hop->to_string(), hop_id);
+                    return;
+                }
+
+                next_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(intermediate));
+            }
+            else
+            {
+                next_ids = hop->next_id(hop_id);
+
+                if (not next_ids)
+                {
+                    log::error(logcat, "Failed to query hop ({}) for next ids (input: {})", hop->to_string(), hop_id);
+                    return;
+                }
+
+                next_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(payload));
+            }
+
+            send_data_message(next_ids->first, std::move(next_payload));
+        });
     }
 
     void LinkManager::handle_path_request(oxen::quic::message m, std::string payload)

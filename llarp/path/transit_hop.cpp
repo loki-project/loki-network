@@ -35,7 +35,7 @@ namespace llarp::path
         // generate hash of hop key for nonce mutation
         kx.generate_xor();
 
-        log::critical(logcat, "TransitHop data successfully deserialized: {}", to_string());
+        log::trace(logcat, "TransitHop data successfully deserialized: {}", to_string());
     }
 
     void TransitHop::bt_decode(oxenc::bt_dict_consumer&& btdc)
@@ -55,6 +55,18 @@ namespace llarp::path
         btdp.append("u", _upstream.to_view());
 
         return std::move(btdp).str();
+    }
+
+    std::optional<std::pair<RouterID, HopID>> TransitHop::next_id(const HopID& h) const
+    {
+        std::optional<std::pair<RouterID, HopID>> ret = std::nullopt;
+
+        if (h == _rxid)
+            ret = {_upstream, _txid};
+        else if (h == _txid)
+            ret = {_downstream, _rxid};
+
+        return ret;
     }
 
     nlohmann::json TransitHop::ExtractStatus() const

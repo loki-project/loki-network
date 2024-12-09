@@ -162,7 +162,7 @@ namespace llarp::handlers
             //     _router.loop()->call_later(10s, [this]() {
             //         try
             //         {
-            //             RouterID cpk{oxenc::from_base32z("bx13pza3snxgnccpbz1dpry6zsmspn718f9kyo9sipp3bdc848oy")};
+            //             RouterID cpk{oxenc::from_base32z("6e9wdnd4cj3j3rgc9ze8ctxqj4z976tmu8osbzwgabruabb4u1ky")};
             //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
             //             _initiate_session(
             //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
@@ -436,7 +436,6 @@ namespace llarp::handlers
         bool use_tun)
     {
         bool ret = true;
-        // assert(path->is_client_path());
 
         auto inbound = std::make_shared<session::InboundSession>(
             initiator, std::move(path), *this, std::move(tag), use_tun, std::move(kx_data));
@@ -463,7 +462,7 @@ namespace llarp::handlers
             else
             {
                 // TODO: if this fails, we should close the session
-                log::warning(logcat, "TUN devcice failed to route session (remote: {}) to local ip", session->remote());
+                log::warning(logcat, "TUN device failed to route session (remote: {}) to local ip", session->remote());
                 ret = false;
             }
         }
@@ -491,7 +490,7 @@ namespace llarp::handlers
                 if (not path or not path->is_ready())
                     continue;
 
-                log::debug(logcat, "Publishing ClientContact to pivot {}", path->pivot_rid());
+                log::debug(logcat, "Publishing ClientContact on {}", path->hop_string());
 
                 ret &= path->publish_client_contact(ecc, [](oxen::quic::message m) {
                     if (m)
@@ -562,11 +561,6 @@ namespace llarp::handlers
                                     - 't' : Use Tun interface (bool)
                                     - 'u' : Authentication field
                                         - bt-encoded dict, values TBD
-
-        TODO:
-            - update logic: sessions to relays do not need a shared_kx_data type
-                - client <-> client rely on symmetric DH across aligned paths
-                - client <-> relay end at the pivot
      */
     void SessionEndpoint::_make_session(
         NetworkAddress remote,
@@ -601,14 +595,24 @@ namespace llarp::handlers
         path->send_path_control_message(
             "path_control",
             std::move(intermediate_payload),
-            [this, remote, tag, path, hook = std::move(cb), session_keys = std::move(kx_data)](
-                oxen::quic::message m) mutable {
+            [this,
+             remote,
+             tag,
+             path,
+             hook = std::move(cb),
+             session_keys = std::move(kx_data),
+             remote_intro = std::move(remote_intro)](oxen::quic::message m) mutable {
                 if (m)
                 {
                     log::critical(logcat, "Call to InitiateSession succeeded!");
 
                     auto outbound = std::make_shared<session::OutboundSession>(
-                        remote, *this, std::move(path), std::move(tag), std::move(session_keys));
+                        remote,
+                        *this,
+                        std::move(path),
+                        std::move(tag),
+                        std::move(session_keys),
+                        std::move(remote_intro));
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 
@@ -696,17 +700,6 @@ namespace llarp::handlers
         }
 
         auto& pivot = intro.pivot_rid;
-
-        // TOTHINK: why would we ever have a path keyed to remote client intro pivot txid?
-        // if (auto path = _router.path_context()->get_path(intro.pivot_txid))
-        // {
-        //     log::info(
-        //         logcat,
-        //         "Found path to pivot (rid: {}, tx_id: {}); initiating session!",
-        //         intro.pivot_rid,
-        //         intro.pivot_txid);
-        //     return _make_session(std::move(remote), std::move(path), std::move(cb), is_exit);
-        // }
 
         log::info(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
 

@@ -15,6 +15,7 @@
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/router/router.hpp>
+#include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/str.hpp>
 
 namespace llarp::handlers
@@ -995,7 +996,12 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::debug(logcat, "Dispatching outbound packet for session (remote: {})", remote);
+                log::debug(
+                    logcat,
+                    "Dispatching outbound {}B packet for session (remote: {}): {}",
+                    pkt.size(),
+                    remote,
+                    buffer_printer{pkt.uview()});
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else

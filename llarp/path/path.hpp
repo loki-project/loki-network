@@ -124,6 +124,8 @@ namespace llarp
 
             bool send_path_data_message(std::string body);
 
+            std::string make_path_message(std::string payload);
+
             bool is_established() const { return _established; }
 
             bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
@@ -165,9 +167,7 @@ namespace llarp
             std::string to_string() const;
             static constexpr bool to_string_formattable = true;
 
-          private:
-            std::string make_path_message(std::string payload);
-
+          protected:
             void populate_internals(const std::vector<RemoteRC>& _hops);
 
             /// call obtained exit hooks
