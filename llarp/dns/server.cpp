@@ -310,7 +310,7 @@ namespace llarp::dns
       // remaining args, and the formatted string passed to the above as `val`.
       template <typename... FmtArgs, std::enable_if_t<sizeof...(FmtArgs), int> = 0>
       void
-      SetOpt(const std::string& key, std::string_view format, FmtArgs&&... args)
+      SetOpt(const std::string& key, fmt::format_string<FmtArgs...> format, FmtArgs&&... args)
       {
         SetOpt(key, fmt::format(format, std::forward<FmtArgs>(args)...));
       }
@@ -366,7 +366,7 @@ namespace llarp::dns
         // add host files
         for (const auto& file : conf.m_hostfiles)
         {
-          const auto str = file.u8string();
+          const auto str = file.string();
           if (auto ret = ub_ctx_hosts(m_ctx, str.c_str()))
           {
             throw std::runtime_error{

@@ -157,13 +157,14 @@ namespace llarp
   {
     const double dsecs = std::chrono::duration<double>(dur).count();
     return fmt::format(
-        dur >= 24h        ? "{0}d{1}h{2}m{3}s"
-            : dur >= 1h   ? "{1}h{2}m{3}s"
-            : dur >= 1min ? "{2}m{3}s"
-            : dur >= 1s   ? "{4:.3f}s"
-            : dur >= 1ms  ? "{5:.3f}s"
-            : dur >= 1us  ? u8"{6:.3f}µs"
-                          : "{7}ns",
+        fmt::runtime(
+            dur >= 24h        ? "{0}d{1}h{2}m{3}s"
+                : dur >= 1h   ? "{1}h{2}m{3}s"
+                : dur >= 1min ? "{2}m{3}s"
+                : dur >= 1s   ? "{4:.3f}s"
+                : dur >= 1ms  ? "{5:.3f}s"
+                : dur >= 1us  ? "{6:.3f}µs"
+                              : "{7}ns"),
         dur / 24h,
         dur / 1h,
         dur / 1min,
