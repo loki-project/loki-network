@@ -446,8 +446,7 @@ namespace llarp
     _nodedb = std::move(nodedb);
 
     m_isServiceNode = conf.router.m_isRelay;
-    log::debug(
-        logcat, m_isServiceNode ? "Running as a relay (service node)" : "Running as a client");
+    log::debug(logcat, "Running as a {}", m_isServiceNode ? "relay (service node)" : "client");
 
     if (whitelistRouters)
     {
