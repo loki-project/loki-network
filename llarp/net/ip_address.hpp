@@ -19,7 +19,7 @@ namespace llarp
   /// As a convenience, it can produce a SockAddr for dealing with network libraries which depend
   /// sockaddr structs. However, it does not keep this as a member variable and isn't responsible
   /// for its lifetime/memory/etc.
-  struct [[deprecated("use llarp::SockAddr instead")]] IpAddress
+  struct IpAddress
   {
     /// Empty constructor.
     IpAddress() = default;
