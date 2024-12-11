@@ -46,7 +46,7 @@ namespace llarp::quic
   std::string
   StreamID::ToString() const
   {
-    return fmt::format(u8"Str❰{}❱", id);
+    return fmt::format("Str❰{}❱", id);
   }
 
   Stream::Stream(

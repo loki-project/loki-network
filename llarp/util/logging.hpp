@@ -53,7 +53,7 @@ namespace llarp
   {
     LogTrace(
         T&&... args,
-        const log::slns::source_location& location = log::slns::source_location::current())
+        const log::source_location& location = log::source_location::current())
         : log::trace<T...>::trace{
             log_detail::legacy_logger,
             log_detail::concat_args_fmt<sizeof...(T)>(),
@@ -66,7 +66,7 @@ namespace llarp
   {
     LogDebug(
         T&&... args,
-        const log::slns::source_location& location = log::slns::source_location::current())
+        const log::source_location& location = log::source_location::current())
         : log::debug<T...>::debug{
             log_detail::legacy_logger,
             log_detail::concat_args_fmt<sizeof...(T)>(),
@@ -79,7 +79,7 @@ namespace llarp
   {
     LogInfo(
         T&&... args,
-        const log::slns::source_location& location = log::slns::source_location::current())
+        const log::source_location& location = log::source_location::current())
         : log::info<T...>::info{
             log_detail::legacy_logger,
             log_detail::concat_args_fmt<sizeof...(T)>(),
@@ -92,7 +92,7 @@ namespace llarp
   {
     LogWarn(
         T&&... args,
-        const log::slns::source_location& location = log::slns::source_location::current())
+        const log::source_location& location = log::source_location::current())
         : log::warning<T...>::warning{
             log_detail::legacy_logger,
             log_detail::concat_args_fmt<sizeof...(T)>(),
@@ -105,7 +105,7 @@ namespace llarp
   {
     LogError(
         T&&... args,
-        const log::slns::source_location& location = log::slns::source_location::current())
+        const log::source_location& location = log::source_location::current())
         : log::error<T...>::error{
             log_detail::legacy_logger,
             log_detail::concat_args_fmt<sizeof...(T)>(),
