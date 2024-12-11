@@ -1230,15 +1230,12 @@ namespace llarp
             if (auto pos = arg_v.find(':'); pos != arg_v.npos)
             {
                 // host = arg_v.substr(0, pos);
-                log::critical(logcat, "Parsing input: {}", arg);
                 std::tie(host, p) = detail::parse_addr(arg_v, DEFAULT_LISTEN_PORT);
-                log::critical(logcat, "Parsed input = {}:{}", host, p);
             }
 
             if (host.empty())
             {
-                log::critical(
-                    logcat, "Host value empty, port:{}{}", p, p == DEFAULT_LISTEN_PORT ? "(DEFAULT PORT)" : "");
+                log::debug(logcat, "Host value empty, port:{}{}", p, p == DEFAULT_LISTEN_PORT ? "(DEFAULT PORT)" : "");
                 given_port_only = p != DEFAULT_LISTEN_PORT;
                 maybe = net_ptr->get_best_public_address(true, p);
             }
@@ -1248,7 +1245,7 @@ namespace llarp
             if (maybe and maybe->is_loopback())
                 throw std::invalid_argument{"{} is a loopback address"_format(arg)};
 
-            log::critical(logcat, "parsed address: {}", *maybe);
+            log::trace(logcat, "parsed address: {}", *maybe);
 
             return maybe;
         };

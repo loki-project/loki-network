@@ -29,8 +29,7 @@ namespace llarp::session
           _tag{std::move(_t)},
           _remote{std::move(remote)},
           _use_tun{use_tun},
-          _is_outbound{is_outbound},
-          _is_exit_session{kx_data.has_value()}
+          _is_outbound{is_outbound}
     {
         if (kx_data.has_value())
             session_keys = std::move(*kx_data);
@@ -48,7 +47,6 @@ namespace llarp::session
 
     bool BaseSession::send_path_data_message(std::string data)
     {
-        // session_keys.encrypt(to_uspan(data));
         auto inner_payload = PATH::DATA::serialize(std::move(data), _r.local_rid());
         auto intermediate_payload =
             PATH::DATA::serialize_intermediate(std::move(inner_payload), remote_intro.pivot_txid);

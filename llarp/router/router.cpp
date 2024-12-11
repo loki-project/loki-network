@@ -551,12 +551,12 @@ namespace llarp
 
             // TODO: load strict-connects as bootstraps as well
 
-            log::info(logcat, "Local client configured to strictly use {} edge relays", n_edges);
+            log::debug(logcat, "Local client configured to strictly use {} edge relays", n_edges);
 
             if (min_client_outbounds > n_edges)
             {
                 min_client_outbounds = n_edges;
-                log::info(
+                log::debug(
                     logcat,
                     "Local client holds only {} strict-connect edge relays; adjusting minimum router connections "
                     "commensurately",
@@ -564,7 +564,7 @@ namespace llarp
             }
         }
         else
-            log::info(
+            log::debug(
                 logcat, "Local client configured to maintain {} router connections at minimum", min_client_outbounds);
 
         if (not min_client_outbounds)

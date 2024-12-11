@@ -84,7 +84,7 @@ namespace llarp::vpn
                     control.ioctl(SIOCSIFADDR, &ifr);
 
                     auto subnet_mask = (ipv4_subnet / range.mask()).base;
-                    log::trace(logcat, "IP Range:{}, subnet mask: {}", range, subnet_mask);
+                    log::debug(logcat, "IP Range:{}, subnet mask: {}", range, subnet_mask);
 
                     ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
                         oxenc::load_host_to_big<unsigned int>(&subnet_mask.addr);

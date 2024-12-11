@@ -108,12 +108,12 @@ namespace llarp::handlers
         void setup_dns();
 
         // INPROGRESS: new API
-        // Handles an outbound packet going out INTO the network
+        // Handles an outbound packet going OUT to the network
         void handle_outbound_packet(IPPacket pkt);
 
         void rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest);
 
-        // Handle an inbound packet coming in FROM the network
+        // Handles an inbound packet coming IN from the network
         bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session);
 
         // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
@@ -162,7 +162,7 @@ namespace llarp::handlers
       private:
         std::optional<ip_v> get_next_local_ip();
 
-        bool obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4);
+        std::optional<ip_v> obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4);
 
         void send_packet_to_net_if(IPPacket&& pkt);
     };

@@ -57,6 +57,9 @@ namespace llarp
         return ret;
     }
 
+    static const auto v4_header_version = oxenc::host_to_big(uint8_t{4});
+    static const auto udp_header_proto = oxenc::host_to_big(uint8_t{17});
+
     void IPPacket::_init_internals()
     {
         _header = reinterpret_cast<ip_header*>(data());
@@ -65,12 +68,8 @@ namespace llarp
         if (_buf.empty())
             return;
 
-        // log::trace(logcat, "ippkt header: {}", buffer_printer{_buf});
-        // log::trace(logcat, "ippkt protocol: {}", _header->protocol);
-        // log::trace(logcat, "ippkt version: {}", _header->version);
-
-        _is_v4 = _header->version == oxenc::host_to_big(uint8_t{4});
-        _is_udp = _header->protocol == uint8_t{17};
+        _is_v4 = _header->version == v4_header_version;
+        _is_udp = _header->protocol == udp_header_proto;
 
         uint16_t src_port =
             (_is_udp) ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)) : 0;
@@ -126,8 +125,8 @@ namespace llarp
 
         std::basic_string_view<uint16_t> head_u16s{reinterpret_cast<const uint16_t*>(_header), sizeof(ip_header)};
         // set new IP addresses
-        _header->src = src.addr;
-        _header->dest = dst.addr;
+        _header->src = oxenc::host_to_big(src.addr);
+        _header->dest = oxenc::host_to_big(dst.addr);
 
         switch (_header->protocol)
         {
@@ -290,7 +289,7 @@ namespace llarp
             oxenc::write_host_as_big<uint16_t>(1500, itr);
             itr += 2;
 
-            // copy ip header and first 8 bytes of datagram for icmp rject
+            // copy ip header and first 8 bytes of datagram for icmp reject
             std::memcpy(itr, _buf.data(), ip_hdr_sz + ICMP_HEADER_SIZE);
             itr += ip_hdr_sz + ICMP_HEADER_SIZE;
 

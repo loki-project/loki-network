@@ -287,7 +287,7 @@ namespace llarp
                 return std::move(btdp).str();
             }
 
-            inline static std::tuple<NetworkAddress, bstring> deserialize(oxenc::bt_dict_consumer& btdc)
+            inline static std::tuple<NetworkAddress, bstring> deserialize(oxenc::bt_dict_consumer&& btdc)
             {
                 RouterID remote;
                 bstring payload;

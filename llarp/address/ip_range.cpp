@@ -91,6 +91,7 @@ namespace llarp
             for (const auto& e : excluding)
                 if (e == range)
                     return false;
+            log::debug(logcat, "{}", std::get<ipv4_range>(range).base);
             return true;
         };
 
@@ -109,7 +110,7 @@ namespace llarp
         {
             for (size_t n = 0; n < num_ipv6_private; ++n)
             {
-                if (auto v6 = ipv6(0xfd2e, 0x6c6f, 0x6b69, n) / 64; filter(v6))
+                if (auto v6 = ipv6(0xfd2e, 0x6c6f, 0x6b69, n, 0x0000, 0x0000, 0x0000, 0x0001) / 64; filter(v6))
                     return v6;
             }
         }

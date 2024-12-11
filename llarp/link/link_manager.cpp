@@ -1527,8 +1527,6 @@ namespace llarp
                     return;
                 }
 
-                log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
-
                 for (auto& hop : path->hops)
                 {
                     nonce = crypto::onion(
@@ -1537,17 +1535,16 @@ namespace llarp
                         hop.kx.shared_secret,
                         nonce,
                         hop.kx.xor_nonce);
-
-                    log::debug(logcat, "xchacha20 -> {}", buffer_printer{payload});
                 }
+
+                log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
 
                 NetworkAddress sender;
                 bstring data;
 
                 try
                 {
-                    oxenc::bt_dict_consumer btdc{payload};
-                    std::tie(sender, data) = PATH::DATA::deserialize(btdc);
+                    std::tie(sender, data) = PATH::DATA::deserialize(oxenc::bt_dict_consumer{payload});
 
                     if (auto session = _router.session_endpoint()->get_session(sender))
                     {
@@ -1560,12 +1557,10 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    log::warning(logcat, "Exception: {}: {}", e.what(), buffer_printer{data});
+                    log::warning(logcat, "Exception: {}: {}", e.what(), buffer_printer{payload});
                 }
                 return;
             }
-
-            log::debug(logcat, "Received path data for local relay: {}", buffer_printer{payload});
 
             auto hop = _router.path_context()->get_transit_hop(hop_id);
 
@@ -1587,12 +1582,16 @@ namespace llarp
             std::optional<std::pair<RouterID, HopID>> next_ids = std::nullopt;
             std::string next_payload;
 
+            log::debug(
+                logcat,
+                "We are {} hop for path data: {}: {}",
+                hop->terminal_hop ? "terminal" : "intermediate",
+                hop->to_string(),
+                buffer_printer{payload});
+
             // if terminal hop, pass to the correct path expecting to receive this message
             if (hop->terminal_hop)
             {
-                log::debug(
-                    logcat, "We are terminal hop for path data: {}: {}", hop->to_string(), buffer_printer{payload});
-
                 HopID ihid;
                 std::string intermediate;
 
@@ -1618,7 +1617,7 @@ namespace llarp
                     return;
                 }
 
-                log::debug(logcat, "Bridging path data message on hop: {}", next_hop->to_string());
+                log::debug(logcat, "Bridging path data message to hop: {}", next_hop->to_string());
 
                 next_ids = next_hop->next_id(ihid);
 

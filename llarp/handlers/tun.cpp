@@ -960,13 +960,14 @@ namespace llarp::handlers
         }
     }
 
+    // handles an outbound packet going OUT to the network
     void TunEndpoint::handle_outbound_packet(IPPacket pkt)
     {
         ip_v src, dest;
 
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        log::trace(logcat, "outbound packet is ipv{}", pkt_is_ipv4 ? "4" : "6");
+        log::debug(logcat, "outbound packet: {}", pkt.info_line());
 
         if (pkt_is_ipv4)
         {
@@ -978,6 +979,8 @@ namespace llarp::handlers
             src = pkt.source_ipv6();
             dest = pkt.dest_ipv6();
         }
+
+        log::debug(logcat, "src:{}, dest:{}", src, dest);
 
         if constexpr (llarp::platform::is_apple)
         {
@@ -1005,45 +1008,30 @@ namespace llarp::handlers
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else
-                log::warning(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
+                log::info(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
         }
         else
             log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
     }
 
-    bool TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4)
+    std::optional<ip_v> TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4)
     {
-        // we are receiving traffic from a session to a local exit node
         if (auto maybe_src = _local_ip_mapping.get_local_from_remote(remote))
         {
             if (std::holds_alternative<ipv4>(*maybe_src))
             {
                 if (use_ipv4)
-                    src = *maybe_src;
-                else
-                {
-                    auto quicaddr = oxen::quic::Address{std::get<ipv4>(*maybe_src)};
-                    src = quicaddr.to_ipv6();
-                }
+                    return *maybe_src;
+                return oxen::quic::Address{std::get<ipv4>(*maybe_src)}.to_ipv6();
             }
-            else
-            {
-                if (use_ipv4)
-                {
-                    auto quicaddr = oxen::quic::Address{std::get<ipv6>(*maybe_src)};
-                    src = quicaddr.to_ipv4();
-                }
-                else
-                    src = *maybe_src;
-            }
-        }
-        else
-        {
-            log::critical(logcat, "Unable to find local IP for inbound packet from remote: {}", remote);
-            return false;
+
+            if (use_ipv4)
+                return oxen::quic::Address{std::get<ipv6>(*maybe_src)}.to_ipv4();
+            return *maybe_src;
         }
 
-        return true;
+        log::warning(logcat, "Unable to find src IP for inbound packet from remote: {}", remote);
+        return std::nullopt;
     }
 
     void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
@@ -1058,9 +1046,11 @@ namespace llarp::handlers
         else
             pkt.update_ipv6_address(std::get<ipv6>(src), std::get<ipv6>(dest));
 
+        log::debug(logcat, "Rewritten packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
         send_packet_to_net_if(std::move(pkt));
     }
 
+    // handles an inbound packet coming IN from the network
     bool TunEndpoint::handle_inbound_packet(
         IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
     {
@@ -1070,6 +1060,7 @@ namespace llarp::handlers
 
         if (is_exit_session and is_outbound_session)
         {
+            log::debug(logcat, "inbound exit session pkt: {}", pkt.info_line());
             // we are receiving traffic from a session to a remote exit node
             if (pkt_is_ipv4)
             {
@@ -1088,13 +1079,12 @@ namespace llarp::handlers
 
             if (not maybe_remote)
             {
-                log::critical(
-                    logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
+                log::info(logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
                 return false;
             }
             if (*maybe_remote != remote)
             {
-                log::critical(
+                log::info(
                     logcat,
                     "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
                     src,
@@ -1107,6 +1097,7 @@ namespace llarp::handlers
         {
             if (is_exit_session and not is_outbound_session)
             {
+                log::debug(logcat, "inbound exit session pkt: {}", pkt.info_line());
                 // we are receiving traffic from a session to a local exit node
                 if (not is_allowing_traffic(pkt))
                     return false;
@@ -1118,6 +1109,7 @@ namespace llarp::handlers
             }
             else
             {
+                log::debug(logcat, "inbound service session pkt: {}", pkt.info_line());
                 // we are receiving hidden service traffic
                 if (pkt_is_ipv4)
                     dest = _local_addr.to_ipv4();
@@ -1125,9 +1117,13 @@ namespace llarp::handlers
                     dest = _local_ipv6.to_ipv6();
             }
 
-            if (not obtain_src_for_remote(remote, src, pkt_is_ipv4))
+            if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
+                src = std::move(*maybe_src);
+            else
                 return false;
         }
+
+        log::debug(logcat, "src:{}, dest:{}", src, dest);
 
         rewrite_and_send_packet(std::move(pkt), src, dest);
 

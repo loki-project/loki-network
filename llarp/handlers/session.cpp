@@ -159,10 +159,10 @@ namespace llarp::handlers
             // {
             //     testnet_trigger = true;
 
-            //     _router.loop()->call_later(10s, [this]() {
+            //     _router.loop()->call_later(5s, [this]() {
             //         try
             //         {
-            //             RouterID cpk{oxenc::from_base32z("6e9wdnd4cj3j3rgc9ze8ctxqj4z976tmu8osbzwgabruabb4u1ky")};
+            //             RouterID cpk{oxenc::from_base32z("mprqiu67f4gr8hb4zx8kuuqmxanmct4b6fp1nkeeruhxx9tqwc7y")};
             //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
             //             _initiate_session(
             //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");

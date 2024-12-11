@@ -20,7 +20,7 @@ namespace llarp::vpn
 
         void handle_ip_packet(IPPacket pkt) override
         {
-            log::debug(logcat, "inbound pkt: ", pkt.info_line());
+            log::debug(logcat, "udp pkt: ", pkt.info_line());
             auto dstport = pkt.dest_port();
 
             if (not dstport)
@@ -45,7 +45,7 @@ namespace llarp::vpn
 
         void handle_ip_packet(IPPacket pkt) override
         {
-            log::debug(logcat, "inbound pkt: {}", pkt.info_line());
+            log::debug(logcat, "l4 pkt: {}", pkt.info_line());
             // TOFIX:
             // _base_handler(IPPacket::from_udp(std::move(pkt)));
         }
@@ -55,7 +55,7 @@ namespace llarp::vpn
 
     void PacketRouter::handle_ip_packet(IPPacket pkt)
     {
-        log::debug(logcat, "inbound pkt: {}", pkt.info_line());
+        log::debug(logcat, "ip pkt: {}", pkt.info_line());
         auto dest_port = pkt.dest_port();
 
         if (not dest_port)
