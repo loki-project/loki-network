@@ -1387,7 +1387,7 @@ namespace llarp
         {
           ConfigParser parser;
           if (not parser.LoadFile(overrideFile))
-            throw std::runtime_error{"cannot load '" + overrideFile.u8string() + "'"};
+            throw std::runtime_error{fmt::format("cannot load '{}'", overrideFile)};
 
           parser.IterAll([&](std::string_view section, const SectionValues_t& values) {
             for (const auto& pair : values)

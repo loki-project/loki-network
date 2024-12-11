@@ -73,10 +73,11 @@ namespace llarp
 
     using namespace fmt::literals;
     return fmt::format(
-        delta < now_threshold ? "now"
-            : delta < 10s     ? "{in}{secs:d}.{ms:03d}s{ago}"
-            : delta < 1h      ? "{in}{mins:d}m{secs:02d}s{ago}"
-                              : "{in}{hours:d}h{mins:02d}m{ago}",
+        fmt::runtime(
+            delta < now_threshold ? "now"
+                : delta < 10s     ? "{in}{secs:d}.{ms:03d}s{ago}"
+                : delta < 1h      ? "{in}{mins:d}m{secs:02d}s{ago}"
+                                  : "{in}{hours:d}h{mins:02d}m{ago}"),
         "in"_a = future ? "in " : "",
         "ago"_a = future ? "" : " ago",
         "hours"_a = hours,
@@ -96,9 +97,10 @@ namespace llarp
 
     using namespace fmt::literals;
     return fmt::format(
-        delta < 1min     ? "{neg}{secs:d}.{ms:03d}s"
-            : delta < 1h ? "{neg}{mins:d}m{secs:02d}.{ms:03d}s"
-                         : "{neg}{hours:d}h{mins:02d}m{secs:02d}.{ms:03d}s",
+        fmt::runtime(
+            delta < 1min     ? "{neg}{secs:d}.{ms:03d}s"
+                : delta < 1h ? "{neg}{mins:d}m{secs:02d}.{ms:03d}s"
+                             : "{neg}{hours:d}h{mins:02d}m{secs:02d}.{ms:03d}s"),
         "neg"_a = neg ? "-" : "",
         "hours"_a = hours,
         "mins"_a = mins,

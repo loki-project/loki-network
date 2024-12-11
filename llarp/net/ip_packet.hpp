@@ -134,7 +134,7 @@ namespace llarp::net
     static constexpr size_t MaxSize = _max_size;
     static constexpr size_t MinSize = 20;
 
-    [[deprecated("deprecated because of llarp_buffer_t")]] static IPPacket
+    static IPPacket
     UDP(nuint32_t srcaddr,
         nuint16_t srcport,
         nuint32_t dstaddr,
@@ -163,7 +163,7 @@ namespace llarp::net
         return net::IPPacket{size_t{}};
     }
 
-    [[deprecated("deprecated because of llarp_buffer_t")]] inline bool
+    inline bool
     Load(const llarp_buffer_t& buf)
     {
       _buf = buf.copy();
@@ -173,7 +173,7 @@ namespace llarp::net
       return false;
     }
 
-    [[deprecated("deprecated because of llarp_buffer_t")]] inline llarp_buffer_t
+    inline llarp_buffer_t
     ConstBuffer() const
     {
       return llarp_buffer_t{_buf};
