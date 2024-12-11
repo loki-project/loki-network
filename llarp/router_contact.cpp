@@ -284,8 +284,13 @@ namespace llarp
       {
         bool decode_result = DecodeVersion_1(btlist);
 
+        // Abuse bt_list_consumer to grab a reference to its protected `data` string_view, which is
+        // the first member and so at the beginning of the struct.  This is horrible (thanks to the
+        // disaster known as llarp_buffer_t), and is going away in the in-progress lokinet rewrite.
+        auto& btlist_data = *reinterpret_cast<std::string_view*>(&btlist);
+
         // advance the llarp_buffer_t since lokimq serialization is unaware of it.
-        buf->cur += btlist.current_buffer().data() - buf_view.data() + 1;
+        buf->cur += btlist_data.data() - buf_view.data() + 1;
 
         return decode_result;
       }

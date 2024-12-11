@@ -27,7 +27,7 @@ struct ManagedBuffer;
 /// TODO: replace usage of these with std::span (via a backport until we move to C++20).  That's a
 /// fairly big job, though, as llarp_buffer_t is currently used a bit differently (i.e. maintains
 /// both start and current position, plus has some value reading/writing methods).
-struct [[deprecated("this type is stupid, use something else")]] llarp_buffer_t
+struct llarp_buffer_t
 {
   /// starting memory address
   byte_t* base{nullptr};
@@ -76,19 +76,19 @@ struct [[deprecated("this type is stupid, use something else")]] llarp_buffer_t
 
   // These overloads, const_casting away the const, are not just gross but downright dangerous:
   template <typename Byte, typename = std::enable_if_t<is_basic_byte<Byte>>>
-  [[deprecated("dangerous constructor that casts away constness, be very careful")]] llarp_buffer_t(
+  llarp_buffer_t(
       const Byte* buf, size_t sz)
       : llarp_buffer_t{const_cast<Byte*>(buf), sz}
   {}
 
   template <typename Byte, typename = std::enable_if_t<is_basic_byte<Byte>>>
-  [[deprecated("dangerous constructor that casts away constness, be very careful")]] llarp_buffer_t(
+  llarp_buffer_t(
       const std::vector<Byte>& b)
       : llarp_buffer_t{const_cast<Byte*>(b.data()), b.size()}
   {}
 
   template <typename Byte, size_t N, typename = std::enable_if_t<is_basic_byte<Byte>>>
-  [[deprecated("dangerous constructor that casts away constness, be very careful")]] llarp_buffer_t(
+  llarp_buffer_t(
       const std::array<Byte, N>& b)
       : llarp_buffer_t{const_cast<Byte*>(b.data()), b.size()}
   {}
@@ -213,7 +213,7 @@ llarp_buffer_t::write(InputIt begin, InputIt end)
 /**
  Provide a copyable/moveable wrapper around `llarp_buffer_t`.
  */
-struct [[deprecated("deprecated along with llarp_buffer_t")]] ManagedBuffer
+struct ManagedBuffer
 {
   llarp_buffer_t underlying;
 

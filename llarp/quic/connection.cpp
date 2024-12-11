@@ -90,7 +90,7 @@ namespace llarp::quic
         void* user_data)
     {
       std::basic_string_view data{rawdata, rawdatalen};
-      LogTrace("Receiving crypto data @ level ", crypto_level, " ", buffer_printer{data});
+      LogTrace("Receiving crypto data @ level ", static_cast<int>(crypto_level), " ", buffer_printer{data});
 
       auto& conn = *static_cast<Connection*>(user_data);
       switch (crypto_level)
@@ -150,7 +150,7 @@ namespace llarp::quic
           break;
 
         default:
-          LogWarn("Unhandled crypto_level ", crypto_level);
+          LogWarn("Unhandled crypto_level ", static_cast<int>(crypto_level));
           return FAIL;
       }
       conn.io_ready();
