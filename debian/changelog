@@ -1,4 +1,4 @@
-lokinet (0.9.11-3) unstable; urgency=medium
+lokinet (0.9.11-3~deb13) trixie; urgency=medium
 
   [ Jason Rhinelander ]
   * stable branch library compatibility fixes
