@@ -1,3 +1,13 @@
+lokinet (0.9.11-3~deb12) bookworm; urgency=medium
+
+  [ Jason Rhinelander ]
+  * stable branch library compatibility fixes
+
+  [ Thomas Winget ]
+  * mainnet service node detect and exit bad state
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Wed, 11 Dec 2024 21:28:33 -0400
+
 lokinet (0.9.11-2~deb12) bookworm; urgency=medium
 
   * ping oxend after getting identity keys
