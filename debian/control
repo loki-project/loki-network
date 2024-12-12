@@ -2,7 +2,7 @@ Source: lokinet
 Section: net
 Priority: optional
 Maintainer: Jeff Becker (probably not evil) <jeff@i2p.rocks>
-Build-Depends: debhelper (>= 11), g++, ninja-build, cmake (>= 3.10), pkg-config, libuv1-dev, git, libunbound-dev,
+Build-Depends: debhelper (>= 11), g++-10, ninja-build, cmake (>= 3.10), pkg-config, libuv1-dev, git, libunbound-dev,
     libsodium-dev (>= 1.0.18), libsystemd-dev, liboxenmq-dev (>= 1.2.5), libsqlite3-dev, nettle-dev, libevent-dev,
     libcurl4-openssl-dev, libssl-dev, libjemalloc-dev
 Standards-Version: 3.9.6
