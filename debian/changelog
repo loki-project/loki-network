@@ -1,4 +1,4 @@
-lokinet (0.9.11-3~ubuntu2404) noble; urgency=medium
+lokinet (0.9.11-3~ubuntu2410) oracular; urgency=medium
 
   [ Jason Rhinelander ]
   * disable system oxenc
