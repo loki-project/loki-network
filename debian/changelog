@@ -1,3 +1,14 @@
+lokinet (0.9.11-3~ubuntu2404) noble; urgency=medium
+
+  [ Jason Rhinelander ]
+  * disable system oxenc
+  * stable branch library compatibility fixes
+
+  [ Thomas Winget ]
+  * mainnet service node detect and exit bad state
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Wed, 11 Dec 2024 21:31:01 -0400
+
 lokinet (0.9.11-2~ubuntu2404) noble; urgency=medium
 
   * Add noble build
