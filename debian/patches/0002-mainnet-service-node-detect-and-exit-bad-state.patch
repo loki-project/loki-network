@@ -1,0 +1,68 @@
+From: Thomas Winget <tewinget@gmail.com>
+Date: Thu, 3 Oct 2024 18:23:20 -0400
+Subject: mainnet service node detect and exit bad state
+
+If a node is deregistered while running (or is started before being registered),
+it can fail to properly connect to the network once registered (again).  This does
+not *fix* that, but these symptoms should be sufficient to detect such a state and
+the node should recover upon restart.
+---
+ llarp/router/router.cpp             | 12 ++++++++++++
+ llarp/router/router.hpp             |  1 +
+ llarp/util/thread/queue_manager.hpp |  1 +
+ 3 files changed, 14 insertions(+)
+
+diff --git a/llarp/router/router.cpp b/llarp/router/router.cpp
+index 39a7e7c..4bd0e88 100644
+--- a/llarp/router/router.cpp
++++ b/llarp/router/router.cpp
+@@ -638,6 +638,7 @@ namespace llarp
+     log::debug(logcat, "Network ID set to {}", conf.router.m_netId);
+     if (!conf.router.m_netId.empty() && strcmp(conf.router.m_netId.c_str(), llarp::DEFAULT_NETID))
+     {
++      is_default_netID = false;
+       const auto& netid = conf.router.m_netId;
+       llarp::LogWarn(
+           "!!!! you have manually set netid to be '",
+@@ -932,6 +933,17 @@ namespace llarp
+       return;
+     // LogDebug("tick router");
+     const auto now = Now();
++
++    // If a node is deregistered while running (or is started before being registered),
++    // it can fail to properly connect to the network once registered (again).  This does
++    // not *fix* that, but these symptoms should be sufficient to detect such a state and
++    // the node should recover upon restart.
++    if (is_default_netID and IsServiceNode() and uptime() > 1h and nodedb()->NumLoaded() < 10)
++    {
++      Stop();
++      return;
++    }
++
+     if (const auto delta = now - _lastTick; _lastTick != 0s and delta > TimeskipDetectedDuration)
+     {
+       // we detected a time skip into the futre, thaw the network
+diff --git a/llarp/router/router.hpp b/llarp/router/router.hpp
+index 3e86cff..0984251 100644
+--- a/llarp/router/router.hpp
++++ b/llarp/router/router.hpp
+@@ -53,6 +53,7 @@ namespace llarp
+   {
+     llarp_time_t _lastPump = 0s;
+     bool ready;
++    bool is_default_netID{true};
+     // transient iwp encryption key
+     fs::path transport_keyfile;
+ 
+diff --git a/llarp/util/thread/queue_manager.hpp b/llarp/util/thread/queue_manager.hpp
+index f202b4a..279d1ed 100644
+--- a/llarp/util/thread/queue_manager.hpp
++++ b/llarp/util/thread/queue_manager.hpp
+@@ -3,6 +3,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cassert>
++#include <cstdint>
+ #include <iostream>
+ #include <limits>
+ #include <string>
