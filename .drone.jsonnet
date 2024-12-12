@@ -1,6 +1,6 @@
 local distro = 'bullseye';
 local distro_name = 'Debian ' + distro;
-local distro_docker = 'registry.oxen.rocks/lokinet-ci-debian-' + distro + '-builder';
+local distro_docker = 'registry.oxen.rocks/debian-' + distro + '-builder';
 
 local apt_get_quiet = 'apt-get -o=Dpkg::Use-Pty=0 -q';
 
