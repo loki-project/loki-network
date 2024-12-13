@@ -210,7 +210,7 @@ namespace llarp::quic
     auto nwrote = ngtcp2_pkt_write_version_negotiation(
         u8data(buf),
         buf.size(),
-        std::uniform_int_distribution<uint8_t>{0, 255}(rng),
+        static_cast<uint8_t>(std::uniform_int_distribution<unsigned short>{0, 255}(rng)),
         vi.dcid,
         vi.dcid_len,
         vi.scid,
