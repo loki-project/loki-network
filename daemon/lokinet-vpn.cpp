@@ -78,7 +78,7 @@ namespace
   // from within main().
   template <typename... T>
   [[nodiscard]] int
-  exit_error(int code, const std::string& format, T&&... args)
+  exit_error(int code, const fmt::format_string<T...> format, T&&... args)
   {
     fmt::print(format, std::forward<T>(args)...);
     fmt::print("\n");
@@ -88,7 +88,7 @@ namespace
   // Same as above, but with code omitted (uses exit code 1)
   template <typename... T>
   [[nodiscard]] int
-  exit_error(const std::string& format, T&&... args)
+  exit_error(const fmt::format_string<T...>& format, T&&... args)
   {
     return exit_error(1, format, std::forward<T>(args)...);
   }
@@ -244,7 +244,7 @@ main(int argc, char* argv[])
     if (auto err_it = maybe_result->find("error");
         err_it != maybe_result->end() and not err_it.value().is_null())
     {
-      return exit_error("{}", err_it.value());
+      return exit_error("{}", err_it.value().dump());
     }
   }
   if (goDown)

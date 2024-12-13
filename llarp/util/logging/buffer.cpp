@@ -27,18 +27,18 @@ namespace llarp
         else
           fmt::format_to(ins, "{:02x}", std::to_integer<uint_fast16_t>(b[k]));
       }
-      out.append(u8"  ┃");
+      out.append("  ┃");
       for (size_t j = i; j < stop; j++)
       {
         auto c = std::to_integer<char>(b[j]);
         if (c == 0x00)
-          out.append(u8"∅");
+          out.append("∅");
         else if (c < 0x20 || c > 0x7e)
-          out.append(u8"·");
+          out.append("·");
         else
           out.push_back(c);
       }
-      out.append(u8"┃");
+      out.append("┃");
     }
     return out;
   }
