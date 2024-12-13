@@ -10,7 +10,7 @@ fixes #2125
  3 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/llarp/router/router.cpp b/llarp/router/router.cpp
-index f3a807e..0e7c277 100644
+index 4bd0e88..ee6e666 100644
 --- a/llarp/router/router.cpp
 +++ b/llarp/router/router.cpp
 @@ -361,6 +361,7 @@ namespace llarp
