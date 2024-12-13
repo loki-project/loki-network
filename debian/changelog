@@ -1,3 +1,22 @@
+lokinet (0.9.12-1~ubuntu202410) oracular; urgency=medium
+
+  [ Jason Rhinelander ]
+  * use oxenc system lib again
+  * stable branch library compatibility fixes
+
+  [ Thomas Winget ]
+  * mainnet service node detect and exit bad state
+
+  [ Jason Rhinelander ]
+  * disable warnings as errors on stable branch
+  * update various outdated ci deps
+  * Add workaround for bool config values
+  * Fix usage of uniform_int_distribution<uint8_t>
+  * Update oxen-encoding, oxen-mq
+  * Rediff patches
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 12 Dec 2024 21:24:12 -0400
+
 lokinet (0.9.11-3~ubuntu2410) oracular; urgency=medium
 
   [ Jason Rhinelander ]
