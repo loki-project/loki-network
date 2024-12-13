@@ -1,3 +1,22 @@
+lokinet (0.9.12-1~deb12) bookworm; urgency=medium
+
+  [ Jason Rhinelander ]
+  * stop using deprecated docker image name
+  * stable branch library compatibility fixes
+
+  [ Thomas Winget ]
+  * mainnet service node detect and exit bad state
+
+  [ Jason Rhinelander ]
+  * disable warnings as errors on stable branch
+  * update various outdated ci deps
+  * Add workaround for bool config values
+  * Fix usage of uniform_int_distribution<uint8_t>
+  * Update oxen-encoding, oxen-mq
+  * Rediff patches
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 12 Dec 2024 21:20:26 -0400
+
 lokinet (0.9.11-3~deb12) bookworm; urgency=medium
 
   [ Jason Rhinelander ]
