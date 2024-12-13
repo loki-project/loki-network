@@ -1,3 +1,23 @@
+lokinet (0.9.12-1~deb11) bullseye; urgency=medium
+
+  [ Jason Rhinelander ]
+  * Rediff patches
+  * stop using deprecated docker image name
+  * stable branch library compatibility fixes
+
+  [ Thomas Winget ]
+  * mainnet service node detect and exit bad state
+
+  [ Jason Rhinelander ]
+  * disable warnings as errors on stable branch
+  * update various outdated ci deps
+  * Add workaround for bool config values
+  * Fix usage of uniform_int_distribution<uint8_t>
+  * Update oxen-encoding, oxen-mq
+  * Rediff patches
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 12 Dec 2024 21:20:38 -0400
+
 lokinet (0.9.11-2~deb11) bullseye; urgency=medium
 
   * ping oxend after getting identity keys
