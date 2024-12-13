@@ -1,7 +1,6 @@
 #pragma once
 
 #include "net.h"
-#include "uint128.hpp"
 
 #include <llarp/address/ip_range.hpp>
 #include <llarp/util/mem.hpp>
@@ -47,7 +46,7 @@ namespace llarp
         {
             // TODO: is this needed?
             /// a gateway we can use if it exists
-            std::optional<ip_range_v> _gateway;
+            std::optional<ip_net_v> _gateway;
 
             /// human readable name of interface
             std::string name;
@@ -70,9 +69,9 @@ namespace llarp
             std::optional<std::string> if_name = std::nullopt;
             std::optional<oxen::quic::Address> if_addr = std::nullopt;
             std::optional<oxen::quic::Address> if_netmask = std::nullopt;
-            std::optional<int> if_index = std::nullopt;
+            std::optional<unsigned int> if_index = std::nullopt;
 
-            operator bool() const { return if_name and if_addr /* and if_netmask */ and if_index; }
+            operator bool() const { return if_name and if_addr; }
         };
 
         /// network platform (all methods virtual so it can be mocked by unit tests)

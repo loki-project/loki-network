@@ -14,12 +14,13 @@ namespace llarp
     struct IPRange
     {
       private:
+        ip_net_v _ip_net;
+
         oxen::quic::Address _addr;
         uint8_t _mask;
         bool _is_ipv4;
 
         ip_v _base_ip;
-        ip_range_v _ip_range;
         ip_v _max_ip;
 
         void _init_ip();
@@ -29,10 +30,13 @@ namespace llarp
         bool _contains(const ipv6& other) const;
 
         // getters to DRY out variant access
-        ipv4_range& _ipv4_range() { return std::get<ipv4_range>(_ip_range); }
-        const ipv4_range& _ipv4_range() const { return std::get<ipv4_range>(_ip_range); }
-        ipv6_range& _ipv6_range() { return std::get<ipv6_range>(_ip_range); }
-        const ipv6_range& _ipv6_range() const { return std::get<ipv6_range>(_ip_range); }
+        ipv4_net& _ipv4_net() { return std::get<ipv4_net>(_ip_net); }
+        const ipv4_net& _ipv4_net() const { return std::get<ipv4_net>(_ip_net); }
+        ipv4_range _ipv4_range() const { return _ipv4_net().to_range(); }
+
+        ipv6_net& _ipv6_net() { return std::get<ipv6_net>(_ip_net); }
+        const ipv6_net& _ipv6_net() const { return std::get<ipv6_net>(_ip_net); }
+        ipv6_range _ipv6_range() const { return _ipv6_net().to_range(); }
 
       public:
         IPRange() : IPRange{oxen::quic::Address{}, 0} {}
@@ -44,21 +48,21 @@ namespace llarp
             _init_ip();
         }
 
-        IPRange(const ipv4_range& ipv4)
-            : _addr{ipv4.base},
-              _mask{ipv4.mask},
+        IPRange(const ipv4_net& ipv4)
+            : _ip_net{ipv4},
+              _addr{_ipv4_net().ip},
+              _mask{_ipv4_net().mask},
               _is_ipv4{true},
-              _base_ip{ipv4.base},
-              _ip_range{ipv4},
-              _max_ip{ipv4.max_ip()}
+              _base_ip{_ipv4_range().ip},
+              _max_ip{_ipv4_net().max_ip()}
         {}
 
-        IPRange(const ipv6_range& ipv6)
-            : _addr{ipv6.base},
+        IPRange(const ipv6_net& ipv6)
+            : _ip_net{ipv6},
+              _addr{ipv6.ip},
               _mask{ipv6.mask},
               _is_ipv4{false},
-              _base_ip{ipv6.base},
-              _ip_range{ipv6},
+              _base_ip{ipv6.ip.to_base(_mask)},
               _max_ip{ipv6.max_ip()}
         {}
 
@@ -67,16 +71,19 @@ namespace llarp
 
         void bt_encode(oxenc::bt_list_producer& btlp) const { btlp.append(to_string()); }
 
-        std::string to_string() const { return is_ipv4() ? _ipv4_range().to_string() : _ipv6_range().to_string(); }
+        std::string to_string() const { return is_ipv4() ? _ipv4_net().to_string() : _ipv6_net().to_string(); }
 
         static std::optional<IPRange> from_string(std::string arg);
 
         bool contains(const IPRange& other) const;
         bool contains(const ip_v& other) const;
+        bool contains(const ip_net_v& other) const;
 
         bool is_ipv4() const { return _is_ipv4; }
 
-        ip_range_v get_ip_range() const { return _ip_range; }
+        ip_net_v get_ip_net() const { return _ip_net; }
+
+        ip_v net_ip() const;
 
         ip_v base_ip() const { return _base_ip; }
 
@@ -84,6 +91,11 @@ namespace llarp
 
         const uint8_t& mask() const { return _mask; }
         uint8_t mask() { return _mask; }
+
+        oxen::quic::Address base_address() const
+        {
+            return is_ipv4() ? oxen::quic::Address{_ipv4_range().ip} : oxen::quic::Address{_ipv6_range().ip};
+        }
 
         const oxen::quic::Address& address() const { return _addr; }
         oxen::quic::Address address() { return _addr; }
@@ -98,12 +110,12 @@ namespace llarp
             return std::tie(_addr, _mask) == std::tie(other._addr, other._mask);
         }
 
-        bool operator==(const ip_range_v& other) const
+        bool operator==(const ip_net_v& other) const
         {
-            if (_is_ipv4 and std::holds_alternative<ipv4_range>(other))
-                return _ipv4_range() == std::get<ipv4_range>(other);
-            if (not _is_ipv4 and std::holds_alternative<ipv6_range>(other))
-                return _ipv6_range() == std::get<ipv6_range>(other);
+            if (_is_ipv4 and std::holds_alternative<ipv4_net>(other))
+                return _ipv4_net() == std::get<ipv4_net>(other);
+            if (not _is_ipv4 and std::holds_alternative<ipv6_net>(other))
+                return _ipv6_net() == std::get<ipv6_net>(other);
 
             return false;
         }
@@ -165,7 +177,7 @@ namespace llarp
         IPRangeIterator() = default;
 
         IPRangeIterator(const IPRange& range)
-            : _ip_range{range}, _is_ipv4{range.is_ipv4()}, _current_ip{range.base_ip()}, _max_ip{range.max_ip()}
+            : _ip_range{range}, _is_ipv4{range.is_ipv4()}, _current_ip{range.net_ip()}, _max_ip{range.max_ip()}
         {}
 
         // Returns the next ip address in the iterating range; returns std::nullopt if range is exhausted

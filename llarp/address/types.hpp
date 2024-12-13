@@ -9,9 +9,11 @@ namespace llarp
     using ipv4 = oxen::quic::ipv4;
     using ipv6 = oxen::quic::ipv6;
     using ip_v = std::variant<ipv4, ipv6>;
-    using ipv4_range = oxen::quic::ipv4_net;
-    using ipv6_range = oxen::quic::ipv6_net;
-    using ip_range_v = std::variant<ipv4_range, ipv6_range>;
+    using ipv4_range = oxen::quic::ipv4_range;
+    using ipv6_range = oxen::quic::ipv6_range;
+    using ipv4_net = oxen::quic::ipv4_net;
+    using ipv6_net = oxen::quic::ipv6_net;
+    using ip_net_v = std::variant<ipv4_net, ipv6_net>;
 
     namespace concepts
     {
@@ -19,7 +21,7 @@ namespace llarp
         concept IPType = std::is_same_v<ip_t, ipv4> || std::is_same_v<ip_t, ipv6>;
 
         template <typename ip_range_t>
-        concept IPRangeType = std::is_same_v<ip_range_t, ipv4_range> || std::is_same_v<ip_range_t, ipv6_range>;
+        concept IPRangeType = std::is_same_v<ip_range_t, ipv4_net> || std::is_same_v<ip_range_t, ipv6_net>;
     }  // namespace concepts
 
     using KeyedAddress = oxen::quic::RemoteAddress;

@@ -162,7 +162,7 @@ namespace llarp::handlers
             //     _router.loop()->call_later(5s, [this]() {
             //         try
             //         {
-            //             RouterID cpk{oxenc::from_base32z("mprqiu67f4gr8hb4zx8kuuqmxanmct4b6fp1nkeeruhxx9tqwc7y")};
+            //             RouterID cpk{oxenc::from_base32z("p3thqq8toyidz3ssos7tx6xhsje3zfdkmpdw43gtb8cz7a96yedo")};
             //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
             //             _initiate_session(
             //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
@@ -431,6 +431,7 @@ namespace llarp::handlers
     bool SessionEndpoint::prefigure_session(
         NetworkAddress initiator,
         SessionTag tag,
+        HopID remote_pivot_txid,
         std::shared_ptr<path::Path> path,
         shared_kx_data kx_data,
         bool use_tun)
@@ -438,7 +439,13 @@ namespace llarp::handlers
         bool ret = true;
 
         auto inbound = std::make_shared<session::InboundSession>(
-            initiator, std::move(path), *this, std::move(tag), use_tun, std::move(kx_data));
+            initiator,
+            std::move(path),
+            *this,
+            std::move(remote_pivot_txid),
+            std::move(tag),
+            use_tun,
+            std::move(kx_data));
 
         auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
 
@@ -578,6 +585,7 @@ namespace llarp::handlers
         std::tie(inner_payload, kx_data) = InitiateSession::serialize_encrypt(
             _router.local_rid(),
             remote.router_id(),
+            path->pivot_txid(),
             tag,
             remote_intro.pivot_txid,
             fetch_auth_token(remote),
@@ -599,9 +607,9 @@ namespace llarp::handlers
              remote,
              tag,
              path,
+             remote_pivot_txid = remote_intro.pivot_txid,
              hook = std::move(cb),
-             session_keys = std::move(kx_data),
-             remote_intro = std::move(remote_intro)](oxen::quic::message m) mutable {
+             session_keys = std::move(kx_data)](oxen::quic::message m) mutable {
                 if (m)
                 {
                     log::critical(logcat, "Call to InitiateSession succeeded!");
@@ -610,9 +618,9 @@ namespace llarp::handlers
                         remote,
                         *this,
                         std::move(path),
+                        std::move(remote_pivot_txid),
                         std::move(tag),
-                        std::move(session_keys),
-                        std::move(remote_intro));
+                        std::move(session_keys));
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
 

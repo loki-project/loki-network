@@ -32,7 +32,7 @@ namespace llarp::vpn
         }
     };
 
-    struct InterfaceInfo
+    struct [[deprecated("Use net::if_info instead!")]] InterfaceInfo
     {
         std::string ifname;
         unsigned int index;

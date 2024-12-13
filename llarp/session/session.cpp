@@ -19,22 +19,21 @@ namespace llarp::session
         std::shared_ptr<path::Path> _p,
         handlers::SessionEndpoint& parent,
         NetworkAddress remote,
+        HopID remote_pivot_txid,
         SessionTag _t,
         bool use_tun,
         bool is_outbound,
-        std::optional<shared_kx_data> kx_data,
-        std::optional<ClientIntro> _remote_intro)
+        std::optional<shared_kx_data> kx_data)
         : _r{r},
           _parent{parent},
           _tag{std::move(_t)},
           _remote{std::move(remote)},
+          _remote_pivot_txid{std::move(remote_pivot_txid)},
           _use_tun{use_tun},
           _is_outbound{is_outbound}
     {
         if (kx_data.has_value())
             session_keys = std::move(*kx_data);
-        if (_remote_intro.has_value())
-            remote_intro = std::move(*_remote_intro);
 
         set_new_current_path(std::move(_p));
     }
@@ -48,8 +47,7 @@ namespace llarp::session
     bool BaseSession::send_path_data_message(std::string data)
     {
         auto inner_payload = PATH::DATA::serialize(std::move(data), _r.local_rid());
-        auto intermediate_payload =
-            PATH::DATA::serialize_intermediate(std::move(inner_payload), remote_intro.pivot_txid);
+        auto intermediate_payload = PATH::DATA::serialize_intermediate(std::move(inner_payload), _remote_pivot_txid);
         return _r.send_data_message(
             _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
     }
@@ -163,20 +161,20 @@ namespace llarp::session
         NetworkAddress remote,
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
+        HopID remote_pivot_txid,
         SessionTag _t,
-        std::optional<shared_kx_data> kx_data,
-        std::optional<ClientIntro> remote_intro)
+        std::optional<shared_kx_data> kx_data)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
               _router,
               std::move(path),
               parent,
               std::move(remote),
+              std::move(remote_pivot_txid),
               std::move(_t),
               _router.using_tun_if(),
               true,
-              std::move(kx_data),
-              std::move(remote_intro)},
+              std::move(kx_data)},
           _is_snode_session{not _remote.is_client()},
           _last_use{_router.now()}
     {
@@ -332,6 +330,7 @@ namespace llarp::session
         NetworkAddress remote,
         std::shared_ptr<path::Path> _path,
         handlers::SessionEndpoint& parent,
+        HopID remote_pivot_txid,
         SessionTag _t,
         bool use_tun,
         std::optional<shared_kx_data> kx_data)
@@ -340,6 +339,7 @@ namespace llarp::session
             std::move(_path),
             parent,
             std::move(remote),
+            std::move(remote_pivot_txid),
             std::move(_t),
             use_tun,
             false,

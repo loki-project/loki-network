@@ -13,7 +13,8 @@ namespace llarp
         - 'n' : symmetric nonce
         - 'x' : encrypted payload
             - 'i' : RouterID of initiator
-            - 'p' : HopID at the pivot taken from remote ClientIntro
+            - 'p' : HopID at the pivot taken from local ClientIntro
+            - 'r' : HopID at the pivot taken from remote's ClientIntro
             - 's' : SessionTag for current session
             - 't' : Use Tun interface (bool)
             - 'u' : Authentication field
@@ -29,8 +30,9 @@ namespace llarp
         inline static std::tuple<std::string, shared_kx_data> serialize_encrypt(
             const RouterID& local,
             const RouterID& remote,
+            HopID local_pivot_txid,
             SessionTag& tag,
-            HopID pivot_txid,
+            HopID remote_pivot_txid,
             std::optional<std::string_view> auth_token,
             bool use_tun)
         {
@@ -42,7 +44,8 @@ namespace llarp
                     oxenc::bt_dict_producer btdp;
 
                     btdp.append("i", local.to_view());
-                    btdp.append("p", pivot_txid.to_view());
+                    btdp.append("p", local_pivot_txid.to_view());
+                    btdp.append("r", remote_pivot_txid.to_view());
                     btdp.append("s", tag.to_view());
                     btdp.append("t", use_tun);
                     // TOTHINK: this auth field
@@ -69,8 +72,9 @@ namespace llarp
             }
         };
 
-        inline static std::tuple<shared_kx_data, NetworkAddress, HopID, SessionTag, bool, std::optional<std::string>>
-        decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
+        inline static std::
+            tuple<shared_kx_data, NetworkAddress, HopID, SessionTag, HopID, bool, std::optional<std::string>>
+            decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
             PubKey shared_pubkey;
@@ -95,13 +99,15 @@ namespace llarp
                 NetworkAddress initiator;
                 RouterID init_rid;
                 SessionTag tag;
-                HopID pivot_txid;
+                HopID remote_pivot_txid;
+                HopID local_pivot_txid;
                 bool use_tun;
                 std::optional<std::string> maybe_auth = std::nullopt;
 
                 init_rid.from_string(btdc.require<std::string_view>("i"));
                 initiator = NetworkAddress::from_pubkey(init_rid, true);
-                pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
                 tag.from_string(btdc.require<std::string_view>("s"));
                 use_tun = btdc.require<bool>("t");
                 maybe_auth = btdc.maybe<std::string>("u");
@@ -109,8 +115,9 @@ namespace llarp
                 return {
                     std::move(kx_data),
                     std::move(initiator),
-                    std::move(pivot_txid),
+                    std::move(local_pivot_txid),
                     std::move(tag),
+                    std::move(remote_pivot_txid),
                     use_tun,
                     std::move(maybe_auth)};
             }

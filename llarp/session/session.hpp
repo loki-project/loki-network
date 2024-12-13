@@ -49,7 +49,8 @@ namespace llarp
 
             shared_kx_data session_keys{};
 
-            ClientIntro remote_intro;
+            // used for bridging data messages across aligned paths
+            HopID _remote_pivot_txid;
 
             bool _use_tun;
             bool _is_outbound;
@@ -79,11 +80,11 @@ namespace llarp
                 std::shared_ptr<path::Path> _p,
                 handlers::SessionEndpoint& parent,
                 NetworkAddress remote,
+                HopID remote_pivot_txid,
                 SessionTag _t,
                 bool use_tun,
                 bool is_outbound,
-                std::optional<shared_kx_data> kx_data = std::nullopt,
-                std::optional<ClientIntro> remote_intro = std::nullopt);
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             virtual ~BaseSession() = default;
 
@@ -124,9 +125,9 @@ namespace llarp
                 NetworkAddress _remote,
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
+                HopID remote_pivot_txid,
                 SessionTag _t,
-                std::optional<shared_kx_data> kx_data = std::nullopt,
-                std::optional<ClientIntro> remote_intro = std::nullopt);
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
 
@@ -182,6 +183,7 @@ namespace llarp
                 NetworkAddress _remote,
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
+                HopID remote_pivot_txid,
                 SessionTag _t,
                 bool use_tun,
                 std::optional<shared_kx_data> kx_data = std::nullopt);

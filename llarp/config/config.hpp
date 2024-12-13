@@ -191,6 +191,7 @@ namespace llarp
         // Used when in exit mode; pass down to LocalEndpoint
         // std::set<IPRange> _routed_ranges;  // moved into traffic_policy!
 
+        // TESTNET: move into ExitConfig!
         bool enable_route_poker;
         bool blackhole_routes;
 

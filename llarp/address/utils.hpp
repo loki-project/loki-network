@@ -108,15 +108,15 @@ namespace llarp
 
         inline constexpr size_t num_ipv4_private{272};
 
-        inline constexpr std::array<ipv4_range, num_ipv4_private> generate_private_ipv4()
+        inline constexpr std::array<ipv4_net, num_ipv4_private> generate_private_ipv4()
         {
-            std::array<ipv4_range, num_ipv4_private> ret{};
+            std::array<ipv4_net, num_ipv4_private> ret{};
 
             for (size_t n = 16; n < 32; ++n)
-                ret[n - 16] = ipv4(172, n, 0, 1) / 16;
+                ret[n - 16] = ipv4(172, n, 0, 1) % 16;
 
             for (size_t n = 0; n < 256; ++n)
-                ret[n + 16] = ipv4(10, n, 0, 1) / 16;
+                ret[n + 16] = ipv4(10, n, 0, 1) % 16;
 
             return ret;
         }

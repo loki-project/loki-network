@@ -1016,6 +1016,8 @@ namespace llarp
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, false, true);
 
+        // _route_poker->start();
+
         _systemd_ticker = _loop->call_every(
             SERVICE_MANAGER_REPORT_INTERVAL, []() { sys::service_manager->report_periodic_stats(); }, false, true);
 

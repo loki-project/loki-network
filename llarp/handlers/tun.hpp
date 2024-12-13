@@ -164,7 +164,7 @@ namespace llarp::handlers
 
         std::optional<ip_v> obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4);
 
-        void send_packet_to_net_if(IPPacket&& pkt);
+        void send_packet_to_net_if(IPPacket pkt);
     };
 
 }  // namespace llarp::handlers

@@ -1582,7 +1582,7 @@ namespace llarp
             std::optional<std::pair<RouterID, HopID>> next_ids = std::nullopt;
             std::string next_payload;
 
-            log::debug(
+            log::trace(
                 logcat,
                 "We are {} hop for path data: {}: {}",
                 hop->terminal_hop ? "terminal" : "intermediate",
@@ -1607,7 +1607,7 @@ namespace llarp
                     return;
                 }
 
-                log::debug(logcat, "Inbound path rxid:{}, outbound path txid:{}", hop_id, ihid);
+                log::trace(logcat, "Inbound path rxid:{}, outbound path txid:{}", hop_id, ihid);
 
                 auto next_hop = _router.path_context()->get_transit_hop(ihid);
 
@@ -1617,7 +1617,7 @@ namespace llarp
                     return;
                 }
 
-                log::debug(logcat, "Bridging path data message to hop: {}", next_hop->to_string());
+                log::trace(logcat, "Bridging path data message to hop: {}", next_hop->to_string());
 
                 next_ids = next_hop->next_id(ihid);
 
@@ -1692,7 +1692,8 @@ namespace llarp
 
         NetworkAddress initiator;
         SessionTag tag;
-        HopID pivot_txid;
+        HopID remote_pivot_txid;
+        HopID local_pivot_txid;
         bool use_tun;
         shared_kx_data kx_data;
         std::optional<std::string> maybe_auth = std::nullopt;
@@ -1701,10 +1702,10 @@ namespace llarp
         try
         {
             if (inner_body)
-                std::tie(kx_data, initiator, pivot_txid, tag, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, local_pivot_txid, tag, remote_pivot_txid, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{*inner_body}, _router.identity());
             else
-                std::tie(kx_data, initiator, pivot_txid, tag, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, local_pivot_txid, tag, remote_pivot_txid, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{m.body()}, _router.identity());
 
             if (maybe_auth and not _router.session_endpoint()->validate(initiator, maybe_auth))
@@ -1713,16 +1714,22 @@ namespace llarp
                 return m.respond(InitiateSession::AUTH_ERROR, true);
             }
 
-            path_ptr = _router.path_context()->get_path(pivot_txid);
+            path_ptr = _router.path_context()->get_path(local_pivot_txid);
 
             if (not path_ptr)
             {
-                log::warning(logcat, "Failed to find local path for new inbound session over pivot: {}", pivot_txid);
+                log::warning(
+                    logcat, "Failed to find local path for new inbound session over pivot: {}", local_pivot_txid);
                 return m.respond(InitiateSession::BAD_PATH, true);
             }
 
             if (_router.session_endpoint()->prefigure_session(
-                    std::move(initiator), std::move(tag), std::move(path_ptr), std::move(kx_data), use_tun))
+                    std::move(initiator),
+                    std::move(tag),
+                    std::move(remote_pivot_txid),
+                    std::move(path_ptr),
+                    std::move(kx_data),
+                    use_tun))
             {
                 log::critical(logcat, "InboundSession configured successfully!");
                 return m.respond(messages::OK_RESPONSE);

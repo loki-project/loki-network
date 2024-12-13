@@ -83,7 +83,7 @@ namespace llarp::path
         intro.pivot_txid = hops.back()._txid;
 
         log::debug(
-            logcat, "Path client intro holding pivot_rid ({}) and pivot_rxid ({})", intro.pivot_rid, intro.pivot_txid);
+            logcat, "Path client intro holding pivot_rid ({}) and pivot_txid ({})", intro.pivot_rid, intro.pivot_txid);
     }
 
     void Path::link_session(recv_session_dgram_cb cb)

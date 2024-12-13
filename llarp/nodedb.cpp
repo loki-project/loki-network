@@ -138,7 +138,7 @@ namespace llarp
                     _is_service_node ? "Relay" : "Client",
                     num_rcs(),
                     MIN_ACTIVE_RCS);
-                _bootstrap_handler->begin();
+                _bootstrap_handler->start();
             }
 
             return false;
@@ -149,6 +149,12 @@ namespace llarp
 
     void NodeDB::purge_rcs(std::chrono::milliseconds now)
     {
+        if (_router.is_stopping() || not _router.is_running())
+        {
+            log::debug(logcat, "NodeDB unable to continue NodeDB purge -- router is stopped!");
+            return;
+        }
+
         remove_if([&](const RemoteRC& rc) -> bool {
             // don't purge bootstrap nodes from nodedb
             if (is_bootstrap_node(rc))
@@ -630,7 +636,7 @@ namespace llarp
         _is_bootstrapping = false;
         // this function is only called in success or lokinet shutdown, so we will never need bootstrapping
         _needs_bootstrap = false;
-        _bootstrap_handler->halt();
+        _bootstrap_handler->stop();
 
         if (success)
         {
@@ -878,7 +884,7 @@ namespace llarp
         if (_bootstrap_handler)
         {
             log::debug(logcat, "NodeDB clearing bootstrap handler...");
-            _bootstrap_handler->halt();
+            _bootstrap_handler->stop();
             _bootstrap_handler.reset();
         }
 

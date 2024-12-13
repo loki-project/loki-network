@@ -8,9 +8,11 @@ namespace llarp
 {
     static auto logcat = log::Cat("route_poker");
 
+    RoutePoker::RoutePoker(Router& r) : _router{r} {}
+
     void RoutePoker::add_route(oxen::quic::Address ip)
     {
-        if (not is_up)
+        if (not _is_up)
             return;
 
         bool has_existing = poked_routes.count(ip);
@@ -38,7 +40,7 @@ namespace llarp
     {
         if (ip.is_set() and gateway.is_set() and is_enabled())
         {
-            vpn::AbstractRouteManager& route = router.vpn_platform()->RouteManager();
+            vpn::AbstractRouteManager& route = _router.vpn_platform()->RouteManager();
             route.delete_route(ip, gateway);
         }
     }
@@ -47,7 +49,7 @@ namespace llarp
     {
         if (ip.is_set() and gateway.is_set() and is_enabled())
         {
-            vpn::AbstractRouteManager& route = router.vpn_platform()->RouteManager();
+            vpn::AbstractRouteManager& route = _router.vpn_platform()->RouteManager();
             route.add_route(ip, gateway);
         }
     }
@@ -65,7 +67,10 @@ namespace llarp
     void RoutePoker::start()
     {
         if (not is_enabled())
+        {
+            log::info(logcat, "Route poker is NOT enabled for this lokinet instance!");
             return;
+        }
 
         // router.loop()->call_every(100ms, weak_from_this(), [self = weak_from_this()]() {
         //     if (auto ptr = self.lock())
@@ -96,26 +101,16 @@ namespace llarp
 
     RoutePoker::~RoutePoker()
     {
-        if (not router.vpn_platform())
+        if (not _router.vpn_platform())
             return;
 
-        auto& route = router.vpn_platform()->RouteManager();
+        auto& route = _router.vpn_platform()->RouteManager();
         for (const auto& [ip, gateway] : poked_routes)
         {
             if (gateway.is_set() and ip.is_set())
                 route.delete_route(ip, gateway);
         }
         route.delete_blackhole();
-    }
-
-    bool RoutePoker::is_enabled() const
-    {
-        if (router.is_service_node())
-            return false;
-        if (const auto& conf = router.config())
-            return conf->network.enable_route_poker;
-
-        throw std::runtime_error{"Attempting to use RoutePoker with router with no config set"};
     }
 
     void RoutePoker::update()
@@ -173,8 +168,9 @@ namespace llarp
 
     void RoutePoker::put_up()
     {
-        bool was_up = is_up;
-        is_up = true;
+        bool was_up = _is_up;
+        _is_up = true;
+
         if (not was_up)
         {
             if (not is_enabled())
@@ -189,17 +185,17 @@ namespace llarp
             {
                 log::info(logcat, "RoutePoker coming up; poking routes");
 
-                vpn::AbstractRouteManager& route = router.vpn_platform()->RouteManager();
+                vpn::AbstractRouteManager& route = _router.vpn_platform()->RouteManager();
 
                 // black hole all routes if enabled
-                if (router.config()->network.blackhole_routes)
+                if (_router.config()->network.blackhole_routes)
                     route.add_blackhole();
 
                 // explicit route pokes for first hops
-                router.for_each_connection(
+                _router.for_each_connection(
                     [this](const RouterID&, link::Connection& conn) { add_route(conn.conn->remote()); });
 
-                add_route(router.link_manager()->local());
+                add_route(_router.link_manager()->local());
                 // add default route
                 // const auto ep = router.hidden_service_context().GetDefault();
                 // if (auto* vpn = ep->GetVPNInterface())
@@ -214,9 +210,9 @@ namespace llarp
     void RoutePoker::put_down()
     {
         // unpoke routes for first hops
-        router.for_each_connection(
+        _router.for_each_connection(
             [this](const RouterID&, link::Connection& conn) { delete_route(conn.conn->remote()); });
-        if (is_enabled() and is_up)
+        if (is_enabled() and _is_up)
         {
             // vpn::AbstractRouteManager& route = router.vpn_platform()->RouteManager();
             // const auto ep = router.hidden_service_context().GetDefault();

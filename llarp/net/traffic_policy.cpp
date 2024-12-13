@@ -69,6 +69,7 @@ namespace llarp::net
 
     bool ExitPolicy::allow_ip_traffic(const IPPacket& pkt)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         if (protocols.empty() and ranges.empty())
             return true;
 

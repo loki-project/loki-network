@@ -505,7 +505,7 @@ namespace llarp::path
         // make a copy here to reference rather than creating one in the lambda every iteration
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
         to_exclude.insert(pivot);
-        std::vector<ipv4_range> excluded_ranges{};
+        std::vector<ipv4_net> excluded_ranges{};
         // excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() / netmask);
 
         if (auto maybe = select_first_hop(to_exclude))
@@ -536,7 +536,7 @@ namespace llarp::path
             if (not to_exclude.insert(rid).second)
                 return false;
 
-            excluded_ranges.emplace_back(v4 / netmask);
+            excluded_ranges.emplace_back(v4 % netmask);
 
             if (_router.router_profiling().is_bad_for_path(rid, 1))
                 return false;

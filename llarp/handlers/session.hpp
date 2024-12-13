@@ -124,6 +124,7 @@ namespace llarp
             bool prefigure_session(
                 NetworkAddress initiator,
                 SessionTag tag,
+                HopID remote_pivot_txid,
                 std::shared_ptr<path::Path> path,
                 shared_kx_data kx_data,
                 bool use_tun);

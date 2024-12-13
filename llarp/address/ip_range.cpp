@@ -8,15 +8,15 @@ namespace llarp
     {
         if (_is_ipv4)
         {
-            _base_ip = _addr.to_ipv4().to_base(_mask);
-            _ip_range = ipv4_range{std::get<ipv4>(_base_ip), _mask};
-            _max_ip = std::get<ipv4_range>(_ip_range).max_ip();
+            _ip_net = _addr.to_ipv4() % _mask;
+            _base_ip = _ipv4_range().ip;
+            _max_ip = _ipv4_net().max_ip();
         }
         else
         {
-            _base_ip = _addr.to_ipv6().to_base(_mask);
-            _ip_range = ipv6_range{std::get<ipv6>(_base_ip), _mask};
-            _max_ip = std::get<ipv6_range>(_ip_range).max_ip();
+            _ip_net = _addr.to_ipv6() % _mask;
+            _base_ip = _ipv6_range().ip;
+            _max_ip = _ipv6_net().max_ip();
         }
     }
 
@@ -82,16 +82,34 @@ namespace llarp
         return is_ipv4() ? _contains(std::get<ipv4>(other)) : _contains(std::get<ipv6>(other));
     }
 
+    bool IPRange::contains(const ip_net_v& other) const
+    {
+        if (is_ipv4() ^ std::holds_alternative<ipv4_net>(other))
+            return false;
+
+        return is_ipv4() ? _contains(std::get<ipv4_net>(other).to_range().ip)
+                         : _contains(std::get<ipv6_net>(other).to_range().ip);
+    }
+
+    ip_v IPRange::net_ip() const
+    {
+        if (is_ipv4())
+            return _ipv4_net().ip;
+        return _ipv6_net().ip;
+    }
+
     std::optional<IPRange> IPRange::find_private_range(const std::list<IPRange>& excluding, bool ipv6_enabled)
     {
         if (excluding.empty())
             return std::nullopt;
 
-        auto filter = [&excluding](const ip_range_v& range) -> bool {
+        auto filter = [&excluding](const ip_net_v& range) -> bool {
             for (const auto& e : excluding)
-                if (e == range)
+            {
+                if (e.contains(range))
                     return false;
-            log::debug(logcat, "{}", std::get<ipv4_range>(range).base);
+            }
+            log::trace(logcat, "{}", std::get<ipv4_net>(range).ip);
             return true;
         };
 
@@ -110,7 +128,7 @@ namespace llarp
         {
             for (size_t n = 0; n < num_ipv6_private; ++n)
             {
-                if (auto v6 = ipv6(0xfd2e, 0x6c6f, 0x6b69, n, 0x0000, 0x0000, 0x0000, 0x0001) / 64; filter(v6))
+                if (auto v6 = ipv6(0xfd2e, 0x6c6f, 0x6b69, n, 0x0000, 0x0000, 0x0000, 0x0001) % 64; filter(v6))
                     return v6;
             }
         }

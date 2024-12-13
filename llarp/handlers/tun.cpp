@@ -286,7 +286,7 @@ namespace llarp::handlers
     void TunEndpoint::configure()
     {
         return _router.loop()->call_get([&]() {
-            log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+            log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
             auto& net_conf = _router.config()->network;
 
@@ -329,7 +329,7 @@ namespace llarp::handlers
             _local_range_iterator = IPRangeIterator(_local_range);
 
             _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
-            _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
+            _local_ip_mapping.insert_or_assign(_local_range.net_ip(), std::move(_local_netaddr));
 
             vpn::InterfaceInfo info;
             info.ifname = _if_name;
@@ -365,7 +365,7 @@ namespace llarp::handlers
 
             log::info(logcat, "{} got network interface:{}", name(), _if_name);
 
-            auto pkt_hook = [this]() {
+            auto pkt_hook = [this]() mutable {
                 for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
                 {
                     log::trace(logcat, "packet router receiving {}", pkt.info_line());
@@ -1034,9 +1034,9 @@ namespace llarp::handlers
         return std::nullopt;
     }
 
-    void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
+    void TunEndpoint::send_packet_to_net_if(IPPacket pkt)
     {
-        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->write_packet(std::move(pkt)); });
+        _router.loop()->call([this, pkt = std::move(pkt)]() mutable { _net_if->write_packet(std::move(pkt)); });
     }
 
     void TunEndpoint::rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest)
