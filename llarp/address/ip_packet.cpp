@@ -89,8 +89,8 @@ namespace llarp
         }
         else
         {
-            auto srcv6 = ipv6{&_v6_header->srcaddr};
-            auto dstv6 = ipv6{&_v6_header->dstaddr};
+            auto srcv6 = ipv6{&_v6_header->src};
+            auto dstv6 = ipv6{&_v6_header->dest};
 
             log::trace(logcat, "srcv6={}:{}, dstv6={}:{}", srcv6, src_port, dstv6, dest_port);
 
@@ -123,7 +123,6 @@ namespace llarp
     {
         log::debug(logcat, "Setting new source ({}) and destination ({}) IPs", src, dst);
 
-        std::basic_string_view<uint16_t> head_u16s{reinterpret_cast<const uint16_t*>(_header), sizeof(ip_header)};
         // set new IP addresses
         _header->src = oxenc::host_to_big(src.addr);
         _header->dest = oxenc::host_to_big(dst.addr);
@@ -142,9 +141,7 @@ namespace llarp
                 break;
         }
 
-        // IPv4 checksum
-        auto v4chk = (uint16_t*)&(_header->checksum);
-        *v4chk = checksum_ipv4(_header, _header->header_len);
+        _header->checksum = checksum_ipv4(_header, _header->header_len);
 
         _init_internals();
     }
@@ -165,8 +162,8 @@ namespace llarp
         }
 
         // IPv6 address
-        hdr->srcaddr = src.to_in6();
-        hdr->dstaddr = dst.to_in6();
+        hdr->src = src.to_in6();
+        hdr->dest = dst.to_in6();
 
         // TODO IPv6 header options
         auto* pld = data() + ihs;
@@ -226,7 +223,7 @@ namespace llarp
                 chksumoff = 16;
                 [[fallthrough]];
             case 33:  // DCCP
-                chksum = tcp_checksum_ipv6(&hdr->srcaddr, &hdr->dstaddr, hdr->payload_len, 0);
+                chksum = tcp_checksum_ipv6(&hdr->src, &hdr->dest, hdr->payload_len, 0);
 
                 // ones-complement addition fo 0xFFff is 0; this is verboten
                 if (chksum == 0xFFff)
@@ -237,7 +234,7 @@ namespace llarp
                 break;
             case 17:   // UDP
             case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
-                chksum = udp_checksum_ipv6(&hdr->srcaddr, &hdr->dstaddr, hdr->payload_len, 0);
+                chksum = udp_checksum_ipv6(&hdr->src, &hdr->dest, hdr->payload_len, 0);
                 _is_udp = true;
                 break;
             default:

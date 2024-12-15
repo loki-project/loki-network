@@ -122,10 +122,10 @@ namespace llarp::vpn
 
         IPPacket read_next_packet() override
         {
-            log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
             std::vector<uint8_t> buf;
             buf.resize(MAX_PACKET_SIZE);
             const auto sz = read(_fd, buf.data(), buf.capacity());
+            log::debug(logcat, "{} bytes read from fd {} (err?:{})", sz, _fd, strerror(errno));
             if (sz < 0)
             {
                 if (errno == EAGAIN or errno == EWOULDBLOCK)
@@ -143,7 +143,7 @@ namespace llarp::vpn
         bool write_packet(IPPacket pkt) override
         {
             const auto sz = write(_fd, pkt.data(), pkt.size());
-            log::trace(logcat, "{} bytes written to fd {}", sz, _fd);
+            log::debug(logcat, "{} bytes written to fd {} (err?:{})", sz, _fd, strerror(errno));
             if (sz <= 0)
                 return false;
             return sz == static_cast<ssize_t>(pkt.size());

@@ -1502,7 +1502,7 @@ namespace llarp
 
     void LinkManager::handle_path_data_message(bstring data)
     {
-        _router.loop()->call([this, message = std::move(data)]() {
+        _router.loop()->call([this, message = std::move(data)]() mutable {
             HopID hop_id;
             std::string payload;
             SymmNonce nonce;

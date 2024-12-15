@@ -48,75 +48,29 @@ namespace llarp
             "Failed to compare ip variant in desired {} scheme!"_format(compare_v4 ? "ipv4" : "ipv6")};
     }
 
-    struct ip_header_le
-    {
-        uint8_t header_len : 4;
-        uint8_t version : 4;
-        uint8_t service_type;
-        uint16_t total_len;
-        uint16_t id;
-        uint16_t frag_off;
-        uint8_t ttl;
-        uint8_t protocol;
-        uint16_t checksum;
-        uint32_t src;
-        uint32_t dest;
-    };
-
-    struct ip_header_be
-    {
-        uint8_t version : 4;
-        uint8_t header_len : 4;
-        uint8_t service_type;
-        uint16_t total_len;
-        uint16_t id;
-        uint16_t frag_off;
-        uint8_t ttl;
-        uint8_t protocol;
-        uint16_t checksum;
-        uint32_t src;
-        uint32_t dest;
-    };
-
-    using ip_header = std::conditional_t<oxenc::little_endian, ip_header_le, ip_header_be>;
-
-    static_assert(sizeof(ip_header) == 20);
-
-    struct ipv6_header_preamble_le
-    {
-        unsigned char pad_small : 4;
-        unsigned char version : 4;
-        uint8_t pad[3];
-    };
-
-    struct ipv6_header_preamble_be
-    {
-        unsigned char version : 4;
-        unsigned char pad_small : 4;
-        uint8_t pad[3];
-    };
-
-    using ipv6_header_preamble =
-        std::conditional_t<oxenc::little_endian, ipv6_header_preamble_le, ipv6_header_preamble_be>;
-
-    static_assert(sizeof(ipv6_header_preamble) == 4);
-
     struct ipv6_header
     {
         union
         {
-            ipv6_header_preamble preamble;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+            unsigned char pad_small : 4;
+            unsigned char version : 4;
+#else
+            unsigned char version : 4;
+            unsigned char pad_small : 4;
+#endif
+            uint8_t pad[3];
             uint32_t flowlabel;
         } preamble;
 
         uint16_t payload_len;
         uint8_t protocol;
         uint8_t hoplimit;
-        in6_addr srcaddr;
-        in6_addr dstaddr;
+        in6_addr src;
+        in6_addr dest;
 
         /// Returns the flowlabel (stored in network order) in HOST ORDER
-        uint32_t set_flowlabel() const { return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
+        uint32_t get_flowlabel() const { return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
 
         /// Sets a flowlabel in network order. Takes in a label in HOST ORDER
         void set_flowlabel(uint32_t label)

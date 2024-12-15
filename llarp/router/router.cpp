@@ -1014,7 +1014,7 @@ namespace llarp
 
         log::debug(logcat, "Creating Router::Tick() repeating event...");
         _loop_ticker = _loop->call_every(
-            ROUTER_TICK_INTERVAL, [this] { tick(); }, false, true);
+            ROUTER_TICK_INTERVAL, [this] { tick(); }, false);
 
         // _route_poker->start();
 

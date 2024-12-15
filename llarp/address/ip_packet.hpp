@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ip_headers.hpp"
 #include "types.hpp"
 
 #include <llarp/util/buffer.hpp>

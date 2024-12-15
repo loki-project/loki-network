@@ -29,6 +29,28 @@ namespace llarp
         static std::set<std::string_view> allowed = {SNODE, LOKI};
     }  //  namespace TLD
 
+    namespace utils
+    {
+
+        uint16_t ip_checksum(const uint8_t *buf, size_t sz);
+
+        // Parameters:
+        //  - old_sum : old checksum (NETWORK order!)
+        //  - old_{src,dest} : old src and dest IP's (stored internally in HOST order!)
+        //  - new_{src,dest} : new src and dest IP's (stored internally in HOST order!)
+        //
+        // Returns:
+        //  - uint16_t : new checksum (NETWORK order!)
+        uint16_t ipv4_checksum_diff(uint16_t old_sum, ipv4 old_src, ipv4 old_dest, ipv4 new_src, ipv4 new_dest);
+
+        void ipv4_tcp_checksum_diff();
+        void ipv4_udp_checksum_diff();
+
+        uint16_t ipv6_checksum_diff();
+    }  // namespace utils
+
+    uint16_t checksum_partial(const void *header, uint8_t header_len, uint16_t sum);
+
     uint16_t checksum_ipv4(const void *header, uint8_t header_len);
 
     uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum);

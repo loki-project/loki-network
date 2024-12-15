@@ -140,7 +140,7 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    // static std::atomic<bool> testnet_trigger = false;
+    static std::atomic<bool> testnet_trigger = false;
 
     void SessionEndpoint::start_tickers()
     {
@@ -155,25 +155,24 @@ namespace llarp::handlers
                 },
                 true);
 
-            // if (not testnet_trigger)
-            // {
-            //     testnet_trigger = true;
+            if (not testnet_trigger)
+            {
+                testnet_trigger = true;
 
-            //     _router.loop()->call_later(5s, [this]() {
-            //         try
-            //         {
-            //             RouterID cpk{oxenc::from_base32z("p3thqq8toyidz3ssos7tx6xhsje3zfdkmpdw43gtb8cz7a96yedo")};
-            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-            //             _initiate_session(
-            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
-            //                 });
-            //         }
-            //         catch (const std::exception& e)
-            //         {
-            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-            //         }
-            //     });
-            // }
+                _router.loop()->call_later(5s, [this]() {
+                    try
+                    {
+                        RouterID cpk{oxenc::from_base32z("ccaocb1w9hqspyeog3xfipb1cubnc93bze7bhtruwp1qy7mhkseo")};
+                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+                        _initiate_session(
+                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+                    }
+                });
+            }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
