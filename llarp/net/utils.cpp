@@ -5,10 +5,12 @@ namespace llarp
     namespace utils
     {
         static constexpr uint32_t add_u32(uint32_t x) { return uint32_t{x & 0xFFff} + uint32_t{x >> 16}; }
-        static constexpr uint32_t add_u32(ipv4 x) { return add_u32(oxenc::host_to_big(x.addr)); }
+        // static constexpr uint32_t add_u32(ipv4 x) { return add_u32(oxenc::host_to_big(x.addr)); }
+        static uint32_t add_u32(ipv4 x) { return add_u32(oxenc::host_to_big(x.addr)); }
 
         static constexpr uint32_t sub_u32(uint32_t x) { return add_u32(~x); }
-        static constexpr uint32_t sub_u32(ipv4 x) { return sub_u32(oxenc::host_to_big(x.addr)); }
+        // static constexpr uint32_t sub_u32(ipv4 x) { return sub_u32(oxenc::host_to_big(x.addr)); }
+        static uint32_t sub_u32(ipv4 x) { return sub_u32(oxenc::host_to_big(x.addr)); }
 
         uint16_t ip_checksum(const uint8_t *buf, size_t sz)
         {
