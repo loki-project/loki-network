@@ -56,10 +56,7 @@ namespace llarp::consensus
         check_incoming_tests_impl("lokinet", now, startup, last);
     }
 
-    void reachability_testing::incoming_ping(const time_point_t& now)
-    {
-        last.last_test = now;
-    }
+    void reachability_testing::incoming_ping(const time_point_t& now) { last.last_test = now; }
 
     std::optional<RouterID> reachability_testing::next_random(Router* router, const time_point_t& now, bool requeue)
     {
@@ -138,9 +135,6 @@ namespace llarp::consensus
         failing_queue.emplace(pk, steady_clock::now() + next_test_in, previous_failures + 1);
     }
 
-    void reachability_testing::remove_node_from_failing(const RouterID& pk)
-    {
-        failing.erase(pk);
-    }
+    void reachability_testing::remove_node_from_failing(const RouterID& pk) { failing.erase(pk); }
 
 }  // namespace llarp::consensus

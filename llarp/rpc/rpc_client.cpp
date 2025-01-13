@@ -165,20 +165,20 @@ namespace llarp::rpc
 
     void RPCClient::start_pings()
     {
-        constexpr auto PingInterval = 30s;
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         auto router = _router.lock();
         if (not router)
             return;
 
-        auto makePingRequest = router->loop()->make_caller([self = shared_from_this()]() {
+        log::info(logcat, "Starting RPCClient ping ticker...");
+        _ping_ticker = router->loop()->call_every(PING_INTERVAL, [this]() {
             // send a ping
-            PubKey pk{};
-            auto r = self->_router.lock();
+            auto r = _router.lock();
             if (not r)
                 return;  // router has gone away, maybe shutting down?
 
-            pk = r->local_rid();
+            auto pk = r->local_rid();
 
             nlohmann::json payload = {
                 {"pubkey_ed25519", oxenc::to_hex(pk.begin(), pk.end())},
@@ -187,39 +187,33 @@ namespace llarp::rpc
             if (auto err = r->OxendErrorState())
                 payload["error"] = *err;
 
-            self->request(
+            request(
                 "admin.lokinet_ping",
-                [](bool success, std::vector<std::string> data) {
-                    (void)data;
+                [](bool success, std::vector<std::string> /* data */) {
                     log::debug(logcat, "Received response for ping. Successful: {}", success);
                 },
                 payload.dump());
 
             // subscribe to block updates
-            self->request("sub.block", [](bool success, std::vector<std::string> data) {
+            request("sub.block", [](bool success, std::vector<std::string> data) {
                 if (data.empty() or not success)
-                {
                     log::error(logcat, "Failed to subscribe to new blocks");
-                    return;
-                }
-                log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
+                else
+                    log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
             });
+
             // Trigger an update on a regular timer as well in case we missed a block notify for
             // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
             // known hash so that the poll is very cheap (basically empty) if the block hasn't
             // advanced.
-            self->update_service_node_list();
+            update_service_node_list();
         });
-
-        // Fire one ping off right away to get things going.
-        makePingRequest();
-        m_lokiMQ->add_timer(std::move(makePingRequest), PingInterval);
     }
 
     void RPCClient::handle_new_service_node_list(const nlohmann::json& j)
     {
         std::unordered_map<RouterID, PubKey> keymap;
-        std::vector<RouterID> activeNodeList, decommNodeList, unfundedNodeList;
+        std::vector<RouterID> active_list;
         if (not j.is_array())
             throw std::runtime_error{"Invalid service node list: expected array of service node states"};
 
@@ -235,10 +229,6 @@ namespace llarp::rpc
             if (active_itr == snode.end() or not active_itr->is_boolean())
                 continue;
             const bool active = active_itr->get<bool>();
-            const auto funded_itr = snode.find("funded");
-            if (funded_itr == snode.end() or not funded_itr->is_boolean())
-                continue;
-            const bool funded = funded_itr->get<bool>();
 
             RouterID rid;
             PubKey pk;
@@ -246,10 +236,11 @@ namespace llarp::rpc
                 continue;
 
             keymap[rid] = pk;
-            (active ? activeNodeList : funded ? decommNodeList : unfundedNodeList).push_back(std::move(rid));
+            if (active)
+                active_list.emplace_back(std::move(rid));
         }
 
-        if (activeNodeList.empty())
+        if (active_list.empty())
         {
             log::warning(logcat, "Received empty service node list, ignoring.");
             return;
@@ -260,14 +251,11 @@ namespace llarp::rpc
         {
             auto& loop = router->loop();
             loop->call([this,
-                        active = std::move(activeNodeList),
-                        decomm = std::move(decommNodeList),
-                        unfunded = std::move(unfundedNodeList),
+                        active = std::move(active_list),
                         keymap = std::move(keymap),
                         router = std::move(router)]() mutable {
                 _key_map = std::move(keymap);
-
-                router->set_router_whitelist(active, decomm, unfunded);
+                router->set_router_whitelist(active);
             });
         }
         else
@@ -338,19 +326,19 @@ namespace llarp::rpc
     }
 
     void RPCClient::lookup_ons_hash(
-        std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler)
+        std::string namehash, std::function<void(std::optional<EncryptedSNSRecord>)> resultHandler)
     {
         log::debug(logcat, "Looking Up ONS NameHash {}", namehash);
         const nlohmann::json req{{"type", 2}, {"name_hash", oxenc::to_hex(namehash)}};
         request(
             "rpc.lns_resolve",
             [this, resultHandler](bool success, std::vector<std::string> data) {
-                std::optional<service::EncryptedONSRecord> maybe = std::nullopt;
+                std::optional<EncryptedSNSRecord> maybe = std::nullopt;
                 if (success)
                 {
                     try
                     {
-                        service::EncryptedONSRecord result;
+                        EncryptedSNSRecord result;
                         const auto j = nlohmann::json::parse(data[1]);
                         j.dump();
                         result.ciphertext = oxenc::from_hex(j["encrypted_value"].get<std::string>());

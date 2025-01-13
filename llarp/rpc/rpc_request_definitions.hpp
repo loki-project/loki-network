@@ -291,6 +291,24 @@ namespace llarp::rpc
         } request;
     };
 
+    //  RPC: find_cc
+    //    Lookup client contact via path request
+    //
+    //  Inputs:
+    //    "pk" : client pubkey
+    //
+    //  Returns:
+    //    "cc" : client contact
+    struct FindCC : RPCRequest
+    {
+        static constexpr auto name = "find_cc"sv;
+
+        struct request_parameterss
+        {
+            std::string pk;
+        } request;
+    };
+
     // List of all RPC request structs to allow compile-time enumeration of all supported types
     using rpc_request_types = tools::type_list<
         Halt,
@@ -300,6 +318,7 @@ namespace llarp::rpc
         QuicConnect,   // debug
         QuicListener,  // debug
         LookupSnode,
+        FindCC,
         MapExit,
         ListExits,
         SwapExits,

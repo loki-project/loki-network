@@ -2,8 +2,8 @@
 
 #include "packet_io.hpp"
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/address/ip_range.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/net/net.hpp>
 
 #include <oxen/quic.hpp>
@@ -32,7 +32,7 @@ namespace llarp::vpn
         }
     };
 
-    struct InterfaceInfo
+    struct [[deprecated("Use net::if_info instead!")]] InterfaceInfo
     {
         std::string ifname;
         unsigned int index;

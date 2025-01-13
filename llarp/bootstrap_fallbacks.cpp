@@ -12,7 +12,7 @@ namespace llarp
                  //
              })
         {
-            if (network != RouterContact::ACTIVE_NETID)
+            if (network != RelayContact::ACTIVE_NETID)
                 continue;
 
             auto& bsl = fallbacks[network];

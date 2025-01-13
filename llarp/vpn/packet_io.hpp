@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/address/ip_packet.hpp>
+#include <llarp/net/ip_packet.hpp>
 
 #include <functional>
 

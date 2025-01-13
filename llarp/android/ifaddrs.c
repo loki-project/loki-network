@@ -237,10 +237,7 @@ static NetlinkList* getResultList(int p_socket, int p_request)
     return l_list;
 }
 
-static size_t maxSize(size_t a, size_t b)
-{
-    return (a > b ? a : b);
-}
+static size_t maxSize(size_t a, size_t b) { return (a > b ? a : b); }
 
 static size_t calcAddrLen(sa_family_t p_family, int p_dataSize)
 {

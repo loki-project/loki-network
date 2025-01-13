@@ -1,11 +1,11 @@
 #pragma once
 
 #include <llarp/address/address.hpp>
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/constants/path.hpp>
+#include <llarp/contact/tag.hpp>
 #include <llarp/ev/tcp.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/path/path.hpp>
-#include <llarp/service/tag.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -19,7 +19,7 @@ namespace llarp
     namespace link
     {
         class TunnelManager;
-    }
+    }  //  namespace link
 
     namespace handlers
     {
@@ -31,7 +31,6 @@ namespace llarp
         - client to snode:
           - the traffic to the pivot is encrypted
           - the pivot is the terminus, so data doesn't need to be encrypted
-          - could set HopID to 0 to indicate
     */
 
     namespace session
@@ -45,8 +44,13 @@ namespace llarp
             Router& _r;
             handlers::SessionEndpoint& _parent;
 
-            service::SessionTag _tag;
+            SessionTag _tag;
             NetworkAddress _remote;
+
+            shared_kx_data session_keys{};
+
+            // used for bridging data messages across aligned paths
+            HopID _remote_pivot_txid;
 
             bool _use_tun;
             bool _is_outbound;
@@ -54,7 +58,7 @@ namespace llarp
             const bool _is_exit_session{false};
 
             std::shared_ptr<path::Path> _current_path;
-            HopID _current_hop_id;
+            HopID _pivot_txid;
 
             // manually routed QUIC endpoint
             std::shared_ptr<oxen::quic::Endpoint> _ep;
@@ -76,10 +80,11 @@ namespace llarp
                 std::shared_ptr<path::Path> _p,
                 handlers::SessionEndpoint& parent,
                 NetworkAddress remote,
-                service::SessionTag _t,
+                HopID remote_pivot_txid,
+                SessionTag _t,
                 bool use_tun,
-                bool is_exit,
-                bool is_outbound);
+                bool is_outbound,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             virtual ~BaseSession() = default;
 
@@ -90,7 +95,7 @@ namespace llarp
             NetworkAddress remote() { return _remote; }
 
             bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
+                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
 
             bool send_path_data_message(std::string data);
 
@@ -104,9 +109,9 @@ namespace llarp
 
             bool using_tun() const { return _use_tun; }
 
-            service::SessionTag tag() { return _tag; }
+            SessionTag tag() { return _tag; }
 
-            const service::SessionTag& tag() const { return _tag; }
+            const SessionTag& tag() const { return _tag; }
 
             bool is_exit_session() const { return _is_exit_session; }
         };
@@ -120,30 +125,22 @@ namespace llarp
                 NetworkAddress _remote,
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
-                service::SessionTag _t,
-                bool is_exit);
+                HopID remote_pivot_txid,
+                SessionTag _t,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
 
           private:
-            Ed25519SecretKey _session_key;  // DISCUSS: is this useful?
-
-            std::chrono::milliseconds _last_use;
-
             const bool _is_snode_session{false};
+            std::chrono::milliseconds _last_use;
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            std::shared_ptr<path::Path> current_path()
-            {
-                if (auto itr = _paths.find(_remote.router_id()); itr != _paths.end())
-                    return itr->second;
-
-                return nullptr;
-            }
+            std::shared_ptr<path::Path> current_path() { return _current_path; }
 
             void blacklist_snode(const RouterID& snode) override;
 
@@ -169,12 +166,12 @@ namespace llarp
 
             const RouterID& remote_endpoint() const { return _remote.router_id(); }
 
-            std::optional<HopID> current_hop_id() const
+            std::optional<HopID> current_pivot_txid() const
             {
-                if (_current_hop_id.is_zero())
+                if (_pivot_txid.is_zero())
                     return std::nullopt;
 
-                return _current_hop_id;
+                return _pivot_txid;
             }
 
             bool is_expired(std::chrono::milliseconds now) const;
@@ -186,12 +183,14 @@ namespace llarp
                 NetworkAddress _remote,
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
-                service::SessionTag _t,
-                bool use_tun);
+                HopID remote_pivot_txid,
+                SessionTag _t,
+                bool use_tun,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~InboundSession() = default;
 
-            void set_new_tag(const service::SessionTag& tag);
+            void set_new_tag(const SessionTag& tag);
         };
     }  // namespace session
 

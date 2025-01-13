@@ -1,9 +1,10 @@
 #pragma once
 
+#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
-#include <llarp/router_id.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/ev/types.hpp>
 
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
@@ -14,6 +15,8 @@ namespace llarp
 
     namespace rpc
     {
+        inline constexpr auto PING_INTERVAL{30s};
+
         /// The LokidRpcClient uses loki-mq to talk to make API requests to lokid.
         struct RPCClient : public std::enable_shared_from_this<RPCClient>
         {
@@ -30,7 +33,7 @@ namespace llarp
             uint64_t block_height() const { return _block_height; }
 
             void lookup_ons_hash(
-                std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler);
+                std::string namehash, std::function<void(std::optional<EncryptedSNSRecord>)> resultHandler);
 
             /// inform that if connected to a router successfully
             void inform_connection(RouterID router, bool success);
@@ -63,6 +66,8 @@ namespace llarp
 
             // Handles notification of a new block
             void handle_new_block(oxenmq::Message& msg);
+
+            std::shared_ptr<EventTicker> _ping_ticker;
 
             std::optional<oxenmq::ConnectionID> m_Connection;
             std::shared_ptr<oxenmq::OxenMQ> m_lokiMQ;

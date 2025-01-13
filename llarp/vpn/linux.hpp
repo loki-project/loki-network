@@ -28,6 +28,8 @@ namespace llarp::vpn
 
     inline constexpr ipv4 ipv4_subnet{255, 255, 255, 255};
 
+    inline constexpr std::array<ipv6, 4> if_ipv6_addrs{ipv6{}, ipv6{0x4000}, ipv6{0x8000}, ipv6{0xc000}};
+
     struct in6_ifreq
     {
         in6_addr addr;
@@ -43,24 +45,25 @@ namespace llarp::vpn
         LinuxInterface(InterfaceInfo info) : NetworkInterface{std::move(info)}, _fd{::open("/dev/net/tun", O_RDWR)}
         {
             if (_fd == -1)
-                throw std::runtime_error("cannot open /dev/net/tun " + std::string{strerror(errno)});
+                throw std::runtime_error("cannot open /dev/net/tun {}"_format(strerror(errno)));
 
             if (fcntl(_fd, F_SETFL, O_NONBLOCK) == -1)
-                throw std::runtime_error{"Failed to set Linux interface fd non-block!s"};
+                throw std::runtime_error{"Failed to set `O_NONBLOCK` on Linux interface FD!"};
 
             ifreq ifr{};
             in6_ifreq ifr6{};
 
             ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
-            std::copy_n(_info.ifname.c_str(), std::min(_info.ifname.size(), sizeof(ifr.ifr_name)), ifr.ifr_name);
+            std::memcpy(
+                ifr.ifr_name, _info.ifname.c_str(), std::min(_info.ifname.size(), static_cast<size_t>(IFNAMSIZ)));
 
             if (::ioctl(_fd, TUNSETIFF, &ifr) == -1)
-                throw std::runtime_error("cannot set interface name: " + std::string{strerror(errno)});
+                throw std::runtime_error("cannot set interface name: {}"_format(strerror(errno)));
 
             IOCTL control{AF_INET};
 
             control.ioctl(SIOCGIFFLAGS, &ifr);
-            const int flags = ifr.ifr_flags;
+            short int flags = ifr.ifr_flags;
 
             control.ioctl(SIOCGIFINDEX, &ifr);
             _info.index = ifr.ifr_ifindex;
@@ -81,8 +84,8 @@ namespace llarp::vpn
 
                     control.ioctl(SIOCSIFADDR, &ifr);
 
-                    auto subnet_mask = (ipv4_subnet / range.mask()).base;
-                    log::trace(logcat, "IP Range:{}, subnet mask: {}", range, subnet_mask);
+                    auto subnet_mask = (ipv4_subnet / range.mask()).ip;
+                    log::debug(logcat, "IP Range:{}, subnet mask: {}", range, subnet_mask);
 
                     ((sockaddr_in*)&ifr.ifr_netmask)->sin_addr.s_addr =
                         oxenc::load_host_to_big<unsigned int>(&subnet_mask.addr);
@@ -109,7 +112,7 @@ namespace llarp::vpn
                 }
             }
 
-            ifr.ifr_flags = static_cast<short>(flags | IFF_UP | IFF_NO_PI);
+            ifr.ifr_flags = static_cast<short int>(flags | IFF_UP);
             control.ioctl(SIOCSIFFLAGS, &ifr);
         }
 
@@ -122,6 +125,7 @@ namespace llarp::vpn
             std::vector<uint8_t> buf;
             buf.resize(MAX_PACKET_SIZE);
             const auto sz = read(_fd, buf.data(), buf.capacity());
+            // log::trace(logcat, "{} bytes read from fd {} (err?:{})", sz, _fd, strerror(errno));
             if (sz < 0)
             {
                 if (errno == EAGAIN or errno == EWOULDBLOCK)
@@ -133,13 +137,13 @@ namespace llarp::vpn
             }
 
             buf.resize(sz);
-
             return IPPacket{std::move(buf)};
         }
 
         bool write_packet(IPPacket pkt) override
         {
             const auto sz = write(_fd, pkt.data(), pkt.size());
+            // log::trace(logcat, "{} bytes written to fd {} (err?:{})", sz, _fd, strerror(errno));
             if (sz <= 0)
                 return false;
             return sz == static_cast<ssize_t>(pkt.size());
@@ -188,6 +192,23 @@ namespace llarp::vpn
         /* Helper structure for ip address data and attributes */
         struct _inet_addr
         {
+          private:
+            void _init_internals(const ipv4& v4)
+            {
+                family = AF_INET;
+                bitlen = 32;
+                oxenc::write_host_as_big(v4.addr, &data);
+            }
+
+            void _init_internals(const ipv6& v6)
+            {
+                family = AF_INET6;
+                bitlen = 128;
+                auto in6 = v6.to_in6();
+                std::memcpy(&data, &in6, sizeof(in6_addr));
+            }
+
+          public:
             unsigned char family;
             unsigned char bitlen;
             unsigned char data[sizeof(struct in6_addr)];
@@ -196,43 +217,15 @@ namespace llarp::vpn
 
             _inet_addr(oxen::quic::Address addr)
             {
-                const auto& v4 = addr.is_ipv4();
-
-                family = (v4) ? AF_INET : AF_INET6;
-                bitlen = (v4) ? 32 : 128;
-                std::memcpy(data, addr.host().data(), (v4) ? 4 : 16);
+                if (addr.is_ipv4())
+                    _init_internals(addr.to_ipv4());
+                else
+                    _init_internals(addr.to_ipv6());
             }
 
-            _inet_addr(ipv4 v4)
-            {
-                family = AF_INET;
-                bitlen = 32;
+            _inet_addr(ipv4 v4) { _init_internals(v4); }
 
-                auto bigly = oxenc::host_to_big<uint32_t>(v4.addr);
-                inet_ntop(AF_INET, &bigly, reinterpret_cast<char*>(data), sizeof(struct in6_addr));
-            }
-
-            _inet_addr(ipv6 v6)
-            {
-                family = AF_INET6;
-                bitlen = 128;
-                auto in6 = v6.to_in6();
-                std::memcpy(&data, &in6, sizeof(in6_addr));
-            }
-
-            _inet_addr(net::ipv4addr_t addr, size_t bits = 32)
-            {
-                family = AF_INET;
-                bitlen = bits;
-                std::memcpy(data, &addr.n, 4);
-            }
-
-            _inet_addr(net::ipv6addr_t addr, size_t bits = 128)
-            {
-                family = AF_INET6;
-                bitlen = bits;
-                std::memcpy(data, &addr.n, 16);
-            }
+            _inet_addr(ipv6 v6) { _init_internals(v6); }
         };
 
         void make_blackhole(int cmd, int flags, int af)
@@ -249,12 +242,12 @@ namespace llarp::vpn
             nl_request.r.rtm_scope = RT_SCOPE_UNIVERSE;
             if (af == AF_INET)
             {
-                uint32_t addr{};
-                nl_request.AddData(RTA_DST, &addr, sizeof(addr));
+                ipv4 addr{};
+                nl_request.AddData(RTA_DST, &addr.addr, sizeof(addr.addr));
             }
             else
             {
-                uint128_t addr{};
+                std::array<uint64_t, 2> addr{};
                 nl_request.AddData(RTA_DST, &addr, sizeof(addr));
             }
             send(fd, &nl_request, sizeof(nl_request), 0);
@@ -336,10 +329,10 @@ namespace llarp::vpn
             if (const auto maybe6 = Net().get_interface_ipv6_addr(info.ifname))
             {
                 const _inet_addr gateway6{*maybe6};
-                for (const std::string str : {"::", "4000::", "8000::", "c000::"})
+
+                for (const auto& v6 : if_ipv6_addrs)
                 {
-                    const _inet_addr hole6{net::ipv6addr_t::from_string(str), 2};
-                    make_route(cmd, flags, hole6, gateway6, GatewayMode::eUpperDefault, info.index);
+                    make_route(cmd, flags, _inet_addr{v6}, gateway6, GatewayMode::eUpperDefault, info.index);
                 }
             }
         }

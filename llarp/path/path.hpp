@@ -1,8 +1,10 @@
 #pragma once
 
 #include "path_handler.hpp"
+#include "transit_hop.hpp"
 
 #include <llarp/constants/path.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
 #include <llarp/util/aligned.hpp>
@@ -21,6 +23,7 @@
 namespace llarp
 {
     struct Router;
+    struct Profiling;
 
     namespace service
     {
@@ -29,23 +32,15 @@ namespace llarp
 
     namespace path
     {
-        struct TransitHop;
-        struct PathHopConfig;
-
         using recv_session_dgram_cb = std::function<void(bstring data)>;
-
-        // TODO: replace vector of PathHopConfig with vector of TransitHops
 
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
         {
-            std::vector<PathHopConfig> hops;
-
-            std::weak_ptr<PathHandler> handler;
-
-            service::Introduction intro;
-
-            std::chrono::milliseconds buildStarted = 0s;
+            friend struct PathHandler;
+            friend class handlers::SessionEndpoint;
+            friend struct llarp::Profiling;
+            friend struct LinkManager;
 
             Path(
                 Router& rtr,
@@ -54,19 +49,24 @@ namespace llarp
                 bool is_session = false,
                 bool is_client = false);
 
+            // hops on constructed path
+            std::vector<TransitHop> hops;
+            // local hop info for onioned responses and session messages
+            // std::shared_ptr<TransitHop> _local_hop{};
+            std::weak_ptr<PathHandler> handler;
+            ClientIntro intro{};
+
             std::shared_ptr<Path> get_self() { return shared_from_this(); }
 
             std::weak_ptr<Path> get_weak() { return weak_from_this(); }
 
             nlohmann::json ExtractStatus() const;
 
-            std::string to_string() const;
-
-            std::string HopsString() const;
+            std::string hop_string() const;
 
             std::chrono::milliseconds LastRemoteActivityAt() const { return last_recv_msg; }
 
-            void set_established() { _established = true; }
+            void set_established();
 
             void recv_path_data_message(bstring data);
 
@@ -76,49 +76,31 @@ namespace llarp
 
             bool is_linked() const { return _is_linked; }
 
-            std::chrono::milliseconds ExpireTime() const { return buildStarted + hops[0].lifetime; }
-
-            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt = 5s) const
-            {
-                return now >= (ExpireTime() - dlt);
-            }
-
             void enable_exit_traffic();
 
             void mark_exit_closed();
 
             bool update_exit(uint64_t tx_id);
 
-            bool is_expired(std::chrono::milliseconds now) const;
-
-            /// build a new path on the same set of hops as us
-            /// regenerates keys
-            void rebuild();
+            bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 
             void Tick(std::chrono::milliseconds now);
 
-            bool resolve_ons(std::string name, std::function<void(std::string)> func = nullptr);
+            bool resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func);
 
-            bool find_intro(
-                const dht::Key_t& location,
-                bool is_relayed = false,
-                uint64_t order = 0,
-                std::function<void(std::string)> func = nullptr);
+            bool find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func);
 
-            bool publish_intro(
-                const service::EncryptedIntroSet& introset,
-                bool is_relayed = false,
-                uint64_t order = 0,
-                std::function<void(std::string)> func = nullptr);
+            bool publish_client_contact(
+                const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
 
             bool close_exit(
-                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func = nullptr);
+                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> = nullptr);
 
             bool obtain_exit(
                 const Ed25519SecretKey& sk,
                 uint64_t flag,
                 std::string tx_id,
-                std::function<void(std::string)> func = nullptr);
+                std::function<void(oxen::quic::message)> func);
 
             /// sends a control request along a path
             ///
@@ -129,11 +111,19 @@ namespace llarp
             /// func is called with a bt-encoded response string (if applicable), and
             /// a timeout flag (if set, response string will be empty)
             bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
+                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
 
             bool send_path_data_message(std::string body);
 
-            bool is_ready() const;
+            std::string make_path_message(std::string payload);
+
+            bool is_established() const { return _established; }
+
+            bool is_ready(std::chrono::milliseconds now = llarp::time_now_ms()) const;
+
+            std::shared_ptr<PathHandler> get_parent();
+
+            TransitHop edge() const;
 
             RouterID upstream_rid();
             const RouterID& upstream_rid() const;
@@ -165,14 +155,11 @@ namespace llarp
 
             bool operator!=(const Path& other) const;
 
+            std::string to_string() const;
             static constexpr bool to_string_formattable = true;
 
-          private:
-            std::string make_outer_payload(ustring_view payload);
-
-            std::string make_outer_payload(ustring_view payload, SymmNonce& nonce);
-
-            bool SendLatencyMessage(Router* r);
+          protected:
+            void populate_internals(const std::vector<RemoteRC>& _hops);
 
             /// call obtained exit hooks
             bool InformExitResult(std::chrono::milliseconds b);
@@ -185,11 +172,13 @@ namespace llarp
             bool _is_session_path{false};
             bool _is_client{false};
 
+            const size_t num_hops;
+
             recv_session_dgram_cb _recv_dgram;
 
-            std::chrono::milliseconds last_recv_msg = 0s;
-            std::chrono::milliseconds last_latency_test = 0s;
-            uint64_t last_latency_test_id = 0;
+            std::chrono::milliseconds last_recv_msg{0s};
+            std::chrono::milliseconds last_latency_test{0s};
+            uint64_t last_latency_test_id{};
         };
     }  // namespace path
 }  // namespace llarp
@@ -201,13 +190,8 @@ namespace std
     {
         size_t operator()(const llarp::path::Path& p) const
         {
-            auto& first_hop = p.hops[0];
-            llarp::AlignedBuffer<PUBKEYSIZE> b;
-            std::memcpy(b.data(), first_hop.txID.data(), PATHIDSIZE);
-            std::memcpy(&b[PATHIDSIZE], first_hop.txID.data(), PATHIDSIZE);
-
-            auto h = hash<llarp::AlignedBuffer<PUBKEYSIZE>>{}(b);
-            return h ^ hash<llarp::RouterID>{}(first_hop.upstream);
+            auto h = hash<llarp::HopID>{}(p.upstream_txid());
+            return h ^ hash<llarp::RouterID>{}(p.upstream_rid());
         }
     };
 }  //  namespace std

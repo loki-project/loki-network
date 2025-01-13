@@ -62,10 +62,10 @@ namespace llarp
         ~EventTrigger();
 
         // Resumes iterative execution after successfully cooling down or being signalled to stop by the callback
-        bool begin();
+        bool start();
 
         // Called by the passed callback to signal that the iterative invocation should STOP
-        bool halt();
+        bool stop();
 
       private:
         // Invokes the function `f`, incrementing `::current` up to `n` before cooling down

@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include <llarp/config/config.hpp>
-#include <llarp/router_contact.hpp>
+#include <llarp/relay_contact.hpp>
 #include <llarp/nodedb.hpp>
 
 using llarp_nodedb = llarp::NodeDB;
@@ -13,7 +13,7 @@ TEST_CASE("FindClosestTo returns correct number of elements", "[nodedb][dht]")
   constexpr uint64_t numRCs = 3;
   for (uint64_t i = 0; i < numRCs; ++i)
   {
-    llarp::RouterContact rc;
+    llarp::RelayContact rc;
     rc.pubkey[0] = i;
     nodeDB.Put(rc);
   }
@@ -22,7 +22,7 @@ TEST_CASE("FindClosestTo returns correct number of elements", "[nodedb][dht]")
 
   llarp::dht::Key_t key;
 
-  std::vector<llarp::RouterContact> results = nodeDB.FindManyClosestTo(key, 4);
+  std::vector<llarp::RelayContact> results = nodeDB.FindManyClosestTo(key, 4);
 
   // we asked for more entries than nodedb had
   REQUIRE(numRCs == results.size());
@@ -33,15 +33,15 @@ TEST_CASE("FindClosestTo returns properly ordered set", "[nodedb][dht]")
   llarp_nodedb nodeDB{fs::current_path(), nullptr};
 
   // insert some RCs: a < b < c
-  llarp::RouterContact a;
+  llarp::RelayContact a;
   a.pubkey[0] = 1;
   nodeDB.Put(a);
 
-  llarp::RouterContact b;
+  llarp::RelayContact b;
   b.pubkey[0] = 2;
   nodeDB.Put(b);
 
-  llarp::RouterContact c;
+  llarp::RelayContact c;
   c.pubkey[0] = 3;
   nodeDB.Put(c);
 
@@ -49,7 +49,7 @@ TEST_CASE("FindClosestTo returns properly ordered set", "[nodedb][dht]")
 
   llarp::dht::Key_t key;
 
-  std::vector<llarp::RouterContact> results = nodeDB.FindManyClosestTo(key, 2);
+  std::vector<llarp::RelayContact> results = nodeDB.FindManyClosestTo(key, 2);
   REQUIRE(2 == results.size());
 
   // we xor'ed with 0x0, so order should be a,b,c

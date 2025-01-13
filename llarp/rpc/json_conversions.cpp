@@ -6,10 +6,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("RPC-conversions");
 
-    void to_json(nlohmann::json& j, const IPRange& ipr)
-    {
-        j = ipr.to_string();
-    }
+    void to_json(nlohmann::json& j, const IPRange& ipr) { j = ipr.to_string(); }
 
     void from_json(const nlohmann::json& j, IPRange& ipr)
     {

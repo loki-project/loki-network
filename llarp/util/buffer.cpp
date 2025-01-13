@@ -45,35 +45,17 @@ namespace
 
 }  // namespace
 
-bool llarp_buffer_t::put_uint16(uint16_t i)
-{
-    return put(*this, i);
-}
+bool llarp_buffer_t::put_uint16(uint16_t i) { return put(*this, i); }
 
-bool llarp_buffer_t::put_uint64(uint64_t i)
-{
-    return put(*this, i);
-}
+bool llarp_buffer_t::put_uint64(uint64_t i) { return put(*this, i); }
 
-bool llarp_buffer_t::put_uint32(uint32_t i)
-{
-    return put(*this, i);
-}
+bool llarp_buffer_t::put_uint32(uint32_t i) { return put(*this, i); }
 
-bool llarp_buffer_t::read_uint16(uint16_t& i)
-{
-    return read(*this, i);
-}
+bool llarp_buffer_t::read_uint16(uint16_t& i) { return read(*this, i); }
 
-bool llarp_buffer_t::read_uint32(uint32_t& i)
-{
-    return read(*this, i);
-}
+bool llarp_buffer_t::read_uint32(uint32_t& i) { return read(*this, i); }
 
-bool llarp_buffer_t::read_uint64(uint64_t& i)
-{
-    return read(*this, i);
-}
+bool llarp_buffer_t::read_uint64(uint64_t& i) { return read(*this, i); }
 
 size_t llarp_buffer_t::read_until(char c_delim, uint8_t* result, size_t resultsize)
 {

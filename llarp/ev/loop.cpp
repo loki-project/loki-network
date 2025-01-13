@@ -6,10 +6,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("EventLoop");
 
-    std::shared_ptr<EventLoop> EventLoop::make()
-    {
-        return std::shared_ptr<EventLoop>{new EventLoop{}};
-    }
+    std::shared_ptr<EventLoop> EventLoop::make() { return std::shared_ptr<EventLoop>{new EventLoop{}}; }
 
     EventLoop::EventLoop() : _loop{std::make_shared<oxen::quic::Loop>()} {}
 

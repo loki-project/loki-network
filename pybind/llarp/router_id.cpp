@@ -1,4 +1,4 @@
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 
 #include <common.hpp>
 

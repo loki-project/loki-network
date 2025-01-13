@@ -1,7 +1,6 @@
 #pragma once
 
-#include "router_contact.hpp"
-
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/crypto.hpp>
 
 #include <set>

@@ -68,8 +68,6 @@ namespace llarp
 
             void add_CNAME_reply(std::string name, RR_TTL_t ttl = 1);
 
-            void add_IN_reply(llarp::huint128_t addr, bool isV6, RR_TTL_t ttl = 1);
-
             void add_reply(std::string name, RR_TTL_t ttl = 1);
 
             void add_srv_reply(std::vector<SRVData> records, RR_TTL_t ttl = 1);

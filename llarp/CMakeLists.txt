@@ -19,20 +19,12 @@ lokinet_add_library(lokinet-cryptography
 # Functional objects use by lokinet-core and other libraries
 # needed by vpn/ router/ rpc/ handlers/ net/ link/
 lokinet_add_library(lokinet-core-utils
-  # endpoint_base.cpp
-
   auth/file_auth.cpp
   auth/rpc_auth.cpp
   auth/session_auth.cpp
   
   handlers/session.cpp
   handlers/tun.cpp
-  
-  service/identity.cpp
-  service/info.cpp
-  service/intro.cpp # path
-  service/intro_set.cpp
-  service/name.cpp
   
   vpn/egres_packet_router.cpp
 )
@@ -46,8 +38,6 @@ lokinet_add_library(lokinet-core
   
   router/router.cpp
   router/route_poker.cpp
-  
-  service/types.cpp
 
   session/session.cpp
 )
@@ -62,7 +52,6 @@ lokinet_add_library(lokinet-rpc
 
 lokinet_add_library(lokinet-wire
   link/connection.cpp
-  link/contacts.cpp
   link/link_manager.cpp
   link/tunnel.cpp
 )
@@ -72,7 +61,6 @@ lokinet_add_library(lokinet-utils
   ${CMAKE_CURRENT_BINARY_DIR}/constants/version.cpp
   util/buffer.cpp
   util/file.cpp
-#   util/logging/buffer.cpp
   util/mem.cpp
   util/str.cpp
   util/thread/threading.cpp
@@ -82,13 +70,31 @@ lokinet_add_library(lokinet-utils
 
 add_dependencies(lokinet-utils genversion)
 
+lokinet_add_library(lokinet-contact
+  contact/client_contact.cpp
+  contact/client_intro.cpp
+  contact/contactdb.cpp
+  contact/keys.cpp
+  contact/relay_contact.cpp
+  contact/relay_contact_local.cpp
+  contact/relay_contact_remote.cpp
+  contact/router_id.cpp
+  contact/sns.cpp
+  contact/tag.cpp
+)
+
+# Network interface files used for mediating ip traffic
+lokinet_add_library(lokinet-ip
+  net/ip_packet.cpp
+  net/policy.cpp
+  net/utils.cpp
+)
+
 # Addressing and event loop files used by lokinet-core and other libraries
-# needed by rpc/ link/ service/ config/ path/ dht/
+# needed by rpc/ link/ config/ path/ dht/
 lokinet_add_library(lokinet-addressing
   address/address.cpp
-  address/ip_packet.cpp
   address/ip_range.cpp
-  address/keys.cpp
   address/utils.cpp
 
   ev/loop.cpp
@@ -96,21 +102,11 @@ lokinet_add_library(lokinet-addressing
   ev/types.cpp
   ev/udp.cpp
 
-  net/ip.cpp
-  net/net_int.cpp
-
-  router_contact.cpp    # TODO: move these + router_id.cpp to lokinet-core-utils..?
-  router_contact_local.cpp
-  router_contact_remote.cpp
-  router_id.cpp
   router_version.cpp  # to be deleted shortly
-
-  service/tag.cpp
 )
 
 # lokinet-platform holds all platform specific code
 lokinet_add_library(lokinet-platform
-  net/interface_info.cpp
   vpn/packet_router.cpp
   vpn/platform.cpp
 )
@@ -173,7 +169,6 @@ endif()
 # nodedb data published to the network and versions of it stored locally
 lokinet_add_library(lokinet-nodedb
   bootstrap.cpp   # config, router.hpp
-  net/traffic_policy.cpp  # config, intro_set
   nodedb.cpp
   profiling.cpp # path, router, service::endpoint
 )
@@ -213,24 +208,20 @@ lokinet_add_library(lokinet-path
 )
 
 # Link libraries to their internals
-target_link_libraries(lokinet-core-utils PUBLIC lokinet-dns)
-target_link_libraries(lokinet-core PUBLIC lokinet-core-utils)
-
-# Link lokinet-dns to alternate libraries
-target_link_libraries(lokinet-dns PUBLIC lokinet-dns-platform)
-
 target_link_libraries(lokinet-wire PUBLIC lokinet-addressing)
-target_link_libraries(lokinet-dns PUBLIC lokinet-utils lokinet-cryptography lokinet-config)
 target_link_libraries(lokinet-nodedb PUBLIC lokinet-addressing lokinet-cryptography)
-target_link_libraries(lokinet-platform PUBLIC lokinet-cryptography)
-target_link_libraries(lokinet-rpc PUBLIC lokinet-wire)
-target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography)
+target_link_libraries(lokinet-platform PUBLIC lokinet-cryptography lokinet-ip)
+target_link_libraries(lokinet-rpc PUBLIC lokinet-wire lokinet-contact)
+target_link_libraries(lokinet-addressing PUBLIC lokinet-utils lokinet-cryptography lokinet-contact lokinet-ip)
 target_link_libraries(lokinet-wire PUBLIC lokinet-cryptography)
 target_link_libraries(lokinet-config PUBLIC lokinet-cryptography)
 
 target_link_libraries(lokinet-dns
   PUBLIC
   lokinet-addressing
+  lokinet-cryptography 
+  lokinet-config 
+  lokinet-dns-platform
 )
 
 target_link_libraries(lokinet-path
@@ -240,6 +231,7 @@ target_link_libraries(lokinet-path
 
 target_link_libraries(lokinet-core-utils 
   PUBLIC 
+  lokinet-dns
   lokinet-config
   lokinet-platform
   lokinet-rpc 
@@ -249,7 +241,6 @@ target_link_libraries(lokinet-core-utils
 target_link_libraries(lokinet-cryptography
   PUBLIC
   lokinet-libcrypt
-  lokinet-libntrup
 )
 
 target_link_libraries(lokinet-utils
@@ -260,6 +251,7 @@ target_link_libraries(lokinet-utils
 # cross linkage
 target_link_libraries(lokinet-core 
   PUBLIC 
+  lokinet-core-utils
   lokinet-cryptography
   lokinet-nodedb
   lokinet-path
@@ -286,17 +278,6 @@ target_link_libraries(lokinet-base
   sodium
 )
 
-
-# target_link_libraries(lokinet-rpc PUBLIC oxenmq::oxenmq)
-# target_link_libraries(lokinet-core PUBLIC oxenmq::oxenmq)
-# target_link_libraries(lokinet-config PUBLIC oxenmq::oxenmq)
-# target_link_libraries(lokinet-nodedb PUBLIC oxenmq::oxenmq)
-# target_link_libraries(lokinet-path PUBLIC oxenmq::oxenmq)
-# target_link_libraries(lokinet-platform PUBLIC oxenmq::oxenmq Threads::Threads)
-# target_link_libraries(lokinet-cryptography PUBLIC sodium)
-# target_link_libraries(lokinet-dns PUBLIC libunbound)
-# target_link_libraries(lokinet-utils PUBLIC nlohmann_json::nlohmann_json)
-# target_link_libraries(lokinet-wire PUBLIC oxenmq::oxenmq quic)
 
 if(WITH_EMBEDDED_LOKINET)
   include(GNUInstallDirs)

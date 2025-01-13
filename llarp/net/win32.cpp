@@ -1,5 +1,3 @@
-#include "ip.hpp"
-#include "ip_range.hpp"
 #include "net.hpp"
 #include "net_if.hpp"
 
@@ -196,8 +194,5 @@ namespace llarp::net
 
     const Platform_Impl g_plat{};
 
-    const Platform* Platform::Default_ptr()
-    {
-        return &g_plat;
-    }
+    const Platform* Platform::Default_ptr() { return &g_plat; }
 }  // namespace llarp::net
