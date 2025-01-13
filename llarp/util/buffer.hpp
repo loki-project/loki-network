@@ -83,10 +83,7 @@ namespace llarp
     }
 
     // Helper function to switch between string_view and ustring_view
-    inline ustring_view to_usv(std::string_view v)
-    {
-        return {reinterpret_cast<const uint8_t*>(v.data()), v.size()};
-    }
+    inline ustring_view to_usv(std::string_view v) { return {reinterpret_cast<const uint8_t*>(v.data()), v.size()}; }
 
     template <oxenc::basic_char T>
     inline uspan to_uspan(std::basic_string<T>& v)

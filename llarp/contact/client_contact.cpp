@@ -19,10 +19,7 @@ namespace llarp
           exit_policy{std::move(policy)}
     {}
 
-    ClientContact::ClientContact(std::string&& buf)
-    {
-        bt_decode(oxenc::bt_dict_consumer{buf});
-    }
+    ClientContact::ClientContact(std::string&& buf) { bt_decode(oxenc::bt_dict_consumer{buf}); }
 
     ClientContact ClientContact::generate(
         Ed25519PrivateData&& private_data,
@@ -55,10 +52,7 @@ namespace llarp
         protos = proto;
     }
 
-    void ClientContact::_regenerate()
-    {
-        log::debug(logcat, "ClientContact regenerated with updated fields!");
-    }
+    void ClientContact::_regenerate() { log::debug(logcat, "ClientContact regenerated with updated fields!"); }
 
     void ClientContact::bt_encode(std::vector<unsigned char>& buf) const
     {

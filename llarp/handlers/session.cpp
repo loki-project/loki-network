@@ -17,10 +17,7 @@ namespace llarp::handlers
           _is_snode_service{_router.is_service_node()}
     {}
 
-    const std::shared_ptr<EventLoop>& SessionEndpoint::loop()
-    {
-        return _router.loop();
-    }
+    const std::shared_ptr<EventLoop>& SessionEndpoint::loop() { return _router.loop(); }
 
     void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
@@ -96,13 +93,13 @@ namespace llarp::handlers
             _auth_tokens.merge(net_config.exit_auths);
         }
 
-        uint16_t protoflags = protocol_flag::TCP2QUIC;
+        uint16_t protoflags = meta::to_underlying(protocol_flag::TCP2QUIC);
 
         if (_router.using_tun_if())
-            protoflags |= _is_v4 ? protocol_flag::IPV4 : protocol_flag::IPV6;
+            protoflags |= meta::to_underlying(_is_v4 ? protocol_flag::IPV4 : protocol_flag::IPV6);
 
         if (_is_exit_node)
-            protoflags |= protocol_flag::EXIT;
+            protoflags |= meta::to_underlying(protocol_flag::EXIT);
 
         auto& key_manager = _router.key_manager();
 
@@ -140,7 +137,7 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    static std::atomic<bool> testnet_trigger = false;
+    // static std::atomic<bool> testnet_trigger = false;
 
     void SessionEndpoint::start_tickers()
     {
@@ -155,24 +152,25 @@ namespace llarp::handlers
                 },
                 true);
 
-            if (not testnet_trigger)
-            {
-                testnet_trigger = true;
+            // if (not testnet_trigger)
+            // {
+            //     testnet_trigger = true;
 
-                _router.loop()->call_later(5s, [this]() {
-                    try
-                    {
-                        RouterID cpk{oxenc::from_base32z("ccaocb1w9hqspyeog3xfipb1cubnc93bze7bhtruwp1qy7mhkseo")};
-                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-                        _initiate_session(
-                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
-                    }
-                    catch (const std::exception& e)
-                    {
-                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-                    }
-                });
-            }
+            //     _router.loop()->call_later(5s, [this]() {
+            //         try
+            //         {
+            //             RouterID cpk{oxenc::from_base32z("4g96taie3et7dbkumk5x6rycskaxxsgjeiunpe61469z1gsbfkuo")};
+            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+            //             _initiate_session(
+            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
+            //                 });
+            //         }
+            //         catch (const std::exception& e)
+            //         {
+            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+            //         }
+            //     });
+            // }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -485,7 +483,7 @@ namespace llarp::handlers
     {
         bool ret{true};
 
-        log::critical(logcat, "Publishing new EncryptedClientContact: {}", ecc.bt_payload());
+        log::trace(logcat, "Publishing new EncryptedClientContact: {}", ecc.bt_payload());
 
         {
             Lock_t l{paths_mutex};
@@ -810,29 +808,17 @@ namespace llarp::handlers
         _address_map.insert_or_assign(std::move(local), std::move(remote));
     }
 
-    void SessionEndpoint::unmap_local_addr_by_remote(const NetworkAddress& remote)
-    {
-        _address_map.unmap(remote);
-    }
+    void SessionEndpoint::unmap_local_addr_by_remote(const NetworkAddress& remote) { _address_map.unmap(remote); }
 
-    void SessionEndpoint::unmap_remote_by_name(const std::string& name)
-    {
-        _address_map.unmap(name);
-    }
+    void SessionEndpoint::unmap_remote_by_name(const std::string& name) { _address_map.unmap(name); }
 
     void SessionEndpoint::map_remote_to_local_range(NetworkAddress remote, IPRange range)
     {
         _range_map.insert_or_assign(std::move(range), std::move(remote));
     }
 
-    void SessionEndpoint::unmap_local_range_by_remote(const NetworkAddress& remote)
-    {
-        _range_map.unmap(remote);
-    }
+    void SessionEndpoint::unmap_local_range_by_remote(const NetworkAddress& remote) { _range_map.unmap(remote); }
 
-    void SessionEndpoint::unmap_range_by_name(const std::string& name)
-    {
-        _range_map.unmap(name);
-    }
+    void SessionEndpoint::unmap_range_by_name(const std::string& name) { _range_map.unmap(name); }
 
 }  //  namespace llarp::handlers

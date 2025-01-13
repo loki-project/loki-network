@@ -344,15 +344,9 @@ namespace llarp
         return 0 == crypto_scalarmult_ed25519_noclamp(derived, h.data(), root_pubkey.data());
     }
 
-    void crypto::randomize(uint8_t* buf, size_t len)
-    {
-        randombytes(buf, len);
-    }
+    void crypto::randomize(uint8_t* buf, size_t len) { randombytes(buf, len); }
 
-    void crypto::randbytes(uint8_t* ptr, size_t sz)
-    {
-        randombytes((unsigned char*)ptr, sz);
-    }
+    void crypto::randbytes(uint8_t* ptr, size_t sz) { randombytes((unsigned char*)ptr, sz); }
 
     Ed25519SecretKey crypto::generate_identity()
     {
@@ -394,10 +388,7 @@ namespace llarp
     }
 #endif
 
-    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& sec)
-    {
-        return sec.data() + 32;
-    }
+    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& sec) { return sec.data() + 32; }
 
     // Called during static initialization to initialize libsodium.  (The CSRNG return is
     // not useful, but just here to get this called during static initialization of `csrng`).

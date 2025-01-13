@@ -32,50 +32,26 @@ namespace llarp::thread
     // Max number of combinations of index and generations.
     static constexpr uint32_t NUM_COMBINED_INDEXES = DISABLED_STATE_MASK;
 
-    bool isDisabledFlagSet(uint32_t encodedIndex)
-    {
-        return (encodedIndex & DISABLED_STATE_MASK);
-    }
+    bool isDisabledFlagSet(uint32_t encodedIndex) { return (encodedIndex & DISABLED_STATE_MASK); }
 
-    uint32_t discardDisabledFlag(uint32_t encodedIndex)
-    {
-        return (encodedIndex & ~DISABLED_STATE_MASK);
-    }
+    uint32_t discardDisabledFlag(uint32_t encodedIndex) { return (encodedIndex & ~DISABLED_STATE_MASK); }
 
     uint32_t encodeElement(uint32_t generation, ElementState state)
     {
         return (generation << GENERATION_COUNT_SHIFT) | to_underlying(state);
     }
 
-    uint32_t decodeGenerationFromElementState(uint32_t state)
-    {
-        return state >> GENERATION_COUNT_SHIFT;
-    }
+    uint32_t decodeGenerationFromElementState(uint32_t state) { return state >> GENERATION_COUNT_SHIFT; }
 
-    ElementState decodeStateFromElementState(uint32_t state)
-    {
-        return ElementState(state & ELEMENT_STATE_MASK);
-    }
+    ElementState decodeStateFromElementState(uint32_t state) { return ElementState(state & ELEMENT_STATE_MASK); }
 
-    QueueManager::AtomicIndex& QueueManager::pushIndex()
-    {
-        return m_pushIndex;
-    }
+    QueueManager::AtomicIndex& QueueManager::pushIndex() { return m_pushIndex; }
 
-    QueueManager::AtomicIndex& QueueManager::popIndex()
-    {
-        return m_popIndex;
-    }
+    QueueManager::AtomicIndex& QueueManager::popIndex() { return m_popIndex; }
 
-    const QueueManager::AtomicIndex& QueueManager::pushIndex() const
-    {
-        return m_pushIndex;
-    }
+    const QueueManager::AtomicIndex& QueueManager::pushIndex() const { return m_pushIndex; }
 
-    const QueueManager::AtomicIndex& QueueManager::popIndex() const
-    {
-        return m_popIndex;
-    }
+    const QueueManager::AtomicIndex& QueueManager::popIndex() const { return m_popIndex; }
 
     uint32_t QueueManager::nextCombinedIndex(uint32_t index) const
     {
@@ -97,10 +73,7 @@ namespace llarp::thread
         return generation + 1;
     }
 
-    size_t QueueManager::capacity() const
-    {
-        return m_capacity;
-    }
+    size_t QueueManager::capacity() const { return m_capacity; }
 
     int32_t QueueManager::circularDifference(uint32_t startingValue, uint32_t subtractValue, uint32_t modulo)
     {
@@ -148,10 +121,7 @@ namespace llarp::thread
         }
     }
 
-    QueueManager::~QueueManager()
-    {
-        delete[] m_states;
-    }
+    QueueManager::~QueueManager() { delete[] m_states; }
 
     QueueReturn QueueManager::reservePushIndex(uint32_t& generation, uint32_t& index)
     {
@@ -503,8 +473,5 @@ namespace llarp::thread
         return 0;
     }
 
-    bool QueueManager::enabled() const
-    {
-        return !isDisabledFlagSet(pushIndex().load());
-    }
+    bool QueueManager::enabled() const { return !isDisabledFlagSet(pushIndex().load()); }
 }  // namespace llarp::thread

@@ -52,10 +52,7 @@ namespace llarp::session
             _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
     }
 
-    void BaseSession::recv_path_data_message(bstring body)
-    {
-        _current_path->recv_path_data_message(std::move(body));
-    }
+    void BaseSession::recv_path_data_message(bstring body) { _current_path->recv_path_data_message(std::move(body)); }
 
     void BaseSession::set_new_current_path(std::shared_ptr<path::Path> _new_path)
     {
@@ -203,10 +200,7 @@ namespace llarp::session
         return obj;
     }
 
-    void OutboundSession::blacklist_snode(const RouterID& snode)
-    {
-        (void)snode;
-    }
+    void OutboundSession::blacklist_snode(const RouterID& snode) { (void)snode; }
 
     bool OutboundSession::is_path_dead(std::shared_ptr<path::Path>, std::chrono::milliseconds dlt)
     {
@@ -346,8 +340,5 @@ namespace llarp::session
             std::move(kx_data)}
     {}
 
-    void InboundSession::set_new_tag(const SessionTag& tag)
-    {
-        _tag = tag;
-    }
+    void InboundSession::set_new_tag(const SessionTag& tag) { _tag = tag; }
 }  // namespace llarp::session

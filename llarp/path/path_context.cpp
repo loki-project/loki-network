@@ -10,15 +10,9 @@ namespace llarp::path
 
     PathContext::PathContext(Router& r) : _r{r} {}
 
-    void PathContext::allow_transit()
-    {
-        _allow_transit = true;
-    }
+    void PathContext::allow_transit() { _allow_transit = true; }
 
-    bool PathContext::is_transit_allowed() const
-    {
-        return _allow_transit;
-    }
+    bool PathContext::is_transit_allowed() const { return _allow_transit; }
 
     void PathContext::add_path(std::shared_ptr<Path> path)
     {

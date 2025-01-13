@@ -31,9 +31,6 @@ namespace llarp::auth
         return ret;
     }
 
-    bool SessionAuthPolicy::load_identity_from_file(const char* fname)
-    {
-        return _session_key.load_from_file(fname);
-    }
+    bool SessionAuthPolicy::load_identity_from_file(const char* fname) { return _session_key.load_from_file(fname); }
 
 }  // namespace llarp::auth

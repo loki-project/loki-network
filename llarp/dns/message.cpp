@@ -3,7 +3,7 @@
 #include "dns.hpp"
 #include "srv_data.hpp"
 
-#include <llarp/address/ip_packet.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/buffer.hpp>
 
 #include <oxenc/endian.h>
@@ -54,10 +54,7 @@ namespace llarp::dns
         return true;
     }
 
-    nlohmann::json MessageHeader::ToJSON() const
-    {
-        return nlohmann::json{};
-    }
+    nlohmann::json MessageHeader::ToJSON() const { return nlohmann::json{}; }
 
     Message::Message(Message&& other)
         : hdr_id(std::move(other.hdr_id)),
@@ -85,10 +82,7 @@ namespace llarp::dns
         additional.resize(size_t(hdr._ar_count));
     }
 
-    Message::Message(const Question& question) : hdr_id{0}, hdr_fields{}
-    {
-        questions.emplace_back(question);
-    }
+    Message::Message(const Question& question) : hdr_id{0}, hdr_fields{} { questions.emplace_back(question); }
 
     bool Message::Encode(llarp_buffer_t* buf) const
     {
@@ -172,10 +166,7 @@ namespace llarp::dns
         }
     }
 
-    static constexpr uint16_t reply_flags(uint16_t setbits)
-    {
-        return setbits | flags_QR | flags_AA | flags_RA;
-    }
+    static constexpr uint16_t reply_flags(uint16_t setbits) { return setbits | flags_QR | flags_AA | flags_RA; }
 
     void Message::add_reply(std::string name, RR_TTL_t ttl)
     {

@@ -25,11 +25,6 @@ namespace llarp
     struct Router;
     struct Profiling;
 
-    // namespace link
-    // {
-    //     struct LinkManager;
-    // }
-
     namespace service
     {
         struct EncryptedIntroSet;
@@ -38,10 +33,6 @@ namespace llarp
     namespace path
     {
         using recv_session_dgram_cb = std::function<void(bstring data)>;
-
-        /** TODO:
-                - we only need a vector of RID's for path-building, not RemoteRC's
-         */
 
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>

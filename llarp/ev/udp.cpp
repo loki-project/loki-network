@@ -18,10 +18,7 @@ namespace llarp
         _local = socket->address();
     }
 
-    UDPHandle::~UDPHandle()
-    {
-        socket.reset();
-    }
+    UDPHandle::~UDPHandle() { socket.reset(); }
 
     io_result UDPHandle::_send_impl(
         const oxen::quic::Path& path, std::byte* buf, size_t size, uint8_t ecn, size_t& n_pkts)

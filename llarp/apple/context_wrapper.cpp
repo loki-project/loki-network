@@ -3,9 +3,9 @@
 #include "context.hpp"
 #include "vpn_interface.hpp"
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/constants/apple.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/logging/callback_sink.hpp>

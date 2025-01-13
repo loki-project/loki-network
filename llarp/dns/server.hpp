@@ -3,10 +3,9 @@
 #include "message.hpp"
 #include "platform.hpp"
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/ev/loop.hpp>
-#include <llarp/net/net.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/compare_ptr.hpp>
 
 #include <oxen/quic.hpp>

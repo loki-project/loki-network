@@ -459,10 +459,7 @@ extern "C"
         return 0;
     }
 
-    struct lokinet_context* EXPORT lokinet_context_new()
-    {
-        return new lokinet_context{};
-    }
+    struct lokinet_context* EXPORT lokinet_context_new() { return new lokinet_context{}; }
 
     void EXPORT lokinet_context_free(struct lokinet_context* ctx)
     {

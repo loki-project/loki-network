@@ -6,7 +6,6 @@
 #include <llarp/contact/router_id.hpp>
 #include <llarp/contact/tag.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/util/concept.hpp>
 #include <llarp/util/str.hpp>
 #include <llarp/util/thread/threading.hpp>
 

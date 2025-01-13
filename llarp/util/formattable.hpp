@@ -1,8 +1,9 @@
 #pragma once
 
-#include "concept.hpp"
+#include "meta.hpp"
 
 #include <oxen/log/format.hpp>
+#include <oxen/quic/format.hpp>
 
 #include <optional>
 
@@ -10,6 +11,14 @@ namespace llarp
 {
     using namespace std::literals;
     using namespace oxen::log::literals;
+
+    namespace concepts
+    {
+        // Types can opt-in to being fmt-formattable by ensuring they have a ::to_string() method defined
+        template <typename T>
+        concept to_string_formattable = oxen::quic::concepts::ToStringFormattable<T>;
+    }  // namespace concepts
+
 }  // namespace llarp
 
 #if !defined(USE_GHC_FILESYSTEM) && FMT_VERSION >= 80102
@@ -88,7 +97,7 @@ namespace fmt
 
 namespace fmt
 {
-    template <llarp::concepts::is_scoped_enum T>
+    template <llarp::concepts::scoped_enum T>
     struct formatter<T, char> : formatter<std::string_view>
     {
         template <typename FormatContext>
@@ -97,32 +106,4 @@ namespace fmt
             return formatter<std::string_view>::format(to_string(val), ctx);
         }
     };
-
-    // template <std::convertible_to<std::string_view> T>
-    // struct formatter<std::optional<T>, char> : formatter<std::string_view>
-    // {
-    //     template <typename FormatContext>
-    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
-    //     {
-    //         if (opt)
-    //         {
-    //             return formatter<std::string_view>::format(*opt, ctx);
-    //         }
-    //         return format_to(ctx.out(), "[-nullopt-]");
-    //     }
-    // };
-
-    // template <llarp::concepts::to_string_formattable T>
-    // struct formatter<std::optional<T>, char> : formatter<T>
-    // {
-    //     template <typename FormatContext>
-    //     auto format(const std::optional<T>& opt, FormatContext& ctx)
-    //     {
-    //         if (opt)
-    //         {
-    //             return formatter<std::string_view>::format(opt->to_string(), ctx);
-    //         }
-    //         return format_to(ctx.out(), "[-nullopt-]");
-    //     }
-    // };
 }  // namespace fmt

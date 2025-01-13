@@ -1,6 +1,6 @@
 #include "ip_packet.hpp"
 
-#include "utils.hpp"
+#include "net.hpp"
 
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging/buffer.hpp>
@@ -14,6 +14,16 @@
 namespace llarp
 {
     static auto logcat = log::Cat("ip_packet");
+
+    // constexpr auto IP_CSUM_OFF = offsetof(struct ip_header, checksum);
+    // constexpr auto IP_DST_OFF = offsetof(struct ip_header, dest);
+    // constexpr auto IP_SRC_OFF = offsetof(struct ip_header, src);
+    // constexpr auto IP_PROTO_OFF = offsetof(struct ip_header, protocol);
+    // constexpr auto TCP_DATA_OFF = oxenc::host_to_big<uint32_t>(0xF0000000);
+    constexpr auto TCP_CSUM_OFF = offsetof(struct tcp_header, checksum);
+    constexpr auto UDP_CSUM_OFF = offsetof(struct udp_header, checksum);
+    // auto TCP_DATA_OFFSET = htonl(0xF0000000);
+    // constexpr auto IS_PSEUDO = 0x10;
 
     IPPacket::IPPacket(size_t sz)
     {
@@ -57,19 +67,20 @@ namespace llarp
         return ret;
     }
 
-    static const auto v4_header_version = oxenc::host_to_big(uint8_t{4});
-    static const auto udp_header_proto = oxenc::host_to_big(uint8_t{17});
+    static const auto v4_header_version = oxenc::host_to_big<uint8_t>(4);
 
     void IPPacket::_init_internals()
     {
         _header = reinterpret_cast<ip_header*>(data());
         _v6_header = reinterpret_cast<ipv6_header*>(data());
 
+        _proto = net::IPProtocol{_header->protocol};
+
         if (_buf.empty())
             return;
 
         _is_v4 = _header->version == v4_header_version;
-        _is_udp = _header->protocol == udp_header_proto;
+        _is_udp = _proto == net::IPProtocol::UDP;
 
         uint16_t src_port =
             (_is_udp) ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)) : 0;
@@ -104,9 +115,7 @@ namespace llarp
         size_t hdr_sz = 0;
 
         if (_header->protocol == 0x11)
-        {
             hdr_sz = 8;
-        }
         else
             return std::nullopt;
 
@@ -121,29 +130,55 @@ namespace llarp
 
     void IPPacket::update_ipv4_address(ipv4 src, ipv4 dst)
     {
-        log::debug(logcat, "Setting new source ({}) and destination ({}) IPs", src, dst);
+        log::trace(logcat, "Setting new source ({}) and destination ({}) IPs", src, dst);
+
+        if (auto ihs = size_t(_header->header_len * 4); ihs <= size())
+        {
+            auto* payload = data() + ihs;
+            auto payload_size = size() - ihs;
+            auto frag_off = size_t(oxenc::big_to_host(_header->frag_off) & 0x1Fff) * 8;
+
+            switch (_header->protocol)
+            {
+                case 6:  // TCP
+                    if (frag_off <= TCP_CSUM_OFF || payload_size >= TCP_CSUM_OFF - frag_off + 2)
+                    {
+                        auto* tcp_hdr = reinterpret_cast<tcp_header*>(payload);
+                        tcp_hdr->checksum =
+                            utils::ipv4_tcp_checksum_diff(tcp_hdr->checksum, _header->src, _header->dest, src, dst);
+                    }
+                    break;
+                case 17:   // UDP
+                case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
+                    if (frag_off <= UDP_CSUM_OFF || payload_size >= UDP_CSUM_OFF + 2)
+                    {
+                        auto* udp_hdr = reinterpret_cast<udp_header*>(payload);
+                        udp_hdr->checksum =
+                            utils::ipv4_udp_checksum_diff(udp_hdr->checksum, _header->src, _header->dest, src, dst);
+                    }
+                    break;
+                case 33:  // DCCP
+                    if (frag_off <= UDP_CSUM_OFF || payload_size >= UDP_CSUM_OFF - frag_off + 2)
+                    {
+                        auto* tcp_hdr = reinterpret_cast<tcp_header*>(payload);
+                        tcp_hdr->checksum =
+                            utils::ipv4_tcp_checksum_diff(tcp_hdr->checksum, _header->src, _header->dest, src, dst);
+                    }
+                    break;
+                default:
+                    // do nothing
+                    break;
+            }
+        }
+
+        _header->checksum = utils::ipv4_checksum_diff(_header->checksum, _header->src, _header->dest, src, dst);
 
         // set new IP addresses
         _header->src = oxenc::host_to_big(src.addr);
         _header->dest = oxenc::host_to_big(dst.addr);
 
-        switch (_header->protocol)
-        {
-            case 6:    // TCP
-            case 17:   // UDP
-            case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
-            case 33:   // DCCP
-                _header->checksum = tcpudp_checksum_ipv4(
-                    _header->src, _header->dest, _header->header_len, _header->protocol, _header->checksum);
-                break;
-            default:
-                // do nothing
-                break;
-        }
-
-        _header->checksum = checksum_ipv4(_header, _header->header_len);
-
-        _init_internals();
+        _src_addr.set_addr(reinterpret_cast<in_addr*>(&_header->src));
+        _dst_addr.set_addr(reinterpret_cast<in_addr*>(&_header->dest));
     }
 
     void IPPacket::update_ipv6_address(ipv6 src, ipv6 dst, std::optional<uint32_t> flowlabel)
@@ -224,7 +259,6 @@ namespace llarp
                 [[fallthrough]];
             case 33:  // DCCP
                 chksum = tcp_checksum_ipv6(&hdr->src, &hdr->dest, hdr->payload_len, 0);
-
                 // ones-complement addition fo 0xFFff is 0; this is verboten
                 if (chksum == 0xFFff)
                     chksum = 0x0000;
@@ -254,22 +288,22 @@ namespace llarp
         if (is_ipv4())
         {
             auto ip_hdr_sz = _header->header_len * 4;
-            auto pkt_size = (ICMP_HEADER_SIZE + ip_hdr_sz) * 2;
+            size_t pkt_size = (ICMP_HEADER_SIZE + ip_hdr_sz) * 2;
 
-            IPPacket pkt{static_cast<size_t>(pkt_size)};
+            IPPacket pkt{pkt_size};
+            auto* pkt_header = pkt.header();
 
-            _header->version = 4;
-            _header->header_len = 0x05;
-            _header->service_type = 0;
-            _header->checksum = 0;
-            _header->total_len = ntohs(pkt_size);
-            _header->src = _header->dest;
-            _header->dest = _header->src;
-            _header->protocol = 1;  // ICMP
-            _header->ttl = _header->ttl;
-            _header->frag_off = htons(0b0100000000000000);
+            pkt_header->version = 4;
+            pkt_header->header_len = 0x05;
+            pkt_header->service_type = 0;
+            pkt_header->checksum = 0;
+            pkt_header->total_len = ntohs(pkt_size);
+            pkt_header->src = _header->dest;
+            pkt_header->dest = _header->src;
+            pkt_header->protocol = 1;  // ICMP
+            pkt_header->ttl = pkt_header->ttl;
+            pkt_header->frag_off = htons(0b0100000000000000);
 
-            uint16_t* checksum;
             uint8_t* itr = pkt.data() + ip_hdr_sz;
             uint8_t* icmp_begin = itr;  // type 'destination unreachable'
             *itr++ = 3;
@@ -279,7 +313,7 @@ namespace llarp
 
             // checksum + unused
             oxenc::write_host_as_big<uint32_t>(0, itr);
-            checksum = (uint16_t*)itr;
+            auto* checksum = (uint16_t*)itr;
             itr += 4;
 
             // next hop mtu is ignored but let's put something here anyways just in case tm
@@ -291,13 +325,13 @@ namespace llarp
             itr += ip_hdr_sz + ICMP_HEADER_SIZE;
 
             // calculate checksum of ip header
-            _header->checksum = checksum_ipv4(_header, _header->header_len);
-            const auto icmp_size = std::distance(icmp_begin, itr);
+            pkt_header->checksum = utils::ip_checksum(_buf.data(), ip_hdr_sz);
 
             // calculate icmp checksum
-            *checksum = checksum_ipv4(icmp_begin, icmp_size);
+            *checksum = utils::ip_checksum(icmp_begin, std::distance(icmp_begin, itr));
             return pkt;
         }
+
         return std::nullopt;
     }
 
@@ -305,7 +339,7 @@ namespace llarp
     {
         bstring data{};
         data.reserve(_buf.size());
-        std::memcpy(data.data(), _buf.data(), _buf.size());
+        std::memmove(data.data(), _buf.data(), _buf.size());
         return NetworkPacket{oxen::quic::Path{_src_addr, _dst_addr}, std::move(data)};
     }
 
@@ -338,10 +372,7 @@ namespace llarp
         return true;
     }
 
-    std::vector<uint8_t> IPPacket::steal_buffer() &&
-    {
-        return std::move(_buf);
-    }
+    std::vector<uint8_t> IPPacket::steal_buffer() && { return std::move(_buf); }
 
     std::string IPPacket::steal_payload() &&
     {
@@ -350,15 +381,9 @@ namespace llarp
         return ret;
     }
 
-    std::vector<uint8_t> IPPacket::give_buffer()
-    {
-        return {_buf};
-    }
+    std::vector<uint8_t> IPPacket::give_buffer() { return {_buf}; }
 
-    std::string IPPacket::to_string()
-    {
-        return {reinterpret_cast<const char*>(data()), size()};
-    }
+    std::string IPPacket::to_string() { return {reinterpret_cast<const char*>(data()), size()}; }
 
     std::string IPPacket::info_line() const
     {

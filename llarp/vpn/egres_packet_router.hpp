@@ -1,7 +1,7 @@
 #pragma once
 
 #include <llarp/address/address.hpp>
-#include <llarp/address/ip_packet.hpp>
+#include <llarp/net/ip_packet.hpp>
 
 #include <functional>
 #include <unordered_map>

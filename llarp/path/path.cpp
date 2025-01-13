@@ -136,10 +136,7 @@ namespace llarp::path
         return ret;
     }
 
-    bool Path::operator!=(const Path& other) const
-    {
-        return not(*this == other);
-    }
+    bool Path::operator!=(const Path& other) const { return not(*this == other); }
 
     bool Path::obtain_exit(
         const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(oxen::quic::message)> func)
@@ -169,15 +166,9 @@ namespace llarp::path
         return send_path_control_message("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
 
-    void Path::enable_exit_traffic()
-    {
-        log::info(logcat, "{} {} granted exit", name(), pivot_rid());
-    }
+    void Path::enable_exit_traffic() { log::info(logcat, "{} {} granted exit", name(), pivot_rid()); }
 
-    void Path::mark_exit_closed()
-    {
-        log::info(logcat, "{} hd its exit closed", name());
-    }
+    void Path::mark_exit_closed() { log::info(logcat, "{} hd its exit closed", name()); }
 
     std::string Path::make_path_message(std::string inner_payload)
     {
@@ -211,10 +202,7 @@ namespace llarp::path
         return _router.send_control_message(upstream_rid(), "path_control", std::move(outer_payload), std::move(func));
     }
 
-    bool Path::is_ready(std::chrono::milliseconds now) const
-    {
-        return _established ? !is_expired(now) : false;
-    }
+    bool Path::is_ready(std::chrono::milliseconds now) const { return _established ? !is_expired(now) : false; }
 
     std::shared_ptr<PathHandler> Path::get_parent()
     {
@@ -224,70 +212,31 @@ namespace llarp::path
         return nullptr;
     }
 
-    TransitHop Path::edge() const
-    {
-        return {hops.front()};
-    }
+    TransitHop Path::edge() const { return {hops.front()}; }
 
-    RouterID Path::upstream_rid()
-    {
-        return hops.front().router_id();
-    }
+    RouterID Path::upstream_rid() { return hops.front().router_id(); }
 
-    const RouterID& Path::upstream_rid() const
-    {
-        return hops.front().router_id();
-    }
+    const RouterID& Path::upstream_rid() const { return hops.front().router_id(); }
 
-    HopID Path::upstream_txid()
-    {
-        return hops.front().txid();
-    }
+    HopID Path::upstream_txid() { return hops.front().txid(); }
 
-    const HopID& Path::upstream_txid() const
-    {
-        return hops.front().txid();
-    }
+    const HopID& Path::upstream_txid() const { return hops.front().txid(); }
 
-    HopID Path::upstream_rxid()
-    {
-        return hops.front().rxid();
-    }
+    HopID Path::upstream_rxid() { return hops.front().rxid(); }
 
-    const HopID& Path::upstream_rxid() const
-    {
-        return hops.front().rxid();
-    }
+    const HopID& Path::upstream_rxid() const { return hops.front().rxid(); }
 
-    RouterID Path::pivot_rid()
-    {
-        return hops.back().router_id();
-    }
+    RouterID Path::pivot_rid() { return hops.back().router_id(); }
 
-    const RouterID& Path::pivot_rid() const
-    {
-        return hops.back().router_id();
-    }
+    const RouterID& Path::pivot_rid() const { return hops.back().router_id(); }
 
-    HopID Path::pivot_txid()
-    {
-        return hops.back().txid();
-    }
+    HopID Path::pivot_txid() { return hops.back().txid(); }
 
-    const HopID& Path::pivot_txid() const
-    {
-        return hops.back().txid();
-    }
+    const HopID& Path::pivot_txid() const { return hops.back().txid(); }
 
-    HopID Path::pivot_rxid()
-    {
-        return hops.back().rxid();
-    }
+    HopID Path::pivot_rxid() { return hops.back().rxid(); }
 
-    const HopID& Path::pivot_rxid() const
-    {
-        return hops.back().rxid();
-    }
+    const HopID& Path::pivot_rxid() const { return hops.back().rxid(); }
 
     std::string Path::to_string() const
     {
@@ -354,10 +303,7 @@ namespace llarp::path
         intro.expiry = llarp::time_now_ms() + path::DEFAULT_LIFETIME;
     }
 
-    bool Path::is_expired(std::chrono::milliseconds now) const
-    {
-        return intro.is_expired(now);
-    }
+    bool Path::is_expired(std::chrono::milliseconds now) const { return intro.is_expired(now); }
 
     std::string Path::name() const
     {

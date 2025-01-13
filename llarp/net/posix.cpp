@@ -287,8 +287,5 @@ namespace llarp::net
 
     const Platform_Impl g_plat{};
 
-    const Platform* Platform::Default_ptr()
-    {
-        return &g_plat;
-    }
+    const Platform* Platform::Default_ptr() { return &g_plat; }
 }  // namespace llarp::net

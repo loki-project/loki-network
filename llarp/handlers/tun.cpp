@@ -11,7 +11,6 @@
 #include <llarp/constants/platform.hpp>
 #include <llarp/contact/sns.hpp>
 #include <llarp/dns/dns.hpp>
-#include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/router/router.hpp>
@@ -392,15 +391,9 @@ namespace llarp::handlers
         });
     }
 
-    static bool is_random_snode(const dns::Message& msg)
-    {
-        return msg.questions[0].IsName("random.snode");
-    }
+    static bool is_random_snode(const dns::Message& msg) { return msg.questions[0].IsName("random.snode"); }
 
-    static bool is_localhost_loki(const dns::Message& msg)
-    {
-        return msg.questions[0].IsLocalhost();
-    }
+    static bool is_localhost_loki(const dns::Message& msg) { return msg.questions[0].IsLocalhost(); }
 
     static dns::Message& clear_dns_message(dns::Message& msg)
     {
@@ -793,10 +786,7 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::supports_ipv6() const
-    {
-        return ipv6_enabled;
-    }
+    bool TunEndpoint::supports_ipv6() const { return ipv6_enabled; }
 
     // FIXME: pass in which question it should be addressing
     bool TunEndpoint::should_hook_dns_message(const dns::Message& msg) const
@@ -828,20 +818,11 @@ namespace llarp::handlers
         return false;
     }
 
-    std::string TunEndpoint::get_if_name() const
-    {
-        return _if_name;
-    }
+    std::string TunEndpoint::get_if_name() const { return _if_name; }
 
-    bool TunEndpoint::is_service_node() const
-    {
-        return _router.is_service_node();
-    }
+    bool TunEndpoint::is_service_node() const { return _router.is_service_node(); }
 
-    bool TunEndpoint::is_exit_node() const
-    {
-        return _router.is_exit_node();
-    }
+    bool TunEndpoint::is_exit_node() const { return _router.is_exit_node(); }
 
     bool TunEndpoint::stop()
     {
@@ -960,14 +941,13 @@ namespace llarp::handlers
         }
     }
 
-    // handles an outbound packet going OUT to the network
+    // handles an outbound packet going OUT from user -> network
     void TunEndpoint::handle_outbound_packet(IPPacket pkt)
     {
         ip_v src, dest;
-
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        log::debug(logcat, "outbound packet: {}", pkt.info_line());
+        log::trace(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
 
         if (pkt_is_ipv4)
         {
@@ -980,7 +960,7 @@ namespace llarp::handlers
             dest = pkt.dest_ipv6();
         }
 
-        log::debug(logcat, "src:{}, dest:{}", src, dest);
+        log::trace(logcat, "src:{}, dest:{}", src, dest);
 
         if constexpr (llarp::platform::is_apple)
         {
@@ -999,12 +979,7 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::debug(
-                    logcat,
-                    "Dispatching outbound {}B packet for session (remote: {}): {}",
-                    pkt.size(),
-                    remote,
-                    buffer_printer{pkt.uview()});
+                log::info(logcat, "Dispatching outbound {}B packet for session (remote: {})", pkt.size(), remote);
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else
@@ -1046,11 +1021,11 @@ namespace llarp::handlers
         else
             pkt.update_ipv6_address(std::get<ipv6>(src), std::get<ipv6>(dest));
 
-        log::debug(logcat, "Rewritten packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
+        log::trace(logcat, "Rewritten packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
         send_packet_to_net_if(std::move(pkt));
     }
 
-    // handles an inbound packet coming IN from the network
+    // handles an inbound packet coming IN from network -> user
     bool TunEndpoint::handle_inbound_packet(
         IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
     {
@@ -1060,7 +1035,7 @@ namespace llarp::handlers
 
         if (is_exit_session and is_outbound_session)
         {
-            log::debug(logcat, "inbound exit session pkt: {}", pkt.info_line());
+            log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
             // we are receiving traffic from a session to a remote exit node
             if (pkt_is_ipv4)
             {
@@ -1097,7 +1072,7 @@ namespace llarp::handlers
         {
             if (is_exit_session and not is_outbound_session)
             {
-                log::debug(logcat, "inbound exit session pkt: {}", pkt.info_line());
+                log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
                 // we are receiving traffic from a session to a local exit node
                 if (not is_allowing_traffic(pkt))
                     return false;
@@ -1109,7 +1084,7 @@ namespace llarp::handlers
             }
             else
             {
-                log::debug(logcat, "inbound service session pkt: {}", pkt.info_line());
+                log::info(logcat, "inbound service session pkt: {}", pkt.info_line());
                 // we are receiving hidden service traffic
                 if (pkt_is_ipv4)
                     dest = _local_addr.to_ipv4();
@@ -1123,7 +1098,7 @@ namespace llarp::handlers
                 return false;
         }
 
-        log::debug(logcat, "src:{}, dest:{}", src, dest);
+        log::trace(logcat, "src:{}, dest:{}", src, dest);
 
         rewrite_and_send_packet(std::move(pkt), src, dest);
 
@@ -1139,10 +1114,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
-        if (auto exitPolicy = get_traffic_policy())
-            return exitPolicy->allow_ip_traffic(pkt);
-
-        return true;
+        return _traffic_policy ? _traffic_policy->allow_ip_traffic(pkt) : true;
     }
 
     bool TunEndpoint::has_mapping_to_remote(const NetworkAddress& addr) const
@@ -1155,10 +1127,7 @@ namespace llarp::handlers
         return _local_ip_mapping.get_local_from_remote(addr);
     }
 
-    oxen::quic::Address TunEndpoint::get_if_addr() const
-    {
-        return _local_addr;
-    }
+    oxen::quic::Address TunEndpoint::get_if_addr() const { return _local_addr; }
 
     TunEndpoint::~TunEndpoint() = default;
 

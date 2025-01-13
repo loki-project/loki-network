@@ -123,20 +123,11 @@ namespace llarp
         return checkIsGood(path_fail, path_success, chances);
     }
 
-    void Profiling::disable()
-    {
-        _profiling_disabled.store(true);
-    }
+    void Profiling::disable() { _profiling_disabled.store(true); }
 
-    void Profiling::enable()
-    {
-        _profiling_disabled.store(false);
-    }
+    void Profiling::enable() { _profiling_disabled.store(false); }
 
-    bool Profiling::is_enabled() const
-    {
-        return not _profiling_disabled.load();
-    }
+    bool Profiling::is_enabled() const { return not _profiling_disabled.load(); }
 
     bool Profiling::is_bad_for_connect(const RouterID& r, uint64_t chances)
     {

@@ -8,7 +8,7 @@
 #include <llarp/dht/key.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/net/traffic_policy.hpp>
+#include <llarp/net/policy.hpp>
 #include <llarp/router_version.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/buffer.hpp>
@@ -36,16 +36,6 @@ namespace llarp
         class SessionEndpoint;
     }
 
-    enum protocol_flag : uint16_t
-    {
-        CONTROL = 1 << 0,
-        IPV4 = 1 << 1,
-        IPV6 = 1 << 2,
-        EXIT = 1 << 3,
-        AUTH = 1 << 4,
-        TCP2QUIC = 1 << 5,
-    };
-
     // TESTNET:
     inline static constexpr auto CC_PUBLISH_INTERVAL{30s};
 
@@ -58,7 +48,7 @@ namespace llarp
                     to the client instance
             - "p" : supported protocols indicating the traffic accepted by the client instance; this indicates if the
                     client is embedded and therefore requires a tunneled connection. Serialized as a bitwise flag of
-                    above protocol_flag enums
+                    protocol_flag enums (llarp/net/policy.hpp)
             - "s" : (optional) SRV records for lokinet DNS lookup
     */
     struct ClientContact

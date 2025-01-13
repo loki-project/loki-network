@@ -94,10 +94,7 @@ namespace llarp::rpc
     // false if it advanced beyond the requested name.  This is exactly the same as
     // `d.skip_until(name)`, but is here so we can also overload an equivalent function for json
     // iteration.
-    inline bool skip_until(oxenc::bt_dict_consumer& d, std::string_view name)
-    {
-        return d.skip_until(name);
-    }
+    inline bool skip_until(oxenc::bt_dict_consumer& d, std::string_view name) { return d.skip_until(name); }
     // Equivalent to the above but for a json object iterator.
     inline bool skip_until(json_range& it_range, std::string_view name)
     {

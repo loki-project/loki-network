@@ -29,15 +29,9 @@
 
 namespace llarp
 {
-    inline int cmp(const in_addr& a, const in_addr& b)
-    {
-        return memcmp(&a, &b, sizeof(in_addr));
-    }
+    inline int cmp(const in_addr& a, const in_addr& b) { return memcmp(&a, &b, sizeof(in_addr)); }
 
-    inline int cmp(const in6_addr& a, const in6_addr& b)
-    {
-        return memcmp(&a, &b, sizeof(in6_addr));
-    }
+    inline int cmp(const in6_addr& a, const in6_addr& b) { return memcmp(&a, &b, sizeof(in6_addr)); }
 
     namespace net
     {
@@ -144,15 +138,9 @@ namespace llarp
 
 }  // namespace llarp
 
-inline bool operator==(const in_addr& a, const in_addr& b)
-{
-    return llarp::cmp(a, b) == 0;
-}
+inline bool operator==(const in_addr& a, const in_addr& b) { return llarp::cmp(a, b) == 0; }
 
-inline bool operator==(const in6_addr& a, const in6_addr& b)
-{
-    return llarp::cmp(a, b) == 0;
-}
+inline bool operator==(const in6_addr& a, const in6_addr& b) { return llarp::cmp(a, b) == 0; }
 
 inline bool operator==(const sockaddr_in& a, const sockaddr_in& b)
 {
@@ -179,15 +167,9 @@ inline bool operator==(const sockaddr& a, const sockaddr& b)
     }
 }
 
-inline bool operator<(const in_addr& a, const in_addr& b)
-{
-    return llarp::cmp(a, b) < 0;
-}
+inline bool operator<(const in_addr& a, const in_addr& b) { return llarp::cmp(a, b) < 0; }
 
-inline bool operator<(const in6_addr& a, const in6_addr& b)
-{
-    return llarp::cmp(a, b) < 0;
-}
+inline bool operator<(const in6_addr& a, const in6_addr& b) { return llarp::cmp(a, b) < 0; }
 
 inline bool operator<(const sockaddr_in6& a, const sockaddr_in6& b)
 {

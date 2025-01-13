@@ -1,219 +1,71 @@
 #include "utils.hpp"
 
-#include "ip_headers.hpp"
-
 namespace llarp
 {
     static auto logcat = log::Cat("address-utils");
 
-    namespace utils
+    namespace detail
     {
-        // constexpr auto IP_CSUM_OFF = offsetof(struct ip_header, checksum);
-        // constexpr auto IP_DST_OFF = offsetof(struct ip_header, dest);
-        // constexpr auto IP_SRC_OFF = offsetof(struct ip_header, src);
-        // constexpr auto IP_PROTO_OFF = offsetof(struct ip_header, protocol);
-        // constexpr auto TCP_CSUM_OFF = offsetof(struct tcp_header, checksum);
-        // constexpr auto UDP_CSUM_OFF = offsetof(struct tcp_header, checksum);
-        // constexpr auto IS_PSEUDO = 0x10;
-
-        static constexpr uint32_t add_u32(uint32_t x)
+        std::optional<std::string> parse_addr_string(std::string_view arg, std::string_view tld)
         {
-            return uint32_t{x & 0xFFff} + uint32_t{x >> 16};
-        }
+            std::optional<std::string> ret = std::nullopt;
 
-        uint16_t ip_checksum(const uint8_t *buf, size_t sz)
-        {
-            uint32_t sum{};
-
-            while (sz > 1)
+            if (auto pos = arg.find_first_of('.'); pos != std::string_view::npos)
             {
-                sum += *reinterpret_cast<const uint16_t *>(buf);
-                sz -= sizeof(uint16_t);
-                buf += sizeof(uint16_t);
+                auto _prefix = arg.substr(0, pos);
+                // check the pubkey prefix is the right length
+                if (_prefix.length() != PUBKEYSIZE)
+                    return ret;
+
+                // verify the tld is allowed
+                auto _tld = arg.substr(pos);
+
+                if (_tld == tld and TLD::allowed.count(_tld))
+                    ret = _prefix;
             }
-            if (sz != 0)
-                sum += *reinterpret_cast<const uint16_t *>(buf);
 
-            sum = (sum & 0xFFff) + (sum >> 16);
-            sum += sum >> 16;
+            return ret;
+        };
 
-            return static_cast<uint16_t>((~sum) & 0xFFff);
-        }
-
-        uint16_t ipv4_checksum_diff(uint16_t old_sum, ipv4 old_src, ipv4 old_dest, ipv4 new_src, ipv4 new_dest)
+        std::pair<std::string, uint16_t> parse_addr(std::string_view addr, std::optional<uint16_t> default_port)
         {
-            uint32_t sum = oxenc::host_to_big<uint32_t>(old_sum);
-        }
+            std::pair<std::string, uint16_t> result;
+            auto &[host, port] = result;
 
-    }  // namespace utils
-
-    uint16_t csum_add(uint16_t csum, uint16_t rhs)
-    {
-        uint32_t res = csum, other = rhs;
-        res += other;
-        return static_cast<uint16_t>(res + (res < other));
-    }
-
-    uint16_t csum_sub(uint16_t csum, uint16_t rhs)
-    {
-        return csum_add(csum, ~rhs);
-    }
-
-    uint16_t from_32_to_16(uint32_t x)
-    {
-        /* add up 16-bit and 16-bit for 16+c bit */
-        x = (x & 0xffff) + (x >> 16);
-        /* add up carry.. */
-        x = (x & 0xffff) + (x >> 16);
-        return x;
-    }
-
-    uint32_t from_64_to_32(uint64_t x)
-    {
-        /* add up 32-bit and 32-bit for 32+c bit */
-        x = (x & 0xffffffff) + (x >> 32);
-        /* add up carry.. */
-        x = (x & 0xffffffff) + (x >> 32);
-        return x;
-    }
-
-    uint16_t fold_csum(uint32_t csum)
-    {
-        auto sum = csum;
-        sum = (sum & 0xffff) + (sum >> 16);
-        sum = (sum & 0xffff) + (sum >> 16);
-        return static_cast<uint16_t>(~sum);
-    }
-
-    uint32_t ipv4_checksum_magic(const uint8_t *buf, int len)
-    {
-        int odd{1};
-        uint16_t result{0};
-
-        odd &= (unsigned long)buf;
-
-        if (odd)
-        {
-            if constexpr (oxenc::little_endian)
-                result += (*buf << 8);
+            if (auto p = addr.find_last_not_of(DIGITS);
+                p != std::string_view::npos && p + 2 <= addr.size() && addr[p] == ':')
+            {
+                if (!parse_int(addr.substr(p + 1), port))
+                    throw std::invalid_argument{"Invalid address: could not parse port"};
+                addr.remove_suffix(addr.size() - p);
+            }
+            else if (default_port.has_value())  // use ::has_value() in case default_port is set but is == 0
+            {
+                port = *default_port;
+            }
             else
-                result = *buf;
+                throw std::invalid_argument{
+                    "Invalid address: argument contains no port and no default was specified (input:{})"_format(addr)};
 
-            --len;
-            ++buf;
-        }
+            bool had_sq_brackets = false;
 
-        if (len >= 2)
-        {
-            if (2 & (unsigned long)buf)
+            if (!addr.empty() && addr.front() == '[' && addr.back() == ']')
             {
-                result += *(unsigned short *)buf;
-                len -= 2;
-                buf += 2;
+                addr.remove_prefix(1);
+                addr.remove_suffix(1);
+                had_sq_brackets = true;
             }
 
-            if (len >= 4)
+            if (auto p = addr.find_first_not_of(PDIGITS); p != std::string_view::npos)
             {
-                const unsigned char *end = buf + ((unsigned)len & ~3);
-                unsigned int carry = 0;
-
-                do
-                {
-                    unsigned int w = *(unsigned int *)buf;
-                    buf += 4;
-                    result += carry;
-                    result += w;
-                    carry = (w > result);
-                } while (buf < end);
-
-                result += carry;
-                result = (result & 0xffff) + (result >> 16);
+                if (auto q = addr.find_first_not_of(ALDIGITS); q != std::string_view::npos)
+                    throw std::invalid_argument{"Invalid address: does not look like IPv4 or IPv6!"};
+                if (!had_sq_brackets)
+                    throw std::invalid_argument{"Invalid address: IPv6 addresses require [...] square brackets"};
             }
 
-            if (len & 2)
-            {
-                result += *(unsigned short *)buf;
-                buf += 2;
-            }
+            host = addr;
+            return result;
         }
-
-        if (len & 1)
-            result += oxenc::little_endian ? *buf : (*buf << 8);
-
-        result = from_32_to_16(result);
-
-        if (odd)
-            result = ((result >> 8) & 0xff) | ((result & 0xff) << 8);
-
-        return result;
-    }
-
-    uint16_t checksum_partial(const void *header, uint8_t header_len, uint16_t old_sum)
-    {
-        uint16_t result = ipv4_checksum_magic(reinterpret_cast<const uint8_t *>(header), header_len);
-
-        if (result += old_sum; old_sum > result)
-            result += 1;
-
-        return result;
-    }
-
-    uint16_t checksum_ipv4(const void *header, uint8_t header_len)
-    {
-        return ~ipv4_checksum_magic(reinterpret_cast<const uint8_t *>(header), header_len * 4);
-    }
-
-    uint32_t tcpudp_checksum_ipv4(uint32_t src, uint32_t dest, uint32_t len, uint8_t proto, uint32_t sum)
-    {
-        auto csum = static_cast<uint64_t>(sum);
-
-        csum += src;
-        csum += dest;
-
-        csum += oxenc::big_endian ? proto + len : (proto + len) << 8;
-
-        return from_64_to_32(csum);
-    }
-
-    uint16_t ipv6_checksum_magic(
-        const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint8_t proto, uint32_t sum)
-    {
-        uint32_t csum = sum;
-
-        for (size_t i = 0; i < 4; ++i)
-        {
-            auto val = static_cast<uint32_t>(saddr->s6_addr32[i]);
-            csum += val;
-            csum += (csum < val);
-        }
-
-        for (size_t i = 0; i < 4; ++i)
-        {
-            auto val = static_cast<uint32_t>(daddr->s6_addr32[i]);
-            csum += val;
-            csum += (csum < val);
-        }
-
-        uint32_t ulen = htonl(len);
-        uint32_t uproto = htonl(proto);
-
-        csum += ulen;
-        csum += (csum < ulen);
-
-        csum += uproto;
-        csum += (csum < uproto);
-
-        return fold_csum(csum);
-    }
-
-    uint32_t tcp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
-    {
-        return ~ipv6_checksum_magic(saddr, daddr, len, IPPROTO_TCP, csum);
-    }
-
-    uint32_t udp_checksum_ipv6(const struct in6_addr *saddr, const struct in6_addr *daddr, uint32_t len, uint32_t csum)
-    {
-        return ~ipv6_checksum_magic(saddr, daddr, len, IPPROTO_UDP, csum);
-    }
-
+    }  // namespace detail
 }  // namespace llarp

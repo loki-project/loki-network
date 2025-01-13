@@ -20,9 +20,6 @@ namespace llarp
             return itr->second;
         }
 
-        void Simulation::DelNode(const std::string& name)
-        {
-            m_Nodes.erase(name);
-        }
+        void Simulation::DelNode(const std::string& name) { m_Nodes.erase(name); }
     }  // namespace simulate
 }  // namespace llarp

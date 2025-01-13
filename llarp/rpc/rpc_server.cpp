@@ -532,7 +532,7 @@ namespace llarp::rpc
             return;
         }
 
-        if (not ends_with(config.request.filename, ".ini"))
+        if (config.request.filename.ends_with(".ini"))
         {
             SetJSONError("Must append '.ini' to filename", config.response);
             return;

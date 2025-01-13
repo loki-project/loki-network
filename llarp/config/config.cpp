@@ -1702,10 +1702,7 @@ namespace llarp
         return load_config_data(ini, std::nullopt, isRelay);
     }
 
-    bool Config::load_default_config(bool isRelay)
-    {
-        return load_string("", isRelay);
-    }
+    bool Config::load_default_config(bool isRelay) { return load_string("", isRelay); }
 
     void Config::init_config(ConfigDefinition& conf, const ConfigGenParameters& params)
     {

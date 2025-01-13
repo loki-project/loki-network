@@ -78,10 +78,7 @@ namespace llarp
         return false;
     }
 
-    bool BootstrapList::contains(const RemoteRC& rc) const
-    {
-        return count(rc);
-    }
+    bool BootstrapList::contains(const RemoteRC& rc) const { return count(rc); }
 
     std::string_view BootstrapList::bt_encode() const
     {

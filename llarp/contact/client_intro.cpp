@@ -4,10 +4,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("client-intro");
 
-    ClientIntro::ClientIntro(oxenc::bt_dict_consumer&& btdc)
-    {
-        bt_decode(std::move(btdc));
-    }
+    ClientIntro::ClientIntro(oxenc::bt_dict_consumer&& btdc) { bt_decode(std::move(btdc)); }
 
     ClientIntro::ClientIntro(std::string_view buf) : ClientIntro{oxenc::bt_dict_consumer{buf}} {}
 

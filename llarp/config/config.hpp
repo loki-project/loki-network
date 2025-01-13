@@ -12,7 +12,7 @@
 #include <llarp/crypto/types.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>
-#include <llarp/net/traffic_policy.hpp>
+#include <llarp/net/policy.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/str.hpp>
 

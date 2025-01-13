@@ -40,10 +40,7 @@ namespace llarp
         }
     };
 
-    inline bool operator==(const RouterID& lhs, const RouterID& rhs)
-    {
-        return lhs.as_array() == rhs.as_array();
-    }
+    inline bool operator==(const RouterID& lhs, const RouterID& rhs) { return lhs.as_array() == rhs.as_array(); }
 }  // namespace llarp
 
 namespace std

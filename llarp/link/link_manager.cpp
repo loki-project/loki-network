@@ -186,20 +186,11 @@ namespace llarp
         }
     }  // namespace link
 
-    std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const
-    {
-        return ep->connection_stats();
-    }
+    std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const { return ep->connection_stats(); }
 
-    size_t LinkManager::get_num_connected_routers(bool active_only) const
-    {
-        return ep->num_router_conns(active_only);
-    }
+    size_t LinkManager::get_num_connected_routers(bool active_only) const { return ep->num_router_conns(active_only); }
 
-    size_t LinkManager::get_num_connected_clients() const
-    {
-        return ep->num_client_conns();
-    }
+    size_t LinkManager::get_num_connected_clients() const { return ep->num_client_conns(); }
 
     using messages::serialize_response;
 
@@ -555,10 +546,7 @@ namespace llarp
         return false;
     }
 
-    void LinkManager::close_connection(RouterID rid)
-    {
-        return ep->close_connection(rid);
-    }
+    void LinkManager::close_connection(RouterID rid) { return ep->close_connection(rid); }
 
     void LinkManager::test_reachability(const RouterID& rid, conn_open_hook on_open, conn_closed_hook on_close)
     {
@@ -624,20 +612,11 @@ namespace llarp
         log::warning(logcat, "Failed to begin establishing connection to {}", remote_addr);
     }
 
-    bool LinkManager::have_connection_to(const RouterID& remote) const
-    {
-        return ep->have_conn(remote);
-    }
+    bool LinkManager::have_connection_to(const RouterID& remote) const { return ep->have_conn(remote); }
 
-    bool LinkManager::have_service_connection_to(const RouterID& remote) const
-    {
-        return ep->have_service_conn(remote);
-    }
+    bool LinkManager::have_service_connection_to(const RouterID& remote) const { return ep->have_service_conn(remote); }
 
-    bool LinkManager::have_client_connection_to(const RouterID& remote) const
-    {
-        return ep->have_client_conn(remote);
-    }
+    bool LinkManager::have_client_connection_to(const RouterID& remote) const { return ep->have_client_conn(remote); }
 
     void LinkManager::close_all_links()
     {
@@ -686,10 +665,7 @@ namespace llarp
         }
     }
 
-    bool LinkManager::is_service_node() const
-    {
-        return _is_service_node;
-    }
+    bool LinkManager::is_service_node() const { return _is_service_node; }
 
     // TODO: this?  perhaps no longer necessary in the same way?
     void LinkManager::check_persisting_conns(std::chrono::milliseconds)
@@ -699,10 +675,7 @@ namespace llarp
     }
 
     // TODO: this
-    nlohmann::json LinkManager::extract_status() const
-    {
-        return {};
-    }
+    nlohmann::json LinkManager::extract_status() const { return {}; }
 
     void LinkManager::connect_to_keep_alive(size_t num_conns)
     {
@@ -1032,7 +1005,7 @@ namespace llarp
 
     void LinkManager::_handle_resolve_sns(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::critical(logcat, "Received request to publish client contact!");
+        log::trace(logcat, "Received request to publish client contact!");
 
         std::string name_hash;
 
@@ -1064,14 +1037,11 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_resolve_sns(oxen::quic::message m)
-    {
-        return _handle_resolve_sns(std::move(m));
-    }
+    void LinkManager::handle_resolve_sns(oxen::quic::message m) { return _handle_resolve_sns(std::move(m)); }
 
     void LinkManager::_handle_publish_cc(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::critical(logcat, "Received request to publish client contact!");
+        log::trace(logcat, "Received request to publish client contact!");
 
         EncryptedClientContact enc;
 
@@ -1157,14 +1127,11 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_publish_cc(oxen::quic::message m)
-    {
-        return _handle_publish_cc(std::move(m));
-    }
+    void LinkManager::handle_publish_cc(oxen::quic::message m) { return _handle_publish_cc(std::move(m)); }
 
     void LinkManager::_handle_find_cc(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::critical(logcat, "Received request to find client contact!");
+        log::trace(logcat, "Received request to find client contact!");
 
         dht::Key_t dht_key;
 
@@ -1251,10 +1218,7 @@ namespace llarp
         }
     }
 
-    void LinkManager::handle_find_cc(oxen::quic::message m)
-    {
-        return _handle_find_cc(std::move(m));
-    }
+    void LinkManager::handle_find_cc(oxen::quic::message m) { return _handle_find_cc(std::move(m)); }
 
     void LinkManager::handle_path_build(oxen::quic::message m, const RouterID& from)
     {
@@ -1358,7 +1322,7 @@ namespace llarp
 
     void LinkManager::_handle_path_control(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         HopID hop_id;
         std::string payload;
@@ -1495,10 +1459,7 @@ namespace llarp
             });
     }
 
-    void LinkManager::handle_path_control(oxen::quic::message m)
-    {
-        return _handle_path_control(std::move(m));
-    }
+    void LinkManager::handle_path_control(oxen::quic::message m) { return _handle_path_control(std::move(m)); }
 
     void LinkManager::handle_path_data_message(bstring data)
     {
@@ -1537,7 +1498,7 @@ namespace llarp
                         hop.kx.xor_nonce);
                 }
 
-                log::info(logcat, "Received path data for local client: {}", buffer_printer{payload});
+                log::trace(logcat, "Received path data for local client: {}", buffer_printer{payload});
 
                 NetworkAddress sender;
                 bstring data;
@@ -1688,7 +1649,7 @@ namespace llarp
 
     void LinkManager::_handle_initiate_session(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         NetworkAddress initiator;
         SessionTag tag;
@@ -1731,7 +1692,7 @@ namespace llarp
                     std::move(kx_data),
                     use_tun))
             {
-                log::critical(logcat, "InboundSession configured successfully!");
+                log::debug(logcat, "InboundSession configured successfully!");
                 return m.respond(messages::OK_RESPONSE);
             }
 

@@ -7,10 +7,7 @@ namespace llarp
 {
     static auto logcat = llarp::log::Cat("ONSRecord");
 
-    EncryptedSNSRecord EncryptedSNSRecord::deserialize(std::string_view bt)
-    {
-        return EncryptedSNSRecord{bt};
-    }
+    EncryptedSNSRecord EncryptedSNSRecord::deserialize(std::string_view bt) { return EncryptedSNSRecord{bt}; }
 
     EncryptedSNSRecord::EncryptedSNSRecord(std::string_view bt) : _bt_payload{bt}
     {

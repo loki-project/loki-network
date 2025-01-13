@@ -14,10 +14,7 @@ namespace llarp::messages
 {
     static auto logcat = log::Cat("messages");
 
-    inline std::string serialize_response(oxenc::bt_dict supplement = {})
-    {
-        return oxenc::bt_serialize(supplement);
-    }
+    inline std::string serialize_response(oxenc::bt_dict supplement = {}) { return oxenc::bt_serialize(supplement); }
 
     // ideally STATUS is the first key in a bt-dict, so use a single, early ascii char
     inline const auto STATUS_KEY = "!"s;

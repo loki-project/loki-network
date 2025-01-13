@@ -1,6 +1,6 @@
 #include "tcp.hpp"
 
-#include <llarp/address/ip_packet.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/logging/buffer.hpp>
 
 namespace llarp

@@ -18,20 +18,11 @@ namespace llarp::path
 {
     static auto logcat = log::Cat("pathhandler");
 
-    bool BuildLimiter::Attempt(const RouterID& router)
-    {
-        return _edge_limiter.Insert(router);
-    }
+    bool BuildLimiter::Attempt(const RouterID& router) { return _edge_limiter.Insert(router); }
 
-    void BuildLimiter::Decay(std::chrono::milliseconds now)
-    {
-        _edge_limiter.Decay(now);
-    }
+    void BuildLimiter::Decay(std::chrono::milliseconds now) { _edge_limiter.Decay(now); }
 
-    bool BuildLimiter::Limited(const RouterID& router) const
-    {
-        return _edge_limiter.Contains(router);
-    }
+    bool BuildLimiter::Limited(const RouterID& router) const { return _edge_limiter.Contains(router); }
 
     nlohmann::json BuildStats::ExtractStatus() const
     {
@@ -196,10 +187,7 @@ namespace llarp::path
         }
     }
 
-    std::chrono::milliseconds PathHandler::now() const
-    {
-        return _router.now();
-    }
+    std::chrono::milliseconds PathHandler::now() const { return _router.now(); }
 
     // called within the scope of locked mutex
     void PathHandler::expire_paths(std::chrono::milliseconds now)
@@ -358,25 +346,13 @@ namespace llarp::path
         return true;
     }
 
-    bool PathHandler::is_stopped() const
-    {
-        return !_running.load();
-    }
+    bool PathHandler::is_stopped() const { return !_running.load(); }
 
-    bool PathHandler::should_remove() const
-    {
-        return is_stopped() and num_active_paths() == 0;
-    }
+    bool PathHandler::should_remove() const { return is_stopped() and num_active_paths() == 0; }
 
-    bool PathHandler::build_cooldown_hit(RouterID edge) const
-    {
-        return _router.pathbuild_limiter().Limited(edge);
-    }
+    bool PathHandler::build_cooldown_hit(RouterID edge) const { return _router.pathbuild_limiter().Limited(edge); }
 
-    bool PathHandler::build_cooldown() const
-    {
-        return llarp::time_now_ms() < last_build + build_interval_limit;
-    }
+    bool PathHandler::build_cooldown() const { return llarp::time_now_ms() < last_build + build_interval_limit; }
 
     size_t PathHandler::should_build_more() const
     {

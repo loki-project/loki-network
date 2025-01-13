@@ -33,10 +33,7 @@ namespace llarp
             throw std::runtime_error{fmt::format("nodedb {} is not a directory", nodedbDir)};
     }
 
-    std::tuple<size_t, size_t, size_t> NodeDB::db_stats() const
-    {
-        return {num_rcs(), num_rids(), num_bootstraps()};
-    }
+    std::tuple<size_t, size_t, size_t> NodeDB::db_stats() const { return {num_rcs(), num_rids(), num_bootstraps()}; }
 
     std::optional<RemoteRC> NodeDB::get_rc_by_rid(const RouterID& rid)
     {
@@ -215,10 +212,7 @@ namespace llarp
         return "{}/{}{}"_format(_root.c_str(), pubkey.to_string(), RC_FILE_EXT);
     }
 
-    bool NodeDB::want_rc(const RouterID& rid) const
-    {
-        return known_rids.count(rid) and not rc_lookup.contains(rid);
-    }
+    bool NodeDB::want_rc(const RouterID& rid) const { return known_rids.count(rid) and not rc_lookup.contains(rid); }
 
     void NodeDB::set_bootstrap_routers(BootstrapList& from_router)
     {
@@ -917,15 +911,9 @@ namespace llarp
         }
     }
 
-    bool NodeDB::has_rc(const RemoteRC& rc) const
-    {
-        return known_rcs.count(rc);
-    }
+    bool NodeDB::has_rc(const RemoteRC& rc) const { return known_rcs.count(rc); }
 
-    bool NodeDB::has_rc(const RouterID& pk) const
-    {
-        return rc_lookup.count(pk);
-    }
+    bool NodeDB::has_rc(const RouterID& pk) const { return rc_lookup.count(pk); }
 
     std::optional<RemoteRC> NodeDB::get_rc(const RouterID& pk) const
     {
@@ -966,15 +954,9 @@ namespace llarp
         return ret;
     }
 
-    size_t NodeDB::num_rcs() const
-    {
-        return known_rcs.size();
-    }
+    size_t NodeDB::num_rcs() const { return known_rcs.size(); }
 
-    size_t NodeDB::num_rids() const
-    {
-        return known_rids.size();
-    }
+    size_t NodeDB::num_rids() const { return known_rids.size(); }
 
     bool NodeDB::verify_store_gossip_rc(const RemoteRC& rc)
     {

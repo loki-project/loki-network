@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ip_headers.hpp"
-#include "types.hpp"
+#include "policy.hpp"
 
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/formattable.hpp>
@@ -44,6 +44,8 @@ namespace llarp
         bool _is_v4{true};
         bool _is_udp{false};
 
+        net::IPProtocol _proto;
+
         void _init_internals();
 
       public:
@@ -59,19 +61,24 @@ namespace llarp
 
         NetworkPacket make_netpkt() &&;
 
+        // TESTNET: debug methods
+        // uint16_t checksum() const { return _is_v4 ? header()->checksum : 0; }
+
         bool is_ipv4() const { return _is_v4; }
+
+        net::IPProtocol protocol() const { return _proto; }
 
         const oxen::quic::Address& source() const { return _src_addr; }
 
         uint16_t source_port() { return source().port(); }
 
-        const oxen::quic::Address& destination() const { return _dst_addr; }
-
-        uint16_t dest_port() { return destination().port(); }
-
         ipv4 source_ipv4() { return _src_addr.to_ipv4(); }
 
         ipv6 source_ipv6() { return _src_addr.to_ipv6(); }
+
+        const oxen::quic::Address& destination() const { return _dst_addr; }
+
+        uint16_t dest_port() { return destination().port(); }
 
         ipv4 dest_ipv4() const { return _dst_addr.to_ipv4(); }
 
@@ -103,8 +110,6 @@ namespace llarp
         uint8_t* data() { return _buf.data(); }
 
         const uint8_t* data() const { return _buf.data(); }
-
-        const uint8_t* protocol() const { return _is_v4 ? &header()->protocol : &v6_header()->protocol; }
 
         size_t size() const { return _buf.size(); }
 

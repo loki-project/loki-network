@@ -5,10 +5,7 @@
 
 namespace llarp
 {
-    void in_addr_set(in_addr* addr, const char* str)
-    {
-        inet_aton(str, addr);
-    }
+    void in_addr_set(in_addr* addr, const char* str) { inet_aton(str, addr); }
 
     void Config_Init(py::module& mod)
     {

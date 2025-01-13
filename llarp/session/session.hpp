@@ -1,10 +1,10 @@
 #pragma once
 
 #include <llarp/address/address.hpp>
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/constants/path.hpp>
 #include <llarp/contact/tag.hpp>
 #include <llarp/ev/tcp.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/path/path.hpp>
 
 #include <oxen/quic.hpp>

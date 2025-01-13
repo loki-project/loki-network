@@ -2,8 +2,6 @@
 
 #include "utils.hpp"
 
-#include <llarp/util/concept.hpp>
-
 #include <oxenc/bt_serialize.h>
 
 namespace llarp

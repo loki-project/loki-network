@@ -25,64 +25,6 @@ namespace llarp
     }  // namespace concepts
 
     using KeyedAddress = oxen::quic::RemoteAddress;
-
-    inline constexpr uint32_t ipv6_flowlabel_mask = 0b0000'0000'0000'1111'1111'1111'1111'1111;
-
-    inline constexpr size_t ICMP_HEADER_SIZE{8};
-
-    // Compares the given ip variant against a quic address
-    // Returns:
-    //  - true : ip == address
-    //  - false : ip != address
-    // Error:
-    //  - throws : ip and address are mismatched ipv4 vs ipv6
-    inline bool ip_equals_address(const ip_v& ip, const oxen::quic::Address& addr, bool compare_v4)
-    {
-        if (compare_v4 and std::holds_alternative<ipv4>(ip))
-            return std::get<ipv4>(ip) == addr.to_ipv4();
-
-        if (not compare_v4 and std::holds_alternative<ipv6>(ip))
-            return std::get<ipv6>(ip) == addr.to_ipv6();
-
-        throw std::invalid_argument{
-            "Failed to compare ip variant in desired {} scheme!"_format(compare_v4 ? "ipv4" : "ipv6")};
-    }
-
-    struct ipv6_header
-    {
-        union
-        {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-            unsigned char pad_small : 4;
-            unsigned char version : 4;
-#else
-            unsigned char version : 4;
-            unsigned char pad_small : 4;
-#endif
-            uint8_t pad[3];
-            uint32_t flowlabel;
-        } preamble;
-
-        uint16_t payload_len;
-        uint8_t protocol;
-        uint8_t hoplimit;
-        in6_addr src;
-        in6_addr dest;
-
-        /// Returns the flowlabel (stored in network order) in HOST ORDER
-        uint32_t get_flowlabel() const { return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
-
-        /// Sets a flowlabel in network order. Takes in a label in HOST ORDER
-        void set_flowlabel(uint32_t label)
-        {
-            // the ipv6 flow label is the last 20 bits in the first 32 bits of the header
-            preamble.flowlabel =
-                (htonl(ipv6_flowlabel_mask) & htonl(label)) | (preamble.flowlabel & htonl(~ipv6_flowlabel_mask));
-        }
-    };
-
-    static_assert(sizeof(ipv6_header) == 40);
-
 }  //   namespace llarp
 
 namespace std

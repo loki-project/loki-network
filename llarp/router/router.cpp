@@ -223,10 +223,7 @@ namespace llarp
         }
     }
 
-    bool Router::is_fully_meshed() const
-    {
-        return num_router_connections() >= _node_db->num_rcs();
-    }
+    bool Router::is_fully_meshed() const { return num_router_connections() >= _node_db->num_rcs(); }
 
     void Router::persist_connection_until(const RouterID& remote, std::chrono::milliseconds until)
     {
@@ -244,10 +241,7 @@ namespace llarp
         return _link_manager->send_control_message(remote, std::move(ep), std::move(body), std::move(func));
     }
 
-    std::set<RouterID> Router::get_current_remotes() const
-    {
-        return _link_manager->get_current_remotes();
-    }
+    std::set<RouterID> Router::get_current_remotes() const { return _link_manager->get_current_remotes(); }
 
     void Router::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
     {
@@ -695,15 +689,9 @@ namespace llarp
         });
     }
 
-    bool Router::is_service_node() const
-    {
-        return _is_service_node;
-    }
+    bool Router::is_service_node() const { return _is_service_node; }
 
-    bool Router::is_exit_node() const
-    {
-        return _is_exit_node;
-    }
+    bool Router::is_exit_node() const { return _is_exit_node; }
 
     bool Router::insufficient_peers() const
     {
@@ -720,10 +708,7 @@ namespace llarp
         return std::nullopt;
     }
 
-    bool Router::has_whitelist() const
-    {
-        return whitelist_received;
-    }
+    bool Router::has_whitelist() const { return whitelist_received; }
 
     bool Router::appears_decommed() const
     {
@@ -740,20 +725,14 @@ namespace llarp
         return _is_service_node and has_whitelist() and node_db()->registered_routers().count(local_rid());
     }
 
-    bool Router::can_test_routers() const
-    {
-        return appears_funded() and not _testing_disabled;
-    }
+    bool Router::can_test_routers() const { return appears_funded() and not _testing_disabled; }
 
     size_t Router::num_router_connections(bool active_only) const
     {
         return _link_manager->get_num_connected_routers(active_only);
     }
 
-    size_t Router::num_client_connections() const
-    {
-        return _link_manager->get_num_connected_clients();
-    }
+    size_t Router::num_client_connections() const { return _link_manager->get_num_connected_clients(); }
 
     void Router::save_rc()
     {
@@ -945,10 +924,7 @@ namespace llarp
         _last_tick = llarp::time_now_ms();
     }
 
-    const std::set<RouterID>& Router::get_whitelist() const
-    {
-        return _node_db->registered_routers();
-    }
+    const std::set<RouterID>& Router::get_whitelist() const { return _node_db->registered_routers(); }
 
     void Router::set_router_whitelist(const std::vector<RouterID>& whitelist)
     {
@@ -1209,14 +1185,8 @@ namespace llarp
         _loop->call_later(200ms, [this] { cleanup(); });
     }
 
-    oxen::quic::Address Router::listen_addr() const
-    {
-        return _listen_address;
-    }
+    oxen::quic::Address Router::listen_addr() const { return _listen_address; }
 
-    const llarp::net::Platform& Router::net() const
-    {
-        return *llarp::net::Platform::Default_ptr();
-    }
+    const llarp::net::Platform& Router::net() const { return *llarp::net::Platform::Default_ptr(); }
 
 }  // namespace llarp

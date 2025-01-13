@@ -38,9 +38,6 @@ namespace llarp
         return obj;
     }
 
-    void ContactDB::put_cc(EncryptedClientContact enc)
-    {
-        _cc_nodes->put_node(enc);
-    }
+    void ContactDB::put_cc(EncryptedClientContact enc) { _cc_nodes->put_node(enc); }
 
 }  //  namespace llarp

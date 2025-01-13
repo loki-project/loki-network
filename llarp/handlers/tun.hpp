@@ -1,9 +1,8 @@
 #pragma once
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/net/net.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
 #include <llarp/vpn/platform.hpp>

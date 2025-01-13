@@ -13,10 +13,7 @@ namespace llarp
         return true;
     }
 
-    std::string PubKey::to_string() const
-    {
-        return oxenc::to_base32z(begin(), end());
-    }
+    std::string PubKey::to_string() const { return oxenc::to_base32z(begin(), end()); }
 
     PubKey& PubKey::operator=(const uint8_t* ptr)
     {
@@ -30,18 +27,9 @@ namespace llarp
         return *this;
     }
 
-    bool PubKey::operator<(const PubKey& other) const
-    {
-        return as_array() < other.as_array();
-    }
+    bool PubKey::operator<(const PubKey& other) const { return as_array() < other.as_array(); }
 
-    bool PubKey::operator==(const PubKey& other) const
-    {
-        return as_array() == other.as_array();
-    }
+    bool PubKey::operator==(const PubKey& other) const { return as_array() == other.as_array(); }
 
-    bool PubKey::operator!=(const PubKey& other) const
-    {
-        return !(*this == other);
-    }
+    bool PubKey::operator!=(const PubKey& other) const { return !(*this == other); }
 }  // namespace llarp

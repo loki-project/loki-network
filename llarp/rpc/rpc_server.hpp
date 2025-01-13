@@ -70,10 +70,7 @@ namespace llarp::rpc
         j["result"] = result;
     }
 
-    inline void SetJSONError(std::string_view msg, json& j)
-    {
-        j["error"] = msg;
-    }
+    inline void SetJSONError(std::string_view msg, json& j) { j["error"] = msg; }
 
     class RPCServer
     {

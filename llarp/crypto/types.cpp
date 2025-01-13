@@ -15,10 +15,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("cryptoutils");
 
-    PubKey Ed25519SecretKey::to_pubkey() const
-    {
-        return PubKey(data() + 32);
-    }
+    PubKey Ed25519SecretKey::to_pubkey() const { return PubKey(data() + 32); }
 
     bool Ed25519SecretKey::load_from_file(const fs::path& fname)
     {
@@ -132,10 +129,7 @@ namespace llarp
         xor_nonce = xhash.data();  // truncate 32 -> 24
     }
 
-    shared_kx_data shared_kx_data::generate()
-    {
-        return shared_kx_data{crypto::generate_identity()};
-    }
+    shared_kx_data shared_kx_data::generate() { return shared_kx_data{crypto::generate_identity()}; }
 
     // TESTNET: TODO: check if the libsodium functions ever actually fail...
 

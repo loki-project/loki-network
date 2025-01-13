@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#include <llarp/address/ip_packet.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/thread/threading.hpp>

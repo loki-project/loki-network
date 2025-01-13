@@ -597,10 +597,7 @@ namespace llarp::dns
         return std::nullopt;
     }
 
-    void Server::add_resolver(std::weak_ptr<Resolver_Base> resolver)
-    {
-        _resolvers.insert(resolver);
-    }
+    void Server::add_resolver(std::weak_ptr<Resolver_Base> resolver) { _resolvers.insert(resolver); }
 
     void Server::add_resolver(std::shared_ptr<Resolver_Base> resolver)
     {
@@ -608,10 +605,7 @@ namespace llarp::dns
         add_resolver(std::weak_ptr<Resolver_Base>{resolver});
     }
 
-    void Server::add_packet_source(std::weak_ptr<PacketSource_Base> pkt)
-    {
-        _packet_sources.push_back(pkt);
-    }
+    void Server::add_packet_source(std::weak_ptr<PacketSource_Base> pkt) { _packet_sources.push_back(pkt); }
 
     void Server::add_packet_source(std::shared_ptr<PacketSource_Base> pkt)
     {

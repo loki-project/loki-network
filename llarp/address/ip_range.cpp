@@ -64,15 +64,9 @@ namespace llarp
         return _contains(std::get<ipv6>(other.base_ip()));
     }
 
-    bool IPRange::_contains(const ipv4& other) const
-    {
-        return _ipv4_range().contains(other);
-    }
+    bool IPRange::_contains(const ipv4& other) const { return _ipv4_range().contains(other); }
 
-    bool IPRange::_contains(const ipv6& other) const
-    {
-        return _ipv6_range().contains(other);
-    }
+    bool IPRange::_contains(const ipv6& other) const { return _ipv6_range().contains(other); }
 
     bool IPRange::contains(const ip_v& other) const
     {
