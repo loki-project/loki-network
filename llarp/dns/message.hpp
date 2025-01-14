@@ -39,7 +39,7 @@ namespace llarp
 
             bool Decode(llarp_buffer_t* buf) override;
 
-            bool decode(std::span<unsigned char> b) override;
+            bool decode(std::span<uint8_t> b) override;
 
             nlohmann::json ToJSON() const override;
 
@@ -80,7 +80,7 @@ namespace llarp
 
             bool Decode(llarp_buffer_t* buf) override;
 
-            bool decode(std::span<unsigned char> /* b */) override { return {}; };  // TODO:
+            bool decode(std::span<uint8_t> /* b */) override { return {}; };  // TODO:
 
             // Wrapper around Encode that encodes into a new buffer and returns it
             std::vector<uint8_t> to_buffer() const;

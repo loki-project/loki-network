@@ -289,7 +289,7 @@ namespace llarp::handlers
 
             auto& net_conf = _router.config()->network;
 
-            _traffic_policy = net_conf.traffic_policy;
+            _exit_policy = net_conf.traffic_policy;
             _base_ipv6_range = net_conf._base_ipv6_range;
 
             if (net_conf.path_alignment_timeout)
@@ -947,7 +947,7 @@ namespace llarp::handlers
         ip_v src, dest;
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        log::trace(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
+        log::debug(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
 
         if (pkt_is_ipv4)
         {
@@ -1074,7 +1074,7 @@ namespace llarp::handlers
             {
                 log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
                 // we are receiving traffic from a session to a local exit node
-                if (not is_allowing_traffic(pkt))
+                if (not _exit_policy->allow_ip_traffic(pkt))
                     return false;
 
                 if (pkt_is_ipv4)
@@ -1114,7 +1114,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
-        return _traffic_policy ? _traffic_policy->allow_ip_traffic(pkt) : true;
+        return _exit_policy ? _exit_policy->allow_ip_traffic(pkt) : true;
     }
 
     bool TunEndpoint::has_mapping_to_remote(const NetworkAddress& addr) const

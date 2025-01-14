@@ -68,7 +68,7 @@ namespace llarp
             SharedSecret& secret,
             const SymmNonce& nonce,
             const RouterID& remote,
-            uspan payload);
+            std::span<uint8_t> payload);
 
         // void derive_encrypt_outer_wrapping(
         //     const Ed25519SecretKey& shared_key,
@@ -85,7 +85,7 @@ namespace llarp
             SharedSecret& shared,
             const PubKey& remote,
             const SymmNonce& nonce,
-            uspan encrypted);
+            std::span<uint8_t> encrypted);
 
         std::array<unsigned char, 32> make_scalar(const PubKey& k, uint64_t domain);
 

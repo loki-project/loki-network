@@ -44,7 +44,7 @@ namespace llarp
         bool _is_v4{true};
         bool _is_udp{false};
 
-        net::IPProtocol _proto;
+        net::IPProtocol _proto{};
 
         void _init_internals();
 
@@ -52,7 +52,6 @@ namespace llarp
         IPPacket() : IPPacket{size_t{0}} {}
         explicit IPPacket(size_t sz);
         explicit IPPacket(bstring_view data);
-        explicit IPPacket(ustring_view data);
         explicit IPPacket(std::vector<uint8_t>&& data);
         explicit IPPacket(const uint8_t* buf, size_t len);
 
@@ -134,7 +133,7 @@ namespace llarp
 
         ustring_view uview() const { return {data(), size()}; }
 
-        std::string to_string();
+        std::string to_string() const;
 
         std::string info_line() const;
     };

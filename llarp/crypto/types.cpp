@@ -145,14 +145,14 @@ namespace llarp
             throw std::runtime_error{"Server DH failed -- should this even ever happen?"};
     }
 
-    void shared_kx_data::encrypt(uspan data)
+    void shared_kx_data::encrypt(std::span<uint8_t> data)
     {
         if (!crypto::xchacha20(data.data(), data.size(), shared_secret, nonce))
             throw std::runtime_error{"xchacha20 encryption failed -- should this even ever happen?"};
     }
 
     // identical methods, separated for clarity of use/logging for now
-    void shared_kx_data::decrypt(uspan data)
+    void shared_kx_data::decrypt(std::span<uint8_t> data)
     {
         if (!crypto::xchacha20(data.data(), data.size(), shared_secret, nonce))
             throw std::runtime_error{"xchacha20 decryption failed -- should this even ever happen?"};

@@ -56,7 +56,7 @@ namespace llarp::dns
         virtual void send_to(
             const oxen::quic::Address& to, const oxen::quic::Address& from, std::vector<uint8_t> data) const
         {
-            send_to(to, from, IPPacket{data.data(), data.size()});
+            send_to(to, from, IPPacket{std::move(data)});
         }
 
         /// stop reading packets and end operation

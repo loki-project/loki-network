@@ -36,8 +36,6 @@ namespace llarp
     IPPacket::IPPacket(bstring_view data) : IPPacket{reinterpret_cast<const unsigned char*>(data.data()), data.size()}
     {}
 
-    IPPacket::IPPacket(ustring_view data) : IPPacket{data.data(), data.size()} {}
-
     IPPacket::IPPacket(std::vector<uint8_t>&& data) : IPPacket{data.data(), data.size()} {}
 
     IPPacket::IPPacket(const uint8_t* buf, size_t len)
@@ -383,11 +381,12 @@ namespace llarp
 
     std::vector<uint8_t> IPPacket::give_buffer() { return {_buf}; }
 
-    std::string IPPacket::to_string() { return {reinterpret_cast<const char*>(data()), size()}; }
+    std::string IPPacket::to_string() const { return {reinterpret_cast<const char*>(data()), size()}; }
 
     std::string IPPacket::info_line() const
     {
-        return "IPPacket:[src={} | dest={} | size={}]"_format(_src_addr, _dst_addr, size());
+        return "IPPacket:[type={} | src={} | dest={} | size={}]"_format(
+            ip_protocol_name(_proto), _src_addr, _dst_addr, size());
     }
 
 }  // namespace llarp

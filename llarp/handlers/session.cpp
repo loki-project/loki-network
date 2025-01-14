@@ -137,7 +137,7 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    // static std::atomic<bool> testnet_trigger = false;
+    static std::atomic<bool> testnet_trigger = false;
 
     void SessionEndpoint::start_tickers()
     {
@@ -152,25 +152,24 @@ namespace llarp::handlers
                 },
                 true);
 
-            // if (not testnet_trigger)
-            // {
-            //     testnet_trigger = true;
+            if (not testnet_trigger)
+            {
+                testnet_trigger = true;
 
-            //     _router.loop()->call_later(5s, [this]() {
-            //         try
-            //         {
-            //             RouterID cpk{oxenc::from_base32z("4g96taie3et7dbkumk5x6rycskaxxsgjeiunpe61469z1gsbfkuo")};
-            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-            //             _initiate_session(
-            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
-            //                 });
-            //         }
-            //         catch (const std::exception& e)
-            //         {
-            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-            //         }
-            //     });
-            // }
+                _router.loop()->call_later(5s, [this]() {
+                    try
+                    {
+                        RouterID cpk{oxenc::from_base32z("acit6x8kwxdehpkzrpunw5nb8mf4w5u8tn3ojmxit9rpnhhhp81y")};
+                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+                        _initiate_session(
+                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
+                    }
+                    catch (const std::exception& e)
+                    {
+                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+                    }
+                });
+            }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -630,7 +629,11 @@ namespace llarp::handlers
                         if (auto maybe_ip = _router.tun_endpoint()->map_session_to_local_ip(session->remote()))
                         {
                             log::info(
-                                logcat, "TUN device successfully routing session to remote: {}", session->remote());
+                                logcat,
+                                "TUN device successfully routing session (remote: {}) via local ip: {}",
+                                session->remote(),
+                                std::holds_alternative<ipv4>(*maybe_ip) ? std::get<ipv4>(*maybe_ip).to_string()
+                                                                        : std::get<ipv6>(*maybe_ip).to_string());
 
                             return hook(*maybe_ip);
                         }

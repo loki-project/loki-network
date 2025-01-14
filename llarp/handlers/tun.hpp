@@ -54,7 +54,7 @@ namespace llarp::handlers
 
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
-        std::optional<net::ExitPolicy> _traffic_policy = std::nullopt;
+        std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;
@@ -125,7 +125,7 @@ namespace llarp::handlers
 
         bool has_if_addr() const { return true; }
 
-        std::optional<net::ExitPolicy> get_traffic_policy() const { return _traffic_policy; }
+        std::optional<net::ExitPolicy> get_traffic_policy() const { return _exit_policy; }
 
         std::chrono::milliseconds get_path_alignment_timeout() const { return _path_alignment_timeout; }
 
@@ -143,15 +143,6 @@ namespace llarp::handlers
         Router& router() { return _router; }
 
         void start_poller();
-
-        //   protected:
-        struct WritePacket
-        {
-            uint64_t seqno;
-            IPPacket pkt;
-
-            bool operator>(const WritePacket& other) const { return seqno > other.seqno; }
-        };
 
         // Stores assigned IP's for each session in/out of this lokinet instance
         //  - Reserved local addresses is directly pre-loaded from config

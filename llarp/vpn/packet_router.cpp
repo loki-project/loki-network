@@ -4,7 +4,7 @@
 
 namespace llarp::vpn
 {
-    static auto logcat = log::Cat("ip_packet");
+    static auto logcat = log::Cat("packet_router");
 
     struct UDPPacketHandler : public Layer4Handler
     {
@@ -16,6 +16,7 @@ namespace llarp::vpn
         void add_sub_handler(uint16_t localport, ip_pkt_hook handler) override
         {
             _port_mapped_handlers.emplace(localport, std::move(handler));
+            log::debug(logcat, "UDP packet sub-handler registered for local port {}", localport);
         }
 
         void handle_ip_packet(IPPacket pkt) override
@@ -53,7 +54,7 @@ namespace llarp::vpn
 
     PacketRouter::PacketRouter(ip_pkt_hook baseHandler) : _handler{std::move(baseHandler)} {}
 
-    void PacketRouter::handle_ip_packet(IPPacket pkt)
+    void PacketRouter::handle_ip_packet(IPPacket pkt) const
     {
         if (pkt.is_ipv4())
             log::trace(logcat, "ipv4 pkt: {}", pkt.info_line());
@@ -63,7 +64,7 @@ namespace llarp::vpn
             return _handler(std::move(pkt));
 
         auto proto = pkt.protocol();
-        if (const auto itr = _ip_proto_handler.find(proto); itr != _ip_proto_handler.end())
+        if (auto itr = _ip_proto_handler.find(proto); itr != _ip_proto_handler.end())
             itr->second->handle_ip_packet(std::move(pkt));
         else
             _handler(std::move(pkt));
@@ -71,11 +72,14 @@ namespace llarp::vpn
 
     void PacketRouter::add_udp_handler(uint16_t localport, ip_pkt_hook func)
     {
-        if (_ip_proto_handler.find(net::IPProtocol::UDP) == _ip_proto_handler.end())
-        {
-            _ip_proto_handler.emplace(net::IPProtocol::UDP, std::make_unique<UDPPacketHandler>(_handler));
-        }
-        _ip_proto_handler[net::IPProtocol::UDP]->add_sub_handler(localport, func);
+        auto [it, b] = _ip_proto_handler.try_emplace(net::IPProtocol::UDP, nullptr);
+
+        if (b)
+            it->second = std::make_unique<UDPPacketHandler>(_handler);
+        else
+            log::info(logcat, "Packet router already holds registered UDP packet handler!");
+
+        it->second->add_sub_handler(localport, std::move(func));
     }
 
     void PacketRouter::add_ip_proto_handler(net::IPProtocol proto, ip_pkt_hook func)

@@ -20,7 +20,7 @@ namespace llarp::vpn
         explicit PacketRouter(ip_pkt_hook baseHandler);
 
         /// feed in an ip packet for handling
-        void handle_ip_packet(IPPacket pkt);
+        void handle_ip_packet(IPPacket pkt) const;
 
         /// add a non udp packet handler using ip protocol proto
         void add_ip_proto_handler(net::IPProtocol proto, ip_pkt_hook func);

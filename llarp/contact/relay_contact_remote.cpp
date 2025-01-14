@@ -32,7 +32,7 @@ namespace llarp
             log::trace(logcat, "{}B read from file (path:{})!", nread, fname);
             _payload.resize(nread);
 
-            oxenc::bt_dict_consumer btdc{_payload};
+            oxenc::bt_dict_consumer btdc{ustring_view{_payload}};
             bt_load(btdc);
             bt_verify(btdc);
         }
@@ -47,7 +47,7 @@ namespace llarp
 
     bool RemoteRC::verify() const
     {
-        oxenc::bt_dict_consumer btdc{_payload};
+        oxenc::bt_dict_consumer btdc{ustring_view{_payload}};
         bt_verify(btdc);
         return true;
     }

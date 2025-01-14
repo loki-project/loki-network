@@ -33,41 +33,43 @@ namespace llarp::net
                 return static_cast<IPProtocol>(intVal);
         }
 
-        throw std::invalid_argument{"no such ip protocol: '" + data + "'"};
+        throw std::invalid_argument{"Call to ::getprotobyname failed for input: {}"_format(data)};
     }
 
-    ProtocolInfo::ProtocolInfo(std::string_view data)
-    {
-        const auto parts = split(data, "/");
-        proto = parse_ip_proto(std::string{parts[0]});
-        if (parts.size() == 2)
-        {
-            uint16_t port_host{};
+    // ProtocolInfo::ProtocolInfo(std::string_view data)
+    // {
+    //     const auto parts = split(data, "/");
+    //     proto = parse_ip_proto(std::string{parts[0]});
+    //     if (parts.size() == 2)
+    //     {
+    //         uint16_t port_host{};
 
-            std::string portStr{parts[1]};
-            std::string protoName = ip_proto_str(proto);
+    //         std::string portStr{parts[1]};
+    //         std::string protoName = ip_proto_str(proto);
 
-            if (const auto* serv = ::getservbyname(portStr.c_str(), protoName.c_str()))
-            {
-                port_host = serv->s_port;
-            }
-            else if (const auto port_int = std::stoi(portStr); port_int > 0)
-            {
-                port_host = port_int;
-            }
-            else
-                throw std::invalid_argument{"invalid port in protocol info: " + portStr};
-            port = port_host;
-        }
-        else
-            port = std::nullopt;
-    }
+    //         if (const auto* serv = ::getservbyname(portStr.c_str(), protoName.c_str()))
+    //         {
+    //             port_host = serv->s_port;
+    //         }
+    //         else if (const auto port_int = std::stoi(portStr); port_int > 0)
+    //         {
+    //             port_host = port_int;
+    //         }
+    //         else
+    //             throw std::invalid_argument{"Invalid port in protocol info: {}"_format(portStr)};
+
+    //         port = port_host;
+    //     }
+    //     else
+    //         port = std::nullopt;
+    // }
 
     bool ProtocolInfo::matches_packet_proto(const IPPacket& pkt) const { return pkt.protocol() == proto; }
 
     bool ExitPolicy::allow_ip_traffic(const IPPacket& pkt) const
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
         if (protocols.empty() and ranges.empty())
             return true;
 
@@ -77,22 +79,18 @@ namespace llarp::net
                 return true;
         }
 
-        ipv4 v4 = pkt.dest_ipv4();
-        ipv6 v6 = pkt.dest_ipv6();
         auto is_ipv4 = pkt.is_ipv4();
+        ip_v pkt_ip;
+
+        if (is_ipv4)
+            pkt_ip = pkt.dest_ipv4();
+        else
+            pkt_ip = pkt.dest_ipv6();
 
         for (const auto& range : ranges)
         {
-            if (is_ipv4)
-            {
-                if (range.contains(v4))
-                    return true;
-            }
-            else
-            {
-                if (range.contains(v6))
-                    return true;
-            }
+            if (range.contains(pkt_ip))
+                return true;
         }
 
         return false;
@@ -150,11 +148,11 @@ namespace llarp::net
         }
     }
 
-    ProtocolInfo::ProtocolInfo(std::string buf)
+    ProtocolInfo::ProtocolInfo(std::string_view buf)
     {
         try
         {
-            oxenc::bt_list_consumer btlc{std::move(buf)};
+            oxenc::bt_list_consumer btlc{buf};
             proto = IPProtocol{btlc.consume_integer<uint8_t>()};
 
             if (not btlc.is_finished())
@@ -178,7 +176,7 @@ namespace llarp::net
 
                 while (not sublist.is_finished())
                 {
-                    protocols.emplace(sublist.consume_string());
+                    protocols.emplace(sublist.consume_string_view());
                 }
             }
 
@@ -239,30 +237,4 @@ namespace llarp::net
 
         return true;
     }
-
-    // nlohmann::json ProtocolInfo::ExtractStatus() const
-    // {
-    //     nlohmann::json status{
-    //         {"protocol", static_cast<uint32_t>(protocol)},
-    //     };
-    //     if (port)
-    //         status["port"] = *port;
-    //     return status;
-    // }
-
-    // nlohmann::json ExitProtocol::ExtractStatus() const
-    // {
-    //     std::vector<nlohmann::json> rangesStatus;
-    //     std::transform(ranges.begin(), ranges.end(), std::back_inserter(rangesStatus), [](const auto& range) {
-    //         return range.to_string();
-    //     });
-
-    //     std::vector<nlohmann::json> protosStatus;
-    //     std::transform(protocols.begin(), protocols.end(), std::back_inserter(protosStatus), [](const auto& proto) {
-    //         return proto.ExtractStatus();
-    //     });
-
-    //     return nlohmann::json{{"ranges", rangesStatus}, {"protocols", protosStatus}};
-    // }
-
 }  // namespace llarp::net

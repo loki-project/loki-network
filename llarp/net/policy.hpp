@@ -22,6 +22,7 @@ namespace llarp
         TCP2QUIC = 1 << 5,
     };
 
+    // TODO: WIP implementation
     struct ip_protocol
     {
         enum class type : uint8_t
@@ -53,6 +54,33 @@ namespace llarp
             PGM = 0x71,
         };
 
+        inline constexpr auto ip_protocol_name(IPProtocol p)
+        {
+            switch (p)
+            {
+                case IPProtocol::ICMP:
+                    return "ICMP"sv;
+                case IPProtocol::IGMP:
+                    return "IGMP"sv;
+                case IPProtocol::IPIP:
+                    return "IPIP"sv;
+                case IPProtocol::TCP:
+                    return "TCP"sv;
+                case IPProtocol::UDP:
+                    return "UDP"sv;
+                case IPProtocol::GRE:
+                    return "GRE"sv;
+                case IPProtocol::ICMP6:
+                    return "ICMP6"sv;
+                case IPProtocol::OSPF:
+                    return "OSPF"sv;
+                case IPProtocol::PGM:
+                    return "PGM"sv;
+                default:
+                    return "<NONE>"sv;
+            }
+        }
+
         /// information about an IP protocol
         struct ProtocolInfo
         {
@@ -62,7 +90,8 @@ namespace llarp
             /// the layer 3 port IN HOST ORDER FFS
             std::optional<uint16_t> port{std::nullopt};
 
-            ProtocolInfo(std::string buf);
+            ProtocolInfo() = default;
+            ProtocolInfo(std::string_view buf);
 
             void bt_encode(oxenc::bt_list_producer& btlp) const;
 
@@ -70,8 +99,7 @@ namespace llarp
 
             bool bt_decode(std::string_view buf);
 
-            /// returns true if an ip packet looks like it matches this protocol info
-            /// returns false otherwise
+            // Compares packet protocol with protocol info
             bool matches_packet_proto(const IPPacket& pkt) const;
 
             auto operator<=>(const ProtocolInfo& other) const
@@ -86,9 +114,7 @@ namespace llarp
                 return std::tie(proto, port) < std::tie(other.proto, other.port);
             }
 
-            ProtocolInfo() = default;
-
-            explicit ProtocolInfo(std::string_view spec);
+            // explicit ProtocolInfo(std::string_view spec);
         };
 
         /// information about what exit traffic an endpoint will carry
@@ -115,8 +141,7 @@ namespace llarp
 
             bool operator==(const ExitPolicy& other) const { return (*this <=> other) == 0; }
 
-            /// returns true if we allow the traffic in this ip packet
-            /// returns false otherwise
+            // Verifies if IPPacket traffic is allowed; return true/false
             bool allow_ip_traffic(const IPPacket& pkt) const;
         };
     }  // namespace net

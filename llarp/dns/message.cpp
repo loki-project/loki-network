@@ -46,7 +46,7 @@ namespace llarp::dns
         return true;
     }
 
-    bool MessageHeader::decode(std::span<unsigned char> b)
+    bool MessageHeader::decode(std::span<uint8_t> b)
     {
         std::memcpy(_data.data(), b.data(), sizeof(_data));
         for (auto& d : _data)

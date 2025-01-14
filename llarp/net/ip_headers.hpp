@@ -2,6 +2,8 @@
 
 #include "utils.hpp"
 
+#include <netinet/ip6.h>
+
 namespace llarp
 {
     struct ip_header
@@ -26,25 +28,32 @@ namespace llarp
 
     static_assert(sizeof(ip_header) == 20);
 
-    struct ipv6_header2
-    {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-        uint32_t flow_label : 20;
-        uint8_t traffic_class;
-        uint8_t version : 4;
-#else
-        uint8_t version : 4;
-        uint8_t traffic_class : 8;
-        uint32_t flow_label : 20;
-#endif
-        // uint16_t pload_len; // payload length
-        // uint8_t nxt_hdr;    // next header (protocol)
-        // uint8_t hop_limit;
-        // in6_addr src;
-        // in6_addr dest;
-    };
+    // TODO: WIP
+    //     struct ipv6_header2
+    //     {
+    //       private:
+    //         std::array<uint8_t, 4> preamble;
 
-    // static_assert(sizeof(ipv6_header2) == 40);
+    // // #if __BYTE_ORDER == __LITTLE_ENDIAN
+    // //         uint32_t flow_label : 20;
+    // //         uint8_t traffic_class;
+    // //         uint8_t version : 4;
+    // // #else
+    // //         uint8_t version : 4;
+    // //         uint8_t traffic_class : 8;
+    // //         uint32_t flow_label : 20;
+    // // #endif
+    //         uint16_t pload_len; // payload length
+    //         uint8_t nxt_hdr;    // next header (protocol)
+    //         uint8_t hop_limit;
+    //         in6_addr src;
+    //         in6_addr dest;
+
+    //       public:
+
+    //     };
+
+    //     static_assert(sizeof(ipv6_header2) == 40);
 
     struct ipv6_header
     {
@@ -68,7 +77,7 @@ namespace llarp
         in6_addr dest;
 
         /// Returns the flowlabel (stored in network order) in HOST ORDER
-        uint32_t get_flowlabel() const { return ntohl(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
+        uint32_t get_flowlabel() const { return oxenc::big_to_host(preamble.flowlabel & htonl(ipv6_flowlabel_mask)); }
 
         /// Sets a flowlabel in network order. Takes in a label in HOST ORDER
         void set_flowlabel(uint32_t label)

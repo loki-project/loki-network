@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llarp/net/net.hpp>
+// #include <llarp/net/net.hpp>
 #include <llarp/util/aligned.hpp>
 
 namespace llarp

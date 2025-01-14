@@ -238,7 +238,7 @@ namespace llarp
         SharedSecret& secret,
         const SymmNonce& nonce,
         const RouterID& remote,
-        uspan payload)
+        std::span<uint8_t> payload)
     {
         // derive shared key
         if (!crypto::dh_client(secret, remote, shared_key, nonce))
@@ -262,7 +262,7 @@ namespace llarp
         SharedSecret& shared,
         const PubKey& remote,
         const SymmNonce& nonce,
-        uspan encrypted)
+        std::span<uint8_t> encrypted)
     {
         // derive shared secret using shared secret and our secret key (and nonce)
         if (!crypto::dh_server(shared, remote, local_sk, nonce))

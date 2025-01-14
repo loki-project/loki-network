@@ -67,13 +67,13 @@ namespace llarp
         explicit Ed25519PrivateData(const AlignedBuffer<64>& key_and_hash) : AlignedBuffer<64>(key_and_hash) {}
 
         // Returns writeable access to the 32-byte Ed25519 Private Scalar
-        uspan scalar() { return {data(), 32}; }
+        std::span<uint8_t> scalar() { return {data(), 32}; }
         // Returns readable access to the 32-byte Ed25519 Private Scalar
-        const_uspan scalar() const { return {data(), 32}; }
+        uspan scalar() const { return {data(), 32}; }
         // Returns writeable access to the 32-byte Ed25519 Signing Hash
-        uspan signing_hash() { return {data() + 32, 32}; }
+        std::span<uint8_t> signing_hash() { return {data() + 32, 32}; }
         // Returns readable access to the 32-byte Ed25519 Signing Hash
-        const_uspan signing_hash() const { return {data() + 32, 32}; }
+        uspan signing_hash() const { return {data() + 32, 32}; }
 
         PubKey to_pubkey() const;
 
@@ -125,9 +125,9 @@ namespace llarp
 
         void server_dh(const Ed25519SecretKey& local_sk);
 
-        void encrypt(uspan data);
+        void encrypt(std::span<uint8_t> data);
 
-        void decrypt(uspan enc);
+        void decrypt(std::span<uint8_t> enc);
     };
 
 }  // namespace llarp
