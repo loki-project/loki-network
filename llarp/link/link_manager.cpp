@@ -310,7 +310,7 @@ namespace llarp
             [this](oxen::quic::dgram_interface&, bstring dgram) { return handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
-            oxen::quic::opt::enable_datagrams{/* oxen::quic::Splitting::ACTIVE */});
+            oxen::quic::opt::enable_datagrams{oxen::quic::Splitting::ACTIVE});
 
         // While only service nodes accept inbound connections, clients must have this key verify
         // callback set. It will reject any attempted inbound connection to a lokinet client prior
