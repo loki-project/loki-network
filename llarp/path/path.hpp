@@ -5,6 +5,7 @@
 
 #include <llarp/constants/path.hpp>
 #include <llarp/contact/client_contact.hpp>
+#include <llarp/contact/tag.hpp>
 #include <llarp/crypto/types.hpp>
 #include <llarp/dht/key.hpp>
 #include <llarp/util/aligned.hpp>
@@ -32,8 +33,6 @@ namespace llarp
 
     namespace path
     {
-        using recv_session_dgram_cb = std::function<void(bstring data)>;
-
         /// A path we made
         struct Path : public std::enable_shared_from_this<Path>
         {
@@ -68,13 +67,13 @@ namespace llarp
 
             void set_established();
 
-            void recv_path_data_message(bstring data);
+            // void recv_path_data_message(bstring data);
 
-            void link_session(recv_session_dgram_cb cb);
+            void link_session(session_tag t);
 
-            bool unlink_session();
+            bool unlink_session(session_tag t);
 
-            bool is_linked() const { return _is_linked; }
+            bool is_linked() const { return not _linked_sessions.empty(); }
 
             void enable_exit_traffic();
 
@@ -145,8 +144,6 @@ namespace llarp
 
             std::string name() const;
 
-            bool is_session_path() const { return _is_session_path; }
-
             bool is_client_path() const { return _is_client; }
 
             bool operator<(const Path& other) const;
@@ -174,7 +171,7 @@ namespace llarp
 
             const size_t num_hops;
 
-            recv_session_dgram_cb _recv_dgram;
+            std::unordered_set<session_tag> _linked_sessions;
 
             std::chrono::milliseconds last_recv_msg{0s};
             std::chrono::milliseconds last_latency_test{0s};
@@ -188,7 +185,7 @@ namespace std
     template <>
     struct hash<llarp::path::Path>
     {
-        size_t operator()(const llarp::path::Path& p) const
+        size_t operator()(const llarp::path::Path& p) const noexcept
         {
             auto h = hash<llarp::HopID>{}(p.upstream_txid());
             return h ^ hash<llarp::RouterID>{}(p.upstream_rid());

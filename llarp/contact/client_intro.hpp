@@ -67,7 +67,7 @@ namespace std
     template <>
     struct hash<llarp::ClientIntro>
     {
-        size_t operator()(const llarp::ClientIntro& i) const
+        size_t operator()(const llarp::ClientIntro& i) const noexcept
         {
             return std::hash<llarp::PubKey>{}(i.pivot_rid) ^ std::hash<llarp::HopID>{}(i.pivot_txid);
         }

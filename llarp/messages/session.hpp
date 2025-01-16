@@ -15,7 +15,7 @@ namespace llarp
             - 'i' : RouterID of initiator
             - 'p' : HopID at the pivot taken from local ClientIntro
             - 'r' : HopID at the pivot taken from remote's ClientIntro
-            - 's' : SessionTag for current session
+            - 's' : session_tag for current session
             - 't' : Use Tun interface (bool)
             - 'u' : Authentication field
                 - bt-encoded dict, values TBD
@@ -31,7 +31,7 @@ namespace llarp
             const RouterID& local,
             const RouterID& remote,
             HopID local_pivot_txid,
-            SessionTag& tag,
+            session_tag& tag,
             HopID remote_pivot_txid,
             std::optional<std::string_view> auth_token,
             bool use_tun)
@@ -46,7 +46,7 @@ namespace llarp
                     btdp.append("i", local.to_view());
                     btdp.append("p", local_pivot_txid.to_view());
                     btdp.append("r", remote_pivot_txid.to_view());
-                    btdp.append("s", tag.to_view());
+                    btdp.append("s", tag.view());
                     btdp.append("t", use_tun);
                     // TOTHINK: this auth field
                     if (auth_token)
@@ -73,7 +73,7 @@ namespace llarp
         };
 
         inline static std::
-            tuple<shared_kx_data, NetworkAddress, HopID, SessionTag, HopID, bool, std::optional<std::string>>
+            tuple<shared_kx_data, NetworkAddress, HopID, session_tag, HopID, bool, std::optional<std::string>>
             decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
@@ -98,7 +98,7 @@ namespace llarp
 
                 NetworkAddress initiator;
                 RouterID init_rid;
-                SessionTag tag;
+                session_tag tag;
                 HopID remote_pivot_txid;
                 HopID local_pivot_txid;
                 bool use_tun;
@@ -108,7 +108,7 @@ namespace llarp
                 initiator = NetworkAddress::from_pubkey(init_rid, true);
                 remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
                 local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
-                tag.from_string(btdc.require<std::string_view>("s"));
+                tag.read(btdc.require<std::string_view>("s"));
                 use_tun = btdc.require<bool>("t");
                 maybe_auth = btdc.maybe<std::string>("u");
 

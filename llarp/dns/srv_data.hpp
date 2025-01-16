@@ -101,7 +101,7 @@ namespace std
     template <>
     struct hash<llarp::dns::SRVData>
     {
-        size_t operator()(const llarp::dns::SRVData& data) const
+        size_t operator()(const llarp::dns::SRVData& data) const noexcept
         {
             const std::hash<std::string> h_str{};
             const std::hash<uint16_t> h_port{};

@@ -1,7 +1,23 @@
 #include "utils.hpp"
 
+#include <llarp/util/logging.hpp>
+
 namespace llarp
 {
+    static auto logcat = log::Cat("net-utils");
+
+    bool ip_equals_address(const ip_v &ip, const oxen::quic::Address &addr, bool compare_v4)
+    {
+        if (compare_v4 and std::holds_alternative<ipv4>(ip))
+            return std::get<ipv4>(ip) == addr.to_ipv4();
+
+        if (not compare_v4 and std::holds_alternative<ipv6>(ip))
+            return std::get<ipv6>(ip) == addr.to_ipv6();
+
+        log::warning(logcat, "Failed to compare ip variant in desired ipv{} scheme!", compare_v4 ? "4" : "6");
+        return false;
+    }
+
     namespace utils
     {
         static constexpr uint32_t add_u32(uint32_t x) { return uint32_t{x & 0xFFff} + uint32_t{x >> 16}; }

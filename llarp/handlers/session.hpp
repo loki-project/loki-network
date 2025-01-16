@@ -87,7 +87,7 @@ namespace llarp
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
             template <concepts::SessionType session_t = session::BaseSession>
-            std::shared_ptr<session_t> get_session(const SessionTag& tag) const
+            std::shared_ptr<session_t> get_session(const session_tag& tag) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(tag));
             }
@@ -123,7 +123,7 @@ namespace llarp
 
             bool prefigure_session(
                 NetworkAddress initiator,
-                SessionTag tag,
+                session_tag tag,
                 HopID remote_pivot_txid,
                 std::shared_ptr<path::Path> path,
                 shared_kx_data kx_data,

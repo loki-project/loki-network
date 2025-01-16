@@ -7,6 +7,8 @@
 
 namespace llarp
 {
+    // TESTNET: TODO: revisit this later; if we never need NetworkAddr as a key, just use tag
+
     /** This class will accept any types satisfying the concepts SessionType and NetworkAddrType
             NetworkAddrType: must be inherited from NetworkAddress
             SessionType: must be inherited from BaseSession
@@ -18,7 +20,7 @@ namespace llarp
     struct session_map
     {
       protected:
-        std::unordered_map<SessionTag, net_addr_t> _session_lookup;
+        std::unordered_map<session_tag, net_addr_t> _session_lookup;
         std::unordered_map<net_addr_t, std::shared_ptr<session_t>> _sessions;
 
         using Lock_t = util::NullLock;
@@ -81,7 +83,7 @@ namespace llarp
             return {_2->second, b1 & b2};
         }
 
-        std::optional<net_addr_t> get_remote(const SessionTag& tag) const
+        std::optional<net_addr_t> get_remote(const session_tag& tag) const
         {
             Lock_t l{session_mutex};
 
@@ -105,19 +107,19 @@ namespace llarp
             return ret;
         }
 
-        std::shared_ptr<session_t> get_session(const SessionTag& tag) const
+        std::shared_ptr<session_t> get_session(const session_tag& tag) const
         {
             Lock_t l{session_mutex};
 
             std::shared_ptr<session_t> ret = nullptr;
 
-            if (auto itr = get_remote(tag); itr != std::nullopt)
-                ret = get_session(itr->second);
+            if (auto remote = get_remote(tag); remote != std::nullopt)
+                ret = get_session(*remote);
 
             return ret;
         }
 
-        void unmap(const SessionTag& tag)
+        void unmap(const session_tag& tag)
         {
             Lock_t l{session_mutex};
 
@@ -147,7 +149,7 @@ namespace llarp
             }
         }
 
-        bool have_session(const SessionTag& tag) const
+        bool have_session(const session_tag& tag) const
         {
             Lock_t l{session_mutex};
 
@@ -164,7 +166,7 @@ namespace llarp
             return _sessions.count(local);
         }
 
-        std::shared_ptr<session_t> operator[](const SessionTag& tag) { return get_session(tag); }
+        std::shared_ptr<session_t> operator[](const session_tag& tag) { return get_session(tag); }
 
         std::shared_ptr<session_t> operator[](const net_addr_t& local) { return get_session(local); }
     };

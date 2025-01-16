@@ -12,14 +12,22 @@ namespace llarp
 {
     struct IPPacket;
 
-    enum class protocol_flag : uint16_t
+    inline constexpr uint8_t proto_mask{0b0000'0011};
+
+    /** protocol_flag
+        - When negotiating sessions and advertising client contacts, all flags can be used
+        - When prepended to a datagram, only 2 bits are needed for 4 configurations
+            - host, standard = 00
+            - host, tcp2quic = 01
+            - exit, standard = 10
+            - exit, tcp2quic = 11
+    */
+    enum class protocol_flag : uint8_t
     {
-        CONTROL = 1 << 0,
-        IPV4 = 1 << 1,
-        IPV6 = 1 << 2,
-        EXIT = 1 << 3,
-        AUTH = 1 << 4,
-        TCP2QUIC = 1 << 5,
+        EXIT = 1 << 0,
+        TCP2QUIC = 1 << 1,
+        IPV4 = 1 << 2,
+        IPV6 = 1 << 3,
     };
 
     // TODO: WIP implementation

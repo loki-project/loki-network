@@ -222,7 +222,7 @@ namespace std
     template <>
     struct hash<llarp::IPRange>
     {
-        size_t operator()(const llarp::IPRange& r) const
+        size_t operator()(const llarp::IPRange& r) const noexcept
         {
             size_t h;
 

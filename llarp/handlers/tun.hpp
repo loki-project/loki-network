@@ -112,8 +112,12 @@ namespace llarp::handlers
 
         void rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest);
 
+        // TESTNET: TODO: new inbound packet handling logic
+        void handle_inbound_packet(IPPacket pkt, session_tag tag, NetworkAddress remote);
+
         // Handles an inbound packet coming IN from the network
-        bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session);
+        // bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool
+        // is_outbound_session);
 
         // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
         // route session traffic
@@ -125,7 +129,7 @@ namespace llarp::handlers
 
         bool has_if_addr() const { return true; }
 
-        std::optional<net::ExitPolicy> get_traffic_policy() const { return _exit_policy; }
+        std::optional<net::ExitPolicy> get_exit_policy() const { return _exit_policy; }
 
         std::chrono::milliseconds get_path_alignment_timeout() const { return _path_alignment_timeout; }
 
@@ -145,7 +149,7 @@ namespace llarp::handlers
         void start_poller();
 
         // Stores assigned IP's for each session in/out of this lokinet instance
-        //  - Reserved local addresses is directly pre-loaded from config
+        //  - Reserved local addresses are directly pre-loaded from config
         //  - Persisting address map is directly pre-loaded from config
         address_map<ip_v, NetworkAddress> _local_ip_mapping;
 

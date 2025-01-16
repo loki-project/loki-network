@@ -292,7 +292,7 @@ namespace std
     template <>
     struct hash<llarp::RelayContact>
     {
-        virtual size_t operator()(const llarp::RelayContact& r) const
+        virtual size_t operator()(const llarp::RelayContact& r) const noexcept
         {
             return std::hash<llarp::PubKey>{}(r.router_id());
         }

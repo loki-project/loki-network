@@ -310,7 +310,7 @@ namespace llarp
             [this](oxen::quic::dgram_interface&, bstring dgram) { return handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
-            oxen::quic::opt::enable_datagrams{});
+            oxen::quic::opt::enable_datagrams{/* oxen::quic::Splitting::ACTIVE */});
 
         // While only service nodes accept inbound connections, clients must have this key verify
         // callback set. It will reject any attempted inbound connection to a lokinet client prior
@@ -1501,20 +1501,17 @@ namespace llarp
 
                 log::trace(logcat, "Received path data for local client: {}", buffer_printer{payload});
 
-                NetworkAddress sender;
-                bstring data;
-
                 try
                 {
-                    std::tie(sender, data) = PATH::DATA::deserialize(oxenc::bt_dict_consumer{payload});
+                    auto [tag, data] = PATH::DATA::deserialize_inner(std::move(payload));
 
-                    if (auto session = _router.session_endpoint()->get_session(sender))
+                    if (auto session = _router.session_endpoint()->get_session(tag))
                     {
                         session->recv_path_data_message(std::move(data));
                     }
                     else
                     {
-                        log::warning(logcat, "Could not find session (remote:{}) to relay path data message!", sender);
+                        log::warning(logcat, "Could not find session (tag:{}) to relay path data message!", tag);
                     }
                 }
                 catch (const std::exception& e)
@@ -1653,7 +1650,7 @@ namespace llarp
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         NetworkAddress initiator;
-        SessionTag tag;
+        session_tag tag;
         HopID remote_pivot_txid;
         HopID local_pivot_txid;
         bool use_tun;

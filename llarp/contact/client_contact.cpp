@@ -10,7 +10,7 @@ namespace llarp
         Ed25519PrivateData private_data,
         PubKey pk,
         const std::unordered_set<dns::SRVData>& srvs,
-        uint16_t proto_flags,
+        uint8_t proto_flags,
         std::optional<net::ExitPolicy> policy)
         : derived_privatekey{std::move(private_data)},
           pubkey{std::move(pk)},
@@ -25,7 +25,7 @@ namespace llarp
         Ed25519PrivateData&& private_data,
         PubKey&& pk,
         const std::unordered_set<dns::SRVData>& srvs,
-        uint16_t proto_flags,
+        uint8_t proto_flags,
         std::optional<net::ExitPolicy> policy)
     {
         log::info(logcat, "Generating new ClientContact...");
@@ -120,6 +120,8 @@ namespace llarp
                 SRVs.emplace(sublist.consume_dict_consumer());
         }
     }
+
+    session_tag ClientContact::generate_session_tag() const { return session_tag::make(protos & proto_mask); }
 
     bool ClientContact::is_expired(std::chrono::milliseconds now) const
     {

@@ -32,13 +32,13 @@ namespace std
     template <>
     struct hash<llarp::ipv4>
     {
-        size_t operator()(const llarp::ipv4& obj) const { return hash<decltype(obj.addr)>{}(obj.addr); }
+        size_t operator()(const llarp::ipv4& obj) const noexcept { return hash<decltype(obj.addr)>{}(obj.addr); }
     };
 
     template <>
     struct hash<llarp::ipv6>
     {
-        size_t operator()(const llarp::ipv6& obj) const
+        size_t operator()(const llarp::ipv6& obj) const noexcept
         {
             auto h = hash<decltype(obj.hi)>{}(obj.hi);
             h ^= hash<decltype(obj.lo)>{}(obj.lo) + oxen::quic::inverse_golden_ratio + (h << 6) + (h >> 2);
@@ -49,7 +49,7 @@ namespace std
     template <>
     struct hash<llarp::ip_v>
     {
-        size_t operator()(const llarp::ip_v& obj) const
+        size_t operator()(const llarp::ip_v& obj) const noexcept
         {
             if (auto maybe_v4 = std::get_if<llarp::ipv4>(&obj))
                 return hash<llarp::ipv4>{}(*maybe_v4);

@@ -15,6 +15,7 @@
 namespace llarp
 {
     using on_session_init_hook = std::function<void(ip_v)>;
+    using recv_session_dgram_cb = std::function<void(std::vector<uint8_t>)>;
 
     namespace link
     {
@@ -44,7 +45,7 @@ namespace llarp
             Router& _r;
             handlers::SessionEndpoint& _parent;
 
-            SessionTag _tag;
+            session_tag _tag;
             NetworkAddress _remote;
 
             shared_kx_data session_keys{};
@@ -59,6 +60,8 @@ namespace llarp
 
             std::shared_ptr<path::Path> _current_path;
             HopID _pivot_txid;
+
+            recv_session_dgram_cb _recv_dgram;
 
             // manually routed QUIC endpoint
             std::shared_ptr<oxen::quic::Endpoint> _ep;
@@ -81,7 +84,7 @@ namespace llarp
                 handlers::SessionEndpoint& parent,
                 NetworkAddress remote,
                 HopID remote_pivot_txid,
-                SessionTag _t,
+                session_tag _t,
                 bool use_tun,
                 bool is_outbound,
                 std::optional<shared_kx_data> kx_data = std::nullopt);
@@ -99,7 +102,9 @@ namespace llarp
 
             bool send_path_data_message(std::string data);
 
-            void recv_path_data_message(bstring data);
+            void recv_path_data_message(std::vector<uint8_t> data);
+
+            // void recv_path_data_message(bstring data);
 
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
 
@@ -109,9 +114,9 @@ namespace llarp
 
             bool using_tun() const { return _use_tun; }
 
-            SessionTag tag() { return _tag; }
+            session_tag tag() { return _tag; }
 
-            const SessionTag& tag() const { return _tag; }
+            const session_tag& tag() const { return _tag; }
 
             bool is_exit_session() const { return _is_exit_session; }
         };
@@ -126,7 +131,7 @@ namespace llarp
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
                 HopID remote_pivot_txid,
-                SessionTag _t,
+                session_tag _t,
                 std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
@@ -184,13 +189,13 @@ namespace llarp
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
                 HopID remote_pivot_txid,
-                SessionTag _t,
+                session_tag _t,
                 bool use_tun,
                 std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~InboundSession() = default;
 
-            void set_new_tag(const SessionTag& tag);
+            void set_new_tag(const session_tag& tag);
         };
     }  // namespace session
 

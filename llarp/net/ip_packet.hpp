@@ -42,13 +42,14 @@ namespace llarp
         oxen::quic::Address _dst_addr{};
 
         bool _is_v4{true};
-        bool _is_udp{false};
 
         net::IPProtocol _proto{};
 
         void _init_internals();
 
       public:
+        // TESTNET: TODO: after merging libquic retyping for libc++19, revise these constructors
+
         IPPacket() : IPPacket{size_t{0}} {}
         explicit IPPacket(size_t sz);
         explicit IPPacket(bstring_view data);

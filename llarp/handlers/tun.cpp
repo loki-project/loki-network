@@ -415,7 +415,7 @@ namespace llarp::handlers
         //       [this, snode, msg, reply, isV6](
         //           const RouterID&,
         //           std::shared_ptr<session::BaseSession> s,
-        //           [[maybe_unused]] SessionTag tag) {
+        //           [[maybe_unused]] session_tag tag) {
         //         SendDNSReply(snode, s, msg, reply, isV6);
         //       });
         // };
@@ -965,10 +965,7 @@ namespace llarp::handlers
         if constexpr (llarp::platform::is_apple)
         {
             if (ip_equals_address(dest, _local_addr, pkt_is_ipv4))
-            {
-                rewrite_and_send_packet(std::move(pkt), src, dest);
-                return;
-            }
+                return rewrite_and_send_packet(std::move(pkt), std::move(src), std::move(dest));
         }
 
         // we pass `dest` because that is our local private IP on the outgoing IPPacket
@@ -979,14 +976,25 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::info(logcat, "Dispatching outbound {}B packet for session (remote: {})", pkt.size(), remote);
+                log::info(
+                    logcat,
+                    "Dispatching outbound {}B packet for session (remote: {}): {}",
+                    pkt.size(),
+                    remote,
+                    pkt.info_line());
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else
                 log::info(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
         }
         else
-            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
+        {
+            log::critical(logcat, "Could not find remote for route {}", pkt.info_line());
+
+            // make ICMP unreachable
+            if (auto icmp = pkt.make_icmp_unreachable())
+                rewrite_and_send_packet(std::move(*icmp), std::move(src), std::move(dest));
+        }
     }
 
     std::optional<ip_v> TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4)
@@ -1025,85 +1033,154 @@ namespace llarp::handlers
         send_packet_to_net_if(std::move(pkt));
     }
 
-    // handles an inbound packet coming IN from network -> user
-    bool TunEndpoint::handle_inbound_packet(
-        IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
+    void TunEndpoint::handle_inbound_packet(IPPacket pkt, session_tag tag, NetworkAddress remote)
     {
         ip_v src, dest;
-
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        if (is_exit_session and is_outbound_session)
+        auto [is_exit_pkt, is_tunneled_pkt] = tag.proto_bits();
+
+        if (is_tunneled_pkt)
         {
-            log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
-            // we are receiving traffic from a session to a remote exit node
-            if (pkt_is_ipv4)
-            {
-                src = pkt.source_ipv4();
-                dest = _local_addr.to_ipv4();
-            }
-            else
-            {
-                src = pkt.source_ipv6();
-                dest = _local_ipv6.to_ipv6();
-            }
+            log::critical(logcat, "Dropping tcp2quic pkt");
+            // TODO: pass to tunnel
+            // TODO: also finish quic tunnel
+            // TODO: route this even earlier
 
-            assert(remote.is_client());
-
-            auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
-
-            if (not maybe_remote)
-            {
-                log::info(logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
-                return false;
-            }
-            if (*maybe_remote != remote)
-            {
-                log::info(
-                    logcat,
-                    "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
-                    src,
-                    *maybe_remote,
-                    remote);
-                return false;
-            }
+            return;
         }
-        else
+
+        if (is_exit_pkt)
         {
-            if (is_exit_session and not is_outbound_session)
+            if (is_exit_node())  // traffic to local exit node
             {
-                log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
-                // we are receiving traffic from a session to a local exit node
+                log::info(logcat, "inbound exit pkt for local exit node: {}", pkt.info_line());
+
                 if (not _exit_policy->allow_ip_traffic(pkt))
-                    return false;
+                {
+                    log::warning(logcat, "Invalid pkt proto ({}) for local exit", pkt.protocol());
+                    return;
+                }
 
                 if (pkt_is_ipv4)
                     dest = pkt.dest_ipv4();
                 else
                     dest = pkt.dest_ipv6();
             }
-            else
+            else  // traffic to remote exit node
             {
-                log::info(logcat, "inbound service session pkt: {}", pkt.info_line());
-                // we are receiving hidden service traffic
-                if (pkt_is_ipv4)
-                    dest = _local_addr.to_ipv4();
-                else
-                    dest = _local_ipv6.to_ipv6();
-            }
+                log::info(logcat, "inbound exit pkt from remote exit node: {}", pkt.info_line());
 
-            if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
-                src = std::move(*maybe_src);
+                if (pkt_is_ipv4)
+                {
+                    src = pkt.source_ipv4();
+                    dest = _local_addr.to_ipv4();
+                }
+                else
+                {
+                    src = pkt.source_ipv6();
+                    dest = _local_addr.to_ipv6();
+                }
+            }
+        }
+        else
+        {
+            log::info(logcat, "inbound session pkt: {}", pkt.info_line());
+
+            if (pkt_is_ipv4)
+                dest = _local_addr.to_ipv4();
             else
-                return false;
+                dest = _local_addr.to_ipv6();
         }
 
+        if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
+            src = std::move(*maybe_src);
+        else
+            return;
+
         log::trace(logcat, "src:{}, dest:{}", src, dest);
-
         rewrite_and_send_packet(std::move(pkt), src, dest);
-
-        return true;
     }
+
+    // handles an inbound packet coming IN from network -> user
+    // bool TunEndpoint::handle_inbound_packet(
+    //     IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
+    // {
+    //     ip_v src, dest;
+
+    //     auto pkt_is_ipv4 = pkt.is_ipv4();
+
+    //     if (is_exit_session and is_outbound_session)
+    //     {
+    //         log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
+    //         // we are receiving traffic from a session to a remote exit node
+    //         if (pkt_is_ipv4)
+    //         {
+    //             src = pkt.source_ipv4();
+    //             dest = _local_addr.to_ipv4();
+    //         }
+    //         else
+    //         {
+    //             src = pkt.source_ipv6();
+    //             dest = _local_ipv6.to_ipv6();
+    //         }
+
+    //         assert(remote.is_client());
+
+    //         auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
+
+    //         if (not maybe_remote)
+    //         {
+    //             log::info(logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src,
+    //             remote); return false;
+    //         }
+    //         if (*maybe_remote != remote)
+    //         {
+    //             log::info(
+    //                 logcat,
+    //                 "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
+    //                 src,
+    //                 *maybe_remote,
+    //                 remote);
+    //             return false;
+    //         }
+    //     }
+    //     else
+    //     {
+    //         if (is_exit_session and not is_outbound_session)
+    //         {
+    //             log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
+    //             // we are receiving traffic from a session to a local exit node
+    //             if (not _exit_policy->allow_ip_traffic(pkt))
+    //                 return false;
+
+    //             if (pkt_is_ipv4)
+    //                 dest = pkt.dest_ipv4();
+    //             else
+    //                 dest = pkt.dest_ipv6();
+    //         }
+    //         else
+    //         {
+    //             log::info(logcat, "inbound service session pkt: {}", pkt.info_line());
+    //             // we are receiving hidden service traffic
+    //             if (pkt_is_ipv4)
+    //                 dest = _local_addr.to_ipv4();
+    //             else
+    //                 dest = _local_ipv6.to_ipv6();
+    //         }
+
+    //         if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
+    //             src = std::move(*maybe_src);
+    //         else
+    //             return false;
+    //     }
+
+    //     log::trace(logcat, "src:{}, dest:{}", src, dest);
+
+    //     rewrite_and_send_packet(std::move(pkt), src, dest);
+
+    //     return true;
+    // }
 
     void TunEndpoint::start_poller()
     {

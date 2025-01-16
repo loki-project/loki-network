@@ -2,6 +2,7 @@
 
 #include "client_intro.hpp"
 #include "router_id.hpp"
+#include "tag.hpp"
 
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
@@ -69,7 +70,7 @@ namespace llarp
             Ed25519PrivateData private_data,
             PubKey pk,
             const std::unordered_set<dns::SRVData>& srvs,
-            uint16_t proto_flags,
+            uint8_t proto_flags,
             std::optional<net::ExitPolicy> policy = std::nullopt);
 
         /** Parameters:
@@ -83,7 +84,7 @@ namespace llarp
             Ed25519PrivateData&& private_data,
             PubKey&& pubkey,
             const std::unordered_set<dns::SRVData>& srvs,
-            uint16_t proto_flags,
+            uint8_t proto_flags,
             std::optional<net::ExitPolicy> policy = std::nullopt);
 
         EncryptedClientContact encrypt_and_sign() const;
@@ -108,7 +109,7 @@ namespace llarp
         intro_set intros;
         std::unordered_set<dns::SRVData> SRVs;
 
-        uint16_t protos;
+        uint8_t protos;
 
         // In exit mode, we advertise our policy for accepted traffic and the corresponding ranges
         std::optional<net::ExitPolicy> exit_policy;
@@ -124,6 +125,8 @@ namespace llarp
 
         // Throws if unsuccessful, must take BTDC in invocation
         void bt_decode(oxenc::bt_dict_consumer&& btdc);
+
+        session_tag generate_session_tag() const;
 
       private:
         void _regenerate();

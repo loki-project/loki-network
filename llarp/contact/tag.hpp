@@ -2,28 +2,48 @@
 
 // #include <llarp/net/net.hpp>
 #include <llarp/util/aligned.hpp>
+#include <llarp/util/buffer.hpp>
 
 namespace llarp
 {
-    struct SessionTag final : AlignedBuffer<16>
+    struct alignas(uint64_t) session_tag
     {
-        using AlignedBuffer<16>::AlignedBuffer;
+        static constexpr size_t SIZE{8};
 
-        static SessionTag make_random();
+        std::array<uint8_t, SIZE> buf;
 
-        void Randomize() override;
+        session_tag() = default;
+
+      private:
+        session_tag(uint8_t protocol);
+
+      public:
+        static session_tag make(uint8_t protocol);
+
+        std::tuple<bool, bool> proto_bits() const;
+
+        void read(std::string_view buf);
+
+        std::string_view view() const;
+        uspan span() const;
+
+        auto operator<=>(const session_tag& other) const { return buf <=> other.buf; }
+        bool operator==(const session_tag& other) const { return (*this <=> other) == 0; }
+
+        std::string to_string() const;
+        static constexpr bool to_string_formattable = true;
     };
+
 }  // namespace llarp
 
 namespace std
 {
     template <>
-    struct hash<llarp::SessionTag>
+    struct hash<llarp::session_tag>
     {
-        size_t operator()(const llarp::SessionTag& tag) const
+        size_t operator()(const llarp::session_tag& tag) const noexcept
         {
-            std::hash<std::string_view> h{};
-            return h(std::string_view{reinterpret_cast<const char*>(tag.data()), tag.size()});
+            return std::hash<std::string_view>{}(tag.view());
         }
     };
 }  // namespace std

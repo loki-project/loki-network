@@ -78,11 +78,11 @@ namespace llarp
             return;
 
         _is_v4 = _header->version == v4_header_version;
-        _is_udp = _proto == net::IPProtocol::UDP;
+        auto keep_port = _proto == net::IPProtocol::UDP || _proto == net::IPProtocol::TCP;
 
         uint16_t src_port =
-            (_is_udp) ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)) : 0;
-        uint16_t dest_port = (_is_udp)
+            (keep_port) ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)) : 0;
+        uint16_t dest_port = (keep_port)
             ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4) + 2)
             : 0;
 
@@ -250,6 +250,8 @@ namespace llarp
         uint16_t chksumoff{0};
         uint16_t chksum{0};
 
+        bool is_udp = false;
+
         switch (nextproto)
         {
             case 6:  // TCP
@@ -262,25 +264,25 @@ namespace llarp
                     chksum = 0x0000;
 
                 chksumoff = chksumoff == 16 ? 16 : 6;
-                _is_udp = false;
                 break;
             case 17:   // UDP
             case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
                 chksum = udp_checksum_ipv6(&hdr->src, &hdr->dest, hdr->payload_len, 0);
-                _is_udp = true;
+                is_udp = true;
                 break;
             default:
                 // do nothing
                 break;
         }
 
-        auto check = _is_udp ? (uint16_t*)(pld + 6) : (uint16_t*)(pld + chksumoff - fragoff);
+        auto check = is_udp ? (uint16_t*)(pld + 6) : (uint16_t*)(pld + chksumoff - fragoff);
 
         *check = chksum;
 
         _init_internals();
     }
 
+    // TODO: make a compile-time ICMP template with configurable fields
     std::optional<IPPacket> IPPacket::make_icmp_unreachable() const
     {
         if (is_ipv4())
@@ -300,7 +302,7 @@ namespace llarp
             pkt_header->dest = _header->src;
             pkt_header->protocol = 1;  // ICMP
             pkt_header->ttl = pkt_header->ttl;
-            pkt_header->frag_off = htons(0b0100000000000000);
+            pkt_header->frag_off = oxenc::host_to_big(0b0100000000000000);
 
             uint8_t* itr = pkt.data() + ip_hdr_sz;
             uint8_t* icmp_begin = itr;  // type 'destination unreachable'
@@ -327,6 +329,8 @@ namespace llarp
 
             // calculate icmp checksum
             *checksum = utils::ip_checksum(icmp_begin, std::distance(icmp_begin, itr));
+
+            log::debug(logcat, "ICMP unreachable pkt configured");
             return pkt;
         }
 

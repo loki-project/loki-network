@@ -93,10 +93,13 @@ namespace llarp::handlers
             _auth_tokens.merge(net_config.exit_auths);
         }
 
-        uint16_t protoflags = meta::to_underlying(protocol_flag::TCP2QUIC);
-
+        // always accept ipv4 (currently)
+        uint8_t protoflags = meta::to_underlying(protocol_flag::IPV4);
+        if (!_is_v4)
+            protoflags |= meta::to_underlying(protocol_flag::IPV6);
+        // if we are a full client, we accept standard and tunneled (tcp2quic) traffic
         if (_router.using_tun_if())
-            protoflags |= meta::to_underlying(_is_v4 ? protocol_flag::IPV4 : protocol_flag::IPV6);
+            protoflags |= meta::to_underlying(protocol_flag::TCP2QUIC);
 
         if (_is_exit_node)
             protoflags |= meta::to_underlying(protocol_flag::EXIT);
@@ -137,7 +140,7 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    static std::atomic<bool> testnet_trigger = false;
+    // static std::atomic<bool> testnet_trigger = false;
 
     void SessionEndpoint::start_tickers()
     {
@@ -152,24 +155,25 @@ namespace llarp::handlers
                 },
                 true);
 
-            if (not testnet_trigger)
-            {
-                testnet_trigger = true;
+            // if (not testnet_trigger)
+            // {
+            //     testnet_trigger = true;
 
-                _router.loop()->call_later(5s, [this]() {
-                    try
-                    {
-                        RouterID cpk{oxenc::from_base32z("acit6x8kwxdehpkzrpunw5nb8mf4w5u8tn3ojmxit9rpnhhhp81y")};
-                        log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-                        _initiate_session(
-                            NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH"); });
-                    }
-                    catch (const std::exception& e)
-                    {
-                        log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-                    }
-                });
-            }
+            //     _router.loop()->call_later(5s, [this]() {
+            //         try
+            //         {
+            //             RouterID cpk{oxenc::from_base32z("fs4kczh5ypnq7cd3sf4qxceqjhmznkhgauutwhf8a5rpzr9cnaky")};
+            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
+            //             _initiate_session(
+            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
+            //                 });
+            //         }
+            //         catch (const std::exception& e)
+            //         {
+            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+            //         }
+            //     });
+            // }
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -426,7 +430,7 @@ namespace llarp::handlers
 
     bool SessionEndpoint::prefigure_session(
         NetworkAddress initiator,
-        SessionTag tag,
+        session_tag tag,
         HopID remote_pivot_txid,
         std::shared_ptr<path::Path> path,
         shared_kx_data kx_data,
@@ -560,7 +564,7 @@ namespace llarp::handlers
                                 - 'x' : encrypted payload
                                     - 'i' : RouterID of initiator
                                     - 'p' : HopID at the pivot taken from remote ClientIntro
-                                    - 's' : SessionTag for current session
+                                    - 's' : session_tag for current session
                                     - 't' : Use Tun interface (bool)
                                     - 'u' : Authentication field
                                         - bt-encoded dict, values TBD
@@ -572,7 +576,7 @@ namespace llarp::handlers
         on_session_init_hook cb,
         bool /* is_exit */)
     {
-        auto tag = SessionTag::make_random();
+        auto tag = client_contact.generate_session_tag();
 
         std::string inner_payload;
         shared_kx_data kx_data;
@@ -601,7 +605,7 @@ namespace llarp::handlers
             std::move(intermediate_payload),
             [this,
              remote,
-             tag,
+             tag = std::move(tag),
              path,
              remote_pivot_txid = remote_intro.pivot_txid,
              hook = std::move(cb),

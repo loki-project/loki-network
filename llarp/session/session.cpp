@@ -4,7 +4,6 @@
 #include <llarp/handlers/session.hpp>
 #include <llarp/link/tunnel.hpp>
 #include <llarp/messages/path.hpp>
-#include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/formattable.hpp>
 
@@ -20,7 +19,7 @@ namespace llarp::session
         handlers::SessionEndpoint& parent,
         NetworkAddress remote,
         HopID remote_pivot_txid,
-        SessionTag _t,
+        session_tag _t,
         bool use_tun,
         bool is_outbound,
         std::optional<shared_kx_data> kx_data)
@@ -35,6 +34,16 @@ namespace llarp::session
         if (kx_data.has_value())
             session_keys = std::move(*kx_data);
 
+        if (_use_tun)
+            _recv_dgram = [this](std::vector<uint8_t> data) {
+                _r.tun_endpoint()->handle_inbound_packet(IPPacket{std::move(data)}, _tag, _remote);
+            };
+        else
+            _recv_dgram = [this](std::vector<uint8_t> data) {
+                _ep->manually_receive_packet(
+                    NetworkPacket{oxen::quic::Path{}, bstring{reinterpret_cast<std::byte*>(data.data()), data.size()}});
+            };
+
         set_new_current_path(std::move(_p));
     }
 
@@ -46,31 +55,29 @@ namespace llarp::session
 
     bool BaseSession::send_path_data_message(std::string data)
     {
-        auto inner_payload = PATH::DATA::serialize(std::move(data), _r.local_rid());
+        auto inner_payload = PATH::DATA::serialize_inner(std::move(data), _tag);
         auto intermediate_payload = PATH::DATA::serialize_intermediate(std::move(inner_payload), _remote_pivot_txid);
         return _r.send_data_message(
             _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
     }
 
-    void BaseSession::recv_path_data_message(bstring body) { _current_path->recv_path_data_message(std::move(body)); }
+    void BaseSession::recv_path_data_message(std::vector<uint8_t> data)
+    {
+        if (_recv_dgram)
+            _recv_dgram(std::move(data));
+        else
+            throw std::runtime_error{"Session does not have hook to receive datagrams!"};
+    }
 
     void BaseSession::set_new_current_path(std::shared_ptr<path::Path> _new_path)
     {
         if (_current_path)
-            _current_path->unlink_session();
+            _current_path->unlink_session(_tag);
 
         _current_path = std::move(_new_path);
         _pivot_txid = _current_path->pivot_txid();
 
-        if (_use_tun)
-            _current_path->link_session([this](bstring data) {
-                _r.tun_endpoint()->handle_inbound_packet(
-                    IPPacket{std::move(data)}, _remote, _is_exit_session, _is_outbound);
-            });
-        else
-            _current_path->link_session([this](bstring data) {
-                _ep->manually_receive_packet(NetworkPacket{oxen::quic::Path{}, std::move(data)});
-            });
+        _current_path->link_session(_tag);
 
         assert(_current_path->is_linked());
     }
@@ -79,8 +86,7 @@ namespace llarp::session
     {
         _ep = _r.quic_tunnel()->net()->endpoint(
             LOCALHOST_BLANK, oxen::quic::opt::manual_routing{[this](const oxen::quic::Path&, bstring_view data) {
-                _current_path->send_path_data_message(
-                    std::string{reinterpret_cast<const char*>(data.data()), data.size()});
+                send_path_data_message(std::string{reinterpret_cast<const char*>(data.data()), data.size()});
             }});
     }
 
@@ -159,7 +165,7 @@ namespace llarp::session
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
         HopID remote_pivot_txid,
-        SessionTag _t,
+        session_tag _t,
         std::optional<shared_kx_data> kx_data)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
@@ -325,7 +331,7 @@ namespace llarp::session
         std::shared_ptr<path::Path> _path,
         handlers::SessionEndpoint& parent,
         HopID remote_pivot_txid,
-        SessionTag _t,
+        session_tag _t,
         bool use_tun,
         std::optional<shared_kx_data> kx_data)
         : BaseSession{
@@ -340,5 +346,5 @@ namespace llarp::session
             std::move(kx_data)}
     {}
 
-    void InboundSession::set_new_tag(const SessionTag& tag) { _tag = tag; }
+    void InboundSession::set_new_tag(const session_tag& tag) { _tag = tag; }
 }  // namespace llarp::session

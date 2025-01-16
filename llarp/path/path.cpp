@@ -86,33 +86,28 @@ namespace llarp::path
             logcat, "Path client intro holding pivot_rid ({}) and pivot_txid ({})", intro.pivot_rid, intro.pivot_txid);
     }
 
-    void Path::link_session(recv_session_dgram_cb cb)
+    void Path::link_session(session_tag t)
     {
-        _recv_dgram = std::move(cb);
-        _is_linked = true;
+        _linked_sessions.insert(t);
+        log::critical(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
         _is_session_path = true;
     }
 
-    bool Path::unlink_session()
+    bool Path::unlink_session(session_tag t)
     {
-        if (_is_linked)
-        {
-            _is_linked = false;
-            _recv_dgram = nullptr;
-            return true;
-        }
-
-        log::warning(logcat, "Path is not currently linked to an ongoing session!");
-        return false;
+        auto n = _linked_sessions.erase(t);
+        _is_session_path = not _linked_sessions.empty();
+        log::critical(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
+        return n != 0;
     }
 
-    void Path::recv_path_data_message(bstring data)
-    {
-        if (_recv_dgram)
-            _recv_dgram(std::move(data));
-        else
-            throw std::runtime_error{"Path does not have hook to receive datagrams!"};
-    }
+    // void Path::recv_path_data_message(bstring data)
+    // {
+    //     if (_recv_dgram)
+    //         _recv_dgram(std::move(data));
+    //     else
+    //         throw std::runtime_error{"Path does not have hook to receive datagrams!"};
+    // }
 
     bool Path::operator<(const Path& other) const
     {

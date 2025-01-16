@@ -287,6 +287,13 @@ namespace llarp
                 return std::move(btdp).str();
             }
 
+            inline static std::string serialize_inner(std::string body, session_tag tag)
+            {
+                std::string payload{tag.view()};
+                payload.append(body);
+                return payload;
+            }
+
             inline static std::tuple<NetworkAddress, bstring> deserialize(oxenc::bt_dict_consumer&& btdc)
             {
                 RouterID remote;
@@ -302,7 +309,8 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    throw std::runtime_error{"Exception caught deserializing path data:{}"_format(e.what())};
+                    throw std::runtime_error{
+                        "Exception caught deserializing outer datagram payload: {}"_format(e.what())};
                 }
             }
 
@@ -320,7 +328,28 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    throw std::runtime_error{"Exception caught deserializing path data:{}"_format(e.what())};
+                    throw std::runtime_error{
+                        "Exception caught deserializing intermediate datagram payload: {}"_format(e.what())};
+                }
+            }
+
+            inline static std::tuple<session_tag, std::vector<uint8_t>> deserialize_inner(std::string&& payload)
+            {
+                session_tag t{};
+                std::vector<uint8_t> body{};
+
+                try
+                {
+                    t.read({payload.data(), session_tag::SIZE});
+                    body.resize(payload.size() - session_tag::SIZE);
+                    std::memmove(body.data(), payload.data() + session_tag::SIZE, payload.size() - session_tag::SIZE);
+
+                    return {std::move(t), std::move(body)};
+                }
+                catch (const std::exception& e)
+                {
+                    throw std::runtime_error{
+                        "Exception caught deserializing inner datagram payload: {}"_format(e.what())};
                 }
             }
         }  // namespace DATA

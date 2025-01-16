@@ -16,7 +16,7 @@ namespace std
     template <>
     struct hash<std::pair<llarp::RouterID, llarp::HopID>>
     {
-        size_t operator()(const std::pair<llarp::RouterID, llarp::HopID>& i) const
+        size_t operator()(const std::pair<llarp::RouterID, llarp::HopID>& i) const noexcept
         {
             return hash<llarp::RouterID>{}(i.first) ^ hash<llarp::HopID>{}(i.second);
         }
