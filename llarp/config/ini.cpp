@@ -50,10 +50,7 @@ namespace llarp
         _data.clear();
     }
 
-    static bool whitespace(char ch)
-    {
-        return std::isspace(static_cast<unsigned char>(ch)) != 0;
-    }
+    static bool whitespace(char ch) { return std::isspace(static_cast<unsigned char>(ch)) != 0; }
 
     /// Differs from Parse() as ParseAll() does NOT skip comments
     /// ParseAll() is only used by RPC endpoint 'config' for

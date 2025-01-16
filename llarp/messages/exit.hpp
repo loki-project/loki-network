@@ -2,13 +2,14 @@
 
 #include "common.hpp"
 
+#include <llarp/path/path_types.hpp>
+#include <llarp/util/random.hpp>
+
 namespace llarp
 {
     /*
         TODO:
-          - ADD PUBKEY FIELD OR AT LEAST SEE WHY LINKMANAGER::HANDLE_OBTAIN_EXIT() LOOKS FOR ONE
-
-          - change these parameters to ustringviews and ustrings where needed after bumping oxenc
+          - change these parameters to uspans where needed after bumping oxenc
           - change std::string sig(64, '\0') --> std::array<unsigned char, 64> sig
     */
 

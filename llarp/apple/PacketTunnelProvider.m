@@ -32,10 +32,7 @@
 
 @end
 
-static void nslogger(const char* msg)
-{
-    NSLog(@"%s", msg);
-}
+static void nslogger(const char* msg) { NSLog(@"%s", msg); }
 
 static void packet_writer(int af, const void* data, size_t size, void* ctx)
 {

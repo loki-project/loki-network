@@ -15,10 +15,7 @@ namespace llarp
         : _version(router), _proto(proto)
     {}
 
-    bool RouterVersion::is_compatible_with(const RouterVersion& other) const
-    {
-        return _proto == other._proto;
-    }
+    bool RouterVersion::is_compatible_with(const RouterVersion& other) const { return _proto == other._proto; }
 
     std::string RouterVersion::bt_encode() const
     {
@@ -46,10 +43,7 @@ namespace llarp
         assert(is_empty());
     }
 
-    bool RouterVersion::is_empty() const
-    {
-        return *this == emptyRouterVersion;
-    }
+    bool RouterVersion::is_empty() const { return *this == emptyRouterVersion; }
 
     bool RouterVersion::bt_decode(std::string_view buf)
     {

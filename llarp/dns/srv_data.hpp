@@ -26,7 +26,7 @@ namespace llarp::dns
     {
         SRVData() = default;
         // SRVData constructor expecting a bt-encoded dictionary
-        explicit SRVData(std::string bt);
+        SRVData(oxenc::bt_dict_consumer&& btdc);
         SRVData(std::string _proto, uint16_t _priority, uint16_t _weight, uint16_t _port, std::string _target);
 
         /* bind-like formatted string for SRV records in config file
@@ -65,6 +65,14 @@ namespace llarp::dns
         // but rather some sanity/safety checks
         bool is_valid() const;
 
+        auto operator<=>(const SRVData& other) const
+        {
+            return std::tie(service_proto, priority, weight, port, target)
+                <=> std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
+        }
+
+        bool operator==(const SRVData& other) const { return (*this <=> other) == 0; }
+
         /// so we can put SRVData in a std::set
         bool operator<(const SRVData& other) const
         {
@@ -72,14 +80,9 @@ namespace llarp::dns
                 < std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
         }
 
-        bool operator==(const SRVData& other) const
-        {
-            return std::tie(service_proto, priority, weight, port, target)
-                == std::tie(other.service_proto, other.priority, other.weight, other.port, other.target);
-        }
+        void bt_encode(oxenc::bt_dict_producer&& btdp) const;
 
-        bool operator!=(const SRVData& other) const { return !(*this == other); }
-
+        // TESTNET: TODO: remove this after refactoring IntroSet -> ClientContact
         std::string bt_encode() const;
 
         bool bt_decode(std::string buf);
@@ -87,7 +90,7 @@ namespace llarp::dns
         nlohmann::json ExtractStatus() const;
 
       private:
-        bool bt_decode(oxenc::bt_dict_consumer& btdc);
+        bool bt_decode(oxenc::bt_dict_consumer&& btdc);
         bool from_string(std::string_view srvString);
     };
 
@@ -98,7 +101,7 @@ namespace std
     template <>
     struct hash<llarp::dns::SRVData>
     {
-        size_t operator()(const llarp::dns::SRVData& data) const
+        size_t operator()(const llarp::dns::SRVData& data) const noexcept
         {
             const std::hash<std::string> h_str{};
             const std::hash<uint16_t> h_port{};

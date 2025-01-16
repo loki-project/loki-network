@@ -39,15 +39,9 @@ namespace llarp
         config = std::move(conf);
     }
 
-    bool Context::is_up() const
-    {
-        return router && router->is_running();
-    }
+    bool Context::is_up() const { return router && router->is_running(); }
 
-    bool Context::looks_alive() const
-    {
-        return router && router->looks_alive();
-    }
+    bool Context::looks_alive() const { return router && router->looks_alive(); }
 
     void Context::setup(const RuntimeOptions& opts)
     {
@@ -127,10 +121,7 @@ namespace llarp
         close_waiter = std::make_unique<std::promise<void>>();
     }
 
-    bool Context::is_stopping() const
-    {
-        return close_waiter.operator bool();
-    }
+    bool Context::is_stopping() const { return close_waiter.operator bool(); }
 
     void Context::wait()
     {

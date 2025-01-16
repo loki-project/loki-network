@@ -19,12 +19,11 @@ namespace llarp::dns
             throw std::invalid_argument{"Invalid SRVData!"};
     }
 
-    SRVData::SRVData(std::string bt)
+    SRVData::SRVData(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {
-            oxenc::bt_dict_consumer btdc{bt};
-            bt_decode(btdc);
+            bt_decode(std::move(btdc));
         }
         catch (const std::exception& e)
         {
@@ -107,16 +106,19 @@ namespace llarp::dns
         return is_valid();
     }
 
-    std::string SRVData::bt_encode() const
+    void SRVData::bt_encode(oxenc::bt_dict_producer&& btdp) const
     {
-        oxenc::bt_dict_producer btdp;
-
         btdp.append("p", port);
         btdp.append("s", service_proto);
         btdp.append("t", target);
         btdp.append("u", priority);
         btdp.append("w", weight);
+    }
 
+    std::string SRVData::bt_encode() const
+    {
+        oxenc::bt_dict_producer btdp;
+        bt_encode(std::move(btdp));
         return std::move(btdp).str();
     }
 
@@ -124,8 +126,7 @@ namespace llarp::dns
     {
         try
         {
-            oxenc::bt_dict_consumer btdc{buf};
-            return bt_decode(btdc);
+            return bt_decode(oxenc::bt_dict_consumer{buf});
         }
         catch (const std::exception& e)
         {
@@ -134,7 +135,7 @@ namespace llarp::dns
         }
     }
 
-    bool SRVData::bt_decode(oxenc::bt_dict_consumer& btdc)
+    bool SRVData::bt_decode(oxenc::bt_dict_consumer&& btdc)
     {
         try
         {

@@ -17,7 +17,7 @@ namespace llarp
 
     class EventLoop;
     struct Config;
-    struct RouterContact;
+    struct RelayContact;
     struct Config;
     struct Router;
     class NodeDB;

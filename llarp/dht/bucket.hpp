@@ -1,17 +1,45 @@
 #pragma once
 
-#include "kademlia.hpp"
 #include "key.hpp"
 
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/util/logging.hpp>
 
 #include <map>
 #include <set>
 #include <vector>
 
+namespace llarp::concepts
+{
+    template <typename T, typename U = std::remove_cvref_t<T>>
+    concept XOR_comparable = U::SIZE == PUBKEYSIZE && (std::same_as<RouterID, U> || std::same_as<dht::Key_t, U>);
+}
+
 namespace llarp::dht
 {
     static auto logcat = log::Cat("dht.bucket");
+
+    struct XorMetric
+    {
+        const Key_t us;
+
+        XorMetric(Key_t ourKey) : us{std::move(ourKey)} {}
+
+        bool operator()(const Key_t& left, const Key_t& right) const { return (us ^ left) < (us ^ right); }
+
+        bool operator()(const RemoteRC& left, const RemoteRC& right) const
+        {
+            return (left.router_id() ^ us) < (right.router_id() ^ us);
+        }
+
+        template <concepts::XOR_comparable T, concepts::XOR_comparable U>
+        bool operator()(const T& left, const U& right) const
+        {
+            return (left ^ us) < (right < us);
+        }
+    };
+
+    using rc_set = std::set<RemoteRC, XorMetric>;
 
     template <typename Val_t>
     struct Bucket
@@ -46,7 +74,7 @@ namespace llarp::dht
             }
         };
 
-        bool GetRandomNodeExcluding(Key_t& result, const std::set<Key_t>& exclude) const
+        bool get_random_node_excluding(Key_t& result, const std::set<Key_t>& exclude) const
         {
             std::vector<typename BucketStorage_t::value_type> candidates;
             std::set_difference(
@@ -65,7 +93,7 @@ namespace llarp::dht
             return true;
         }
 
-        bool FindClosest(const Key_t& target, Key_t& result) const
+        bool find_closest(const Key_t& target, Key_t& result) const
         {
             Key_t mindist;
             mindist.Fill(0xff);
@@ -81,7 +109,7 @@ namespace llarp::dht
             return nodes.size() > 0;
         }
 
-        bool GetManyRandom(std::set<Key_t>& result, size_t N) const
+        bool get_n_random(std::set<Key_t>& result, size_t N) const
         {
             if (nodes.size() < N || nodes.empty())
             {
@@ -110,7 +138,7 @@ namespace llarp::dht
             return result.size() == expecting;
         }
 
-        bool FindCloseExcluding(const Key_t& target, Key_t& result, const std::set<Key_t>& exclude) const
+        bool get_nearest_excluding(const Key_t& target, Key_t& result, const std::set<Key_t>& exclude) const
         {
             Key_t maxdist;
             maxdist.Fill(0xff);
@@ -133,7 +161,7 @@ namespace llarp::dht
             return mindist < maxdist;
         }
 
-        bool GetManyNearExcluding(
+        bool get_n_nearest_excluding(
             const Key_t& target, std::set<Key_t>& result, size_t N, const std::set<Key_t>& exclude) const
         {
             std::set<Key_t> s(exclude.begin(), exclude.end());
@@ -141,7 +169,7 @@ namespace llarp::dht
             Key_t peer;
             while (N--)
             {
-                if (!FindCloseExcluding(target, peer, s))
+                if (!get_nearest_excluding(target, peer, s))
                 {
                     return false;
                 }
@@ -151,7 +179,7 @@ namespace llarp::dht
             return true;
         }
 
-        void PutNode(const Val_t& val)
+        void put_node(const Val_t& val)
         {
             auto itr = nodes.find(val.ID);
             if (itr == nodes.end() || itr->second < val)
@@ -160,7 +188,7 @@ namespace llarp::dht
             }
         }
 
-        void DelNode(const Key_t& key)
+        void delete_node(const Key_t& key)
         {
             auto itr = nodes.find(key);
             if (itr != nodes.end())
@@ -169,11 +197,11 @@ namespace llarp::dht
             }
         }
 
-        bool HasNode(const Key_t& key) const { return nodes.find(key) != nodes.end(); }
+        bool has_node(const Key_t& key) const { return nodes.find(key) != nodes.end(); }
 
         // remove all nodes who's key matches a predicate
         template <typename Predicate>
-        void RemoveIf(Predicate pred)
+        void delete_node_if(Predicate pred)
         {
             auto itr = nodes.begin();
             while (itr != nodes.end())
@@ -186,7 +214,7 @@ namespace llarp::dht
         }
 
         template <typename Visit_t>
-        void ForEachNode(Visit_t visit)
+        void for_each_node(Visit_t visit)
         {
             for (const auto& item : nodes)
             {
@@ -194,7 +222,7 @@ namespace llarp::dht
             }
         }
 
-        void Clear() { nodes.clear(); }
+        void clear() { nodes.clear(); }
 
         BucketStorage_t nodes;
         Random_t random;

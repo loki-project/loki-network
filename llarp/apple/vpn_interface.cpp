@@ -31,10 +31,7 @@ namespace llarp::apple
         //
     }
 
-    int VPNInterface::PollFD() const
-    {
-        return -1;
-    }
+    int VPNInterface::PollFD() const { return -1; }
 
     IPPacket VPNInterface::read_next_packet()
     {

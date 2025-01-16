@@ -60,7 +60,7 @@ namespace llarp::rpc
 
             if (not std::is_base_of_v<Immediate, RPC>)
             {
-                server.m_Router.loop()->call_soon(std::move(handler));
+                server._router.loop()->call_soon(std::move(handler));
             }
             else
             {

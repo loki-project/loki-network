@@ -39,19 +39,10 @@ namespace llarp
             return "C:\\ProgramData\\Lokinet";
     }
 
-    inline fs::path GetDefaultConfigFilename()
-    {
-        return "lokinet.ini";
-    }
+    inline fs::path GetDefaultConfigFilename() { return "lokinet.ini"; }
 
-    inline fs::path GetDefaultConfigPath()
-    {
-        return GetDefaultDataDir() / GetDefaultConfigFilename();
-    }
+    inline fs::path GetDefaultConfigPath() { return GetDefaultDataDir() / GetDefaultConfigFilename(); }
 
-    inline fs::path GetDefaultBootstrap()
-    {
-        return GetDefaultDataDir() / "bootstrap.signed";
-    }
+    inline fs::path GetDefaultBootstrap() { return GetDefaultDataDir() / "bootstrap.signed"; }
 
 }  // namespace llarp

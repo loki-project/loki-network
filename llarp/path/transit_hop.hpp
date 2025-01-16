@@ -1,10 +1,10 @@
 #pragma once
 
+#include "path_types.hpp"
+
 #include <llarp/constants/path.hpp>
-#include <llarp/path/path_types.hpp>
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/util/compare_ptr.hpp>
-#include <llarp/util/thread/queue.hpp>
 
 namespace llarp
 {
@@ -14,53 +14,44 @@ namespace llarp
     {
         struct TransitHop : std::enable_shared_from_this<TransitHop>
         {
-          private:
             HopID _txid, _rxid;
+
             RouterID _upstream;
+            RouterID _rid;
             RouterID _downstream;
 
-          public:
             TransitHop() = default;
 
-            TransitHop(Router& r, const RouterID& src, ustring symmkey, ustring symmnonce);
+            void deserialize(oxenc::bt_dict_consumer&& btdc, const RouterID& src, const Router& r);
 
-            // This static factory function is used in path-build logic. The exceptions thrown are the exact response
-            // bodies passed to message::respond(...) function
-            static std::shared_ptr<TransitHop> deserialize_hop(
-                oxenc::bt_dict_consumer&& btdc,
-                const RouterID& src,
-                Router& r,
-                const PubKey& remote_pk,
-                const SymmNonce& nonce);
+            shared_kx_data kx{};
 
-            SharedSecret shared;
-            SymmNonce nonceXOR;
-            std::chrono::milliseconds started = 0s;
-            // 10 minutes default
-            std::chrono::milliseconds lifetime = DEFAULT_LIFETIME;
+            std::chrono::milliseconds expiry{0s};
+
             uint8_t version;
-            std::chrono::milliseconds _last_activity = 0s;
+            std::chrono::milliseconds _last_activity{0s};
             bool terminal_hop{false};
 
-            RouterID& upstream() { return _upstream; }
+            void bt_decode(oxenc::bt_dict_consumer&& btdc);
 
+            std::string bt_encode() const;
+
+            RouterID router_id() { return _rid; }
+            const RouterID& router_id() const { return _rid; }
+
+            RouterID upstream() { return _upstream; }
             const RouterID& upstream() const { return _upstream; }
 
-            RouterID& downstream() { return _downstream; }
-
+            RouterID downstream() { return _downstream; }
             const RouterID& downstream() const { return _downstream; }
 
             HopID rxid() { return _rxid; }
-
             const HopID& rxid() const { return _rxid; }
 
             HopID txid() { return _txid; }
-
             const HopID& txid() const { return _txid; }
 
-            void Stop();
-
-            bool destroy = false;
+            std::optional<std::pair<RouterID, HopID>> next_id(const HopID& h) const;
 
             bool operator<(const TransitHop& other) const
             {
@@ -76,39 +67,14 @@ namespace llarp
 
             bool operator!=(const TransitHop& other) const { return !(*this == other); }
 
-            std::chrono::milliseconds expiry_time() const;
-
             std::chrono::milliseconds last_activity() const { return _last_activity; }
 
+            bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const { return now >= expiry; };
+
+            nlohmann::json ExtractStatus() const;
+
             std::string to_string() const;
-
-            bool is_expired(std::chrono::milliseconds now) const;
-
-            bool ExpiresSoon(std::chrono::milliseconds now, std::chrono::milliseconds dlt) const
-            {
-                return now >= expiry_time() - dlt;
-            }
-
-            void QueueDestroySelf(Router* r);
-
             static constexpr bool to_string_formattable = true;
-
-          private:
-            void SetSelfDestruct();
         };
     }  // namespace path
 }  // namespace llarp
-
-namespace std
-{
-    // template <>
-    // struct hash<llarp::path::TransitHopInfo>
-    // {
-    //     std::size_t operator()(const llarp::path::TransitHopInfo& a) const
-    //     {
-    //         hash<llarp::RouterID> RHash{};
-    //         hash<llarp::HopID> PHash{};
-    //         return RHash(a.upstream) ^ RHash(a.downstream) ^ PHash(a.txID) ^ PHash(a.rxID);
-    //     }
-    // };
-}  // namespace std

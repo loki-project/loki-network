@@ -1,12 +1,8 @@
 #pragma once
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/address/map.hpp>
 #include <llarp/dns/server.hpp>
-#include <llarp/net/ip.hpp>
-#include <llarp/net/net.hpp>
-#include <llarp/service/identity.hpp>
-#include <llarp/util/priority_queue.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/vpn/packet_router.hpp>
 #include <llarp/vpn/platform.hpp>
@@ -47,7 +43,7 @@ namespace llarp::handlers
         /// list of strict connect addresses for hooks
         // std::vector<IpAddress> _strict_connect_addrs;
         /// use v6?
-        bool ipv6_enabled;
+        bool ipv6_enabled{};
 
         std::string _if_name;
 
@@ -58,10 +54,11 @@ namespace llarp::handlers
 
         std::shared_ptr<vpn::PacketRouter> _packet_router;
 
-        std::optional<net::TrafficPolicy> _traffic_policy = std::nullopt;
+        std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
 
         /// a file to load / store the ephemeral address map to
         std::optional<fs::path> _persisting_addr_file = std::nullopt;
+        bool persist_addrs{false};
 
         /// how long to wait for path alignment
         std::chrono::milliseconds _path_alignment_timeout{30s};
@@ -110,13 +107,17 @@ namespace llarp::handlers
         void setup_dns();
 
         // INPROGRESS: new API
-        // Handles an outbound packet going out INTO the network
+        // Handles an outbound packet going OUT to the network
         void handle_outbound_packet(IPPacket pkt);
 
         void rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest);
 
-        // Handle an inbound packet coming in FROM the network
-        bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session);
+        // TESTNET: TODO: new inbound packet handling logic
+        void handle_inbound_packet(IPPacket pkt, session_tag tag, NetworkAddress remote);
+
+        // Handles an inbound packet coming IN from the network
+        // bool handle_inbound_packet(IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool
+        // is_outbound_session);
 
         // Upon session creation, SessionHandler will instruct TunEndpoint to requisition a private IP through which to
         // route session traffic
@@ -128,7 +129,7 @@ namespace llarp::handlers
 
         bool has_if_addr() const { return true; }
 
-        std::optional<net::TrafficPolicy> get_traffic_policy() const { return _traffic_policy; }
+        std::optional<net::ExitPolicy> get_exit_policy() const { return _exit_policy; }
 
         std::chrono::milliseconds get_path_alignment_timeout() const { return _path_alignment_timeout; }
 
@@ -147,45 +148,17 @@ namespace llarp::handlers
 
         void start_poller();
 
-        //   protected:
-        struct WritePacket
-        {
-            uint64_t seqno;
-            IPPacket pkt;
-
-            bool operator>(const WritePacket& other) const { return seqno > other.seqno; }
-        };
-
         // Stores assigned IP's for each session in/out of this lokinet instance
-        //  - Reserved local addresses is directly pre-loaded from config
+        //  - Reserved local addresses are directly pre-loaded from config
         //  - Persisting address map is directly pre-loaded from config
         address_map<ip_v, NetworkAddress> _local_ip_mapping;
 
       private:
         std::optional<ip_v> get_next_local_ip();
 
-        bool obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4);
+        std::optional<ip_v> obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4);
 
-        void send_packet_to_net_if(IPPacket&& pkt);
-
-        template <typename Addr_t, typename Endpoint_t>
-        void send_dns_reply(
-            Addr_t addr,
-            Endpoint_t ctx,
-            std::shared_ptr<dns::Message> query,
-            std::function<void(dns::Message)> reply,
-            bool sendIPv6)
-        {
-            if (ctx)
-            {
-                huint128_t ip = get_ip_for_addr(addr);
-                query->answers.clear();
-                query->add_IN_reply(ip, sendIPv6);
-            }
-            else
-                query->add_nx_reply();
-            reply(*query);
-        }
+        void send_packet_to_net_if(IPPacket pkt);
     };
 
 }  // namespace llarp::handlers

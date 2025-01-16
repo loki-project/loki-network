@@ -1,6 +1,6 @@
 #include "key_manager.hpp"
 
-#include "crypto.hpp"
+#include "types.hpp"
 
 #include <llarp/config/config.hpp>
 #include <llarp/util/logging.hpp>
@@ -36,12 +36,13 @@ namespace llarp
             else
             {
                 log::debug(logcat, "Client generating identity key...");
-                crypto::identity_keygen(identity_key);
+                identity_key = crypto::generate_identity();
             }
 
+            identity_data = identity_key.to_eddata();
             public_key = seckey_to_pubkey(identity_key);
-            log::info(logcat, "Client public key: {}", public_key);
 
+            log::info(logcat, "Client public key: {}", public_key);
             is_initialized = true;
         }
         else
@@ -70,7 +71,14 @@ namespace llarp
     void KeyManager::update_idkey(Ed25519SecretKey&& newkey)
     {
         identity_key = std::move(newkey);
+        identity_data = identity_key.to_eddata();
         public_key = seckey_to_pubkey(identity_key);
         log::info(logcat, "Relay key manager updated secret key; new public key: {}", public_key);
     }
+
+    Ed25519PrivateData KeyManager::derive_subkey(uint64_t domain) const
+    {
+        return identity_key.derive_private_subkey_data(domain);
+    }
+
 }  // namespace llarp

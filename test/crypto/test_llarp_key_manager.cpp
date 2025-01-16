@@ -32,7 +32,7 @@ struct KeyManagerTest
   bool
   generateRcFile()
   {
-    RouterContact rc;
+    RelayContact rc;
     return rc.Write(our_rc_filename);
   }
 };

@@ -25,10 +25,7 @@ namespace llarp::win32
 
     }  // namespace
 
-    void Exec(std::string exe, std::string args)
-    {
-        OneShotExec{exe, args};
-    }
+    void Exec(std::string exe, std::string args) { OneShotExec{exe, args}; }
 
     OneShotExec::OneShotExec(std::string cmd, std::chrono::milliseconds timeout)
         : _si{}, _pi{}, _timeout{static_cast<DWORD>(timeout.count())}
@@ -49,8 +46,5 @@ namespace llarp::win32
         : OneShotExec{fmt::format("{}\\{} {}", SystemExeDir(), cmd, args), timeout}
     {}
 
-    DeferExec::~DeferExec()
-    {
-        OneShotExec{std::move(_exe), std::move(_args), std::move(_timeout)};
-    }
+    DeferExec::~DeferExec() { OneShotExec{std::move(_exe), std::move(_args), std::move(_timeout)}; }
 }  // namespace llarp::win32

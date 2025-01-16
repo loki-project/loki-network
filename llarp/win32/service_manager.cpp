@@ -33,10 +33,7 @@ namespace llarp::sys
         }
     }  // namespace
 
-    SVC_Manager::SVC_Manager()
-    {
-        _status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-    }
+    SVC_Manager::SVC_Manager() { _status.dwServiceType = SERVICE_WIN32_OWN_PROCESS; }
 
     void SVC_Manager::system_changed_our_state(ServiceState st)
     {

@@ -4,7 +4,7 @@
 #include <numeric>
 #include <catch2/catch.hpp>
 #include <llarp/peerstats/types.hpp>
-#include <llarp/router_contact.hpp>
+#include <llarp/relay_contact.hpp>
 #include <llarp/util/logging.hpp>
 #include <llarp/util/time.hpp>
 
@@ -120,10 +120,10 @@ TEST_CASE("Test PeerDb handleGossipedRC", "[PeerDb]")
 {
   const llarp::RouterID id = llarp::test::makeBuf<llarp::RouterID>(0xCA);
 
-  auto rcLifetime = llarp::RouterContact::Lifetime;
+  auto rcLifetime = llarp::RelayContact::Lifetime;
   llarp_time_t now = 0s;
 
-  llarp::RouterContact rc;
+  llarp::RelayContact rc;
   rc.pubkey = llarp::PubKey(id);
   rc.last_updated = 10s;
 
@@ -162,13 +162,13 @@ TEST_CASE("Test PeerDb handleGossipedRC expiry calcs", "[PeerDb]")
   // see comments in peer_db.cpp above PeerDb::handleGossipedRC() for some context around these
   // tests and esp. these numbers
   const llarp_time_t ref = 48h;
-  const llarp_time_t rcLifetime = llarp::RouterContact::Lifetime;
+  const llarp_time_t rcLifetime = llarp::RelayContact::Lifetime;
 
   // rc1, first rc received
   const llarp_time_t s1 = ref;
   const llarp_time_t r1 = s1 + 30s;
   const llarp_time_t e1 = s1 + rcLifetime;
-  llarp::RouterContact rc1;
+  llarp::RelayContact rc1;
   rc1.pubkey = llarp::PubKey(id);
   rc1.last_updated = s1;
 
@@ -177,7 +177,7 @@ TEST_CASE("Test PeerDb handleGossipedRC expiry calcs", "[PeerDb]")
   const llarp_time_t s2 = s1 + 8h;
   const llarp_time_t r2 = s2 + 30s;  // healthy recv time
   const llarp_time_t e2 = s2 + rcLifetime;
-  llarp::RouterContact rc2;
+  llarp::RelayContact rc2;
   rc2.pubkey = llarp::PubKey(id);
   rc2.last_updated = s2;
 
@@ -185,7 +185,7 @@ TEST_CASE("Test PeerDb handleGossipedRC expiry calcs", "[PeerDb]")
   // received "unhealthily" (after rc2 expires)
   const llarp_time_t s3 = s2 + 8h;
   const llarp_time_t r3 = e2 + 1h;  // received after e2
-  llarp::RouterContact rc3;
+  llarp::RelayContact rc3;
   rc3.pubkey = llarp::PubKey(id);
   rc3.last_updated = s3;
 

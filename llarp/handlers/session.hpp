@@ -2,8 +2,8 @@
 
 #include <llarp/address/map.hpp>
 #include <llarp/config/config.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/path/path_handler.hpp>
-#include <llarp/service/identity.hpp>
 #include <llarp/session/map.hpp>
 
 namespace llarp
@@ -21,7 +21,7 @@ namespace llarp
 
             std::unordered_set<dns::SRVData> _srv_records;
 
-            bool should_publish_introset{true};
+            bool should_publish_cc{false};
 
             session_map<NetworkAddress, session::BaseSession> _sessions;
 
@@ -31,10 +31,9 @@ namespace llarp
             //  - Directly pre-loaded from config
             address_map<IPRange, NetworkAddress> _range_map;
 
-            service::Identity _identity;  // TODO: TESTNET: move responsibilities to KeyManager
-            service::IntroSet _local_introset;
+            ClientContact client_contact;
 
-            std::chrono::milliseconds _last_introset_regen_attempt{0s};
+            std::shared_ptr<EventTicker> _cc_publisher;
 
             // auth tokens for making outbound sessions
             std::unordered_map<NetworkAddress, std::string> _auth_tokens;
@@ -61,7 +60,7 @@ namespace llarp
             std::set<IPRange> _routed_ranges;  // formerly from LocalEndpoint
 
             // policies about traffic that we are willing to carry -- Exit mode only!
-            std::optional<net::TrafficPolicy> _exit_policy = std::nullopt;
+            std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
 
           public:
             SessionEndpoint(Router& r);
@@ -84,13 +83,11 @@ namespace llarp
 
             oxen::quic::Address local_address() const { return _local_addr; }
 
-            const service::IntroSet& intro_set() const { return _local_introset; }
-
             // get copy of all srv records
             std::set<dns::SRVData> srv_records() const { return {_srv_records.begin(), _srv_records.end()}; }
 
             template <concepts::SessionType session_t = session::BaseSession>
-            std::shared_ptr<session_t> get_session(const service::SessionTag& tag) const
+            std::shared_ptr<session_t> get_session(const session_tag& tag) const
             {
                 return std::static_pointer_cast<session_t>(_sessions.get_session(tag));
             }
@@ -103,28 +100,42 @@ namespace llarp
 
             void srv_records_changed();
 
-            void regen_and_publish_introset();
+            // This function can be called with the fields to be updated. ClientIntros are always passed, so there
+            // is no need to pass them to this function
+            template <typename... Opt>
+            void update_and_publish_localcc(intro_set intros, Opt&&... args)
+            {
+                if (intros.empty())
+                    return _localcc_update_fail();
+                client_contact.regenerate(std::move(intros), std::forward<Opt>(args)...);
+                _update_and_publish_localcc();
+            }
 
-            bool publish_introset(const service::EncryptedIntroSet& introset);
+            void update_and_publish_localcc(intro_set intros);
+
+            void start_tickers();
+
+            bool publish_client_contact(const EncryptedClientContact& ecc);
 
             // SessionEndpoint can use either a whitelist or a static auth token list to  validate incomininbg requests
             // to initiate a session
             bool validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth = std::nullopt);
 
             bool prefigure_session(
-                NetworkAddress initiator, service::SessionTag tag, std::shared_ptr<path::Path> path, bool use_tun);
+                NetworkAddress initiator,
+                session_tag tag,
+                HopID remote_pivot_txid,
+                std::shared_ptr<path::Path> path,
+                shared_kx_data kx_data,
+                bool use_tun);
 
-            // lookup ONS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
+            // lookup SNS address to return "{pubkey}.loki" hidden service or exit node operated on a remote client
             void resolve_ons(std::string name, std::function<void(std::optional<NetworkAddress>)> func = nullptr);
 
             void lookup_remote_srv(
                 std::string name, std::string service, std::function<void(std::vector<dns::SRVData>)> handler);
 
-            void lookup_intro(
-                RouterID remote,
-                bool is_relayed,
-                uint64_t order,
-                std::function<void(std::optional<service::IntroSet>)> func);
+            void lookup_client_intro(RouterID remote, std::function<void(std::optional<ClientContact>)> func);
 
             // resolves any config mappings that parsed ONS addresses to their pubkey network address
             void resolve_ons_mappings();
@@ -157,13 +168,20 @@ namespace llarp
             void unmap_range_by_name(const std::string& name);
 
           private:
+            void _localcc_update_fail();
+
+            void _update_and_publish_localcc();
+
             bool _initiate_session(NetworkAddress remote, on_session_init_hook cb, bool is_exit = false);
 
-            void _make_session_path(
-                service::IntroductionSet intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
+            void _make_session_path(intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
             void _make_session(
-                NetworkAddress remote, std::shared_ptr<path::Path> path, on_session_init_hook cb, bool is_exit);
+                NetworkAddress remote,
+                ClientIntro remote_intro,
+                std::shared_ptr<path::Path> path,
+                on_session_init_hook cb,
+                bool is_exit);
         };
 
     }  // namespace handlers

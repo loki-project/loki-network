@@ -4,7 +4,6 @@
 
 #include <llarp/config/config.hpp>
 
-// #include <oxen/log/omq_logger.hpp>
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
 
@@ -18,6 +17,7 @@ namespace llarp::rpc
 
     void parse_request(QuicConnect& quicconnect, rpc_input input);
     void parse_request(QuicListener& quiclistener, rpc_input input);
+    void parse_request(FindCC& findcc, rpc_input input);
     void parse_request(LookupSnode& lookupsnode, rpc_input input);
     void parse_request(MapExit& mapexit, rpc_input input);
     void parse_request(UnmapExit& unmapexit, rpc_input input);

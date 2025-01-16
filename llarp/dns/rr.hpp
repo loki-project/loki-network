@@ -3,8 +3,6 @@
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <llarp/net/net_int.hpp>
-
 #include <memory>
 #include <vector>
 
@@ -27,7 +25,7 @@ namespace llarp::dns
 
         bool Decode(llarp_buffer_t* buf) override;
 
-        bool decode(std::span<unsigned char> /* b */) override { return {}; };
+        bool decode(std::span<uint8_t> /* b */) override { return {}; };
 
         nlohmann::json ToJSON() const override;
 

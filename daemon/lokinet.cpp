@@ -1,11 +1,9 @@
 #include <llarp.hpp>
 #include <llarp/config/config.hpp>  // for ensure_config
-// #include <llarp/constants/files.hpp>
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/util/exceptions.hpp>
-// #include <llarp/util/logging.hpp>
 #include <llarp/util/lokinet_init.h>
 #include <llarp/util/thread/threading.hpp>
 
@@ -14,14 +12,9 @@
 #include <oxen/log.hpp>
 
 #include <csignal>
-// #include <cstdlib>
-// #include <iostream>
 #include <memory>
-// #include <optional>
 #include <stdexcept>
-// #include <string>
 #include <thread>
-// #include <utility>
 
 #ifdef _WIN32
 #include <llarp/win32/service_manager.hpp>

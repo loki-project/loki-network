@@ -11,7 +11,7 @@ PYBIND11_MODULE(pyllarp, m)
     llarp::PeerDb_Init(m);
     llarp::PeerStats_Init(m);
     llarp::RouterID_Init(m);
-    llarp::RouterContact_Init(m);
+    llarp::RelayContact_Init(m);
     llarp::CryptoTypes_Init(m);
     llarp::Context_Init(m);
     tooling::HiveContext_Init(m);

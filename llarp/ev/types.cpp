@@ -92,7 +92,7 @@ namespace llarp
                     }
 
                     log::info(logcat, "EventTrigger resuming callback iteration...");
-                    self->begin();
+                    self->start();
                 }
                 catch (const std::exception& e)
                 {
@@ -103,7 +103,7 @@ namespace llarp
 
         if (start_immediately)
         {
-            auto rv = begin();
+            auto rv = start();
             log::debug(logcat, "EventTrigger started {}successfully!", rv ? "" : "un");
         }
     }
@@ -134,7 +134,7 @@ namespace llarp
         event_add(ev.get(), &_null_tv);
     }
 
-    bool EventTrigger::halt()
+    bool EventTrigger::stop()
     {
         _is_cooling_down = false;
         _is_iterating = false;
@@ -147,7 +147,7 @@ namespace llarp
         return ret;
     }
 
-    bool EventTrigger::begin()
+    bool EventTrigger::start()
     {
         _is_cooling_down = false;
         _is_iterating = true;
@@ -197,20 +197,20 @@ namespace llarp
             },
             this));
 
-        log::debug(logcat, "Linux poller configured to watch FD: {}", fd);
+        log::debug(logcat, "Linux poller configured to watch FD {}", fd);
     }
 
     bool LinuxPoller::start()
     {
         auto rv = event_add(ev.get(), nullptr) == 0;
-        log::info(logcat, "Linux poller {} watching FD: {}", rv ? "successfully began" : "failed to start", fd);
+        log::info(logcat, "Linux poller {} watching FD {}", rv ? "successfully began" : "failed to start", fd);
         return rv;
     }
 
     bool LinuxPoller::stop()
     {
         auto rv = event_del(ev.get());
-        log::info(logcat, "Linux poller {} watching FD: {}", rv ? "successfully stopped" : "failed to stop", fd);
+        log::info(logcat, "Linux poller {} watching FD {}", rv ? "successfully stopped" : "failed to stop", fd);
         return rv;
     }
 }  //  namespace llarp

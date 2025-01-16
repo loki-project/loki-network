@@ -3,7 +3,7 @@
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/link/tunnel.hpp>
-#include <llarp/path/path.hpp>
+#include <llarp/messages/path.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/formattable.hpp>
 
@@ -18,55 +18,66 @@ namespace llarp::session
         std::shared_ptr<path::Path> _p,
         handlers::SessionEndpoint& parent,
         NetworkAddress remote,
-        service::SessionTag _t,
+        HopID remote_pivot_txid,
+        session_tag _t,
         bool use_tun,
-        bool is_exit,
-        bool is_outbound)
+        bool is_outbound,
+        std::optional<shared_kx_data> kx_data)
         : _r{r},
           _parent{parent},
           _tag{std::move(_t)},
           _remote{std::move(remote)},
+          _remote_pivot_txid{std::move(remote_pivot_txid)},
           _use_tun{use_tun},
-          _is_outbound{is_outbound},
-          _is_exit_session{is_exit}
+          _is_outbound{is_outbound}
     {
+        if (kx_data.has_value())
+            session_keys = std::move(*kx_data);
+
+        if (_use_tun)
+            _recv_dgram = [this](std::vector<uint8_t> data) {
+                _r.tun_endpoint()->handle_inbound_packet(IPPacket{std::move(data)}, _tag, _remote);
+            };
+        else
+            _recv_dgram = [this](std::vector<uint8_t> data) {
+                _ep->manually_receive_packet(
+                    NetworkPacket{oxen::quic::Path{}, bstring{reinterpret_cast<std::byte*>(data.data()), data.size()}});
+            };
+
         set_new_current_path(std::move(_p));
     }
 
     bool BaseSession::send_path_control_message(
-        std::string method, std::string body, std::function<void(std::string)> func)
+        std::string method, std::string body, std::function<void(oxen::quic::message)> func)
     {
         return _current_path->send_path_control_message(std::move(method), std::move(body), std::move(func));
     }
 
     bool BaseSession::send_path_data_message(std::string data)
     {
-        return _current_path->send_path_data_message(std::move(data));
+        auto inner_payload = PATH::DATA::serialize_inner(std::move(data), _tag);
+        auto intermediate_payload = PATH::DATA::serialize_intermediate(std::move(inner_payload), _remote_pivot_txid);
+        return _r.send_data_message(
+            _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
     }
 
-    void BaseSession::recv_path_data_message(bstring body)
+    void BaseSession::recv_path_data_message(std::vector<uint8_t> data)
     {
-        _current_path->recv_path_data_message(std::move(body));
+        if (_recv_dgram)
+            _recv_dgram(std::move(data));
+        else
+            throw std::runtime_error{"Session does not have hook to receive datagrams!"};
     }
 
     void BaseSession::set_new_current_path(std::shared_ptr<path::Path> _new_path)
     {
         if (_current_path)
-            _current_path->unlink_session();
+            _current_path->unlink_session(_tag);
 
         _current_path = std::move(_new_path);
+        _pivot_txid = _current_path->pivot_txid();
 
-        _current_hop_id = _current_path->intro.pivot_hop_id;
-
-        if (_use_tun)
-            _current_path->link_session([this](bstring data) {
-                _r.tun_endpoint()->handle_inbound_packet(
-                    IPPacket{std::move(data)}, _remote, _is_exit_session, _is_outbound);
-            });
-        else
-            _current_path->link_session([this](bstring data) {
-                _ep->manually_receive_packet(NetworkPacket{oxen::quic::Path{}, std::move(data)});
-            });
+        _current_path->link_session(_tag);
 
         assert(_current_path->is_linked());
     }
@@ -75,8 +86,7 @@ namespace llarp::session
     {
         _ep = _r.quic_tunnel()->net()->endpoint(
             LOCALHOST_BLANK, oxen::quic::opt::manual_routing{[this](const oxen::quic::Path&, bstring_view data) {
-                _current_path->send_path_data_message(
-                    std::string{reinterpret_cast<const char*>(data.data()), data.size()});
+                send_path_data_message(std::string{reinterpret_cast<const char*>(data.data()), data.size()});
             }});
     }
 
@@ -146,7 +156,7 @@ namespace llarp::session
             _r.quic_tunnel()->creds(),
             [addr = *bind, hook = std::move(cb)](oxen::quic::connection_interface&) { hook(addr.to_ipv4()); },
             [](oxen::quic::connection_interface&, uint64_t) {
-                //
+                // TESTNET: TODO:
             });
     }
 
@@ -154,38 +164,36 @@ namespace llarp::session
         NetworkAddress remote,
         handlers::SessionEndpoint& parent,
         std::shared_ptr<path::Path> path,
-        service::SessionTag _t,
-        bool is_exit)
+        HopID remote_pivot_txid,
+        session_tag _t,
+        std::optional<shared_kx_data> kx_data)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
               _router,
               std::move(path),
               parent,
               std::move(remote),
+              std::move(remote_pivot_txid),
               std::move(_t),
               _router.using_tun_if(),
-              is_exit,
-              true},
-          _last_use{_router.now()},
-          _is_snode_session{not _remote.is_client()}
+              true,
+              std::move(kx_data)},
+          _is_snode_session{not _remote.is_client()},
+          _last_use{_router.now()}
     {
         // These can both be false but CANNOT both be true
         if (_is_exit_session and _is_snode_session)
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
-
-        if (_is_snode_session)
-            _session_key = _router.identity();
-        else
-            crypto::identity_keygen(_session_key);
     }
 
     OutboundSession::~OutboundSession() = default;
 
-    void OutboundSession::path_died(std::shared_ptr<path::Path> p)
+    void OutboundSession::path_died([[maybe_unused]] std::shared_ptr<path::Path> p)
     {
-        p->rebuild();
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        // p->rebuild();
     }
 
     nlohmann::json OutboundSession::ExtractStatus() const
@@ -198,10 +206,7 @@ namespace llarp::session
         return obj;
     }
 
-    void OutboundSession::blacklist_snode(const RouterID& snode)
-    {
-        (void)snode;
-    }
+    void OutboundSession::blacklist_snode(const RouterID& snode) { (void)snode; }
 
     bool OutboundSession::is_path_dead(std::shared_ptr<path::Path>, std::chrono::milliseconds dlt)
     {
@@ -210,6 +215,7 @@ namespace llarp::session
 
     void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
         path::PathHandler::path_build_succeeded(p);
 
         // TODO: why the fuck did we used to do this here...?
@@ -256,8 +262,11 @@ namespace llarp::session
 
                 for (auto& [_, p] : _paths)
                 {
-                    log::debug(logcat, "Sending close message on path {}", p->to_string());
-                    send_path_close(p);
+                    if (p and p->is_ready())
+                    {
+                        log::debug(logcat, "Sending close message on path {}", p->to_string());
+                        // send_path_close(p);
+                    }
                 }
             });
 
@@ -273,16 +282,10 @@ namespace llarp::session
     {
         size_t count{0};
         log::debug(
-            logcat,
-            "OutboundSession building {} paths (needed: {}) to remote:{}",
-            n,
-            path::DEFAULT_PATHS_HELD,
-            _remote);
+            logcat, "OutboundSession building {} paths (needed:{}) to remote:{}", n, path::DEFAULT_PATHS_HELD, _remote);
 
         for (size_t i = 0; i < n; ++i)
-        {
-            count += build_path_aligned_to_remote(_remote);
-        }
+            count += build_path_aligned_to_remote(_remote.router_id());
 
         if (count == n)
             log::debug(logcat, "OutboundSession successfully initiated {} path-builds", n);
@@ -294,27 +297,28 @@ namespace llarp::session
     {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true, _remote.is_client());
 
-        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->HopsString());
+        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
     }
 
     void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
     {
-        if (p->close_exit(_session_key, p->upstream_txid().to_string()))
-            log::info(logcat, "Sent path close on path {}", p->to_string());
-        else
-            log::warning(logcat, "Failed to send path close on path {}", p->to_string());
+        (void)p;
+        // if (p->close_exit(_session_key, p->upstream_txid().to_string()))
+        //     log::info(logcat, "Sent path close on path {}", p->to_string());
+        // else
+        //     log::warning(logcat, "Failed to send path close on path {}", p->to_string());
     }
 
     bool OutboundSession::is_ready() const
     {
-        if (_current_hop_id.is_zero())
+        if (_pivot_txid.is_zero())
             return false;
 
         const size_t expect = (1 + (num_paths_desired / 2));
 
-        return num_paths() >= expect;
+        return num_active_paths() >= expect;
     }
 
     bool OutboundSession::is_expired(std::chrono::milliseconds now) const
@@ -326,25 +330,21 @@ namespace llarp::session
         NetworkAddress remote,
         std::shared_ptr<path::Path> _path,
         handlers::SessionEndpoint& parent,
-        service::SessionTag _t,
-        bool use_tun)
+        HopID remote_pivot_txid,
+        session_tag _t,
+        bool use_tun,
+        std::optional<shared_kx_data> kx_data)
         : BaseSession{
             parent._router,
             std::move(_path),
             parent,
             std::move(remote),
+            std::move(remote_pivot_txid),
             std::move(_t),
             use_tun,
-            parent.is_exit_node(),
-            false}
-    {
-        if (not _current_path->is_client_path() and _remote.is_client())
-            throw std::runtime_error{
-                "NetworkAddress and Path do not agree on InboundSession remote's identity (client vs server)!"};
-    }
+            false,
+            std::move(kx_data)}
+    {}
 
-    void InboundSession::set_new_tag(const service::SessionTag& tag)
-    {
-        _tag = tag;
-    }
+    void InboundSession::set_new_tag(const session_tag& tag) { _tag = tag; }
 }  // namespace llarp::session
