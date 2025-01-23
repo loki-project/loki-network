@@ -72,7 +72,7 @@ namespace llarp::rpc
         regs.emplace(RPC::name, std::move(cback));
     }
 
-    RPCServer::RPCServer(LMQ_ptr lmq, Router& r)
+    RPCServer::RPCServer(std::shared_ptr<oxenmq::OxenMQ> lmq, Router& r)
         : m_LMQ{std::move(lmq)}, _router(r), log_subs{*m_LMQ, llarp::logRingBuffer}
     {
         // copied logic loop as placeholder

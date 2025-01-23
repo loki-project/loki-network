@@ -34,16 +34,16 @@ namespace llarp::rpc
     }
 
     RPCClient::RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r)
-        : m_lokiMQ{std::move(lmq)}, _router{std::move(r)}
+        : _omq{std::move(lmq)}, _router{std::move(r)}
     {
         // m_lokiMQ->log_level(toLokiMQLogLevel(LogLevel::Instance().curLevel));
 
         // new block handler
-        m_lokiMQ->add_category("notify", oxenmq::Access{oxenmq::AuthLevel::none})
+        _omq->add_category("notify", oxenmq::Access{oxenmq::AuthLevel::none})
             .add_command("block", [this](oxenmq::Message& m) { handle_new_block(m); });
 
         // TODO: proper auth here
-        auto lokidCategory = m_lokiMQ->add_category("lokid", oxenmq::Access{oxenmq::AuthLevel::none});
+        auto lokidCategory = _omq->add_category("lokid", oxenmq::Access{oxenmq::AuthLevel::none});
         _is_updating_list = false;
     }
 
@@ -58,7 +58,7 @@ namespace llarp::rpc
 
             log::info(logcat, "RPC client connecting to oxend at {}", url.full_address());
 
-            m_Connection = m_lokiMQ->connect_remote(
+            _conn = _omq->connect_remote(
                 url,
                 [](oxenmq::ConnectionID) {},
                 [self = shared_from_this(), url](oxenmq::ConnectionID, std::string_view f) {
@@ -75,7 +75,7 @@ namespace llarp::rpc
     void RPCClient::command(std::string_view cmd)
     {
         log::debug(logcat, "Oxend command: {}", cmd);
-        m_lokiMQ->send(*m_Connection, std::move(cmd));
+        _omq->send(*_conn, std::move(cmd));
     }
 
     void RPCClient::handle_new_block(oxenmq::Message& msg)

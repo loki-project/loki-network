@@ -36,6 +36,7 @@ namespace llarp
     }
 
     using namespace config;
+
     namespace
     {
         struct ConfigGenParameters_impl : public ConfigGenParameters
@@ -1382,7 +1383,7 @@ namespace llarp
             Default{not params.is_relay},
             assignment_acceptor(enable_rpc_server),
             Comment{
-                "Determines whether or not the LMQ JSON API is enabled. Defaults ",
+                "Determines whether or not the LMQ JSON API is enabled. Defaults ON/OFF for client/relays",
             });
 
         conf.define_option<std::string>(

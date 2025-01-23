@@ -56,7 +56,7 @@ namespace
     static void run_main_context(std::optional<fs::path> confFile, const llarp::RuntimeOptions opts);
 
     // variable declarations
-    static auto logcat = llarp::log::Cat("main");
+    static auto logcat = llarp::log::Cat("daemon");
     std::shared_ptr<llarp::Context> ctx;
     std::promise<int> exit_code;
 
@@ -332,11 +332,8 @@ namespace
 #endif
 
         CLI::App cli{
-            "LokiNET is a free, open source, private, decentralized, market-based sybil resistant "
-            "and "
-            "IP "
-            "based onion routing network",
-            "lokinet"};
+            "Lokinet is a free, open source, private, decentralized, market-based sybil resistant "
+            "and IP based onion routing network lokinet"};
         command_line_options options{};
 
         // flags: boolean values in command_line_options struct

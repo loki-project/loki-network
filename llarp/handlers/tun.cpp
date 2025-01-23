@@ -976,7 +976,7 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::info(
+                log::debug(
                     logcat,
                     "Dispatching outbound {}B packet for session (remote: {}): {}",
                     pkt.size(),
@@ -989,7 +989,7 @@ namespace llarp::handlers
         }
         else
         {
-            log::critical(logcat, "Could not find remote for route {}", pkt.info_line());
+            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
 
             // make ICMP unreachable
             if (auto icmp = pkt.make_icmp_unreachable())
@@ -1054,7 +1054,7 @@ namespace llarp::handlers
         {
             if (is_exit_node())  // traffic to local exit node
             {
-                log::info(logcat, "inbound exit pkt for local exit node: {}", pkt.info_line());
+                log::debug(logcat, "inbound exit pkt for local exit node: {}", pkt.info_line());
 
                 if (not _exit_policy->allow_ip_traffic(pkt))
                 {
@@ -1069,7 +1069,7 @@ namespace llarp::handlers
             }
             else  // traffic to remote exit node
             {
-                log::info(logcat, "inbound exit pkt from remote exit node: {}", pkt.info_line());
+                log::debug(logcat, "inbound exit pkt from remote exit node: {}", pkt.info_line());
 
                 if (pkt_is_ipv4)
                 {
@@ -1085,7 +1085,7 @@ namespace llarp::handlers
         }
         else
         {
-            log::info(logcat, "inbound session pkt: {}", pkt.info_line());
+            log::debug(logcat, "inbound session pkt: {}", pkt.info_line());
 
             if (pkt_is_ipv4)
                 dest = _local_addr.to_ipv4();

@@ -162,7 +162,7 @@ namespace llarp::handlers
             //     _router.loop()->call_later(5s, [this]() {
             //         try
             //         {
-            //             RouterID cpk{oxenc::from_base32z("xr8qpu9pu4qp4nhooiktfuyrwmgkut4ud3kqsf9tscwa8rtzuzhy")};
+            //             RouterID cpk{oxenc::from_base32z("uak4d1fy6oqnag5ghcib7184c5e1tym3g9duj5j1hqdoh1gchd1y")};
             //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
             //             _initiate_session(
             //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");

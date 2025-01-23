@@ -51,13 +51,13 @@ namespace llarp
             template <typename HandlerFunc_t, typename Args_t>
             void request(std::string_view cmd, HandlerFunc_t func, const Args_t& args)
             {
-                m_lokiMQ->request(*m_Connection, std::move(cmd), std::move(func), args);
+                _omq->request(*_conn, std::move(cmd), std::move(func), args);
             }
 
             template <typename HandlerFunc_t>
             void request(std::string_view cmd, HandlerFunc_t func)
             {
-                m_lokiMQ->request(*m_Connection, std::move(cmd), std::move(func));
+                _omq->request(*_conn, std::move(cmd), std::move(func));
             }
 
             // Handles a service node list update; takes the "service_node_states" object of an
@@ -69,8 +69,8 @@ namespace llarp
 
             std::shared_ptr<EventTicker> _ping_ticker;
 
-            std::optional<oxenmq::ConnectionID> m_Connection;
-            std::shared_ptr<oxenmq::OxenMQ> m_lokiMQ;
+            std::optional<oxenmq::ConnectionID> _conn;
+            std::shared_ptr<oxenmq::OxenMQ> _omq;
 
             std::weak_ptr<Router> _router;
             std::atomic<bool> _is_updating_list;

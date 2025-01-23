@@ -1,5 +1,4 @@
-#ifndef LLARP_HPP
-#define LLARP_HPP
+#pragma once
 
 #include <future>
 #include <iostream>
@@ -96,5 +95,3 @@ namespace llarp
         std::unique_ptr<std::future<void>> loop_waiter;
     };
 }  // namespace llarp
-
-#endif
