@@ -346,6 +346,8 @@ namespace llarp
 
     void NodeDB::ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> rids)
     {
+        log::info(logcat, "Ingesting {} RID's from {}", rids ? rids->size() : 0, source);
+
         if (rids)
         {
             for (const auto& rid : *rids)
@@ -375,7 +377,7 @@ namespace llarp
         if (_router.is_stopping() || not _router.is_running())
         {
             log::info(logcat, "NodeDB unable to continue RC fetch -- router is stopped!");
-            return stop_rc_fetch(false);
+            return post_rc_fetch(true);
         }
 
         std::vector<RouterID> needed = get_expired_rcs();
@@ -430,7 +432,7 @@ namespace llarp
             if (process_fetched_rcs(*result))
             {
                 log::info(logcat, "Accumulated RC's accepted by trust model");
-                return stop_rc_fetch(true);
+                return post_rc_fetch(false);
             }
 
             log::warning(logcat, "Accumulated RC's rejected by trust model; reselecting RC fetch source...");
@@ -448,7 +450,7 @@ namespace llarp
         if (_router.is_stopping() || not _router.is_running())
         {
             log::info(logcat, "NodeDB unable to continue RouterID fetch -- router is stopped!");
-            return stop_rid_fetch(false);
+            return post_rid_fetch(true);
         }
 
         if (rid_sources.empty())
@@ -547,7 +549,7 @@ namespace llarp
             if (process_fetched_rids())
             {
                 log::info(logcat, "Accumulated RID's accepted by trust model");
-                return stop_rid_fetch(true);
+                return post_rid_fetch(false);
             }
 
             log::warning(logcat, "Accumulated RID's rejected by trust model; reselecting RID fetch sources...");
@@ -598,31 +600,34 @@ namespace llarp
         _needs_bootstrap = num_rcs() < MIN_ACTIVE_RCS;
     }
 
-    void NodeDB::stop_rc_fetch(bool success)
+    void NodeDB::post_rc_fetch(bool shutdown)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        _rc_fetch_ticker->stop();
-
-        if (success)
-            log::info(logcat, "Client successfully completed RelayContact fetch!");
-        else
+        if (shutdown)
+        {
+            _rc_fetch_ticker->stop();
             log::warning(logcat, "Client stopped RelayContact fetch without a sucessful response!");
+        }
+        else
+            log::info(logcat, "Client successfully completed RelayContact fetch!");
     }
 
-    void NodeDB::stop_rid_fetch(bool success)
+    void NodeDB::post_rid_fetch(bool shutdown)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         fetch_counter = 0;
         fail_sources.clear();
         rid_result_counters.clear();
-        _rid_fetch_ticker->stop();
 
-        if (success)
-            log::info(logcat, "Client successfully completed RouterID fetch!");
-        else
+        if (shutdown)
+        {
+            _rid_fetch_ticker->stop();
             log::warning(logcat, "Client stopped RouterID fetch without a sucessful response!");
+        }
+        else
+            log::info(logcat, "Client successfully completed RouterID fetch!");
     }
 
     void NodeDB::stop_bootstrap(bool success)
@@ -734,19 +739,14 @@ namespace llarp
             });
     }
 
-    bool NodeDB::reselect_router_id_sources(std::set<RouterID> specific)
+    void NodeDB::reselect_router_id_sources(std::set<RouterID> specific)
     {
-        return _router.loop()->call_get([&]() {
-            replace_subset(rid_sources, specific, known_rids, RID_SOURCE_COUNT, csrng);
+        replace_subset(rid_sources, specific, known_rids, RID_SOURCE_COUNT, csrng);
 
-            if (auto sz = rid_sources.size(); sz < RID_SOURCE_COUNT)
-            {
-                log::warning(logcat, "Insufficient RID's (count: {}) held locally for fetching!", sz);
-                return false;
-            }
-
-            return true;
-        });
+        if (auto sz = rid_sources.size(); sz < RID_SOURCE_COUNT)
+        {
+            log::warning(logcat, "Insufficient RID's (count: {}) held locally for fetching!", sz);
+        }
     }
 
     void NodeDB::set_router_whitelist(const std::vector<RouterID>& whitelist)

@@ -218,8 +218,8 @@ namespace llarp
         void fetch_rids();
         void bootstrap();
 
-        void stop_rid_fetch(bool success = true);
-        void stop_rc_fetch(bool success = true);
+        void post_rid_fetch(bool shutdown = false);
+        void post_rc_fetch(bool shutdown = false);
 
         void rid_fetch_result(const RouterID& via);
         void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
@@ -238,7 +238,7 @@ namespace llarp
         // Populate rid_sources with random sample from known_rids. A set of rids is passed
         // if only specific RID's need to be re-selected; to re-select all, pass the member
         // variable ::known_rids
-        bool reselect_router_id_sources(std::set<RouterID> specific);
+        void reselect_router_id_sources(std::set<RouterID> specific);
 
         void set_router_whitelist(const std::vector<RouterID>& whitelist);
 

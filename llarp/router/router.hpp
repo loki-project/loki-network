@@ -96,7 +96,7 @@ namespace llarp
 
         // our router contact
         LocalRC relay_contact;
-        std::shared_ptr<oxenmq::OxenMQ> _lmq;
+        std::shared_ptr<oxenmq::OxenMQ> _omq;
         path::BuildLimiter _pathbuild_limiter;
 
         std::atomic<bool> _is_stopping{false};
@@ -228,7 +228,7 @@ namespace llarp
 
         const llarp::net::Platform& net() const;
 
-        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _lmq; }
+        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _omq; }
 
         const std::shared_ptr<rpc::RPCClient>& rpc_client() const { return _rpc_client; }
 
@@ -265,13 +265,13 @@ namespace llarp
         template <std::invocable Callable>
         void queue_work(Callable&& func)
         {
-            _lmq->job(std::forward<Callable>(func));
+            _omq->job(std::forward<Callable>(func));
         }
 
         template <std::invocable Callable>
         void queue_disk_io(Callable&& func)
         {
-            _lmq->job(std::forward<Callable>(func), _disk_thread);
+            _omq->job(std::forward<Callable>(func), _disk_thread);
         }
 
         /// Return true if we are operating as a service node and have received a service node

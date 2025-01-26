@@ -87,7 +87,7 @@ if(WITH_HIVE)
 endif()
 
 
-system_or_submodule(CLI11 CLI11 CLI11>=2.2.0 CLI11)
+system_or_submodule(CLI11 CLI11 CLI11>=2.3.0 CLI11)
 
 
 if(WITH_PEERSTATS)

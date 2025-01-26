@@ -13,11 +13,32 @@ namespace llarp
 {
     struct Router;
 
+    inline constexpr oxenmq::LogLevel oxenlog_to_omq_level(log::Level level)
+    {
+        switch (level)
+        {
+            case log::Level::critical:
+                return oxenmq::LogLevel::fatal;
+            case log::Level::err:
+                return oxenmq::LogLevel::error;
+            case log::Level::warn:
+                return oxenmq::LogLevel::warn;
+            case log::Level::info:
+                return oxenmq::LogLevel::info;
+            case log::Level::debug:
+                return oxenmq::LogLevel::debug;
+            case log::Level::trace:
+            case log::Level::off:
+            default:
+                return oxenmq::LogLevel::trace;
+        }
+    }
+
     namespace rpc
     {
         inline constexpr auto PING_INTERVAL{30s};
 
-        /// The LokidRpcClient uses loki-mq to talk to make API requests to lokid.
+        /// The RPCClient uses oxen-mq to talk to make API requests to OMQ endpoints
         struct RPCClient : public std::enable_shared_from_this<RPCClient>
         {
             explicit RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r);

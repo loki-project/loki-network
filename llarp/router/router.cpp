@@ -46,16 +46,16 @@ namespace llarp
     Router::Router(std::shared_ptr<EventLoop> loop, std::shared_ptr<vpn::Platform> vpnPlatform, std::promise<void> p)
         : _route_poker{std::make_shared<RoutePoker>(*this)},
           _next_explore_at{std::chrono::steady_clock::now()},
-          _lmq{std::make_shared<oxenmq::OxenMQ>()},
+          _omq{std::make_shared<oxenmq::OxenMQ>()},
           _loop{std::move(loop)},
           _close_promise{std::make_unique<std::promise<void>>(std::move(p))},
           _vpn{std::move(vpnPlatform)},
-          _disk_thread{_lmq->add_tagged_thread("disk")},
+          _disk_thread{_omq->add_tagged_thread("disk")},
           _rpc_server{nullptr},
           _last_tick{llarp::time_now_ms()}
     {
         // for lokid, so we don't close the connection when syncing the whitelist
-        _lmq->MAX_MSG_SIZE = -1;
+        _omq->MAX_MSG_SIZE = -1;
     }
 
     nlohmann::json Router::ExtractStatus() const
@@ -329,13 +329,13 @@ namespace llarp
         {
             log::debug(logcat, "Starting RPC client");
             rpc_addr = oxenmq::address(_config->lokid.rpc_addr);
-            _rpc_client = std::make_shared<rpc::RPCClient>(_lmq, weak_from_this());
+            _rpc_client = std::make_shared<rpc::RPCClient>(_omq, weak_from_this());
         }
 
         if (_config->api.enable_rpc_server)
         {
             log::debug(logcat, "Starting RPC server");
-            _rpc_server = std::make_unique<rpc::RPCServer>(_lmq, *this);
+            _rpc_server = std::make_unique<rpc::RPCServer>(_omq, *this);
         }
     }
 
@@ -623,12 +623,12 @@ namespace llarp
                 _is_exit_node ? " operating an exit node service!" : "!");
 
             if (conf.router.worker_threads > 0)
-                _lmq->set_general_threads(conf.router.worker_threads);
+                _omq->set_general_threads(conf.router.worker_threads);
 
             init_rpc();
 
             log::trace(logcat, "Starting OMQ server");
-            _lmq->start();
+            _omq->start();
 
             if (_is_service_node)
             {
@@ -1097,7 +1097,7 @@ namespace llarp
     {
         close();
         log::debug(logcat, "stopping oxenmq");
-        _lmq.reset();
+        _omq.reset();
         _close_promise->set_value();
         _close_promise.reset();
     }

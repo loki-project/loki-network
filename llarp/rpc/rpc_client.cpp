@@ -12,31 +12,10 @@ namespace llarp::rpc
 {
     static auto logcat = log::Cat("rpc.client");
 
-    static constexpr oxenmq::LogLevel toLokiMQLogLevel(log::Level level)
-    {
-        switch (level)
-        {
-            case log::Level::critical:
-                return oxenmq::LogLevel::fatal;
-            case log::Level::err:
-                return oxenmq::LogLevel::error;
-            case log::Level::warn:
-                return oxenmq::LogLevel::warn;
-            case log::Level::info:
-                return oxenmq::LogLevel::info;
-            case log::Level::debug:
-                return oxenmq::LogLevel::debug;
-            case log::Level::trace:
-            case log::Level::off:
-            default:
-                return oxenmq::LogLevel::trace;
-        }
-    }
-
     RPCClient::RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r)
         : _omq{std::move(lmq)}, _router{std::move(r)}
     {
-        // m_lokiMQ->log_level(toLokiMQLogLevel(LogLevel::Instance().curLevel));
+        _omq->log_level(oxenlog_to_omq_level(log::get_level_default()));
 
         // new block handler
         _omq->add_category("notify", oxenmq::Access{oxenmq::AuthLevel::none})
