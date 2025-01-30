@@ -37,7 +37,7 @@ namespace llarp
             }
         }  // namespace enums
 
-        /** Aggregated generalized algorithms for sort, selection, etc
+        /** Aggregated generalized algorithms for conditional sampling
          */
         inline namespace sampling
         {
@@ -61,7 +61,7 @@ namespace llarp
                         continue;
                     }
 
-                    size_t x = csrng() % (i + 1);
+                    size_t x = csrng.boundedrand(i + 1);
                     if (x <= 1)
                         ret = e;
                 }
@@ -89,7 +89,7 @@ namespace llarp
                         continue;
                     }
 
-                    size_t x = csrng() % (i + 1);
+                    size_t x = csrng.boundedrand(i + 1);
                     if (x < n)
                         (*ret)[x] = e;
                 }
@@ -100,7 +100,6 @@ namespace llarp
                 return ret;
             }
         }  // namespace sampling
-
-    }  // namespace meta
+    }      // namespace meta
 
 }  // namespace llarp

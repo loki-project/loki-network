@@ -1,10 +1,11 @@
 #include "types.hpp"
 
-#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/crypto.hpp>
 #include <llarp/util/buffer.hpp>
 #include <llarp/util/file.hpp>
 
+#include <oxenc/base32z.h>
 #include <oxenc/hex.h>
 #include <sodium/crypto_core_ed25519.h>
 #include <sodium/crypto_generichash.h>
@@ -156,6 +157,22 @@ namespace llarp
     {
         if (!crypto::xchacha20(data.data(), data.size(), shared_secret, nonce))
             throw std::runtime_error{"xchacha20 decryption failed -- should this even ever happen?"};
+    }
+
+    hash_key hash_key::derive_from_rid(PubKey root)
+    {
+        hash_key derived;
+        crypto::derive_subkey(derived.data(), derived.size(), root, 1);
+        return derived;
+    }
+
+    std::string hash_key::to_string() const { return oxenc::to_base32z(begin(), end()); }
+
+    bool XorMetric::operator()(const hash_key& left, const hash_key& right) const { return (us ^ left) < (us ^ right); }
+
+    bool XorMetric::operator()(const RemoteRC& left, const RemoteRC& right) const
+    {
+        return (left.router_id() ^ us) < (right.router_id() ^ us);
     }
 
 }  // namespace llarp

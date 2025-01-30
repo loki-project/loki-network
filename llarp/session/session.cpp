@@ -160,6 +160,8 @@ namespace llarp::session
             });
     }
 
+    void BaseSession::set_new_tag(const session_tag& tag) { _tag = tag; }
+
     OutboundSession::OutboundSession(
         NetworkAddress remote,
         handlers::SessionEndpoint& parent,
@@ -254,8 +256,8 @@ namespace llarp::session
 
         if (send_close)
         {
-            std::promise<void> p;
-            auto f = p.get_future();
+            std::promise<void> prom;
+            auto f = prom.get_future();
 
             _router.loop()->call([&]() mutable {
                 Lock_t l{paths_mutex};
@@ -268,6 +270,8 @@ namespace llarp::session
                         // send_path_close(p);
                     }
                 }
+
+                prom.set_value();
             });
 
             f.get();
@@ -281,11 +285,13 @@ namespace llarp::session
     void OutboundSession::build_more(size_t n)
     {
         size_t count{0};
-        log::debug(
-            logcat, "OutboundSession building {} paths (needed:{}) to remote:{}", n, path::DEFAULT_PATHS_HELD, _remote);
+        auto prid = _current_path->pivot_rid();
+
+        log::critical(
+            logcat, "OutboundSession building {} paths (needed:{}) to pivot:{}", n, path::DEFAULT_PATHS_HELD, prid);
 
         for (size_t i = 0; i < n; ++i)
-            count += build_path_aligned_to_remote(_remote.router_id());
+            count += build_path_aligned_to_remote(prid);
 
         if (count == n)
             log::debug(logcat, "OutboundSession successfully initiated {} path-builds", n);
@@ -346,5 +352,4 @@ namespace llarp::session
             std::move(kx_data)}
     {}
 
-    void InboundSession::set_new_tag(const session_tag& tag) { _tag = tag; }
 }  // namespace llarp::session

@@ -142,6 +142,44 @@ namespace llarp::rpc
             req.dump());
     }
 
+    void RPCClient::ping()
+    {
+        // send a ping
+        auto r = _router.lock();
+        if (not r)
+            return;  // router has gone away, maybe shutting down?
+
+        auto pk = r->local_rid();
+
+        nlohmann::json payload = {
+            {"pubkey_ed25519", oxenc::to_hex(pk.begin(), pk.end())},
+            {"version", {LOKINET_VERSION[0], LOKINET_VERSION[1], LOKINET_VERSION[2]}}};
+
+        if (auto err = r->OxendErrorState())
+            payload["error"] = *err;
+
+        request(
+            "admin.lokinet_ping",
+            [](bool success, std::vector<std::string> /* data */) {
+                log::debug(logcat, "Received response for ping. Successful: {}", success);
+            },
+            payload.dump());
+
+        // subscribe to block updates
+        request("sub.block", [](bool success, std::vector<std::string> data) {
+            if (data.empty() or not success)
+                log::error(logcat, "Failed to subscribe to new blocks");
+            else
+                log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
+        });
+
+        // Trigger an update on a regular timer as well in case we missed a block notify for
+        // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
+        // known hash so that the poll is very cheap (basically empty) if the block hasn't
+        // advanced.
+        update_service_node_list();
+    }
+
     void RPCClient::start_pings()
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -151,42 +189,8 @@ namespace llarp::rpc
             return;
 
         log::info(logcat, "Starting RPCClient ping ticker...");
-        _ping_ticker = router->loop()->call_every(PING_INTERVAL, [this]() {
-            // send a ping
-            auto r = _router.lock();
-            if (not r)
-                return;  // router has gone away, maybe shutting down?
-
-            auto pk = r->local_rid();
-
-            nlohmann::json payload = {
-                {"pubkey_ed25519", oxenc::to_hex(pk.begin(), pk.end())},
-                {"version", {LOKINET_VERSION[0], LOKINET_VERSION[1], LOKINET_VERSION[2]}}};
-
-            if (auto err = r->OxendErrorState())
-                payload["error"] = *err;
-
-            request(
-                "admin.lokinet_ping",
-                [](bool success, std::vector<std::string> /* data */) {
-                    log::debug(logcat, "Received response for ping. Successful: {}", success);
-                },
-                payload.dump());
-
-            // subscribe to block updates
-            request("sub.block", [](bool success, std::vector<std::string> data) {
-                if (data.empty() or not success)
-                    log::error(logcat, "Failed to subscribe to new blocks");
-                else
-                    log::debug(logcat, "Subscribed to new blocks: {}", data[0]);
-            });
-
-            // Trigger an update on a regular timer as well in case we missed a block notify for
-            // some reason (e.g. oxend restarts and loses the subscription); we poll using the last
-            // known hash so that the poll is very cheap (basically empty) if the block hasn't
-            // advanced.
-            update_service_node_list();
-        });
+        ping();
+        _ping_ticker = router->loop()->call_every(PING_INTERVAL, [this]() { ping(); });
     }
 
     void RPCClient::handle_new_service_node_list(const nlohmann::json& j)

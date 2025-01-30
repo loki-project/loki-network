@@ -27,6 +27,14 @@ namespace llarp
         mutable util::NullMutex session_mutex;
 
       public:
+        /** Returns the number of sessions currently mapped to remote addresses
+         */
+        size_t count() const
+        {
+            Lock_t l{session_mutex};
+            return _sessions.size();
+        }
+
         /** Called by owning object to tick OutboundSessions. InboundSession objects are not PathHandlers, so they have
             no concept of tick functionality
          */
@@ -36,7 +44,7 @@ namespace llarp
 
             for (auto& [_, s] : _sessions)
             {
-                if (std::is_same_v<session::OutboundSession, decltype(s)>)
+                if (s->is_outbound())
                 {
                     std::dynamic_pointer_cast<session::OutboundSession>(s)->tick(now);
                 }
@@ -54,7 +62,7 @@ namespace llarp
             {
                 for (auto& [_, s] : _sessions)
                 {
-                    if (std::is_same_v<session::OutboundSession, decltype(s)>)
+                    if (s->is_outbound())
                     {
                         std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(send_close);
                     }

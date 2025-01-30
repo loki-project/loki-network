@@ -3,7 +3,6 @@
 #include "contact/relay_contact.hpp"
 #include "contact/router_id.hpp"
 #include "crypto/crypto.hpp"
-#include "dht/bucket.hpp"
 #include "router/router.hpp"
 #include "util/common.hpp"
 #include "util/thread/threading.hpp"
@@ -24,7 +23,7 @@ namespace llarp
 
     inline constexpr auto FETCH_INTERVAL{10min};
     inline constexpr auto PURGE_INTERVAL{5min};
-    inline constexpr auto FLUSH_INTERVAL{15min};
+    inline constexpr auto FLUSH_INTERVAL{5min};
 
     /*  RC Fetch Constants  */
     // fallback to bootstrap if we have less than this many RCs
@@ -40,7 +39,7 @@ namespace llarp
     // the number of rid sources that we make rid fetch requests to
     inline constexpr size_t RID_SOURCE_COUNT{8};
     // upper limit on how many rid fetch requests to rid sources can fail
-    inline constexpr size_t MAX_RID_ERRORS{2};
+    inline constexpr int MAX_RID_ERRORS{2};
     // each returned rid must appear this number of times across all responses
     inline constexpr int MIN_RID_FETCH_FREQ{6};  //  TESTNET:
     // the total number of accepted returned rids should be above this number
@@ -85,6 +84,8 @@ namespace llarp
 
         bool operator<(const Unconfirmed& other) const { return id < other.id; }
     };
+
+    using rc_set = std::set<RemoteRC, XorMetric>;
 
     class NodeDB
     {
@@ -148,6 +149,8 @@ namespace llarp
         std::unordered_map<RouterID, std::atomic<int>> rid_result_counters{};
 
         std::atomic<int> fetch_counter{};
+        std::atomic<int> fail_counter{};
+        std::atomic<int> response_counter{};
 
         template <std::invocable Callable>
         void _disk_hook(Callable&& f) const
@@ -205,11 +208,11 @@ namespace llarp
 
         std::optional<RemoteRC> get_rc_by_rid(const RouterID& rid);
 
-        bool process_fetched_rcs(std::set<RemoteRC>& rcs);
+        void process_fetched_rcs(std::set<RemoteRC> rcs);
 
         void ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> ids = std::nullopt);
 
-        bool process_fetched_rids();
+        void process_fetched_rids();
 
         std::vector<RouterID> get_expired_rcs();
 
@@ -221,7 +224,7 @@ namespace llarp
         void post_rid_fetch(bool shutdown = false);
         void post_rc_fetch(bool shutdown = false);
 
-        void rid_fetch_result(const RouterID& via);
+        void rid_fetch_result();
         void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
         void stop_bootstrap(bool success = true);
         bool is_bootstrapping() const { return _is_bootstrapping; }
@@ -303,10 +306,10 @@ namespace llarp
         bool tick(std::chrono::milliseconds now);
 
         /// find the absolute closets router to a dht location
-        RemoteRC find_closest_to(dht::Key_t location) const;
+        RemoteRC find_closest_to(hash_key location) const;
 
         /// find many routers closest to dht key; if num_routers = 0, return ALL routers
-        dht::rc_set find_many_closest_to(dht::Key_t location, uint32_t num_routers = 0) const;
+        rc_set find_many_closest_to(hash_key location, uint32_t num_routers = 0) const;
 
         /// return true if we have an rc by its ident pubkey
         bool has_rc(const RouterID& pk) const;
@@ -339,19 +342,33 @@ namespace llarp
         std::optional<std::vector<RemoteRC>> get_n_random_rcs_conditional(
             size_t n, std::function<bool(RemoteRC)> hook, bool exact = false, bool use_strict_connect = false) const;
 
+        /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
+        bool put_rc(RemoteRC rc);
+
+        /// if we consider it valid (want_rc),
+        /// put this rc into the cache if it is not there or is newer than the one there already
+        /// returns true if the rc was inserted
+        bool put_rc_if_newer(RemoteRC rc);
+
+        bool verify_store_gossip_rc(const RemoteRC& rc);
+
+      private:
         // Updates `current` to not contain any of the elements of `replace` and resamples (up to
         // `target_size`) from population to refill it.
         template <typename T, typename RNG>
         void replace_subset(
             std::set<T>& current, const std::set<T>& replace, std::set<T> population, size_t target_size, RNG&& rng)
         {
-            // Remove the ones we are replacing from current:
-            current.erase(replace.begin(), replace.end());
+            for (auto it = replace.begin(); it != replace.end(); ++it)
+            {
+                // Remove the ones we are replacing from current:
+                current.erase(*it);
+                // Remove from the population to not reselect
+                population.erase(*it);
+            }
 
-            // Remove ones we are replacing, and ones we already have, from the population so that
-            // we won't reselect them:
-            population.erase(replace.begin(), replace.end());
-            population.erase(current.begin(), current.end());
+            for (auto it = current.begin(); it != current.end(); ++it)
+                population.erase(*it);
 
             if (current.size() < target_size)
                 std::sample(
@@ -362,39 +379,30 @@ namespace llarp
                     rng);
         }
 
-        /// visit all known_rcs
-        template <typename Visit>
-        void visit_all(Visit visit) const
-        {
-            _router.loop()->call([this, visit]() {
-                for (const auto& item : known_rcs)
-                    visit(item);
-            });
-        }
-
         /// remove an entry given a filter that inspects the rc
         template <typename Filter>
         void remove_if(Filter visit)
         {
-            _router.loop()->call([this, visit]() {
-                std::unordered_set<RouterID> removed;
+            // only called from within event loop ticker
+            assert(_router.loop()->in_event_loop());
 
-                for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
+            std::unordered_set<RouterID> removed;
+
+            for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
+            {
+                if (visit(itr->second))
                 {
-                    if (visit(itr->second))
-                    {
-                        removed.insert(itr->first);
-                        known_rids.erase(itr->first);
-                        known_rcs.erase(itr->second);
-                        itr = rc_lookup.erase(itr);
-                    }
-                    else
-                        ++itr;
+                    removed.insert(itr->first);
+                    known_rids.erase(itr->first);
+                    known_rcs.erase(itr->second);
+                    itr = rc_lookup.erase(itr);
                 }
+                else
+                    ++itr;
+            }
 
-                if (not removed.empty())
-                    remove_many_from_disk_async(std::move(removed));
-            });
+            if (not removed.empty())
+                remove_many_from_disk_async(std::move(removed));
         }
 
         template <
@@ -441,16 +449,6 @@ namespace llarp
                 container.emplace(std::move(id));
             }
         }
-
-        /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
-        bool put_rc(RemoteRC rc);
-
-        /// if we consider it valid (want_rc),
-        /// put this rc into the cache if it is not there or is newer than the one there already
-        /// returns true if the rc was inserted
-        bool put_rc_if_newer(RemoteRC rc);
-
-        bool verify_store_gossip_rc(const RemoteRC& rc);
     };
 }  // namespace llarp
 

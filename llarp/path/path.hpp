@@ -7,7 +7,6 @@
 #include <llarp/contact/client_contact.hpp>
 #include <llarp/contact/tag.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/dht/key.hpp>
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/thread/threading.hpp>
@@ -87,7 +86,7 @@ namespace llarp
 
             bool resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func);
 
-            bool find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func);
+            bool find_client_contact(const hash_key& location, std::function<void(oxen::quic::message)> func);
 
             bool publish_client_contact(
                 const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);

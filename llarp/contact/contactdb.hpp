@@ -1,7 +1,8 @@
 #pragma once
 
-#include <llarp/dht/bucket.hpp>
-#include <llarp/dht/node.hpp>
+#include "client_contact.hpp"
+
+#include <llarp/ev/types.hpp>
 
 namespace llarp
 {
@@ -12,28 +13,34 @@ namespace llarp
         - Store nearest-furthest expiry, trim
     */
 
+    using cc_map_storage = std::map<hash_key, EncryptedClientContact, XorMetric>;
+
     /// This class mediates storage, retrieval, and functionality for ClientContacts
     struct ContactDB
     {
-      private:
-        std::shared_ptr<int> timer_keepalive;
-        Router& _router;
-        const dht::Key_t _local_key;
-
-        std::unique_ptr<dht::Bucket<dht::CCNode>> _cc_nodes;
-
-      public:
         explicit ContactDB(Router& r);
 
+      private:
+        Router& _router;
+        const hash_key _local_key;
+
+        cc_map_storage _storage;
+
+        std::shared_ptr<EventTicker> _purge_ticker;
+
+      public:
         std::optional<ClientContact> get_decrypted_cc(RouterID remote) const;
 
-        std::optional<EncryptedClientContact> get_encrypted_cc(const dht::Key_t& key) const;
-
-        nlohmann::json ExtractStatus() const;
+        std::optional<EncryptedClientContact> get_encrypted_cc(const hash_key& key) const;
 
         void put_cc(EncryptedClientContact enc);
 
-        Router* router() const { return &_router; }
+        void start_tickers();
+
+        size_t num_ccs() const;
+
+      private:
+        void purge_ccs(std::chrono::milliseconds now = llarp::time_now_ms());
     };
 
 }  // namespace llarp

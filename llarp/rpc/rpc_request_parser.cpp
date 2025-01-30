@@ -40,6 +40,8 @@ namespace llarp::rpc
 
     void parse_request(FindCC& findcc, rpc_input input) { get_values(input, "pk", findcc.request.pk); }
 
+    void parse_request(SessionInit& sessioninit, rpc_input input) { get_values(input, "pk", sessioninit.request.pk); }
+
     void parse_request(LookupSnode& lookupsnode, rpc_input input)
     {
         get_values(input, "routerID", lookupsnode.request.routerID);

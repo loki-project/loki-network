@@ -51,7 +51,6 @@ namespace llarp
           _close_promise{std::make_unique<std::promise<void>>(std::move(p))},
           _vpn{std::move(vpnPlatform)},
           _disk_thread{_omq->add_tagged_thread("disk")},
-          _rpc_server{nullptr},
           _last_tick{llarp::time_now_ms()}
     {
         // for lokid, so we don't close the connection when syncing the whitelist
@@ -63,8 +62,17 @@ namespace llarp
         if (not _is_running)
             nlohmann::json{{"running", false}};
 
-        return nlohmann::json{
-            {"running", true}, {"numNodesKnown", _node_db->num_rcs()}, {"links", _link_manager->extract_status()}};
+        auto [_in, _out, _relay, _client] = _link_manager->connection_stats();
+        auto [_rcs, _rids, _] = _node_db->db_stats();
+        auto [_npaths, _nhops] = _path_context->path_ctx_stats();
+        auto [_nsessions, _range, _is_exit] = _session_endpoint->session_stats();
+
+        return {
+            {"instance", {{"running", true}, {"local range", _range}, {"exit node", _is_exit}}},
+            {"connections", {{"inbound", _in}, {"outbound", _out}, {"relay", _relay}, {"client", _client}}},
+            {"sessions", {{"active", _nsessions}}},
+            {"nodedb", {{"RCs", _rcs}, {"RIDs", _rids}}},
+            {"path ctx", {{"paths", _npaths}, {"hops", _nhops}}}};
     }
 
     nlohmann::json Router::ExtractSummaryStatus() const
@@ -193,6 +201,7 @@ namespace llarp
             log::debug(logcat, "System service report ticker already auto-started!");
 
         _node_db->start_tickers();
+        _contact_db->start_tickers();
 
         if (is_service_node())
         {
@@ -613,8 +622,7 @@ namespace llarp
 
             log::trace(logcat, "Configuring router...");
 
-            _gossip_interval = TESTNET_GOSSIP_INTERVAL
-                + std::chrono::seconds{std::uniform_int_distribution<size_t>{0, 180}(llarp::csrng)};
+            _gossip_interval = approximate_time(TESTNET_GOSSIP_INTERVAL, 3);
 
             log::critical(
                 logcat,
@@ -736,8 +744,10 @@ namespace llarp
 
     void Router::save_rc()
     {
-        log::info(logcat, "Saving RC file to {}", our_rc_file);
-        queue_disk_io([&]() { relay_contact.write(our_rc_file); });
+        queue_disk_io([&]() {
+            log::info(logcat, "Saving RC file to {}", our_rc_file);
+            relay_contact.write(our_rc_file);
+        });
     }
 
     bool Router::should_report_stats(std::chrono::milliseconds now) const

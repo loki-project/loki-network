@@ -4,7 +4,12 @@
 #include <nlohmann/json.hpp>
 #include <oxenmq/oxenmq.h>
 
-#include <csignal>
+#if defined(__linux__)
+extern "C"
+{
+#include <termios.h>
+}
+#endif
 
 using namespace llarp;
 using namespace nlohmann;
@@ -13,9 +18,47 @@ namespace llarp::controller
 {
     static auto logcat = log::Cat("rpc-controller");
 
-    constexpr auto omq_cat_logger = [](omq::LogLevel /* lvl */, const char* file, int line, std::string buf) {
-        std::cout << "[{}:{}] {}"_format(file, line, buf) << std::endl;
+    constexpr auto omq_cat_logger = [](omq::LogLevel lvl, const char* file, int line, std::string buf) {
+        auto msg = "[{}:{}] {}"_format(file, line, buf);
+
+        switch (lvl)
+        {
+            case oxenmq::LogLevel::fatal:
+                log::critical(logcat, "{}", msg);
+                break;
+            case oxenmq::LogLevel::error:
+                log::error(logcat, "{}", msg);
+                break;
+            case oxenmq::LogLevel::warn:
+                log::warning(logcat, "{}", msg);
+                break;
+            case oxenmq::LogLevel::info:
+                log::info(logcat, "{}", msg);
+                break;
+            case oxenmq::LogLevel::debug:
+                log::debug(logcat, "{}", msg);
+                break;
+            case oxenmq::LogLevel::trace:
+            default:
+                log::trace(logcat, "{}", msg);
+                break;
+        }
     };
+
+    struct lokinet_instance
+    {
+      private:
+        static size_t next_id;
+
+      public:
+        lokinet_instance() = delete;
+        lokinet_instance(omq::ConnectionID c) : ID{++next_id}, cid{std::move(c)} {}
+
+        const size_t ID;
+        omq::ConnectionID cid;
+    };
+
+    size_t lokinet_instance::next_id = 0;
 
     struct rpc_controller
     {
@@ -28,42 +71,128 @@ namespace llarp::controller
         rpc_controller(omq::LogLevel level) : _omq{std::make_shared<omq::OxenMQ>(omq_cat_logger, level)} {}
 
         std::shared_ptr<omq::OxenMQ> _omq;
-        std::vector<omq::address> _rpc_binds;
-        std::unordered_map<omq::address, omq::ConnectionID> _binds;
+        std::unordered_map<omq::address, lokinet_instance> _binds;
+        std::map<size_t, omq::address> _indexes;
+
+        void _initiate(omq::address src, std::string remote)
+        {
+            log::info(
+                logcat,
+                "Instructing lokinet instance (bind:{}) to initiate session to remote:{}",
+                src.full_address(),
+                remote);
+
+            nlohmann::json req;
+            req["pk"] = remote;
+            req["x"] = false;
+
+            if (auto it = _binds.find(src); it != _binds.end())
+                _omq->request(
+                    it->second.cid,
+                    "llarp.session_init",
+                    [&](bool success, std::vector<std::string> data) {
+                        if (success)
+                        {
+                            auto res = nlohmann::json::parse(data[0]);
+                            log::info(logcat, "RPC call to initiate session succeeded: {}", res.dump());
+                        }
+                        else
+                            log::critical(logcat, "RPC call to initiate session failed!");
+                    },
+                    req.dump());
+            else
+                log::critical(logcat, "Could not find connection ID to RPC bind {}", src.full_address());
+        }
+
+        void _status(omq::address src)
+        {
+            log::info(logcat, "Querying lokinet instance (bind:{}) for router status", src.full_address());
+
+            if (auto it = _binds.find(src); it != _binds.end())
+                _omq->request(it->second.cid, "llarp.status", [&](bool success, std::vector<std::string> data) {
+                    if (success)
+                    {
+                        auto res = nlohmann::json::parse(data[0]);
+                        log::info(logcat, "RPC call to query router status succeeded: \n{}\n", res.dump(4));
+                    }
+                    else
+                        log::critical(logcat, "RPC call to query router status failed!");
+                });
+            else
+                log::critical(logcat, "Could not find connection ID to RPC bind {}", src.full_address());
+        }
 
       public:
-        bool start(std::vector<std::string>& bind_addrs)
+        bool omq_connect(const std::vector<std::string>& bind_addrs)
         {
-            _omq->start();
-
-            std::promise<bool> prom{};
+            int i = 0;
+            std::vector<std::promise<bool>> connect_proms{bind_addrs.size()};
 
             for (auto& b : bind_addrs)
             {
                 omq::address bind{b};
-                std::cout << "RPC controller connecting to RPC bind address ({})"_format(bind.full_address())
-                          << std::endl;
-                // log::info(logcat, "RPC controller connecting to RPC bind address ({})", bind.full_address());
+                log::info(logcat, "RPC controller connecting to RPC bind address ({})", bind.full_address());
 
                 auto cid = _omq->connect_remote(
                     bind,
-                    [&](auto) {
-                        std::cout << "Loki controller successfully connected to RPC bind ({})"_format(
-                            bind.full_address())
-                                  << std::endl;
-                        prom.set_value(true);
+                    [&, idx = i](auto) {
+                        log::info(
+                            logcat, "Loki controller successfully connected to RPC bind ({})", bind.full_address());
+                        connect_proms[idx].set_value(true);
                     },
-                    [&](auto, std::string_view msg) {
-                        std::cout << "Loki controller failed to connect to RPC bind ({}): {}"_format(
-                            bind.full_address(), msg)
-                                  << std::endl;
-                        prom.set_value(false);
+                    [&, idx = i](auto, std::string_view msg) {
+                        log::info(
+                            logcat, "Loki controller failed to connect to RPC bind ({}): {}", bind.full_address(), msg);
+                        connect_proms[idx].set_value(false);
                     });
-
-                _binds.emplace(bind, cid);
+                auto it = _binds.emplace(bind, lokinet_instance{cid}).first;
+                _indexes.emplace(it->second.ID, it->first);
+                i += 1;
             }
 
-            return prom.get_future().get();
+            bool ret = true;
+
+            for (auto& p : connect_proms)
+                ret &= p.get_future().get();
+
+            return ret;
+        }
+
+        bool start(std::vector<std::string>& bind_addrs)
+        {
+            _omq->start();
+            return omq_connect(bind_addrs);
+        }
+
+        void list_all() const
+        {
+            auto msg = "\n\n\tLokinet RPC controller connected to {} RPC binds:\n"_format(_binds.size());
+            for (auto& [idx, addr] : _indexes)
+                msg += "\t\tID:{} | Address:{}\n"_format(idx, addr.full_address());
+
+            log::info(logcat, "{}", msg);
+        }
+
+        void refresh() { log::info(logcat, "TODO: implement this!"); }
+
+        void initiate(size_t idx, std::string remote)
+        {
+            if (auto it = _indexes.find(idx); it != _indexes.end())
+                _initiate(it->second, std::move(remote));
+            else
+                log::warning(logcat, "Could not find instance with given index: {}", idx);
+        }
+
+        void initiate(omq::address src, std::string remote) { return _initiate(std::move(src), std::move(remote)); }
+
+        void status(omq::address src) { return _status(std::move(src)); };
+
+        void status(size_t idx)
+        {
+            if (auto it = _indexes.find(idx); it != _indexes.end())
+                _status(it->second);
+            else
+                log::warning(logcat, "Could not find instance with given index: {}", idx);
         }
     };
 }  // namespace llarp::controller
@@ -86,7 +215,7 @@ namespace
     {
         bool verbose{false};
 
-        std::vector<std::string> rpc_paths{{"tcp://127.0.0.1:1190"}};
+        std::vector<std::string> rpc_paths{{"tcp://127.0.0.1:1190"}, {"tcp://127.0.0.1:1189"}};
 
         omq::address rpc_url{};
         std::string log_level{"info"};
@@ -101,30 +230,32 @@ namespace
         std::atomic<bool> running{false};
     };
 
-    enum class switches : int
-    {
-        LIST = 0,
-        REFRESH = 1,
-    };
-
 }  // namespace
 
 namespace
 {
-    static std::shared_ptr<app_data> data;
-
-    auto make_data = []() {
-        if (not data)
-            data = std::make_shared<app_data>();
-    };
+    static std::shared_ptr<app_data> runtime_data;
 
     template <typename... T>
-    static void exit_error(fmt::format_string<T...> format, T&&... args)
+    static int exit_now(bool is_error, fmt::format_string<T...> format, T&&... args)
     {
-        log::error(controller::logcat, format, std::forward<T>(args)...);
-        data->running = false;
-        data->cv.notify_all();
+        if (is_error)
+            log::error(controller::logcat, format, std::forward<T>(args)...);
+        else
+            log::info(controller::logcat, format, std::forward<T>(args)...);
+
+        runtime_data->running = false;
+        runtime_data->cv.notify_all();
+
+        return is_error ? 1 : 0;
     }
+
+    auto prefigure = []() -> int {
+        if (not runtime_data)
+            runtime_data = std::make_shared<app_data>();
+
+        return 0;
+    };
 
     static void app_loop(cli_opts&& options, std::promise<void>&& p)
     {
@@ -132,68 +263,103 @@ namespace
 
         if (not rpc->start(options.rpc_paths))
         {
-            std::cout << "RPC controller failed to bind; exiting..." << std::endl;
+            log::critical(controller::logcat, "RPC controller failed to bind; exiting...");
             p.set_value_at_thread_exit();
             return;
         }
 
-        static thread_local controller::switchboard board{};
         size_t index{};
         std::string address{};
+        std::string pubkey{};
 
         CLI::App app{};
-        app.get_formatter()->column_width(40);
-        app.require_subcommand(0, 1);
+        auto app_fmt = app.get_formatter();
+        app_fmt->column_width(40);
+        app.set_help_flag("");
 
         // inner app options
-        auto* hcom = app.add_subcommand("", "");
+        auto* hcom = app.add_subcommand("help", "Print help menu")->silent();
+        hcom->callback([&]() {
+                app.clear();
+                std::cout << app.help("", CLI::AppFormatMode::Normal) << std::endl;
+                for (auto& com : app.get_subcommands(nullptr))
+                {
+                    std::cout << com->help("", CLI::AppFormatMode::Sub) << std::endl;
+                    for (auto& c : com->get_subcommands(nullptr))
+                        std::cout << c->help("", CLI::AppFormatMode::Sub) << std::endl;
+                }
+            })
+            ->immediate_callback();
 
-        auto* lcom = app.add_subcommand("list", "List all lokinet instances currently running on the local machine");
-        lcom->callback([&]() { board.set(switches::LIST); });
+        auto* list_subcom =
+            app.add_subcommand("list", "List all lokinet instances currently running on the local machine");
+        list_subcom->callback([&]() { rpc->list_all(); })->immediate_callback();
 
-        auto* rcom = app.add_subcommand("refresh", "Refresh local lokinet instance information");
-        rcom->callback([&]() { board.set(switches::REFRESH); });
+        auto* refresh_subcom = app.add_subcommand("refresh", "Refresh local lokinet instance information");
+        refresh_subcom->callback([&]() { rpc->refresh(); });
 
-        auto* icom = app.add_subcommand("instance", "Select a lokinet instance");
-        auto* aopt =
-            icom->add_option("-a, --address", address, "Local RPC address of lokinet instance")->type_name("IP:PORT");
+        auto* instance_subcom =
+            app.add_subcommand("instance", "Select a lokinet instance")->require_option(1)->require_subcommand(1);
+        auto* aopt = instance_subcom->add_option("-a, --address", address, "Local RPC address of lokinet instance")
+                         ->type_name("IP:PORT");
         auto* iopt =
-            icom->add_option("-i, --index", index, "Index of local lokinet instance (use '-L'/'list' to query!)");
+            instance_subcom->add_option("-i, --index", index, "Index of local lokinet instance (use 'list' to query!)");
 
         aopt->excludes(iopt);
         iopt->excludes(aopt);
 
+        auto* init_subcom =
+            instance_subcom->add_subcommand("init", "Initiate session to a remote client")->require_option(1);
+        init_subcom->add_option("-p, --pubkey", pubkey, "PubKey of remote lokinet client");
+
+        init_subcom->callback([&]() {
+            if (not address.empty())
+                rpc->initiate(omq::address{std::move(address)}, std::move(pubkey));
+            else
+                rpc->initiate(index, std::move(pubkey));
+        });
+
+        auto* status_subcom = instance_subcom->add_subcommand("status", "Query status of local lokinet instance");
+
+        status_subcom->callback([&]() {
+            if (not address.empty())
+                rpc->status(omq::address{std::move(address)});
+            else
+                rpc->status(index);
+        });
+
         // notify startup successful
-        data->running = true;
+        runtime_data->running = true;
         p.set_value();
 
-        while (data->running)
+        while (runtime_data->running)
         {
             try
             {
                 std::deque<std::string> copy{};
 
                 {
-                    std::unique_lock<std::mutex> lock{data->m, std::defer_lock};
-                    data->cv.wait(lock, []() { return !data->input_que.empty() || !data->running; });
-                    copy.swap(data->input_que);
+                    std::unique_lock<std::mutex> lock{runtime_data->m, std::defer_lock};
+                    runtime_data->cv.wait(
+                        lock, []() { return !runtime_data->input_que.empty() || !runtime_data->running; });
+                    copy.swap(runtime_data->input_que);
                 }
 
                 if (!copy.empty())
                 {
-                    std::cout << "processing input..." << std::endl;
+                    log::debug(controller::logcat, "processing input...");
                     while (!copy.empty())
                     {
                         auto line = copy.front();
                         copy.pop_front();
-                        std::cout << "line: " << line << std::endl;
+                        log::debug(controller::logcat, "input: {}", line);
                         app.parse(line);
                     }
                 }
             }
             catch (const std::exception& e)
             {
-                std::cout << "Exception: {}"_format(e.what()) << std::endl;
+                log::warning(controller::logcat, "Exception: {}", e.what());
             }
 
             app.clear();
@@ -202,36 +368,38 @@ namespace
 
     static void input_loop()
     {
-        std::cout << "input loop started..." << std::endl;
+        log::info(controller::logcat, "input loop started...");
 
         std::string input;
-        while (data->running)
+        while (runtime_data->running)
         {
             std::getline(std::cin, input);
 
             if (input == "exit")
             {
-                data->running = false;
-                data->cv.notify_all();
+                runtime_data->running = false;
+                runtime_data->cv.notify_all();
                 break;
             }
 
             {
-                std::lock_guard<std::mutex> lock{data->m};
-                data->input_que.push_back(std::move(input));
+                std::lock_guard<std::mutex> lock{runtime_data->m};
+                runtime_data->input_que.push_back(std::move(input));
             }
 
-            std::cout << "dispatched..." << std::endl;
-            data->cv.notify_all();
+            log::debug(controller::logcat, "dispatched...");
+            runtime_data->cv.notify_all();
         }
 
-        std::cout << "input loop exiting..." << std::endl;
+        log::info(controller::logcat, "input loop exiting...");
     }
 }  // namespace
 
 int main(int argc, char* argv[])
 {
-    make_data();
+    if (auto rv = prefigure(); rv != 0)
+        return rv;
+
     CLI::App cli{"loki controller - lokinet instance control utility", "lokinet-cntrl"};
     cli.get_formatter()->column_width(50);
     cli_opts options{};
@@ -255,11 +423,11 @@ int main(int argc, char* argv[])
     }
     catch (const CLI::ParseError& e)
     {
-        return cli.exit(e);
+        return exit_now(true, "Exception: {}", e.what());
     }
     catch (const std::exception& e)
     {
-        return cli.exit(CLI::Error{"Exception", e.what()});
+        return exit_now(true, "Exception: {}", e.what());
     }
 
     options.oxen_log_level = log::level_from_string(options.log_level);
@@ -270,7 +438,7 @@ int main(int argc, char* argv[])
     log::add_sink(log::Type::Print, "stderr");
     log::reset_level(options.oxen_log_level);
 
-    std::cout << "initializing..." << std::endl;
+    log::info(controller::logcat, "initializing...");
 
     try
     {
@@ -288,8 +456,9 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
-        cli.exit(CLI::Error{"Exception", e.what()});
+        return exit_now(true, "Exception: {}", e.what());
     }
 
+    log::info(controller::logcat, "exiting...");
     return 0;
 }

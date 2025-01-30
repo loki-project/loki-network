@@ -26,8 +26,11 @@ namespace llarp
             return i;
         }
 
+        size_t boundedrand(size_t upper_bound) { return randint() % upper_bound; }
+
         uint64_t operator()() { return randint(); }
     };
 
     extern CSRNG csrng;
+
 }  // namespace llarp

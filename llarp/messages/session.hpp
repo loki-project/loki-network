@@ -31,7 +31,6 @@ namespace llarp
             const RouterID& local,
             const RouterID& remote,
             HopID local_pivot_txid,
-            session_tag& tag,
             HopID remote_pivot_txid,
             std::optional<std::string_view> auth_token,
             bool use_tun)
@@ -46,7 +45,7 @@ namespace llarp
                     btdp.append("i", local.to_view());
                     btdp.append("p", local_pivot_txid.to_view());
                     btdp.append("r", remote_pivot_txid.to_view());
-                    btdp.append("s", tag.view());
+                    // btdp.append("s", tag.view());
                     btdp.append("t", use_tun);
                     // TOTHINK: this auth field
                     if (auth_token)
@@ -72,9 +71,8 @@ namespace llarp
             }
         };
 
-        inline static std::
-            tuple<shared_kx_data, NetworkAddress, HopID, session_tag, HopID, bool, std::optional<std::string>>
-            decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
+        inline static std::tuple<shared_kx_data, NetworkAddress, HopID, HopID, bool, std::optional<std::string>>
+        decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
             PubKey shared_pubkey;
@@ -98,7 +96,6 @@ namespace llarp
 
                 NetworkAddress initiator;
                 RouterID init_rid;
-                session_tag tag;
                 HopID remote_pivot_txid;
                 HopID local_pivot_txid;
                 bool use_tun;
@@ -108,7 +105,6 @@ namespace llarp
                 initiator = NetworkAddress::from_pubkey(init_rid, true);
                 remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
                 local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
-                tag.read(btdc.require<std::string_view>("s"));
                 use_tun = btdc.require<bool>("t");
                 maybe_auth = btdc.maybe<std::string>("u");
 
@@ -116,7 +112,6 @@ namespace llarp
                     std::move(kx_data),
                     std::move(initiator),
                     std::move(local_pivot_txid),
-                    std::move(tag),
                     std::move(remote_pivot_txid),
                     use_tun,
                     std::move(maybe_auth)};
@@ -124,6 +119,28 @@ namespace llarp
             catch (const std::exception& e)
             {
                 log::warning(logcat, "Exception caught decrypting session initiation message:{}", e.what());
+                throw;
+            }
+        }
+
+        inline static std::string serialize_response(session_tag& t)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("t", t.view());
+            return std::move(btdp).str();
+        }
+
+        inline static session_tag deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        {
+            try
+            {
+                session_tag tag;
+                tag.read(btdc.require<std::string_view>("t"));
+                return tag;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing session initiation response:{}", e.what());
                 throw;
             }
         }

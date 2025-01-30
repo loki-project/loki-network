@@ -12,10 +12,17 @@ namespace llarp
 
     class EventLoop;
 
+    namespace rpc
+    {
+        class RPCServer;
+    }
+
     namespace handlers
     {
         class SessionEndpoint final : public path::PathHandler, public std::enable_shared_from_this<SessionEndpoint>
         {
+            friend class rpc::RPCServer;
+
             bool _is_exit_node{false};
             bool _is_snode_service{false};
 
@@ -73,6 +80,8 @@ namespace llarp
 
             const std::shared_ptr<EventLoop>& loop();
 
+            std::tuple<size_t, std::string, bool> session_stats() const;
+
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
@@ -121,9 +130,9 @@ namespace llarp
             // to initiate a session
             bool validate(const NetworkAddress& remote, std::optional<std::string> maybe_auth = std::nullopt);
 
-            bool prefigure_session(
+            std::optional<session_tag> prefigure_session(
                 NetworkAddress initiator,
-                session_tag tag,
+                // session_tag tag,
                 HopID remote_pivot_txid,
                 std::shared_ptr<path::Path> path,
                 shared_kx_data kx_data,

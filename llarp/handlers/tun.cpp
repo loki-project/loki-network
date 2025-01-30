@@ -325,7 +325,7 @@ namespace llarp::handlers
             }
 
             log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
-            _local_range_iterator = IPRangeIterator(_local_range);
+            _local_range_iterator = IPRangeIterator{_local_range};
 
             _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
             _local_ip_mapping.insert_or_assign(_local_range.net_ip(), std::move(_local_netaddr));
@@ -947,7 +947,7 @@ namespace llarp::handlers
         ip_v src, dest;
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        log::debug(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
+        log::trace(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
 
         if (pkt_is_ipv4)
         {
@@ -985,7 +985,7 @@ namespace llarp::handlers
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else
-                log::info(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
+                log::debug(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
         }
         else
         {

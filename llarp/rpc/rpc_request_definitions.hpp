@@ -46,15 +46,7 @@ namespace llarp::rpc
     //
     //  Inputs: none
     //
-    //  Returns: massive dump of status info including
-    //    "running"
-    //    "numNodesKnown"
-    //    "dht"
-    //    "services"
-    //    "exit"
-    //    "links"
-    //    "outboundMessages"
-    //    etc
+    //  Returns: massive dump of status info
     //
     struct Status : NoArgs
     {
@@ -303,9 +295,29 @@ namespace llarp::rpc
     {
         static constexpr auto name = "find_cc"sv;
 
-        struct request_parameterss
+        struct request_parameters
         {
             std::string pk;
+        } request;
+    };
+
+    //  RPC: session_init
+    //    Initiate session to remote client
+    //
+    //  Inputs:
+    //    "pk" : client pubkey
+    //    "x"  : is exit session (boolean)
+    //
+    //  Returns:
+    //    "ip" : mapped IP address
+    struct SessionInit : RPCRequest
+    {
+        static constexpr auto name = "session_init"sv;
+
+        struct request_parameters
+        {
+            std::string pk;
+            bool x;
         } request;
     };
 
@@ -319,6 +331,7 @@ namespace llarp::rpc
         QuicListener,  // debug
         LookupSnode,
         FindCC,
+        SessionInit,
         MapExit,
         ListExits,
         SwapExits,

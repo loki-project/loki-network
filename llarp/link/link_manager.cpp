@@ -270,7 +270,12 @@ namespace llarp
     void LinkManager::start_tickers()
     {
         log::debug(logcat, "Starting gossip ticker...");
-        _gossip_ticker = _router.loop()->call_every(_router._gossip_interval, [this]() { regenerate_and_gossip_rc(); });
+
+        _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+            regenerate_and_gossip_rc();
+            _gossip_ticker =
+                _router.loop()->call_every(_router._gossip_interval, [this]() { regenerate_and_gossip_rc(); });
+        });
     }
 
     LinkManager::LinkManager(Router& r)
@@ -516,7 +521,7 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing control message to {}", remote);
+        log::debug(logcat, "Queueing control message to {}", remote);
 
         _router.loop()->call(
             [this, rid = remote, endpoint = std::move(endpoint), body = std::move(body), f = std::move(func)]() {
@@ -537,7 +542,7 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing data message to {}", remote);
+        log::debug(logcat, "Queueing data message to {}", remote);
 
         _router.loop()->call([this, body = std::move(body), rid = remote]() {
             connect_and_send(std::move(rid), std::nullopt, std::move(body));
@@ -891,7 +896,7 @@ namespace llarp
 
     void LinkManager::handle_fetch_rcs(oxen::quic::message m)
     {
-        log::critical(logcat, "Handling FetchRC request...");
+        log::debug(logcat, "Handling FetchRC request...");
         // this handler should not be registered for clients
         assert(_router.is_service_node());
 
@@ -930,7 +935,7 @@ namespace llarp
                 }
             }
 
-            log::critical(logcat, "Returning {} RCs for FetchRC request...", count);
+            log::info(logcat, "Returning {} RCs for FetchRC request...", count);
         }
 
         m.respond(std::move(btdp).str());
@@ -942,14 +947,14 @@ namespace llarp
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
 
-        log::critical(logcat, "payload: {}", payload);
+        log::trace(logcat, "payload: {}", payload);
 
         send_control_message(via, "fetch_rids"s, std::move(payload), std::move(func));
     }
 
     void LinkManager::handle_fetch_router_ids(oxen::quic::message m)
     {
-        log::critical(logcat, "Handling FetchRIDs request...");
+        log::debug(logcat, "Handling FetchRIDs request...");
         // this handler should not be registered for clients
         assert(_router.is_service_node());
 
@@ -970,7 +975,7 @@ namespace llarp
 
         if (source != local)
         {
-            log::critical(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", m.body(), source);
+            log::info(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", m.body(), source);
 
             auto payload = FetchRIDMessage::serialize(source);
             send_control_message(
@@ -999,7 +1004,7 @@ namespace llarp
             return sig;
         });
 
-        log::critical(logcat, "Returning ALL ({}) locally held RIDs to FetchRIDs request!", known_rids.size());
+        log::info(logcat, "Returning ALL ({}) locally held RIDs to FetchRIDs request!", known_rids.size());
         m.respond(std::move(btdp).str());
     }
 
@@ -1133,7 +1138,7 @@ namespace llarp
     {
         log::trace(logcat, "Received request to find client contact!");
 
-        dht::Key_t dht_key;
+        hash_key dht_key;
 
         try
         {
@@ -1650,7 +1655,6 @@ namespace llarp
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         NetworkAddress initiator;
-        session_tag tag;
         HopID remote_pivot_txid;
         HopID local_pivot_txid;
         bool use_tun;
@@ -1661,10 +1665,10 @@ namespace llarp
         try
         {
             if (inner_body)
-                std::tie(kx_data, initiator, local_pivot_txid, tag, remote_pivot_txid, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, local_pivot_txid, remote_pivot_txid, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{*inner_body}, _router.identity());
             else
-                std::tie(kx_data, initiator, local_pivot_txid, tag, remote_pivot_txid, use_tun, maybe_auth) =
+                std::tie(kx_data, initiator, local_pivot_txid, remote_pivot_txid, use_tun, maybe_auth) =
                     InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{m.body()}, _router.identity());
 
             if (maybe_auth and not _router.session_endpoint()->validate(initiator, maybe_auth))
@@ -1682,16 +1686,15 @@ namespace llarp
                 return m.respond(InitiateSession::BAD_PATH, true);
             }
 
-            if (_router.session_endpoint()->prefigure_session(
+            if (auto tag = _router.session_endpoint()->prefigure_session(
                     std::move(initiator),
-                    std::move(tag),
                     std::move(remote_pivot_txid),
                     std::move(path_ptr),
                     std::move(kx_data),
                     use_tun))
             {
                 log::debug(logcat, "InboundSession configured successfully!");
-                return m.respond(messages::OK_RESPONSE);
+                return m.respond(InitiateSession::serialize_response(*tag));
             }
 
             log::warning(logcat, "Failed to configure InboundSession!");

@@ -118,6 +118,8 @@ namespace llarp
 
             const session_tag& tag() const { return _tag; }
 
+            void set_new_tag(const session_tag& tag);
+
             bool is_exit_session() const { return _is_exit_session; }
         };
 
@@ -194,8 +196,6 @@ namespace llarp
                 std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~InboundSession() = default;
-
-            void set_new_tag(const session_tag& tag);
         };
     }  // namespace session
 

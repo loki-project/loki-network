@@ -146,9 +146,11 @@ namespace llarp
 
     void NodeDB::purge_rcs(std::chrono::milliseconds now)
     {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
         if (_router.is_stopping() || not _router.is_running())
         {
-            log::debug(logcat, "NodeDB unable to continue NodeDB purge -- router is stopped!");
+            log::debug(logcat, "NodeDB unable to continue purge ticking -- router is stopped!");
             return;
         }
 
@@ -220,9 +222,9 @@ namespace llarp
         _bootstraps.randomize();
     }
 
-    bool NodeDB::process_fetched_rcs(std::set<RemoteRC>& rcs)
+    void NodeDB::process_fetched_rcs(std::set<RemoteRC> rcs)
     {
-        return _router.loop()->call_get([&]() {
+        _router.loop()->call([&]() {
             std::set<RemoteRC> confirmed_set, unconfirmed_set;
 
             // the intersection of local RC's and received RC's is our confirmed set
@@ -259,16 +261,20 @@ namespace llarp
                 1) The number of "good" rcs is above MIN_GOOD_RC_FETCH_TOTAL
                 2) The ratio of "good" rcs to total received is above MIN_GOOD_RC_FETCH_THRESHOLD
             */
-            bool success = false;
-            if (success = (inter_size >= MIN_GOOD_RC_FETCH_TOTAL) and (fetch_threshold >= MIN_GOOD_RC_FETCH_THRESHOLD);
-                success)
+            bool success = (inter_size >= MIN_GOOD_RC_FETCH_TOTAL) and (fetch_threshold >= MIN_GOOD_RC_FETCH_THRESHOLD);
+
+            if (success)
             {
-                // set rcs to be intersection set
+                log::info(logcat, "Accumulated RC's accepted by trust model");
                 rcs = std::move(confirmed_set);
                 process_results(std::move(unconfirmed_set), unconfirmed_rcs, known_rcs);
+                post_rc_fetch(false);
             }
-
-            return success;
+            else
+            {
+                log::warning(logcat, "Accumulated RC's rejected by trust model; reselecting RC fetch source...");
+                fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
+            }
         });
     }
 
@@ -288,9 +294,9 @@ namespace llarp
           2) If we are bootstrapping:
               - The routerID's returned
     */
-    bool NodeDB::process_fetched_rids()
+    void NodeDB::process_fetched_rids()
     {
-        return _router.loop()->call_get([this]() {
+        _router.loop()->call([&]() {
             std::set<RouterID> union_set, confirmed_set, unconfirmed_set;
 
             for (const auto& [rid, count] : rid_result_counters)
@@ -311,7 +317,7 @@ namespace llarp
                 std::inserter(confirmed_set, confirmed_set.begin()));
 
             // the total number of rids received
-            const auto num_received = (double)(rid_result_counters.size() - fetch_counter);
+            const auto num_received = (double)(rid_result_counters.size());
             // the total number of received AND accepted rids
             const auto union_size = union_set.size();
 
@@ -336,11 +342,16 @@ namespace llarp
             */
             if (success)
             {
+                log::info(logcat, "Accumulated RID's accepted by trust model");
                 process_results(std::move(unconfirmed_set), unconfirmed_rids, known_rids);
                 known_rids.merge(confirmed_set);
+                post_rid_fetch(false);
             }
-
-            return success;
+            else
+            {
+                log::warning(logcat, "Accumulated RID's rejected by trust model; reselecting RID fetch sources...");
+                reselect_router_id_sources(fail_sources);
+            }
         });
     }
 
@@ -350,11 +361,19 @@ namespace llarp
 
         if (rids)
         {
+            log::info(logcat, "Ingesting {} RID's from {}", rids->size(), source);
+
             for (const auto& rid : *rids)
                 rid_result_counters[rid] += 1;
         }
         else
+        {
             fail_sources.insert(source);
+            fail_counter += 1;
+            log::info(logcat, "{} marked as a failed fetch source (currently: {})", source, fail_counter);
+        }
+
+        rid_fetch_result();
     }
 
     std::vector<RouterID> NodeDB::get_expired_rcs()
@@ -428,21 +447,11 @@ namespace llarp
         if (result)
         {
             log::info(logcat, "RC fetching was successful; processing {} returned RCs...", result->size());
-
-            if (process_fetched_rcs(*result))
-            {
-                log::info(logcat, "Accumulated RC's accepted by trust model");
-                return post_rc_fetch(false);
-            }
-
-            log::warning(logcat, "Accumulated RC's rejected by trust model; reselecting RC fetch source...");
-        }
-        else
-        {
-            log::warning(logcat, "RC fetching was unsuccessful; reselecting RC fetch source...");
+            return process_fetched_rcs(std::move(*result));
         }
 
-        fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
+        log::warning(logcat, "RC fetching was unsuccessful; reselecting RC fetch source...");
+        fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
     }
 
     void NodeDB::fetch_rids()
@@ -460,10 +469,13 @@ namespace llarp
         }
 
         fetch_counter = 0;
+        response_counter = 0;
+        fail_counter = 0;
+        fail_sources.clear();
         rid_result_counters.clear();
 
         do
-            fetch_source = *std::next(known_rids.begin(), csrng() % known_rids.size());
+            fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
         while (rid_sources.contains(fetch_source));
 
         auto& src = fetch_source;
@@ -478,6 +490,7 @@ namespace llarp
                 src,
                 FetchRIDMessage::serialize(target),
                 [this, source = src, target = target](oxen::quic::message m) mutable {
+                    response_counter += 1;
                     if (not m)
                     {
                         log::critical(
@@ -486,7 +499,7 @@ namespace llarp
                             target,
                             source,
                             m.timed_out ? "timed out" : "failed: {}"_format(m.view()));
-                        ingest_fetched_rids(target);
+                        ingest_fetched_rids(source);
                     }
                     else
                     {
@@ -510,28 +523,28 @@ namespace llarp
                                         "Failed to verify signature for fetch RouterIDs response."};
                             });
 
-                            ingest_fetched_rids(target, std::move(router_ids));
+                            ingest_fetched_rids(source, std::move(router_ids));
                         }
                         catch (const std::exception& e)
                         {
                             log::critical(logcat, "Error handling fetch RouterIDs response: {}", e.what());
-                            ingest_fetched_rids(target);
+                            ingest_fetched_rids(source);
                         }
                     }
 
-                    rid_fetch_result(source);
+                    // rid_fetch_result();
                 });
 
             fetch_counter += 1;
         }
     }
 
-    void NodeDB::rid_fetch_result(const RouterID& via)
+    void NodeDB::rid_fetch_result()
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        size_t n_fails = fail_sources.size();
-        int n_responses = rid_result_counters[via];
+        int n_fails = fail_counter.load();
+        int n_responses = response_counter.load();
 
         if (n_responses < fetch_counter)
         {
@@ -544,22 +557,10 @@ namespace llarp
         if (n_fails <= MAX_RID_ERRORS)
         {
             log::info(logcat, "RID fetching was successful ({}/{} acceptable errors)", n_fails, MAX_RID_ERRORS);
-
-            // this is where the trust model will do verification based on the similarity of the sets
-            if (process_fetched_rids())
-            {
-                log::info(logcat, "Accumulated RID's accepted by trust model");
-                return post_rid_fetch(false);
-            }
-
-            log::warning(logcat, "Accumulated RID's rejected by trust model; reselecting RID fetch sources...");
-        }
-        else
-        {
-            // we had 4 or more failed requests, so we will need to rotate our rid sources
-            log::critical(logcat, "RID fetching found {} failures; reselecting failed RID fetch sources...", n_fails);
+            return process_fetched_rids();
         }
 
+        log::critical(logcat, "RID fetching found {} failures; reselecting failed RID fetch sources...", n_fails);
         reselect_router_id_sources(fail_sources);
     }
 
@@ -570,23 +571,32 @@ namespace llarp
 
     void NodeDB::start_tickers()
     {
-        log::debug(logcat, "NodeDB starting flush ticker...");
+        log::debug(logcat, "NodeDB starting tickers...");
 
-        _flush_ticker = _router.loop()->call_every(FLUSH_INTERVAL, [this]() {
-            log::debug(logcat, "Writing NodeDB contents to disk...");
+        _router.loop()->call_later(approximate_time(5s, 5), [&]() {
             save_to_disk();
+            _flush_ticker = _router.loop()->call_every(FLUSH_INTERVAL, [this]() mutable { save_to_disk(); });
         });
 
-        _purge_ticker = _router.loop()->call_every(
-            PURGE_INTERVAL, [this]() mutable { purge_rcs(); }, not _needs_bootstrap);
+        _router.loop()->call_later(approximate_time(30s, 10), [&]() {
+            purge_rcs();
+            _purge_ticker = _router.loop()->call_every(
+                PURGE_INTERVAL, [this]() mutable { purge_rcs(); }, not _needs_bootstrap);
+        });
 
         if (not _is_service_node)
         {
             // start these immediately if we do not need to bootstrap
-            _rid_fetch_ticker = _router.loop()->call_every(
-                FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
-            _rc_fetch_ticker = _router.loop()->call_every(
-                FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
+            _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+                fetch_rids();
+                _rid_fetch_ticker = _router.loop()->call_every(
+                    FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
+            });
+
+            _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+                _rc_fetch_ticker = _router.loop()->call_every(
+                    FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
+            });
         }
     }
 
@@ -618,6 +628,8 @@ namespace llarp
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         fetch_counter = 0;
+        response_counter = 0;
+        fail_counter = 0;
         fail_sources.clear();
         rid_result_counters.clear();
 
@@ -862,15 +874,15 @@ namespace llarp
 
     void NodeDB::save_to_disk() const
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (_root.empty())
             return;
 
-        _router.loop()->call([this]() {
-            for (const auto& rc : known_rcs)
-                rc.write(get_path_by_pubkey(rc.router_id()));
-        });
+        log::debug(logcat, "Writing NodeDB contents to disk...");
+
+        for (const auto& rc : known_rcs)
+            rc.write(get_path_by_pubkey(rc.router_id()));
     }
 
     void NodeDB::cleanup()
@@ -986,27 +998,27 @@ namespace llarp
         // build file list
         std::set<fs::path> files;
 
-        for (auto id : remove)
-            files.emplace(get_path_by_pubkey(std::move(id)));
+        for (auto it = remove.begin(); it != remove.end(); it = remove.erase(it))
+            files.emplace(get_path_by_pubkey(std::move(*it)));
 
         // remove them from the disk via the diskio thread
-        _disk_hook([files]() {
+        _disk_hook([files = std::move(files)]() {
             for (auto fpath : files)
                 fs::remove(fpath);
         });
     }
 
-    RemoteRC NodeDB::find_closest_to(llarp::dht::Key_t location) const
+    RemoteRC NodeDB::find_closest_to(llarp::hash_key location) const
     {
-        return _router.loop()->call_get([this, compare = dht::XorMetric{location}]() -> RemoteRC {
+        return _router.loop()->call_get([this, compare = XorMetric{location}]() -> RemoteRC {
             return *std::ranges::min_element(known_rcs, compare);
         });
     }
 
-    dht::rc_set NodeDB::find_many_closest_to(llarp::dht::Key_t location, uint32_t num_routers) const
+    rc_set NodeDB::find_many_closest_to(llarp::hash_key location, uint32_t num_routers) const
     {
-        return _router.loop()->call_get([this, compare = dht::XorMetric{location}, num_routers]() -> dht::rc_set {
-            dht::rc_set ret{known_rcs.begin(), known_rcs.end(), compare};
+        return _router.loop()->call_get([this, compare = XorMetric{location}, num_routers]() -> rc_set {
+            rc_set ret{known_rcs.begin(), known_rcs.end(), compare};
             if (num_routers)
                 ret.erase(std::next(ret.begin(), num_routers), ret.end());
             return ret;

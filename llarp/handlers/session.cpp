@@ -7,6 +7,8 @@
 #include <llarp/nodedb.hpp>
 #include <llarp/router/router.hpp>
 
+#include <oxenc/base32z.h>
+
 namespace llarp::handlers
 {
     static auto logcat = log::Cat("SessionHandler");
@@ -18,6 +20,11 @@ namespace llarp::handlers
     {}
 
     const std::shared_ptr<EventLoop>& SessionEndpoint::loop() { return _router.loop(); }
+
+    std::tuple<size_t, std::string, bool> SessionEndpoint::session_stats() const
+    {
+        return {_sessions.count(), _local_range.to_string(), _is_exit_node};
+    }
 
     void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
@@ -40,8 +47,6 @@ namespace llarp::handlers
             log::debug(logcat, "ClientContact publish ticker stopped!");
             _cc_publisher->stop();
         }
-
-        Lock_t l{paths_mutex};
 
         _sessions.stop_sessions(send_close);
 
@@ -140,40 +145,19 @@ namespace llarp::handlers
         update_and_publish_localcc(get_current_client_intros(), _srv_records);
     }
 
-    // static std::atomic<bool> testnet_trigger = false;
-
     void SessionEndpoint::start_tickers()
     {
         if (should_publish_cc)
         {
-            log::critical(logcat, "Starting ClientContact publish ticker...");
-            _cc_publisher = _router.loop()->call_every(
-                CC_PUBLISH_INTERVAL,
-                [this]() {
-                    log::critical(logcat, "Updating and publishing ClientContact...");
-                    update_and_publish_localcc(get_current_client_intros());
-                },
-                true);
+            log::info(logcat, "Starting ClientContact publish ticker...");
 
-            // if (not testnet_trigger)
-            // {
-            //     testnet_trigger = true;
-
-            //     _router.loop()->call_later(5s, [this]() {
-            //         try
-            //         {
-            //             RouterID cpk{oxenc::from_base32z("uak4d1fy6oqnag5ghcib7184c5e1tym3g9duj5j1hqdoh1gchd1y")};
-            //             log::info(logcat, "Beginning session init to client: {}", cpk.to_network_address(false));
-            //             _initiate_session(
-            //                 NetworkAddress::from_pubkey(cpk, true), [](ip_v) { log::critical(logcat, "FUCK YEAH");
-            //                 });
-            //         }
-            //         catch (const std::exception& e)
-            //         {
-            //             log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
-            //         }
-            //     });
-            // }
+            _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+                update_and_publish_localcc(get_current_client_intros());
+                _cc_publisher = _router.loop()->call_every(
+                    CC_PUBLISH_INTERVAL,
+                    [this]() mutable { update_and_publish_localcc(get_current_client_intros()); },
+                    true);
+            });
         }
         else
             log::info(logcat, "SessionEndpoint configured to NOT publish ClientContact...");
@@ -290,7 +274,7 @@ namespace llarp::handlers
 
     void SessionEndpoint::lookup_client_intro(RouterID remote, std::function<void(std::optional<ClientContact>)> func)
     {
-        auto remote_key = dht::Key_t::derive_from_rid(remote);
+        auto remote_key = hash_key::derive_from_rid(remote);
 
         if (auto maybe_intro = _router.contact_db().get_decrypted_cc(remote))
         {
@@ -381,6 +365,7 @@ namespace llarp::handlers
 
     void SessionEndpoint::update_and_publish_localcc(intro_set intros)
     {
+        log::info(logcat, "Updating and publishing ClientContact...");
         if (intros.empty())
             return _localcc_update_fail();
         client_contact.regenerate(std::move(intros));
@@ -398,8 +383,10 @@ namespace llarp::handlers
 
             if (auto decrypt = enc.decrypt(_router.local_rid()))
             {
-                auto is_equal = client_contact == *decrypt;
-                log::critical(logcat, "Decrypted ClientContact is {}EQUAL to the original!", is_equal ? "" : "NOT ");
+                if (client_contact == *decrypt)
+                    log::trace(logcat, "Decrypted ClientContact is EQUAL to the original!");
+                else
+                    log::critical(logcat, "Decrypted ClientContact is NOT EQUAL to the original!");
             }
             else
                 log::critical(logcat, "COULD NOT DECRYPT ENCRYPTEDCLIENTCONTACT");
@@ -428,24 +415,17 @@ namespace llarp::handlers
         return ret;
     }
 
-    bool SessionEndpoint::prefigure_session(
+    std::optional<session_tag> SessionEndpoint::prefigure_session(
         NetworkAddress initiator,
-        session_tag tag,
         HopID remote_pivot_txid,
         std::shared_ptr<path::Path> path,
         shared_kx_data kx_data,
         bool use_tun)
     {
-        bool ret = true;
+        auto tag = client_contact.generate_session_tag();
 
         auto inbound = std::make_shared<session::InboundSession>(
-            initiator,
-            std::move(path),
-            *this,
-            std::move(remote_pivot_txid),
-            std::move(tag),
-            use_tun,
-            std::move(kx_data));
+            initiator, std::move(path), *this, std::move(remote_pivot_txid), tag, use_tun, std::move(kx_data));
 
         auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
 
@@ -470,7 +450,7 @@ namespace llarp::handlers
             {
                 // TODO: if this fails, we should close the session
                 log::warning(logcat, "TUN device failed to route session (remote: {}) to local ip", session->remote());
-                ret = false;
+                return std::nullopt;
             }
         }
         else
@@ -479,7 +459,7 @@ namespace llarp::handlers
             // session->tcp_backend_connect();
         }
 
-        return ret;
+        return tag;
     }
 
     bool SessionEndpoint::publish_client_contact(const EncryptedClientContact& ecc)
@@ -502,7 +482,7 @@ namespace llarp::handlers
                 ret &= path->publish_client_contact(ecc, [](oxen::quic::message m) {
                     if (m)
                     {
-                        log::critical(logcat, "Call to PublishClientContact succeeded!");
+                        log::info(logcat, "Call to PublishClientContact succeeded!");
                     }
                     else
                     {
@@ -576,8 +556,6 @@ namespace llarp::handlers
         on_session_init_hook cb,
         bool /* is_exit */)
     {
-        auto tag = client_contact.generate_session_tag();
-
         std::string inner_payload;
         shared_kx_data kx_data;
 
@@ -586,7 +564,6 @@ namespace llarp::handlers
             _router.local_rid(),
             remote.router_id(),
             path->pivot_txid(),
-            tag,
             remote_intro.pivot_txid,
             fetch_auth_token(remote),
             _router.using_tun_if());
@@ -605,7 +582,6 @@ namespace llarp::handlers
             std::move(intermediate_payload),
             [this,
              remote,
-             tag = std::move(tag),
              path,
              remote_pivot_txid = remote_intro.pivot_txid,
              hook = std::move(cb),
@@ -613,6 +589,20 @@ namespace llarp::handlers
                 if (m)
                 {
                     log::critical(logcat, "Call to InitiateSession succeeded!");
+                    session_tag tag;
+
+                    try
+                    {
+                        tag = InitiateSession::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+                    }
+                    catch (const std::exception& e)
+                    {
+                        // TESTNET: TODO: close sssion here?
+                        log::warning(logcat, "Exception: {}", e.what());
+                        return;
+                    }
+
+                    log::debug(logcat, "Remote client has provided session tag: {}", tag);
 
                     auto outbound = std::make_shared<session::OutboundSession>(
                         remote,

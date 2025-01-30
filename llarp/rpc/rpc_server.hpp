@@ -84,6 +84,7 @@ namespace llarp
             void invoke(QuicListener& quiclistener);
             void invoke(LookupSnode& lookupsnode);
             void invoke(FindCC& findcc);
+            void invoke(SessionInit& sessioninit);
             void invoke(MapExit& mapexit);
             void invoke(ListExits& listexits);
             void invoke(UnmapExit& unmapexit);

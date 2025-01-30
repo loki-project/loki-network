@@ -54,7 +54,7 @@ namespace llarp
 
             Note: we are bt-encoding to leave space for future fields (ex: version)
          */
-        inline static std::string serialize(const dht::Key_t& location)
+        inline static std::string serialize(const hash_key& location)
         {
             oxenc::bt_dict_producer btdp;
 
@@ -63,9 +63,9 @@ namespace llarp
             return std::move(btdp).str();
         }
 
-        inline static dht::Key_t deserialize(oxenc::bt_dict_consumer&& btdc)
+        inline static hash_key deserialize(oxenc::bt_dict_consumer&& btdc)
         {
-            dht::Key_t key;
+            hash_key key;
 
             try
             {

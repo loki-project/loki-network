@@ -3,7 +3,6 @@
 #include <llarp/contact/router_id.hpp>
 #include <llarp/contact/sns.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/dht/key.hpp>
 #include <llarp/ev/types.hpp>
 
 #include <oxenmq/address.h>
@@ -62,6 +61,8 @@ namespace llarp
             void start_pings();
 
           private:
+            void ping();
+
             /// do a lmq command on the current connection
             void command(std::string_view cmd);
 

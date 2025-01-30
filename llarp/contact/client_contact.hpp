@@ -6,7 +6,6 @@
 
 #include <llarp/constants/version.hpp>
 #include <llarp/crypto/crypto.hpp>
-#include <llarp/dht/key.hpp>
 #include <llarp/dns/srv_data.hpp>
 #include <llarp/net/net.hpp>
 #include <llarp/net/policy.hpp>
@@ -27,18 +26,13 @@ namespace llarp
 {
     struct EncryptedClientContact;
 
-    namespace dht
-    {
-        struct CCNode;
-    }
-
     namespace handlers
     {
         class SessionEndpoint;
     }
 
     // TESTNET:
-    inline static constexpr auto CC_PUBLISH_INTERVAL{30s};
+    inline static constexpr auto CC_PUBLISH_INTERVAL{1min};
 
     /** ClientContact
         On the wire we encode the data as a dict containing:
@@ -157,7 +151,7 @@ namespace llarp
     */
     struct EncryptedClientContact
     {
-        friend struct dht::CCNode;
+        friend struct ContactDB;
         friend struct ClientContact;
 
         explicit EncryptedClientContact() : nonce{SymmNonce::make_random()}, encrypted(ClientContact::MAX_CC_SIZE) {}
@@ -183,7 +177,7 @@ namespace llarp
         std::string bt_encode();
 
       public:
-        dht::Key_t key() const { return dht::Key_t{blinded_pubkey.data()}; }
+        hash_key key() const { return hash_key{blinded_pubkey.data()}; }
 
         std::optional<ClientContact> decrypt(const PubKey& root);
 
@@ -192,5 +186,7 @@ namespace llarp
         bool verify() const;
 
         bool is_expired(std::chrono::milliseconds now = time_now_ms()) const;
+
+        bool operator<(const EncryptedClientContact& other) const { return signed_at < other.signed_at; }
     };
 }  //  namespace llarp

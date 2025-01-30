@@ -11,6 +11,9 @@
 
 namespace llarp
 {
+    struct RouterID;
+    struct RemoteRC;
+
     using SharedSecret = AlignedBuffer<SHAREDKEYSIZE>;
 
     struct RouterID;
@@ -128,6 +131,59 @@ namespace llarp
         void encrypt(std::span<uint8_t> data);
 
         void decrypt(std::span<uint8_t> enc);
+    };
+
+    struct hash_key : public AlignedBuffer<32>
+    {
+        explicit hash_key(const uint8_t* buf) : AlignedBuffer<SIZE>(buf) {}
+
+        explicit hash_key(const std::array<uint8_t, SIZE>& data) : AlignedBuffer<SIZE>(data) {}
+
+        explicit hash_key(const AlignedBuffer<SIZE>& data) : AlignedBuffer<SIZE>(data) {}
+
+        hash_key() : AlignedBuffer<SIZE>() {}
+
+        std::string to_string() const;
+
+        static hash_key derive_from_rid(PubKey root);
+
+        hash_key operator^(const hash_key& other) const
+        {
+            hash_key dist;
+            std::transform(begin(), end(), other.begin(), dist.begin(), std::bit_xor<uint8_t>());
+            return dist;
+        }
+
+        bool operator==(const hash_key& other) const { return as_array() == other.as_array(); }
+
+        bool operator!=(const hash_key& other) const { return as_array() != other.as_array(); }
+
+        bool operator<(const hash_key& other) const { return as_array() < other.as_array(); }
+
+        bool operator>(const hash_key& other) const { return as_array() > other.as_array(); }
+    };
+
+    namespace concepts
+    {
+        template <typename T, typename U = std::remove_cvref_t<T>>
+        concept XOR_comparable = U::SIZE == PUBKEYSIZE && (std::same_as<RouterID, U> || std::same_as<hash_key, U>);
+    }
+
+    struct XorMetric
+    {
+        const hash_key us;
+
+        XorMetric(hash_key ourKey) : us{std::move(ourKey)} {}
+
+        bool operator()(const hash_key& left, const hash_key& right) const;
+
+        bool operator()(const RemoteRC& left, const RemoteRC& right) const;
+
+        template <concepts::XOR_comparable T, concepts::XOR_comparable U>
+        bool operator()(const T& left, const U& right) const
+        {
+            return (left ^ us) < (right < us);
+        }
     };
 
 }  // namespace llarp

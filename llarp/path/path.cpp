@@ -146,7 +146,7 @@ namespace llarp::path
             "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
     }
 
-    bool Path::find_client_contact(const dht::Key_t& location, std::function<void(oxen::quic::message)> func)
+    bool Path::find_client_contact(const hash_key& location, std::function<void(oxen::quic::message)> func)
     {
         return send_path_control_message("find_cc", FindClientContact::serialize(location), std::move(func));
     }

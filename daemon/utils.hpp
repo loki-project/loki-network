@@ -3,6 +3,7 @@
 #include <llarp.hpp>
 #include <llarp/rpc/rpc_client.hpp>
 #include <llarp/util/logging.hpp>
+#include <llarp/util/logging/buffer.hpp>
 
 namespace omq = oxenmq;
 
@@ -16,6 +17,13 @@ namespace llarp::controller
 
       public:
         bool test(size_t i = 0) const { return (i < N) ? board.test(i) : false; };
+
+        template <typename T>
+            requires std::is_enum_v<T>
+        bool test(T i)
+        {
+            return test(meta::to_underlying(i));
+        }
 
         template <typename T>
             requires std::is_enum_v<T>

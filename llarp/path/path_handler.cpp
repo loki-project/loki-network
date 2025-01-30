@@ -102,7 +102,7 @@ namespace llarp::path
                 continue;
             }
 
-            size_t x = csrng() % (i + 1);
+            size_t x = csrng.boundedrand(i + 1);
             if (x <= 1)
                 rand = p.second;
         }
@@ -156,7 +156,7 @@ namespace llarp::path
             }
 
             // replace selections with decreasing probability per iteration
-            size_t x = csrng() % (i + 1);
+            size_t x = csrng.boundedrand(i + 1);
             if (x < n)
                 (*selected)[x] = p.second;
         }
