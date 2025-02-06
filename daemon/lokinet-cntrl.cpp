@@ -209,13 +209,16 @@ namespace
         Runtime CLI subcommands:
         - list
         - refresh
+        - init
+        - status
      */
 
     struct cli_opts
     {
         bool verbose{false};
 
-        std::vector<std::string> rpc_paths{{"tcp://127.0.0.1:1190"}, {"tcp://127.0.0.1:1189"}};
+        std::vector<std::string> rpc_paths{
+            {"tcp://127.0.0.1:1190"}, {"tcp://127.0.0.1:1189"}, {"tcp://127.0.0.1:1188"}};
 
         omq::address rpc_url{};
         std::string log_level{"info"};

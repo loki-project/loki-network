@@ -57,7 +57,7 @@ namespace llarp
                 auto kx_data = shared_kx_data::generate();
 
                 kx_data.client_dh(remote);
-                kx_data.encrypt(to_uspan(payload));
+                kx_data.encrypt(payload);
                 kx_data.generate_xor();
 
                 auto new_payload = ONION::serialize_hop(kx_data.pubkey.to_view(), kx_data.nonce, std::move(payload));

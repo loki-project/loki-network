@@ -57,7 +57,6 @@ namespace llarp
         bool operator()(const ClientIntro& lhs, const ClientIntro& rhs) const { return lhs.expiry < rhs.expiry; }
     };
 
-    using intro_queue = std::priority_queue<ClientIntro, std::vector<ClientIntro>, ClientIntroComp>;
     using intro_set = std::set<ClientIntro, ClientIntroComp>;
 
 }  //  namespace llarp
@@ -69,7 +68,7 @@ namespace std
     {
         size_t operator()(const llarp::ClientIntro& i) const noexcept
         {
-            return std::hash<llarp::PubKey>{}(i.pivot_rid) ^ std::hash<llarp::HopID>{}(i.pivot_txid);
+            return std::hash<llarp::PubKey>{}(i.pivot_rid) ^ ((std::hash<llarp::HopID>{}(i.pivot_txid) << 9) >> 5);
         }
     };
 }  //  namespace std

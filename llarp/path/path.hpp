@@ -49,8 +49,7 @@ namespace llarp
 
             // hops on constructed path
             std::vector<TransitHop> hops;
-            // local hop info for onioned responses and session messages
-            // std::shared_ptr<TransitHop> _local_hop{};
+
             std::weak_ptr<PathHandler> handler;
             ClientIntro intro{};
 
@@ -176,6 +175,17 @@ namespace llarp
             std::chrono::milliseconds last_latency_test{0s};
             uint64_t last_latency_test_id{};
         };
+
+        struct PathPtrComp
+        {
+            bool operator()(const std::shared_ptr<Path>& lhs, const std::shared_ptr<Path>& rhs) const
+            {
+                return *lhs < *rhs;
+            }
+        };
+
+        using PathPtrSet = std::set<std::shared_ptr<Path>, PathPtrComp>;
+
     }  // namespace path
 }  // namespace llarp
 
@@ -186,8 +196,7 @@ namespace std
     {
         size_t operator()(const llarp::path::Path& p) const noexcept
         {
-            auto h = hash<llarp::HopID>{}(p.upstream_txid());
-            return h ^ hash<llarp::RouterID>{}(p.upstream_rid());
+            return hash<llarp::HopID>{}(p.pivot_txid()) ^ ((hash<llarp::HopID>{}(p.upstream_rxid()) << 13) >> 5);
         }
     };
 }  //  namespace std

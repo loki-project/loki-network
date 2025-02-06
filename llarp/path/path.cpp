@@ -101,14 +101,6 @@ namespace llarp::path
         return n != 0;
     }
 
-    // void Path::recv_path_data_message(bstring data)
-    // {
-    //     if (_recv_dgram)
-    //         _recv_dgram(std::move(data));
-    //     else
-    //         throw std::runtime_error{"Path does not have hook to receive datagrams!"};
-    // }
-
     bool Path::operator<(const Path& other) const
     {
         auto& first_hop = hops.front();

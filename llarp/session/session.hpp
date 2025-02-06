@@ -17,6 +17,8 @@ namespace llarp
     using on_session_init_hook = std::function<void(ip_v)>;
     using recv_session_dgram_cb = std::function<void(std::vector<uint8_t>)>;
 
+    inline constexpr size_t PATHS_PER_INTRO{2};
+
     namespace link
     {
         class TunnelManager;
@@ -26,6 +28,8 @@ namespace llarp
     {
         class SessionEndpoint;
     }  // namespace handlers
+
+    using intro_path_map = std::map<ClientIntro, path::PathPtrSet, ClientIntroComp>;
 
     /** Snode vs Client Session
         - client to client: shared secret (symmetric key) is negotiated
@@ -48,7 +52,7 @@ namespace llarp
             session_tag _tag;
             NetworkAddress _remote;
 
-            shared_kx_data session_keys{};
+            std::optional<shared_kx_data> session_keys{};
 
             // used for bridging data messages across aligned paths
             HopID _remote_pivot_txid;
@@ -56,6 +60,7 @@ namespace llarp
             bool _use_tun;
             bool _is_outbound;
 
+            const bool _is_snode_session{false};
             const bool _is_exit_session{false};
 
             std::shared_ptr<path::Path> _current_path;
@@ -104,8 +109,6 @@ namespace llarp
 
             void recv_path_data_message(std::vector<uint8_t> data);
 
-            // void recv_path_data_message(bstring data);
-
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
 
             void tcp_backend_connect();
@@ -134,13 +137,15 @@ namespace llarp
                 std::shared_ptr<path::Path> path,
                 HopID remote_pivot_txid,
                 session_tag _t,
+                intro_set cc,
                 std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
 
           private:
-            const bool _is_snode_session{false};
             std::chrono::milliseconds _last_use;
+
+            intro_path_map intro_path_mapping{};
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
@@ -150,6 +155,8 @@ namespace llarp
             std::shared_ptr<path::Path> current_path() { return _current_path; }
 
             void blacklist_snode(const RouterID& snode) override;
+
+            // void tick(std::chrono::milliseconds now) override;
 
             void build_more(size_t n = 0) override;
 
@@ -161,9 +168,9 @@ namespace llarp
 
             void path_died(std::shared_ptr<path::Path> p) override;
 
-            bool is_path_dead(std::shared_ptr<path::Path> p, std::chrono::milliseconds dlt);
-
             void path_build_succeeded(std::shared_ptr<path::Path> p) override;
+
+            void path_build_failed(std::shared_ptr<path::Path> p, bool timeout = false) override;
 
             bool stop(bool send_close = false) override;
 

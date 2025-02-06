@@ -7,6 +7,8 @@
 #include <llarp/util/aligned.hpp>
 #include <llarp/util/buffer.hpp>
 
+#include <oxenc/span.h>
+
 #include <algorithm>
 
 namespace llarp
@@ -127,6 +129,12 @@ namespace llarp
         void client_dh(const RouterID& remote);
 
         void server_dh(const Ed25519SecretKey& local_sk);
+
+        template <oxenc::string_like T>
+        void encrypt(T& data)
+        {
+            return encrypt(to_uspan(data));
+        }
 
         void encrypt(std::span<uint8_t> data);
 

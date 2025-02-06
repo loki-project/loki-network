@@ -27,12 +27,13 @@ namespace llarp::session
           _parent{parent},
           _tag{std::move(_t)},
           _remote{std::move(remote)},
+          session_keys{std::move(kx_data)},
           _remote_pivot_txid{std::move(remote_pivot_txid)},
           _use_tun{use_tun},
-          _is_outbound{is_outbound}
+          _is_outbound{is_outbound},
+          _is_snode_session{_is_outbound ? !_remote.is_client() : r.is_service_node()}
     {
-        if (kx_data.has_value())
-            session_keys = std::move(*kx_data);
+        set_new_current_path(std::move(_p));
 
         if (_use_tun)
             _recv_dgram = [this](std::vector<uint8_t> data) {
@@ -43,8 +44,6 @@ namespace llarp::session
                 _ep->manually_receive_packet(
                     NetworkPacket{oxen::quic::Path{}, bstring{reinterpret_cast<std::byte*>(data.data()), data.size()}});
             };
-
-        set_new_current_path(std::move(_p));
     }
 
     bool BaseSession::send_path_control_message(
@@ -55,7 +54,11 @@ namespace llarp::session
 
     bool BaseSession::send_path_data_message(std::string data)
     {
+        if (session_keys.has_value())
+            session_keys->encrypt(data);
+
         auto inner_payload = PATH::DATA::serialize_inner(std::move(data), _tag);
+
         auto intermediate_payload = PATH::DATA::serialize_intermediate(std::move(inner_payload), _remote_pivot_txid);
         return _r.send_data_message(
             _current_path->upstream_rid(), _current_path->make_path_message(std::move(intermediate_payload)));
@@ -63,6 +66,9 @@ namespace llarp::session
 
     void BaseSession::recv_path_data_message(std::vector<uint8_t> data)
     {
+        if (session_keys.has_value())
+            session_keys->decrypt(data);
+
         if (_recv_dgram)
             _recv_dgram(std::move(data));
         else
@@ -168,6 +174,7 @@ namespace llarp::session
         std::shared_ptr<path::Path> path,
         HopID remote_pivot_txid,
         session_tag _t,
+        intro_set _remote_intros,
         std::optional<shared_kx_data> kx_data)
         : PathHandler{parent._router, path::DEFAULT_PATHS_HELD},
           BaseSession{
@@ -180,7 +187,6 @@ namespace llarp::session
               _router.using_tun_if(),
               true,
               std::move(kx_data)},
-          _is_snode_session{not _remote.is_client()},
           _last_use{_router.now()}
     {
         // These can both be false but CANNOT both be true
@@ -188,6 +194,16 @@ namespace llarp::session
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
+
+        log::critical(logcat, "Populating intro map for {} intros!", _remote_intros.size());
+
+        for (auto& intro : _remote_intros)
+        {
+            if (intro.pivot_rid == _current_path->pivot_rid())
+                intro_path_mapping.emplace(intro, path::PathPtrSet{_current_path});
+            else
+                intro_path_mapping.emplace(intro, path::PathPtrSet{});
+        }
     }
 
     OutboundSession::~OutboundSession() = default;
@@ -210,21 +226,39 @@ namespace llarp::session
 
     void OutboundSession::blacklist_snode(const RouterID& snode) { (void)snode; }
 
-    bool OutboundSession::is_path_dead(std::shared_ptr<path::Path>, std::chrono::milliseconds dlt)
-    {
-        return dlt >= path::ALIVE_TIMEOUT;
-    }
-
     void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
     {
         log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
-        path::PathHandler::path_build_succeeded(p);
 
-        // TODO: why the fuck did we used to do this here...?
-        // if (p->obtain_exit(_auth->session_key(), _is_snode_service ? 1 : 0, p->upstream_txid().to_string()))
-        //     log::info(logcat, "Asking {} for exit", _remote);
-        // else
-        //     log::warning(logcat, "Failed to send exit request");
+        for (auto& [intro, pathset] : intro_path_mapping)
+        {
+            if (intro.pivot_rid == p->pivot_rid())
+            {
+                pathset.emplace(p);
+                log::debug(logcat, "Client intro {} has {} paths to remote pivot", intro, pathset.size());
+                break;
+            }
+        }
+
+        path::PathHandler::path_build_succeeded(p);
+    }
+
+    void OutboundSession::path_build_failed(std::shared_ptr<path::Path> p, bool timeout)
+    {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        Lock_t l(paths_mutex);
+
+        for (auto& [intro, pathset] : intro_path_mapping)
+        {
+            if (intro.pivot_rid == p->pivot_rid())
+            {
+                pathset.erase(p);
+                log::debug(logcat, "Client intro {} has {} paths to remote pivot", intro, pathset.size());
+                break;
+            }
+        }
+
+        path::PathHandler::path_build_failed(p, timeout);
     }
 
     void OutboundSession::reset_path_state()
@@ -278,23 +312,75 @@ namespace llarp::session
             log::info(logcat, "All paths dispatched path close message!");
         }
 
+        intro_path_mapping.clear();
+
         // base class dtor clears path map
         return path::PathHandler::stop(send_close);
     }
 
+    // void OutboundSession::tick(std::chrono::milliseconds /* now */)
+    // {
+    //     log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+    //     Lock_t l{paths_mutex};
+    //     size_t needed = num_paths_desired;
+
+    //     for (auto& [intro, count] : intro_path_count)
+    //     {
+    //         log::trace(
+    //             logcat,
+    //             "OutboundSession holding {}/{} paths needed to pivot:{}",
+    //             count,
+    //             PATHS_PER_INTRO,
+    //             intro.pivot_rid);
+
+    //         while (count < PATHS_PER_INTRO)
+    //             count += build_path_aligned_to_remote(intro.pivot_rid);
+
+    //         if (needed < count)
+    //             break;
+
+    //         needed -= count;
+    //     }
+    // }
+
     void OutboundSession::build_more(size_t n)
     {
         size_t count{0};
-        auto prid = _current_path->pivot_rid();
 
         log::critical(
-            logcat, "OutboundSession building {} paths (needed:{}) to pivot:{}", n, path::DEFAULT_PATHS_HELD, prid);
+            logcat,
+            "OutboundSession building {} paths to have a minimum of {} ({} intros held)",
+            n,
+            path::DEFAULT_PATHS_HELD,
+            intro_path_mapping.size());
 
-        for (size_t i = 0; i < n; ++i)
-            count += build_path_aligned_to_remote(prid);
+        for (auto& [intro, pathset] : intro_path_mapping)
+        {
+            if (pathset.size() >= PATHS_PER_INTRO)
+            {
+                log::trace(
+                    logcat, "OutboundSession already holds {} paths for intro to pivot {}", pathset.size(), intro);
+                continue;
+            }
 
-        if (count == n)
-            log::debug(logcat, "OutboundSession successfully initiated {} path-builds", n);
+            auto needed = PATHS_PER_INTRO - pathset.size();
+            for (size_t i = 0; i < needed; ++i)
+                count += build_path_aligned_to_remote(intro.pivot_rid);
+
+            log::debug(
+                logcat,
+                "OutboundSession built {} path(s) to have {} for intro to pivot {}",
+                needed,
+                PATHS_PER_INTRO,
+                intro);
+
+            if (count >= n)
+                break;
+        }
+
+        if (count >= n)
+            log::debug(logcat, "OutboundSession successfully initiated {} path-builds", count);
         else
             log::warning(logcat, "OutboundSession only initiated {} path-builds (needed: {})", count, n);
     }
@@ -302,6 +388,16 @@ namespace llarp::session
     std::shared_ptr<path::Path> OutboundSession::build1(std::vector<RemoteRC>& hops)
     {
         auto path = std::make_shared<path::Path>(_router, hops, get_weak(), true, _remote.is_client());
+
+        {
+            Lock_t l{paths_mutex};
+
+            if (auto [it, b] = _paths.try_emplace(path->upstream_rxid(), nullptr); not b)
+            {
+                log::warning(logcat, "Pending build to {} already underway... aborting...", path->upstream_rxid());
+                return nullptr;
+            }
+        }
 
         log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 

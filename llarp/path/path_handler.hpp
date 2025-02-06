@@ -75,19 +75,6 @@ namespace llarp
             static constexpr bool to_string_formattable = true;
         };
 
-        /// TODO: supplant the PathRole int typedef with this, potentially make these ints rather
-        /// bitshifted values. This would require redoing the PathRole logic, where roles
-        /// can be stacked with |=
-        ///
-        /// TODO: is a path role even necessary?
-        enum class Path_Role
-        {
-            ANY = 0,
-            EXIT = 1 << 1,
-            CLIENTSVC = 1 << 2,
-            SERVERSVC = 1 << 3
-        };
-
         struct PathHandler
         {
             friend struct Path;
@@ -109,7 +96,7 @@ namespace llarp
             using Lock_t = util::NullLock;
             mutable util::NullMutex paths_mutex;
 
-            // TESTNET: path mapping
+            // key: upstream rxid
             std::unordered_map<HopID, std::shared_ptr<Path>> _paths;
 
             /// return true if we hit our soft limit for building paths too fast on a first hop
@@ -119,7 +106,7 @@ namespace llarp
 
             virtual void path_died(std::shared_ptr<Path> p);
 
-            void path_build_failed(std::shared_ptr<Path> p, bool timeout = false);
+            virtual void path_build_failed(std::shared_ptr<Path> p, bool timeout = false);
 
             virtual void path_build_succeeded(std::shared_ptr<Path> p);
 

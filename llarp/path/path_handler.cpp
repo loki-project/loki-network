@@ -58,7 +58,6 @@ namespace llarp::path
         Lock_t l(paths_mutex);
 
         _paths.insert_or_assign(p->upstream_rxid(), p);
-
         _router.path_context()->add_path(p);
     }
 

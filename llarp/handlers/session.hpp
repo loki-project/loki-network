@@ -185,12 +185,27 @@ namespace llarp
 
             void _make_session_path(intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
+            // void _make_session_path(
+            //     ClientContact remote_cc,
+            //     intro_set intros,
+            //     NetworkAddress remote,
+            //     on_session_init_hook cb,
+            //     bool is_exit);
+
             void _make_session(
+                intro_set remote_intros,
                 NetworkAddress remote,
                 ClientIntro remote_intro,
                 std::shared_ptr<path::Path> path,
                 on_session_init_hook cb,
                 bool is_exit);
+
+            // void _make_session(
+            //     NetworkAddress remote,
+            //     ClientIntro remote_intro,
+            //     std::shared_ptr<path::Path> path,
+            //     on_session_init_hook cb,
+            //     bool is_exit);
         };
 
     }  // namespace handlers

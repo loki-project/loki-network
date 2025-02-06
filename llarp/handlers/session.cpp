@@ -274,13 +274,13 @@ namespace llarp::handlers
 
     void SessionEndpoint::lookup_client_intro(RouterID remote, std::function<void(std::optional<ClientContact>)> func)
     {
-        auto remote_key = hash_key::derive_from_rid(remote);
-
         if (auto maybe_intro = _router.contact_db().get_decrypted_cc(remote))
         {
             log::info(logcat, "Decrypted ClientContact for remote (rid: {}) found locally!", remote);
             return func(std::move(maybe_intro));
         }
+
+        auto remote_key = hash_key::derive_from_rid(remote);
 
         log::info(
             logcat,
@@ -519,7 +519,7 @@ namespace llarp::handlers
         return ret;
     }
 
-    /**
+    /** Session Initiation Message Structure:
 
         - 'k' : next HopID
         - 'n' : symmetric nonce
@@ -550,6 +550,7 @@ namespace llarp::handlers
                                         - bt-encoded dict, values TBD
      */
     void SessionEndpoint::_make_session(
+        intro_set intros,
         NetworkAddress remote,
         ClientIntro remote_intro,
         std::shared_ptr<path::Path> path,
@@ -558,13 +559,14 @@ namespace llarp::handlers
     {
         std::string inner_payload;
         shared_kx_data kx_data;
+        auto pivot_txid = intros.emplace(std::move(remote_intro)).first->pivot_txid;
 
         // internal payload for remote client
         std::tie(inner_payload, kx_data) = InitiateSession::serialize_encrypt(
             _router.local_rid(),
             remote.router_id(),
             path->pivot_txid(),
-            remote_intro.pivot_txid,
+            pivot_txid,
             fetch_auth_token(remote),
             _router.using_tun_if());
 
@@ -583,7 +585,8 @@ namespace llarp::handlers
             [this,
              remote,
              path,
-             remote_pivot_txid = remote_intro.pivot_txid,
+             remote_pivot_txid = pivot_txid,
+             remote_intros = std::move(intros),
              hook = std::move(cb),
              session_keys = std::move(kx_data)](oxen::quic::message m) mutable {
                 if (m)
@@ -610,6 +613,7 @@ namespace llarp::handlers
                         std::move(path),
                         std::move(remote_pivot_txid),
                         std::move(tag),
+                        std::move(remote_intros),
                         std::move(session_keys));
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
@@ -663,7 +667,7 @@ namespace llarp::handlers
                         logcat, "Call to InitiateSession FAILED; reason: {}", status.value_or("<none given>"));
                 }
             });
-        log::info(logcat, "mesage sent...");
+        log::info(logcat, "message sent...");
     }
 
     void SessionEndpoint::_make_session_path(
@@ -740,7 +744,12 @@ namespace llarp::handlers
                         log::critical(logcat, "PATH ESTABLISHED: {}", path->hop_string());
                         log::info(logcat, "Path build to remote:{} succeeded, initiating session!", remote);
                         return _make_session(
-                            std::move(remote), std::move(remote_intro), std::move(path), std::move(hook), is_exit);
+                            std::move(intros),
+                            std::move(remote),
+                            std::move(remote_intro),
+                            std::move(path),
+                            std::move(hook),
+                            is_exit);
                     }
 
                     try

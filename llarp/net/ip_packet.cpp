@@ -80,11 +80,13 @@ namespace llarp
         _is_v4 = _header->version == v4_header_version;
         auto keep_port = _proto == net::IPProtocol::UDP || _proto == net::IPProtocol::TCP;
 
-        uint16_t src_port =
-            (keep_port) ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)) : 0;
-        uint16_t dest_port = (keep_port)
-            ? *reinterpret_cast<uint16_t*>(data() + (static_cast<ptrdiff_t>(_header->header_len) * 4) + 2)
-            : 0;
+        uint16_t src_port = (keep_port) ? oxenc::big_to_host(*reinterpret_cast<uint16_t*>(
+                                data() + (static_cast<ptrdiff_t>(_header->header_len) * 4)))
+                                        : 0;
+
+        uint16_t dest_port = (keep_port) ? oxenc::big_to_host(*reinterpret_cast<uint16_t*>(
+                                 data() + (static_cast<ptrdiff_t>(_header->header_len) * 4) + 2))
+                                         : 0;
 
         if (_is_v4)
         {
@@ -130,16 +132,16 @@ namespace llarp
     {
         log::trace(logcat, "Setting new source ({}) and destination ({}) IPs", src, dst);
 
-        if (auto ihs = size_t(_header->header_len * 4); ihs <= size())
+        if (auto ihs = size_t(_header->header_len * 4), sz = size(); ihs <= sz)
         {
             auto* payload = data() + ihs;
-            auto payload_size = size() - ihs;
+            auto payload_size = sz - ihs;
             auto frag_off = size_t(oxenc::big_to_host(_header->frag_off) & 0x1Fff) * 8;
 
             switch (_header->protocol)
             {
                 case 6:  // TCP
-                    if (frag_off <= TCP_CSUM_OFF || payload_size >= TCP_CSUM_OFF - frag_off + 2)
+                    if (frag_off <= TCP_CSUM_OFF && payload_size >= TCP_CSUM_OFF - frag_off + 2)
                     {
                         auto* tcp_hdr = reinterpret_cast<tcp_header*>(payload);
                         tcp_hdr->checksum =
@@ -148,7 +150,7 @@ namespace llarp
                     break;
                 case 17:   // UDP
                 case 136:  // UDP-Lite - same checksum place, same 0->0xFFff condition
-                    if (frag_off <= UDP_CSUM_OFF || payload_size >= UDP_CSUM_OFF + 2)
+                    if (frag_off <= UDP_CSUM_OFF && payload_size >= UDP_CSUM_OFF + 2)
                     {
                         auto* udp_hdr = reinterpret_cast<udp_header*>(payload);
                         udp_hdr->checksum =
