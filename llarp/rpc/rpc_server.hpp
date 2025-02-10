@@ -76,15 +76,17 @@ namespace llarp
 
             void AddCategories();
 
+            void invoke(FindCC& findcc);
+            void invoke(SessionInit& sessioninit);
+            void invoke(SessionClose& sessionclose);
+            void invoke(Status& status);
+
+            void invoke(LookupSnode& lookupsnode);
             void invoke(Halt& halt);
             void invoke(Version& version);
-            void invoke(Status& status);
             void invoke(GetStatus& getstatus);
             void invoke(QuicConnect& quicconnect);
             void invoke(QuicListener& quiclistener);
-            void invoke(LookupSnode& lookupsnode);
-            void invoke(FindCC& findcc);
-            void invoke(SessionInit& sessioninit);
             void invoke(MapExit& mapexit);
             void invoke(ListExits& listexits);
             void invoke(UnmapExit& unmapexit);

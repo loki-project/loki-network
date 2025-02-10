@@ -60,7 +60,7 @@ namespace llarp
         /// How long before an RC becomes invalid (and thus deleted).
         inline static constexpr auto LIFETIME{30 * 24h};
 
-        ustring_view view() const { return _payload; }
+        std::string_view view() const { return {reinterpret_cast<const char*>(_payload.data()), _payload.size()}; }
 
         /// Getters for private attributes
         const oxen::quic::Address& addr() const { return _addr; }
@@ -105,7 +105,7 @@ namespace llarp
 
         virtual std::string to_string() const
         {
-            return "RC:['4'={} | 'i'='{}' | 'p'={} | 't'={} | v={}]"_format(
+            return "RC:[ '4'={} | 'i'='{}' | 'p'={} | 't'={} | v={} ]"_format(
                 _addr.to_string(), ACTIVE_NETID, _router_id, _timestamp.time_since_epoch().count(), VERSION);
         }
 
@@ -259,8 +259,6 @@ namespace llarp
             _payload = data;
         }
         ~RemoteRC() = default;
-
-        std::string_view view() const { return {reinterpret_cast<const char*>(_payload.data()), _payload.size()}; }
 
         bool verify() const;
 

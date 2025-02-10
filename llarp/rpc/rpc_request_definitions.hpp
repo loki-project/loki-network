@@ -290,7 +290,7 @@ namespace llarp::rpc
     //    "pk" : client pubkey
     //
     //  Returns:
-    //    "cc" : client contact
+    //    "cc" : client contact, or error string
     struct FindCC : RPCRequest
     {
         static constexpr auto name = "find_cc"sv;
@@ -302,14 +302,14 @@ namespace llarp::rpc
     };
 
     //  RPC: session_init
-    //    Initiate session to remote client
+    //    Initiate session to remote instance
     //
     //  Inputs:
-    //    "pk" : client pubkey
+    //    "pk" : remote pubkey
     //    "x"  : is exit session (boolean)
     //
     //  Returns:
-    //    "ip" : mapped IP address
+    //    "ip" : mapped IP address, or error string
     struct SessionInit : RPCRequest
     {
         static constexpr auto name = "session_init"sv;
@@ -318,6 +318,24 @@ namespace llarp::rpc
         {
             std::string pk;
             bool x;
+        } request;
+    };
+
+    //  RPC: session_close
+    //    Close session to remote instance
+    //
+    //  Inputs:
+    //    "pk" : remote pubkey
+    //
+    //  Returns:
+    //    "b" : T/F if close was successful
+    struct SessionClose : RPCRequest
+    {
+        static constexpr auto name = "session_close"sv;
+
+        struct request_paramters
+        {
+            std::string pk;
         } request;
     };
 
@@ -332,6 +350,7 @@ namespace llarp::rpc
         LookupSnode,
         FindCC,
         SessionInit,
+        SessionClose,
         MapExit,
         ListExits,
         SwapExits,

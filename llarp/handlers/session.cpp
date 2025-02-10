@@ -26,6 +26,44 @@ namespace llarp::handlers
         return {_sessions.count(), _local_range.to_string(), _is_exit_node};
     }
 
+    bool SessionEndpoint::close_session(NetworkAddress remote)
+    {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (auto s = _sessions.get_session(remote))
+        {
+            s->send_path_close();
+
+            if (s->using_tun())
+                _router.tun_endpoint()->unmap_session_to_local_ip(remote);
+
+            _sessions.unmap(remote);
+            log::info(logcat, "Session (remote:{}) closed and unmapped!", remote);
+            return true;
+        }
+
+        log::warning(logcat, "Could not find session (remote:{}) to close!", remote);
+        return false;
+    }
+
+    bool SessionEndpoint::close_session(session_tag t)
+    {
+        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (auto s = _sessions.get_session(t))
+        {
+            if (s->using_tun())
+                _router.tun_endpoint()->unmap_session_to_local_ip(s->remote());
+
+            _sessions.unmap(t);
+            log::info(logcat, "Session (tag:{}) closed and unmapped!", t);
+            return true;
+        }
+
+        log::warning(logcat, "Could not find session (tag:{}) to close!", t);
+        return false;
+    }
+
     void SessionEndpoint::tick(std::chrono::milliseconds now)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -415,6 +453,8 @@ namespace llarp::handlers
         return ret;
     }
 
+    static constexpr auto success_msg = "SessionEndpoint successfully created and mapped InboundSession object!"sv;
+
     std::optional<session_tag> SessionEndpoint::prefigure_session(
         NetworkAddress initiator,
         HopID remote_pivot_txid,
@@ -428,14 +468,13 @@ namespace llarp::handlers
             initiator, std::move(path), *this, std::move(remote_pivot_txid), tag, use_tun, std::move(kx_data));
 
         auto [session, _] = _sessions.insert_or_assign(std::move(initiator), std::move(inbound));
-
-        auto msg = "SessionEndpoint successfully created and mapped InboundSession object!";
+        session->activate();
 
         // TESTNET:
         // instruct the lokinet TUN device to create a mapping from a local IP to this session
         if (session->using_tun())
         {
-            log::info(logcat, "{} Instructing lokinet TUN device to create mapped route...", msg);
+            log::info(logcat, "{} Instructing lokinet TUN device to create mapped route...", success_msg);
 
             if (auto maybe_ip = _router.tun_endpoint()->map_session_to_local_ip(session->remote()))
             {
@@ -455,7 +494,7 @@ namespace llarp::handlers
         }
         else
         {
-            log::info(logcat, "{} Connecting to TCP backend to route session traffic...", msg);
+            log::info(logcat, "{} Connecting to TCP backend to route session traffic...", success_msg);
             // session->tcp_backend_connect();
         }
 
@@ -617,6 +656,7 @@ namespace llarp::handlers
                         std::move(session_keys));
 
                     auto [session, _] = _sessions.insert_or_assign(std::move(remote), std::move(outbound));
+                    session->activate();
 
                     log::info(logcat, "Outbound session to {} successfully created...", session->remote());
 
@@ -667,7 +707,8 @@ namespace llarp::handlers
                         logcat, "Call to InitiateSession FAILED; reason: {}", status.value_or("<none given>"));
                 }
             });
-        log::info(logcat, "message sent...");
+
+        log::debug(logcat, "message sent...");
     }
 
     void SessionEndpoint::_make_session_path(

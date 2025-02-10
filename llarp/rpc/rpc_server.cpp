@@ -316,19 +316,21 @@ namespace llarp::rpc
             return;
         }
 
-        _router.loop()->call([&]() {
+        _router.loop()->call([&, replier = findcc.move()]() mutable {
             _router.session_endpoint()->lookup_client_intro(pk, [&](std::optional<llarp::ClientContact> cc) {
+                nlohmann::json result;
                 if (cc)
                 {
                     auto cc_str = "{}"_format(*cc);
+                    result.emplace("cc", cc_str);
                     log::info(logcat, "RPC call to `find_cc` returned successfully: {}", cc_str);
-                    SetJSONResponse(cc_str, findcc.response);
                 }
                 else
                 {
                     log::warning(logcat, "RPC call to `find_cc` failed!");
-                    SetJSONError("ERROR", findcc.response);
+                    result.emplace("cc", "ERROR");
                 }
+                replier.reply(result.dump());
             });
         });
     }
@@ -337,6 +339,7 @@ namespace llarp::rpc
     {
         log_print_rpc(sessioninit);
 
+        // TESTNET: TODO: remove when relay sessions are streamlined
         if (_router.is_service_node())
         {
             SetJSONError("Not supported", sessioninit.response);
@@ -360,7 +363,7 @@ namespace llarp::rpc
         _router.loop()->call([&]() {
             try
             {
-                log::info(logcat, "Beginning session init to client: {}", pk.to_network_address(false));
+                log::debug(logcat, "Beginning session init to remote instance: {}", pk.to_network_address(false));
                 _router.session_endpoint()->_initiate_session(
                     NetworkAddress::from_pubkey(pk, true),
                     [&, replier = sessioninit.move()](ip_v ip) mutable {
@@ -368,18 +371,55 @@ namespace llarp::rpc
                         std::string a = std::holds_alternative<ipv4>(ip) ? std::get<ipv4>(ip).to_string()
                                                                          : std::get<ipv6>(ip).to_string();
                         result.emplace("ip", a);
-                        log::critical(logcat, "SUCCESS: {}", a);
+                        log::info(logcat, "RPC call to `session_init` succeeded: {}", a);
                         replier.reply(result.dump());
                     },
                     sessioninit.request.x);
+                log::info(logcat, "RPC Server dispatched `session_init` to remote:{}", pk.to_network_address(false));
             }
             catch (const std::exception& e)
             {
-                log::critical(logcat, "Failed to parse client netaddr: {}", e.what());
+                log::critical(logcat, "Failed to parse remote instance netaddr: {}", e.what());
             }
         });
+    }
 
-        log::info(logcat, "RPC Server dispatched `session_init` to remote:{}", pk.to_network_address(false));
+    void RPCServer::invoke(SessionClose& sessionclose)
+    {
+        log_print_rpc(sessionclose);
+
+        // TESTNET: TODO: remove when relay sessions are streamlined
+        if (_router.is_service_node())
+        {
+            SetJSONError("Not supported", sessionclose.response);
+            return;
+        }
+
+        RouterID pk;
+
+        if (sessionclose.request.pk.empty())
+        {
+            SetJSONError("No pubkey provided!", sessionclose.response);
+            return;
+        }
+
+        if (not pk.from_string(oxenc::from_base32z(sessionclose.request.pk)))
+        {
+            SetJSONError("Invalid pubkey provided: " + sessionclose.request.pk, sessionclose.response);
+            return;
+        }
+
+        _router.loop()->call([&]() {
+            try
+            {
+                // _router.session_endpoint()->close_session(session_tag t)
+                log::info(logcat, "RPC Server dispatched `session_close` to remote:{}", pk.to_network_address(false));
+            }
+            catch (const std::exception& e)
+            {
+                log::critical(logcat, "Failed to parse remote instance netaddr: {}", e.what());
+            }
+        });
     }
 
     // TODO: fix this because it's bad

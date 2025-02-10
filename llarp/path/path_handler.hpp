@@ -160,8 +160,6 @@ namespace llarp
             std::optional<std::vector<std::shared_ptr<Path>>> get_n_random_paths_conditional(
                 size_t n, std::function<bool(std::shared_ptr<Path>)> filter, bool exact = false);
 
-            virtual void reset_path_state();
-
             /// return true if we hit our soft limit for building paths too fast
             bool build_cooldown() const;
 

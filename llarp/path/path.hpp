@@ -90,15 +90,6 @@ namespace llarp
             bool publish_client_contact(
                 const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
 
-            bool close_exit(
-                const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> = nullptr);
-
-            bool obtain_exit(
-                const Ed25519SecretKey& sk,
-                uint64_t flag,
-                std::string tx_id,
-                std::function<void(oxen::quic::message)> func);
-
             /// sends a control request along a path
             ///
             /// performs the necessary onion encryption before sending.

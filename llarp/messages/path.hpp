@@ -65,7 +65,7 @@ namespace llarp
             try
             {
                 kx_data.server_dh(local_sk);
-                kx_data.decrypt(to_uspan(payload));
+                kx_data.decrypt(detail::to_uspan(payload));
 
                 log::trace(logcat, "xchacha -> payload: {}", buffer_printer{payload});
 
@@ -165,7 +165,7 @@ namespace llarp
                 // client dh key derivation
                 hop.kx.client_dh(hop.router_id());
                 // encrypt payload
-                hop.kx.encrypt(to_uspan(hop_payload));
+                hop.kx.encrypt(detail::to_uspan(hop_payload));
                 // generate nonceXOR value
                 hop.kx.generate_xor();
 
@@ -209,7 +209,7 @@ namespace llarp
                 try
                 {
                     hop->kx.server_dh(r.identity());
-                    hop->kx.decrypt(to_uspan(payload));
+                    hop->kx.decrypt(detail::to_uspan(payload));
                     hop->kx.generate_xor();
 
                     log::trace(

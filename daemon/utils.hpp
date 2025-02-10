@@ -9,58 +9,58 @@ namespace omq = oxenmq;
 
 namespace llarp::controller
 {
-    template <size_t N = 8>
-    struct switchboard
+    static auto logcat = log::Cat("rpc-controller");
+
+    struct lokinet_instance
     {
       private:
-        std::bitset<N> board{};
+        static size_t next_id;
 
       public:
-        bool test(size_t i = 0) const { return (i < N) ? board.test(i) : false; };
+        lokinet_instance() = delete;
+        lokinet_instance(omq::ConnectionID c) : ID{++next_id}, cid{std::move(c)} {}
 
-        template <typename T>
-            requires std::is_enum_v<T>
-        bool test(T i)
-        {
-            return test(meta::to_underlying(i));
-        }
-
-        template <typename T>
-            requires std::is_enum_v<T>
-        bool set(T i)
-        {
-            return set(meta::to_underlying(i));
-        }
-
-        bool set(size_t i = 0)
-        {
-            if (i >= N)
-                return false;
-
-            if (not board.test(i))
-            {
-                board.set(i, true);
-                return true;
-            }
-
-            return false;
-        }
-
-        bool unset(size_t i = 0)
-        {
-            if (i >= N)
-                return false;
-
-            if (board.test(i))
-            {
-                board.set(i, false);
-                return true;
-            }
-
-            return false;
-        }
-
-        void clear() { board.reset(); }
+        const size_t ID;
+        omq::ConnectionID cid;
     };
 
+    struct rpc_controller
+    {
+        static std::shared_ptr<rpc_controller> make(omq::LogLevel level)
+        {
+            return std::shared_ptr<rpc_controller>{new rpc_controller{level}};
+        }
+
+      private:
+        rpc_controller(omq::LogLevel level);
+
+        std::shared_ptr<omq::OxenMQ> _omq;
+        std::unordered_map<omq::address, lokinet_instance> _binds;
+        std::map<size_t, omq::address> _indexes;
+
+        void _initiate(omq::address src, std::string remote);
+        void _status(omq::address src);
+        void _close(omq::address src, std::string remote);
+
+      public:
+        bool omq_connect(const std::vector<std::string>& bind_addrs);
+
+        bool start(std::vector<std::string>& bind_addrs);
+
+        void list_all() const;
+
+        void refresh();
+
+        void initiate(size_t idx, std::string remote);
+
+        void initiate(omq::address src, std::string remote);
+
+        void status(omq::address src);
+
+        void status(size_t idx);
+
+        void close(omq::address src, std::string remote);
+
+        void close(size_t idx, std::string remote);
+    };
 }  // namespace llarp::controller

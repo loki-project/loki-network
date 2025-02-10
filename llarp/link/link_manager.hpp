@@ -250,7 +250,6 @@ namespace llarp
         int client_router_connections = 4;
 
       private:
-        // DHT messages
         // TESTNET: // NEW CLIENT_CONTACT HANDLERS
         void handle_publish_cc(oxen::quic::message);
         void handle_find_cc(oxen::quic::message);
@@ -262,24 +261,18 @@ namespace llarp
         void _handle_find_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_resolve_sns(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_initiate_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_close_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
         void handle_path_latency(oxen::quic::message);                      // relay
         void handle_path_transfer(oxen::quic::message);                     // relay
 
-        // Exit messages
-        void handle_obtain_exit(oxen::quic::message);  // relay
-        void handle_update_exit(oxen::quic::message);  // relay
-        void handle_close_exit(oxen::quic::message);   // relay
-
         // Sessions
         void handle_initiate_session(oxen::quic::message);
+        void handle_close_session(oxen::quic::message);
         void handle_set_session_tag(oxen::quic::message);
         void handle_set_session_path(oxen::quic::message);
-
-        // Misc
-        void handle_convo_intro(oxen::quic::message);
 
         // These requests come over a path (as a "path_control" request),
         // we may or may not need to make a request to another relay,
@@ -290,24 +283,17 @@ namespace llarp
                 {"publish_cc"sv, &LinkManager::_handle_publish_cc},
                 {"find_cc"sv, &LinkManager::_handle_find_cc},
                 {"resolve_sns"sv, &LinkManager::_handle_resolve_sns},
-                {"session_init"sv, &LinkManager::_handle_initiate_session}};
+                {"session_init"sv, &LinkManager::_handle_initiate_session},
+                {"session_close"sv, &LinkManager::_handle_close_session}};
 
         // Path relaying
         void handle_path_data_message(bstring dgram);
         void handle_path_control(oxen::quic::message);
-
-        void relay_path_request(oxen::quic::message m, std::string payload);
-
         void handle_path_request(oxen::quic::message m, std::string payload);
 
         // Path responses
         void handle_path_latency_response(oxen::quic::message);
         void handle_path_transfer_response(oxen::quic::message);
-
-        // Exit responses
-        void handle_obtain_exit_response(oxen::quic::message);
-        void handle_update_exit_response(oxen::quic::message);
-        void handle_close_exit_response(oxen::quic::message);
     };
 
     namespace link

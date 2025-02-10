@@ -4,198 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <oxenmq/oxenmq.h>
 
-#if defined(__linux__)
-extern "C"
-{
-#include <termios.h>
-}
-#endif
-
 using namespace llarp;
 using namespace nlohmann;
-
-namespace llarp::controller
-{
-    static auto logcat = log::Cat("rpc-controller");
-
-    constexpr auto omq_cat_logger = [](omq::LogLevel lvl, const char* file, int line, std::string buf) {
-        auto msg = "[{}:{}] {}"_format(file, line, buf);
-
-        switch (lvl)
-        {
-            case oxenmq::LogLevel::fatal:
-                log::critical(logcat, "{}", msg);
-                break;
-            case oxenmq::LogLevel::error:
-                log::error(logcat, "{}", msg);
-                break;
-            case oxenmq::LogLevel::warn:
-                log::warning(logcat, "{}", msg);
-                break;
-            case oxenmq::LogLevel::info:
-                log::info(logcat, "{}", msg);
-                break;
-            case oxenmq::LogLevel::debug:
-                log::debug(logcat, "{}", msg);
-                break;
-            case oxenmq::LogLevel::trace:
-            default:
-                log::trace(logcat, "{}", msg);
-                break;
-        }
-    };
-
-    struct lokinet_instance
-    {
-      private:
-        static size_t next_id;
-
-      public:
-        lokinet_instance() = delete;
-        lokinet_instance(omq::ConnectionID c) : ID{++next_id}, cid{std::move(c)} {}
-
-        const size_t ID;
-        omq::ConnectionID cid;
-    };
-
-    size_t lokinet_instance::next_id = 0;
-
-    struct rpc_controller
-    {
-        static std::shared_ptr<rpc_controller> make(omq::LogLevel level)
-        {
-            return std::shared_ptr<rpc_controller>{new rpc_controller{level}};
-        }
-
-      private:
-        rpc_controller(omq::LogLevel level) : _omq{std::make_shared<omq::OxenMQ>(omq_cat_logger, level)} {}
-
-        std::shared_ptr<omq::OxenMQ> _omq;
-        std::unordered_map<omq::address, lokinet_instance> _binds;
-        std::map<size_t, omq::address> _indexes;
-
-        void _initiate(omq::address src, std::string remote)
-        {
-            log::info(
-                logcat,
-                "Instructing lokinet instance (bind:{}) to initiate session to remote:{}",
-                src.full_address(),
-                remote);
-
-            nlohmann::json req;
-            req["pk"] = remote;
-            req["x"] = false;
-
-            if (auto it = _binds.find(src); it != _binds.end())
-                _omq->request(
-                    it->second.cid,
-                    "llarp.session_init",
-                    [&](bool success, std::vector<std::string> data) {
-                        if (success)
-                        {
-                            auto res = nlohmann::json::parse(data[0]);
-                            log::info(logcat, "RPC call to initiate session succeeded: {}", res.dump());
-                        }
-                        else
-                            log::critical(logcat, "RPC call to initiate session failed!");
-                    },
-                    req.dump());
-            else
-                log::critical(logcat, "Could not find connection ID to RPC bind {}", src.full_address());
-        }
-
-        void _status(omq::address src)
-        {
-            log::info(logcat, "Querying lokinet instance (bind:{}) for router status", src.full_address());
-
-            if (auto it = _binds.find(src); it != _binds.end())
-                _omq->request(it->second.cid, "llarp.status", [&](bool success, std::vector<std::string> data) {
-                    if (success)
-                    {
-                        auto res = nlohmann::json::parse(data[0]);
-                        log::info(logcat, "RPC call to query router status succeeded: \n{}\n", res.dump(4));
-                    }
-                    else
-                        log::critical(logcat, "RPC call to query router status failed!");
-                });
-            else
-                log::critical(logcat, "Could not find connection ID to RPC bind {}", src.full_address());
-        }
-
-      public:
-        bool omq_connect(const std::vector<std::string>& bind_addrs)
-        {
-            int i = 0;
-            std::vector<std::promise<bool>> connect_proms{bind_addrs.size()};
-
-            for (auto& b : bind_addrs)
-            {
-                omq::address bind{b};
-                log::info(logcat, "RPC controller connecting to RPC bind address ({})", bind.full_address());
-
-                auto cid = _omq->connect_remote(
-                    bind,
-                    [&, idx = i](auto) {
-                        log::info(
-                            logcat, "Loki controller successfully connected to RPC bind ({})", bind.full_address());
-                        connect_proms[idx].set_value(true);
-                    },
-                    [&, idx = i](auto, std::string_view msg) {
-                        log::info(
-                            logcat, "Loki controller failed to connect to RPC bind ({}): {}", bind.full_address(), msg);
-                        connect_proms[idx].set_value(false);
-                    });
-                auto it = _binds.emplace(bind, lokinet_instance{cid}).first;
-                _indexes.emplace(it->second.ID, it->first);
-                i += 1;
-            }
-
-            bool ret = true;
-
-            for (auto& p : connect_proms)
-                ret &= p.get_future().get();
-
-            return ret;
-        }
-
-        bool start(std::vector<std::string>& bind_addrs)
-        {
-            _omq->start();
-            return omq_connect(bind_addrs);
-        }
-
-        void list_all() const
-        {
-            auto msg = "\n\n\tLokinet RPC controller connected to {} RPC binds:\n"_format(_binds.size());
-            for (auto& [idx, addr] : _indexes)
-                msg += "\t\tID:{} | Address:{}\n"_format(idx, addr.full_address());
-
-            log::info(logcat, "{}", msg);
-        }
-
-        void refresh() { log::info(logcat, "TODO: implement this!"); }
-
-        void initiate(size_t idx, std::string remote)
-        {
-            if (auto it = _indexes.find(idx); it != _indexes.end())
-                _initiate(it->second, std::move(remote));
-            else
-                log::warning(logcat, "Could not find instance with given index: {}", idx);
-        }
-
-        void initiate(omq::address src, std::string remote) { return _initiate(std::move(src), std::move(remote)); }
-
-        void status(omq::address src) { return _status(std::move(src)); };
-
-        void status(size_t idx)
-        {
-            if (auto it = _indexes.find(idx); it != _indexes.end())
-                _status(it->second);
-            else
-                log::warning(logcat, "Could not find instance with given index: {}", idx);
-        }
-    };
-}  // namespace llarp::controller
 
 namespace
 {
@@ -211,6 +21,7 @@ namespace
         - refresh
         - init
         - status
+        - close
      */
 
     struct cli_opts
@@ -312,8 +123,8 @@ namespace
         iopt->excludes(aopt);
 
         auto* init_subcom =
-            instance_subcom->add_subcommand("init", "Initiate session to a remote client")->require_option(1);
-        init_subcom->add_option("-p, --pubkey", pubkey, "PubKey of remote lokinet client");
+            instance_subcom->add_subcommand("init", "Initiate session to a remote instance")->require_option(1);
+        init_subcom->add_option("-p, --pubkey", pubkey, "PubKey of remote lokinet instance");
 
         init_subcom->callback([&]() {
             if (not address.empty())
@@ -329,6 +140,17 @@ namespace
                 rpc->status(omq::address{std::move(address)});
             else
                 rpc->status(index);
+        });
+
+        auto* close_subcom =
+            instance_subcom->add_subcommand("close", "Close session to a remote instance")->require_option(1);
+        close_subcom->add_option("-p, --pubkey", pubkey, "PubKey of remote lokinet instance");
+
+        close_subcom->callback([&]() {
+            if (not address.empty())
+                rpc->close(omq::address{std::move(address)}, std::move(pubkey));
+            else
+                rpc->close(index, std::move(pubkey));
         });
 
         // notify startup successful
@@ -448,11 +270,11 @@ int main(int argc, char* argv[])
         std::promise<void> p;
         auto f = p.get_future();
 
-        std::thread app_thread(app_loop, std::move(options), std::move(p));
+        std::thread app_thread{app_loop, std::move(options), std::move(p)};
 
         f.get();
 
-        std::thread input_thread(input_loop);
+        std::thread input_thread{input_loop};
 
         app_thread.join();
         input_thread.join();

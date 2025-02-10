@@ -100,11 +100,9 @@ namespace llarp
 
     bool RelayContact::write(const fs::path& fname) const
     {
-        auto bte = view();
-
         try
         {
-            util::buffer_to_file(fname, bte.data(), bte.size());
+            util::buffer_to_file(fname, _payload.data(), _payload.size());
         }
         catch (const std::exception& e)
         {

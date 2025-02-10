@@ -35,6 +35,19 @@ namespace llarp
             return _sessions.size();
         }
 
+        /** Called by owning object to apply a callback to every session currently mapped
+         */
+        void for_each(std::function<void(std::shared_ptr<session_t>)> hook)
+        {
+            Lock_t l{session_mutex};
+
+            for (auto& [_, s] : _sessions)
+            {
+                if (s->is_active())
+                    hook(s);
+            }
+        }
+
         /** Called by owning object to tick OutboundSessions. InboundSession objects are not PathHandlers, so they have
             no concept of tick functionality
          */
@@ -44,10 +57,8 @@ namespace llarp
 
             for (auto& [_, s] : _sessions)
             {
-                if (s->is_outbound())
-                {
+                if (s->is_outbound() && s->is_active())
                     std::dynamic_pointer_cast<session::OutboundSession>(s)->tick(now);
-                }
             }
         }
 

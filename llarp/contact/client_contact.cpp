@@ -165,7 +165,7 @@ namespace llarp
 
     std::string ClientContact::to_string() const
     {
-        return "CC:['a'={} | 'e'={} | 'i'={{{}}} | 'p'={} | 's'={}]"_format(
+        return "CC:[ 'a'={} | 'e'={} | 'i'={{{}}} | 'p'={} | 's'={} ]"_format(
             pubkey, exit_policy.has_value(), fmt::join(intros, ","), protos, not SRVs.empty());
     }
 

@@ -936,9 +936,7 @@ namespace llarp::handlers
             log::debug(logcat, "TUN device unmapped session to remote: {}", remote);
         }
         else
-        {
-            log::debug(logcat, "TUN device could not unmap session (remote: {})", remote);
-        }
+            log::warning(logcat, "TUN device could not unmap session (remote: {})", remote);
     }
 
     // handles an outbound packet going OUT from user -> network

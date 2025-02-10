@@ -107,6 +107,10 @@ namespace llarp
                 return std::static_pointer_cast<session_t>(_sessions.get_session(remote));
             }
 
+            bool close_session(NetworkAddress remote);
+
+            bool close_session(session_tag t);
+
             void srv_records_changed();
 
             // This function can be called with the fields to be updated. ClientIntros are always passed, so there
@@ -185,13 +189,6 @@ namespace llarp
 
             void _make_session_path(intro_set intros, NetworkAddress remote, on_session_init_hook cb, bool is_exit);
 
-            // void _make_session_path(
-            //     ClientContact remote_cc,
-            //     intro_set intros,
-            //     NetworkAddress remote,
-            //     on_session_init_hook cb,
-            //     bool is_exit);
-
             void _make_session(
                 intro_set remote_intros,
                 NetworkAddress remote,
@@ -199,13 +196,6 @@ namespace llarp
                 std::shared_ptr<path::Path> path,
                 on_session_init_hook cb,
                 bool is_exit);
-
-            // void _make_session(
-            //     NetworkAddress remote,
-            //     ClientIntro remote_intro,
-            //     std::shared_ptr<path::Path> path,
-            //     on_session_init_hook cb,
-            //     bool is_exit);
         };
 
     }  // namespace handlers

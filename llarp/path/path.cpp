@@ -1,7 +1,6 @@
 #include "path.hpp"
 
 #include <llarp/messages/dht.hpp>
-#include <llarp/messages/exit.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
@@ -125,19 +124,6 @@ namespace llarp::path
 
     bool Path::operator!=(const Path& other) const { return not(*this == other); }
 
-    bool Path::obtain_exit(
-        const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(oxen::quic::message)> func)
-    {
-        return send_path_control_message(
-            "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
-    }
-
-    bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(oxen::quic::message)> func)
-    {
-        return send_path_control_message(
-            "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
-    }
-
     bool Path::find_client_contact(const hash_key& location, std::function<void(oxen::quic::message)> func)
     {
         return send_path_control_message("find_cc", FindClientContact::serialize(location), std::move(func));
@@ -227,8 +213,12 @@ namespace llarp::path
 
     std::string Path::to_string() const
     {
-        return "Path:[ Local RID:{} -- Edge TX:{}/RX:{} ]"_format(
-            _router.local_rid().ShortString(), upstream_txid().to_string(), upstream_rxid().to_string());
+        return "Path:[ Active:{} | Session linked:{} | Local RID:{} | Edge TX:{}/RX:{} ]"_format(
+            detail::bool_alpha(is_ready()),
+            detail::bool_alpha(_is_session_path),
+            _router.local_rid().ShortString(),
+            upstream_txid().to_string(),
+            upstream_rxid().to_string());
     }
 
     std::string Path::hop_string() const

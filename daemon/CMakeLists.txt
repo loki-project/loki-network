@@ -1,5 +1,8 @@
 set(exetargets lokinet)
 
+add_library(lokinet_daemon STATIC utils.cpp)
+target_link_libraries(lokinet_daemon PUBLIC lokinet-base lokinet-core)
+
 if(APPLE)
   add_executable(lokinet lokinet.swift)
   target_compile_options(lokinet BEFORE PRIVATE -target x86_64-apple-macos${CMAKE_OSX_DEPLOYMENT_TARGET})
@@ -17,10 +20,6 @@ if(WITH_BOOTSTRAP)
   enable_lto(lokinet-bootstrap)
 endif()
 
-
-if(TRACY_ROOT)
-  target_sources(lokinet PRIVATE ${TRACY_ROOT}/TracyClient.cpp)
-endif()
 
 set(should_install ON)
 set(SETCAP)
@@ -60,7 +59,8 @@ foreach(exe ${exetargets})
   elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     target_link_directories(${exe} PRIVATE /usr/local/lib)
   endif()
-  target_link_libraries(${exe} PUBLIC lokinet-base lokinet-core)
+#  target_link_libraries(${exe} PUBLIC lokinet-base lokinet-core)
+  target_link_libraries(${exe} PRIVATE lokinet_daemon)
   if(STRIP_SYMBOLS)
     add_custom_command(TARGET ${exe}
       POST_BUILD

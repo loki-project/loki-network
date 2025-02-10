@@ -26,6 +26,7 @@ namespace llarp
 
         inline const auto AUTH_ERROR = messages::serialize_response({{messages::STATUS_KEY, "AUTH ERROR"}});
         inline const auto BAD_PATH = messages::serialize_response({{messages::STATUS_KEY, "BAD PATH"}});
+        inline const auto BAD_ADDRESS = messages::serialize_response({{messages::STATUS_KEY, "BAD ADDRESS"}});
 
         inline static std::tuple<std::string, shared_kx_data> serialize_encrypt(
             const RouterID& local,
@@ -147,6 +148,34 @@ namespace llarp
 
     }  // namespace InitiateSession
 
+    namespace CloseSession
+    {
+        static auto logcat = llarp::log::Cat("session-close");
+
+        inline static std::string serialize(session_tag& t)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("t", t.view());
+            return std::move(btdp).str();
+        }
+
+        inline static session_tag deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        {
+            try
+            {
+                session_tag tag;
+                tag.read(btdc.require<std::string_view>("t"));
+                return tag;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing session close response:{}", e.what());
+                throw;
+            }
+        }
+
+    }  // namespace CloseSession
+
     /** Fields for setting a session tag:
      */
     namespace SetSessionTag
@@ -154,15 +183,6 @@ namespace llarp
         inline static std::string serialize()
         {
             oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                //
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: SetSessionTagMessage failed to bt encode contents");
-            }
 
             return std::move(btdp).str();
         };
@@ -175,15 +195,6 @@ namespace llarp
         inline static std::string serialize()
         {
             oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                //
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: SetSessionPathMessage failed to bt encode contents");
-            }
 
             return std::move(btdp).str();
         };

@@ -421,11 +421,13 @@ namespace llarp
                         std::set<RemoteRC> rcs;
                         oxenc::bt_dict_consumer btdc{m.body()};
 
-                        {
-                            auto btlc = btdc.require<oxenc::bt_list_consumer>("rcs"sv);
+                        btdc.required("r");
 
-                            while (not btlc.is_finished())
-                                rcs.emplace(btlc.consume_dict_data());
+                        {
+                            auto sublist = btdc.consume_list_consumer();
+
+                            while (not sublist.is_finished())
+                                rcs.emplace(sublist.consume_dict_data());
                         }
 
                         return rc_fetch_result(std::move(rcs));
@@ -508,14 +510,16 @@ namespace llarp
                             std::set<RouterID> router_ids;
                             oxenc::bt_dict_consumer btdc{m.body()};
 
-                            {
-                                auto btlc = btdc.require<oxenc::bt_list_consumer>("routers");
+                            btdc.required("r");
 
-                                while (not btlc.is_finished())
-                                    router_ids.emplace(btlc.consume_string_view());
+                            {
+                                auto sublist = btdc.consume_list_consumer();
+
+                                while (not sublist.is_finished())
+                                    router_ids.emplace(sublist.consume_string_view());
                             }
 
-                            btdc.require_signature("signature", [&target](ustring_view msg, ustring_view sig) {
+                            btdc.require_signature("~", [&target](ustring_view msg, ustring_view sig) {
                                 if (sig.size() != 64)
                                     throw std::runtime_error{"Invalid signature: not 64 bytes"};
                                 if (not crypto::verify(target, msg, sig))
@@ -531,8 +535,6 @@ namespace llarp
                             ingest_fetched_rids(source);
                         }
                     }
-
-                    // rid_fetch_result();
                 });
 
             fetch_counter += 1;
@@ -590,12 +592,13 @@ namespace llarp
             _router.loop()->call_later(approximate_time(5s, 5), [&]() {
                 fetch_rids();
                 _rid_fetch_ticker = _router.loop()->call_every(
-                    FETCH_INTERVAL, [this]() { fetch_rids(); }, not _needs_bootstrap);
+                    FETCH_INTERVAL, [this]() mutable { fetch_rids(); }, not _needs_bootstrap);
             });
 
             _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+                fetch_rcs();
                 _rc_fetch_ticker = _router.loop()->call_every(
-                    FETCH_INTERVAL, [this]() { fetch_rcs(); }, not _needs_bootstrap);
+                    FETCH_INTERVAL, [this]() mutable { fetch_rcs(); }, not _needs_bootstrap);
             });
         }
     }
@@ -709,18 +712,20 @@ namespace llarp
                     return;
                 }
 
-                size_t num = 0;
+                size_t num = 0, accepted = 0;
 
                 try
                 {
                     oxenc::bt_dict_consumer btdc{m.body()};
 
-                    {
-                        auto btlc = btdc.require<oxenc::bt_list_consumer>("rcs"sv);
+                    btdc.required("r");
 
-                        while (not btlc.is_finished())
+                    {
+                        auto sublist = btdc.consume_list_consumer();
+
+                        while (not sublist.is_finished())
                         {
-                            put_rc(RemoteRC{btlc.consume_dict_data()});
+                            accepted += put_rc(RemoteRC{sublist.consume_dict_data()});
                             ++num;
                         }
                     }
@@ -735,10 +740,11 @@ namespace llarp
                 {
                     log::critical(
                         logcat,
-                        "{} BootstrapRC fetch successfully produced {} RCs ({} minimum needed)",
+                        "{} BootstrapRC fetch successfully produced {} RCs ({} minimum needed) with {} accepted",
                         _is_service_node ? "Relay" : "Client",
                         num,
-                        MIN_ACTIVE_RCS);
+                        MIN_ACTIVE_RCS,
+                        accepted);
                     return stop_bootstrap(/* true */);
                 }
 

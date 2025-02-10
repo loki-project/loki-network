@@ -39,6 +39,6 @@ namespace llarp
 
     std::string ClientIntro::to_string() const
     {
-        return "CI:['k'={} | 'p'={} | 'x'={}]"_format(pivot_rid, pivot_txid, expiry.count());
+        return "CI 'k'={} | 'p'={} | 'x'={} ]"_format(pivot_rid, pivot_txid, expiry.count());
     }
 }  //  namespace llarp

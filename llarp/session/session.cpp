@@ -4,6 +4,7 @@
 #include <llarp/handlers/session.hpp>
 #include <llarp/link/tunnel.hpp>
 #include <llarp/messages/path.hpp>
+#include <llarp/messages/session.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/util/formattable.hpp>
 
@@ -31,7 +32,8 @@ namespace llarp::session
           _remote_pivot_txid{std::move(remote_pivot_txid)},
           _use_tun{use_tun},
           _is_outbound{is_outbound},
-          _is_snode_session{_is_outbound ? !_remote.is_client() : r.is_service_node()}
+          _is_snode_session{_is_outbound ? !_remote.is_client() : r.is_service_node()},
+          _is_exit_session{session_keys.has_value() && !_is_snode_session}
     {
         set_new_current_path(std::move(_p));
 
@@ -168,6 +170,36 @@ namespace llarp::session
 
     void BaseSession::set_new_tag(const session_tag& tag) { _tag = tag; }
 
+    void BaseSession::activate()
+    {
+        _is_active = true;
+        log::debug(logcat, "Session to remote ({}) activated!", _remote);
+    }
+
+    void BaseSession::deactivate()
+    {
+        _is_active = false;
+        log::debug(logcat, "Session to remote ({}) deactivated!", _remote);
+    }
+
+    void BaseSession::send_path_close()
+    {
+        log::debug(logcat, "Dispatching close session message...");
+        _current_path->send_path_control_message(
+            "session_close", CloseSession::serialize(_tag), [remote = _remote](oxen::quic::message m) mutable {
+                log::info(logcat, "Remote ({}) {} session", remote, m ? "successfully closed" : "failed to close");
+            });
+    }
+
+    std::string BaseSession::to_string() const
+    {
+        return "{}BSession:[ active:{} | exit:{} | {} ]"_format(
+            detail::bool_alpha(_is_outbound, "O", "I"),
+            detail::bool_alpha(_is_active),
+            detail::bool_alpha(_is_exit_session),
+            _current_path->to_string());
+    }
+
     OutboundSession::OutboundSession(
         NetworkAddress remote,
         handlers::SessionEndpoint& parent,
@@ -261,27 +293,6 @@ namespace llarp::session
         path::PathHandler::path_build_failed(p, timeout);
     }
 
-    void OutboundSession::reset_path_state()
-    {
-        // TODO: should we be closing exits on internal state reset?
-        auto sendExitClose = [&](const std::shared_ptr<path::Path> p) {
-            // const static auto roles = llarp::path::ePathRoleExit | llarp::path::ePathRoleSVC;
-            (void)p;
-
-            // if (p->SupportsAnyRoles(roles))
-            // {
-            //   log::info(logcat, "{} closing exit path", p->name());
-            //   if (p->close_exit(_session_key, p->TXID().bt_encode()))
-            //     p->ClearRoles(roles);
-            //   else
-            //     llarp::LogWarn(p->name(), " failed to send exit close message");
-            // }
-        };
-
-        for_each_path(sendExitClose);
-        path::PathHandler::reset_path_state();
-    }
-
     bool OutboundSession::stop(bool send_close)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
@@ -318,31 +329,15 @@ namespace llarp::session
         return path::PathHandler::stop(send_close);
     }
 
-    // void OutboundSession::tick(std::chrono::milliseconds /* now */)
-    // {
-    //     log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-
-    //     Lock_t l{paths_mutex};
-    //     size_t needed = num_paths_desired;
-
-    //     for (auto& [intro, count] : intro_path_count)
-    //     {
-    //         log::trace(
-    //             logcat,
-    //             "OutboundSession holding {}/{} paths needed to pivot:{}",
-    //             count,
-    //             PATHS_PER_INTRO,
-    //             intro.pivot_rid);
-
-    //         while (count < PATHS_PER_INTRO)
-    //             count += build_path_aligned_to_remote(intro.pivot_rid);
-
-    //         if (needed < count)
-    //             break;
-
-    //         needed -= count;
-    //     }
-    // }
+    /** TESTNET: TODO:
+        - change intro_path_map to hold sets of Path weak ptrs
+        - expire on ::tick()
+     */
+    void OutboundSession::tick(std::chrono::milliseconds now)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        path::PathHandler::tick(now);
+    }
 
     void OutboundSession::build_more(size_t n)
     {
@@ -402,15 +397,6 @@ namespace llarp::session
         log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
-    }
-
-    void OutboundSession::send_path_close(std::shared_ptr<path::Path> p)
-    {
-        (void)p;
-        // if (p->close_exit(_session_key, p->upstream_txid().to_string()))
-        //     log::info(logcat, "Sent path close on path {}", p->to_string());
-        // else
-        //     log::warning(logcat, "Failed to send path close on path {}", p->to_string());
     }
 
     bool OutboundSession::is_ready() const

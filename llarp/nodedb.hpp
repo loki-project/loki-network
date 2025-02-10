@@ -233,11 +233,6 @@ namespace llarp
         bool is_bootstrap_node(const RemoteRC& rc) const;
         void purge_rcs(std::chrono::milliseconds now = llarp::time_now_ms());
 
-        //  Bootstrap fallback fetching
-        // void fallback_to_bootstrap();
-        // void post_snode_bootstrap();
-        // void bootstrap_cooldown();
-
         // Populate rid_sources with random sample from known_rids. A set of rids is passed
         // if only specific RID's need to be re-selected; to re-select all, pass the member
         // variable ::known_rids

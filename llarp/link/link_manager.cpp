@@ -5,7 +5,6 @@
 #include <llarp/contact/contactdb.hpp>
 #include <llarp/contact/router_id.hpp>
 #include <llarp/messages/dht.hpp>
-#include <llarp/messages/exit.hpp>
 #include <llarp/messages/fetch.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
@@ -228,6 +227,11 @@ namespace llarp
             s->register_handler("session_init"s, [this](oxen::quic::message m) mutable {
                 _router.loop()->call([&, msg = std::move(m)]() mutable { handle_initiate_session(std::move(msg)); });
             });
+
+            s->register_handler("session_close"s, [this](oxen::quic::message m) mutable {
+                _router.loop()->call([&, msg = std::move(m)]() mutable { handle_close_session(std::move(msg)); });
+            });
+
             log::debug(logcat, "Registered all client-only BTStream commands!");
             return;
         }
@@ -736,7 +740,7 @@ namespace llarp
                 continue;
 
             count += send_control_message(
-                rid, "gossip_rc"s, GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
+                rid, "gossip_rc", GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
                     log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
                 });
         }
@@ -754,9 +758,9 @@ namespace llarp
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            btdc.required("rc");
+            btdc.required("r");
             rc = RemoteRC{btdc.consume_dict_data()};
-            src.from_relay_address(btdc.require<std::string>("sender"));
+            src.from_relay_address(btdc.require<std::string>("s"));
         }
         catch (const std::exception& e)
         {
@@ -788,13 +792,13 @@ namespace llarp
 
         if (auto conn = ep->get_service_conn(rid); conn)
         {
-            conn->control_stream->command("bfetch_rcs"s, std::move(payload), std::move(func));
+            conn->control_stream->command("bfetch_rcs", std::move(payload), std::move(func));
             log::debug(logcat, "Dispatched bootstrap fetch request!");
             return;
         }
 
         _router.loop()->call([this, source, payload, f = std::move(func), rid = rid]() {
-            connect_and_send(rid, "bfetch_rcs"s, std::move(payload), std::move(f));
+            connect_and_send(rid, "bfetch_rcs", std::move(payload), std::move(f));
         });
     }
 
@@ -810,10 +814,10 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            if (btdc.skip_until("local"))
+            if (btdc.skip_until("l"))
                 remote.emplace(btdc.consume_dict_data());
 
-            quantity = btdc.require<size_t>("quantity");
+            quantity = btdc.require<size_t>("q");
         }
         catch (const std::exception& e)
         {
@@ -829,10 +833,6 @@ namespace llarp
 
             if (is_snode)
             {
-                // we already insert the
-                // TESTNET: REMOVE BEFORE TESTING NONLOCALLY
-                // node_db->put_rc(*remote);
-
                 auto remote_rc = *remote;
 
                 if (node_db->registered_routers().count(remote_rc.router_id()))
@@ -865,7 +865,7 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto sublist = btdp.append_list("rcs");
+            auto sublist = btdp.append_list("r");
 
             if (count == 0)
                 log::error(logcat, "No known RCs locally to send!");
@@ -906,11 +906,13 @@ namespace llarp
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            {
-                auto btlc = btdc.require<oxenc::bt_list_consumer>("explicit_ids");
+            btdc.required("x");
 
-                while (not btlc.is_finished())
-                    explicit_ids.emplace(btlc.consume<ustring_view>().data());
+            {
+                auto sublist = btdc.consume_list_consumer();
+
+                while (not sublist.is_finished())
+                    explicit_ids.emplace(sublist.consume_string_view());
             }
         }
         catch (const std::exception& e)
@@ -923,7 +925,7 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto sublist = btdp.append_list("rcs");
+            auto sublist = btdp.append_list("r");
 
             int count = 0;
             for (const auto& rid : explicit_ids)
@@ -949,7 +951,7 @@ namespace llarp
 
         log::trace(logcat, "payload: {}", payload);
 
-        send_control_message(via, "fetch_rids"s, std::move(payload), std::move(func));
+        send_control_message(via, "fetch_rids", std::move(payload), std::move(func));
     }
 
     void LinkManager::handle_fetch_router_ids(oxen::quic::message m)
@@ -964,7 +966,7 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            source.from_network_address(btdc.require<std::string_view>("source"));
+            source.from_string(btdc.require<std::string_view>("s"));
         }
         catch (const std::exception& e)
         {
@@ -979,7 +981,7 @@ namespace llarp
 
             auto payload = FetchRIDMessage::serialize(source);
             send_control_message(
-                source, "fetch_rids"s, std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
+                source, "fetch_rids", std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
                     original.respond(msg.body(), msg.is_error());
                 });
             return;
@@ -989,16 +991,16 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto btlp = btdp.append_list("routers");
+            auto btlp = btdp.append_list("r");
 
             for (const auto& rid : known_rids)
                 btlp.append(rid.to_view());
         }
 
-        btdp.append_signature("signature", [this](ustring_view to_sign) {
+        btdp.append_signature("~", [this](ustring_view to_sign) {
             std::array<unsigned char, 64> sig;
 
-            if (!crypto::sign(const_cast<unsigned char*>(sig.data()), _router.identity(), to_sign))
+            if (!crypto::sign(sig.data(), _router.identity(), to_sign))
                 throw std::runtime_error{"Failed to sign fetch RouterIDs response"};
 
             return sig;
@@ -1677,6 +1679,12 @@ namespace llarp
                 return m.respond(InitiateSession::AUTH_ERROR, true);
             }
 
+            if (initiator.router_id() == _router.local_rid())
+            {
+                log::info(logcat, "Received request to initiate session from local instance; ignoring!");
+                return m.respond(InitiateSession::BAD_ADDRESS, true);
+            }
+
             path_ptr = _router.path_context()->get_path(local_pivot_txid);
 
             if (not path_ptr)
@@ -1707,12 +1715,33 @@ namespace llarp
         m.respond(messages::ERROR_RESPONSE, true);
     }
 
-    // TESTNET: pretty sure this isn't called ever -> do not register it
-    void LinkManager::handle_initiate_session(oxen::quic::message m)
+    void LinkManager::handle_initiate_session(oxen::quic::message m) { return _handle_initiate_session(std::move(m)); }
+
+    void LinkManager::_handle_close_session(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        log::critical(logcat, "{} called, LOOK AT WHY", __PRETTY_FUNCTION__);
-        return _handle_initiate_session(std::move(m));
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        session_tag tag;
+
+        try
+        {
+            if (inner_body)
+                tag = CloseSession::deserialize_response(oxenc::bt_dict_consumer{*inner_body});
+            else
+                tag = CloseSession::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+
+            if (_router.session_endpoint()->close_session(tag))
+                return m.respond(messages::OK_RESPONSE);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        m.respond(messages::ERROR_RESPONSE, true);
     }
+
+    void LinkManager::handle_close_session(oxen::quic::message m) { return _handle_close_session(std::move(m)); }
 
     void LinkManager::handle_path_latency(oxen::quic::message m)
     {
@@ -1765,303 +1794,6 @@ namespace llarp
         {
             log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-    }
-
-    void LinkManager::handle_obtain_exit(oxen::quic::message m)
-    {
-        [[maybe_unused]] uint64_t flag;
-        ustring_view sig;
-        std::string_view dict_data;
-
-        HopID txid;
-        RouterID target;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-
-                flag = btdc.require<uint64_t>("E");
-                target.from_string(btdc.require<std::string_view>("I"));
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            throw;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        const auto rx_id = transit_hop->rxid();
-
-        // TODO:
-        auto success = (crypto::verify(to_usv(target.to_view()), to_usv(dict_data), sig)
-                        /* and _router.exit_context()->obtain_new_exit(PubKey{pubkey.data()}, rx_id, flag != 0) */);
-
-        m.respond(ObtainExitMessage::sign_and_serialize_response(_router.identity(), txid), not success);
-    }
-
-    void LinkManager::handle_obtain_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "ObtainExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            throw;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            if (crypto::verify(_router.local_rid(), to_usv(dict_data), sig))
-                path_ptr->enable_exit_traffic();
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for ObtainExitMessage!", txid.to_view());
-        }
-    }
-
-    void LinkManager::handle_update_exit(oxen::quic::message m)
-    {
-        std::string_view path_id, dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
-
-            sig = to_usv(btlc.consume_string_view());
-            path_id = btdc.require<std::string_view>("P");
-            txid.from_string(btdc.require<std::string_view>("T"));
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        // TODO:
-        // if (auto exit_ep =
-        //         _router.exit_context().find_endpoint_for_path(PathID_t{to_usv(path_id).data()}))
-        // {
-        //   if (crypto::verify(exit_ep->PubKey().data(), to_usv(dict_data), sig))
-        //   {
-        //     (exit_ep->UpdateLocalPath(transit_hop->info.rxID))
-        //         ? m.respond(UpdateExitMessage::sign_and_serialize_response(_router.identity(),
-        //         tx_id)) : m.respond(
-        //             serialize_response({{messages::STATUS_KEY,
-        //             UpdateExitMessage::UPDATE_FAILED}}), true);
-        //   }
-        //   // If we fail to verify the message, no-op
-        // }
-    }
-
-    void LinkManager::handle_update_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "UpdateExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            if (crypto::verify(_router.local_rid(), to_usv(dict_data), sig))
-            {
-                // if (path_ptr->update_exit(std::stoul(tx_id)))
-                // {
-                //     // TODO: talk to tom and Jason about how this stupid shit was a no-op originally
-                //     // see Path::HandleUpdateExitVerifyMessage
-                // }
-                // else
-                // {
-                // }
-            }
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for UpdateExitMessage!", txid.to_view());
-        }
-    }
-
-    void LinkManager::handle_close_exit(oxen::quic::message m)
-    {
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        const auto rx_id = transit_hop->rxid();
-
-        // TODO:
-        // if (auto exit_ep = router().exit_context().find_endpoint_for_path(rx_id))
-        // {
-        //   if (crypto::verify(exit_ep->PubKey().data(), to_usv(dict_data), sig))
-        //   {
-        //     exit_ep->Close();
-        //     m.respond(CloseExitMessage::sign_and_serialize_response(_router.identity(), tx_id));
-        //   }
-        // }
-
-        m.respond(serialize_response({{messages::STATUS_KEY, CloseExitMessage::UPDATE_FAILED}}), true);
-    }
-
-    void LinkManager::handle_close_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "CloseExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view nonce, dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-                nonce = btdc.require<std::string_view>("Y");
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            //
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for CloseExitMessage!", txid.to_view());
-        }
-        // TODO:
-        // if (path_ptr->SupportsAnyRoles(path::ePathRoleExit | path::ePathRoleSVC)
-        //     and crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
-        //   path_ptr->mark_exit_closed();
-    }
-
-    void LinkManager::handle_convo_intro(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "Convo intro message timed out!");
-            return;
-        }
-
-        try
-        {
-            //
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
     }

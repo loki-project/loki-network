@@ -59,6 +59,7 @@ namespace llarp
 
             bool _use_tun;
             bool _is_outbound;
+            bool _is_active{false};
 
             const bool _is_snode_session{false};
             const bool _is_exit_session{false};
@@ -124,6 +125,18 @@ namespace llarp
             void set_new_tag(const session_tag& tag);
 
             bool is_exit_session() const { return _is_exit_session; }
+
+            bool is_active() const { return _is_active; }
+
+            void activate();
+
+            void deactivate();
+
+            void send_path_close();
+
+            virtual std::string to_string() const;
+
+            static constexpr bool to_string_formattable = true;
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -156,15 +169,13 @@ namespace llarp
 
             void blacklist_snode(const RouterID& snode) override;
 
-            // void tick(std::chrono::milliseconds now) override;
+            void tick(std::chrono::milliseconds now) override;
 
             void build_more(size_t n = 0) override;
 
             std::shared_ptr<path::Path> build1(std::vector<RemoteRC>& hops) override;
 
             nlohmann::json ExtractStatus() const;
-
-            void reset_path_state() override;
 
             void path_died(std::shared_ptr<path::Path> p) override;
 
@@ -173,8 +184,6 @@ namespace llarp
             void path_build_failed(std::shared_ptr<path::Path> p, bool timeout = false) override;
 
             bool stop(bool send_close = false) override;
-
-            void send_path_close(std::shared_ptr<path::Path> p);
 
             bool is_ready() const;
 

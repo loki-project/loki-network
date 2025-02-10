@@ -21,6 +21,8 @@
 
 namespace llarp
 {
+    using namespace std::literals;
+
     using cspan = oxenc::const_span<const char>;
     using uspan = oxenc::const_span<const unsigned char>;
     using span = oxenc::const_span<const std::byte>;
@@ -35,14 +37,25 @@ namespace llarp
         return {reinterpret_cast<const unsigned char*>(str), len};
     }
 
-    // Helper function to switch between string_view and ustring_view
-    inline ustring_view to_usv(std::string_view v) { return {reinterpret_cast<const uint8_t*>(v.data()), v.size()}; }
-
-    template <oxenc::basic_char T>
-    inline std::span<uint8_t> to_uspan(std::basic_string<T>& v)
+    namespace detail
     {
-        return std::span<uint8_t>{reinterpret_cast<uint8_t*>(v.data()), v.size()};
-    }
+        // Helper function to switch between string_view and ustring_view
+        inline ustring_view to_usv(std::string_view v)
+        {
+            return {reinterpret_cast<const uint8_t*>(v.data()), v.size()};
+        }
+
+        template <oxenc::basic_char T>
+        inline std::span<uint8_t> to_uspan(std::basic_string<T>& v)
+        {
+            return std::span<uint8_t>{reinterpret_cast<uint8_t*>(v.data()), v.size()};
+        }
+
+        static constexpr auto T = "T"sv, F = "F"sv;
+
+        inline constexpr auto bool_alpha(bool b, std::string_view t = T, std::string_view f = F) { return b ? t : f; }
+    }  // namespace detail
+
 }  // namespace llarp
 
 /// TODO: replace usage of these with std::span (via a backport until we move to C++20).  That's a

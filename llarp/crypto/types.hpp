@@ -133,7 +133,7 @@ namespace llarp
         template <oxenc::string_like T>
         void encrypt(T& data)
         {
-            return encrypt(to_uspan(data));
+            return encrypt(detail::to_uspan(data));
         }
 
         void encrypt(std::span<uint8_t> data);

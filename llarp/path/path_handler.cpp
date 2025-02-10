@@ -166,12 +166,6 @@ namespace llarp::path
         return selected;
     }
 
-    void PathHandler::reset_path_state()
-    {
-        build_interval_limit = PATH_BUILD_RATE;
-        last_build = 0s;
-    }
-
     // called within the scope of locked mutex
     void PathHandler::tick_paths()
     {
@@ -323,7 +317,10 @@ namespace llarp::path
         size_t n{};
 
         for (const auto& [_, p] : _paths)
-            n += (p != nullptr);
+        {
+            if (p != nullptr and p->is_ready())
+                n += 1;
+        }
 
         return n;
     }

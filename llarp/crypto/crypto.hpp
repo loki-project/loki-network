@@ -70,13 +70,6 @@ namespace llarp
             const RouterID& remote,
             std::span<uint8_t> payload);
 
-        // void derive_encrypt_outer_wrapping(
-        //     const Ed25519SecretKey& shared_key,
-        //     SharedSecret& secret,
-        //     const SymmNonce& nonce,
-        //     const RouterID& remote,
-        //     uspan payload);
-
         /// Used in receiving path-build and session initiation messages. Derives a shared secret key using an ephemeral
         /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
         /// the server DH derivation or the xchacha20 payload mutation
