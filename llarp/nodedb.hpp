@@ -348,6 +348,8 @@ namespace llarp
         bool verify_store_gossip_rc(const RemoteRC& rc);
 
       private:
+        void cycle_fetch_source();
+
         // Updates `current` to not contain any of the elements of `replace` and resamples (up to
         // `target_size`) from population to refill it.
         template <typename T, typename RNG>

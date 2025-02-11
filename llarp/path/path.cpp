@@ -25,7 +25,7 @@ namespace llarp::path
           num_hops{hop_rcs.size()}
     {
         populate_internals(hop_rcs);
-        log::info(logcat, "Path successfully constructed: {}", to_string());
+        log::debug(logcat, "Path successfully constructed: {}", to_string());
     }
 
     void Path::populate_internals(const std::vector<RemoteRC>& hop_rcs)
@@ -81,14 +81,14 @@ namespace llarp::path
         intro.pivot_rid = hops.back().router_id();
         intro.pivot_txid = hops.back()._txid;
 
-        log::debug(
+        log::trace(
             logcat, "Path client intro holding pivot_rid ({}) and pivot_txid ({})", intro.pivot_rid, intro.pivot_txid);
     }
 
     void Path::link_session(session_tag t)
     {
         _linked_sessions.insert(t);
-        log::critical(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
+        log::trace(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
         _is_session_path = true;
     }
 
@@ -96,8 +96,15 @@ namespace llarp::path
     {
         auto n = _linked_sessions.erase(t);
         _is_session_path = not _linked_sessions.empty();
-        log::critical(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
+        log::trace(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
         return n != 0;
+    }
+
+    bool Path::is_linked_to(session_tag t) const
+    {
+        auto ret = _linked_sessions.contains(t);
+        log::debug(logcat, "Session (tag:{}) is {}linked to path {}", t, ret ? "" : "NOT ", name());
+        return ret;
     }
 
     bool Path::operator<(const Path& other) const
@@ -138,10 +145,6 @@ namespace llarp::path
     {
         return send_path_control_message("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
-
-    void Path::enable_exit_traffic() { log::info(logcat, "{} {} granted exit", name(), pivot_rid()); }
-
-    void Path::mark_exit_closed() { log::info(logcat, "{} hd its exit closed", name()); }
 
     std::string Path::make_path_message(std::string inner_payload)
     {
@@ -254,12 +257,6 @@ namespace llarp::path
         return obj;
     }
 
-    bool Path::update_exit(uint64_t)
-    {
-        // TODO: do we still want this concept?
-        return false;
-    }
-
     void Path::Tick(std::chrono::milliseconds now)
     {
         if (not is_ready())
@@ -275,17 +272,14 @@ namespace llarp::path
 
     void Path::set_established()
     {
-        log::info(logcat, "Path marked as successfully established!");
+        log::debug(logcat, "Path marked as successfully established!");
         _established = true;
         intro.expiry = llarp::time_now_ms() + path::DEFAULT_LIFETIME;
     }
 
     bool Path::is_expired(std::chrono::milliseconds now) const { return intro.is_expired(now); }
 
-    std::string Path::name() const
-    {
-        return fmt::format("TX={} RX={}", upstream_txid().to_string(), upstream_rxid().to_string());
-    }
+    std::string Path::name() const { return "[ TX={} | RX={} ]"_format(upstream_txid(), upstream_rxid()); }
 
     template <typename Samples_t>
     static std::chrono::milliseconds computeLatency(const Samples_t& samps)

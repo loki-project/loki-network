@@ -262,6 +262,7 @@ namespace llarp
         void _handle_resolve_sns(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_initiate_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
         void _handle_close_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_path_switch(oxen::quic::message, std::optional<std::string> = std::nullopt);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
@@ -271,8 +272,7 @@ namespace llarp
         // Sessions
         void handle_initiate_session(oxen::quic::message);
         void handle_close_session(oxen::quic::message);
-        void handle_set_session_tag(oxen::quic::message);
-        void handle_set_session_path(oxen::quic::message);
+        void handle_path_switch(oxen::quic::message);
 
         // These requests come over a path (as a "path_control" request),
         // we may or may not need to make a request to another relay,

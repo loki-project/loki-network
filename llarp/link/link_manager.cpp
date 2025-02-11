@@ -104,7 +104,7 @@ namespace llarp
             link_manager._router.loop()->call([this, rid = _rid]() {
                 if (auto itr = service_conns.find(rid); itr != service_conns.end())
                 {
-                    log::critical(logcat, "Closing connection to relay RID:{}", rid);
+                    log::info(logcat, "Closing connection to relay RID:{}", rid);
                     auto& conn = *itr->second->conn;
                     conn.close_connection();
                 }
@@ -112,13 +112,13 @@ namespace llarp
                 {
                     if (auto itr = client_conns.find(rid); itr != client_conns.end())
                     {
-                        log::critical(logcat, "Closing connection to client RID:{}", rid);
+                        log::info(logcat, "Closing connection to client RID:{}", rid);
                         auto& conn = *itr->second->conn;
                         conn.close_connection();
                     }
                 }
                 else
-                    log::critical(logcat, "Could not find connection to RID:{} to close!", rid);
+                    log::warning(logcat, "Could not find connection to RID:{} to close!", rid);
             });
         }
 
@@ -216,7 +216,7 @@ namespace llarp
     void LinkManager::register_commands(
         const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& remote_rid, bool client_only)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         s->register_handler("path_control"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg)); });
@@ -232,7 +232,7 @@ namespace llarp
                 _router.loop()->call([&, msg = std::move(m)]() mutable { handle_close_session(std::move(msg)); });
             });
 
-            log::debug(logcat, "Registered all client-only BTStream commands!");
+            log::trace(logcat, "Registered all client-only BTStream commands!");
             return;
         }
 
@@ -268,7 +268,7 @@ namespace llarp
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_resolve_sns(std::move(msg)); });
         });
 
-        log::debug(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
+        log::trace(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
 
     void LinkManager::start_tickers()
@@ -411,7 +411,7 @@ namespace llarp
                 log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
             });
 
-        log::critical(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
+        log::trace(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
         assert(control_stream->stream_id() == 0);
         register_commands(control_stream, remote, not _is_service_node);
 
@@ -467,7 +467,7 @@ namespace llarp
 
     void LinkManager::on_conn_open(oxen::quic::connection_interface& _ci)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         _router.loop()->call([this, wci = _ci.weak_from_this()]() {
             auto ci = wci.lock();
@@ -489,7 +489,7 @@ namespace llarp
     {
         _router.loop()->call(
             [this, ref_id = ci.reference_id(), rid = RouterID{ci.remote_key()}, error_code = ec, path = ci.path()]() {
-                log::critical(logcat, "Purging quic connection {} (ec:{}) path:{}", ref_id, error_code, path);
+                log::debug(logcat, "Purging quic connection {} (ec:{}) path:{}", ref_id, error_code, path);
 
                 if (auto s_itr = ep->service_conns.find(rid); s_itr != ep->service_conns.end())
                 {
@@ -1051,13 +1051,14 @@ namespace llarp
         log::trace(logcat, "Received request to publish client contact!");
 
         EncryptedClientContact enc;
+        std::optional<RouterID> sender = std::nullopt;
 
         try
         {
             if (inner_body)
-                enc = PublishClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
+                std::tie(enc, sender) = PublishClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
             else
-                enc = PublishClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
+                std::tie(enc, sender) = PublishClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
@@ -1077,16 +1078,47 @@ namespace llarp
             return m.respond(PublishClientContact::INVALID, true);
         }
 
+        if (not _is_service_node)
+        {
+            if (not sender.has_value())
+            {
+                log::warning(logcat, "Received new EncryptedClientContact from path control with no RouterID!");
+                return m.respond(messages::ERROR_RESPONSE, true);
+            }
+
+            auto intro = enc.decrypt(*sender);
+
+            // error message prints in ::decrypt(...)
+            if (not intro)
+                return m.respond(messages::ERROR_RESPONSE, true);
+
+            if (auto session = _router.session_endpoint()->get_session(NetworkAddress::from_pubkey(*sender, true)))
+            {
+                log::debug(logcat, "Storing ClientContact for remote rid:{}", *sender);
+                _router.contact_db().put_cc(std::move(enc));
+
+                if (session->is_outbound())
+                    std::dynamic_pointer_cast<session::OutboundSession>(session)->update_remote_intros(
+                        std::move(*intro).take_intros());
+
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Could not find session (remote: {}) for updated ClientContact!", *sender);
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
+
+        auto dht_key = enc.key();
+
         // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
         // allow it to continue propagating
         if (not inner_body)
         {
-            log::critical(logcat, "Received relayed PublishClientContact request (key: {}); accepting...", enc.key());
+            log::debug(logcat, "Received relayed PublishClientContact request (key: {}); accepting...", dht_key);
             _router.contact_db().put_cc(std::move(enc));
             return m.respond(messages::OK_RESPONSE);
         }
 
-        auto dht_key = enc.key();
         auto local_rid = _router.local_rid();
 
         auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
@@ -1100,7 +1132,8 @@ namespace llarp
         {
             auto& _rid = rc.router_id();
 
-            log::debug(logcat, "Closest RCs to received ClientContact: {}", _rid);
+            log::trace(logcat, "Closest RCs to received ClientContact: {}", _rid);
+
             if (_rid == local_rid)
             {
                 log::info(
@@ -1121,7 +1154,7 @@ namespace llarp
         send_control_message(
             closest_peer,
             "publish_cc",
-            PublishClientContact::serialize(std::move(enc)),
+            PublishClientContact::serialize(std::move(enc), std::move(sender)),
             [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
                 log::info(
                     logcat,
@@ -1129,7 +1162,7 @@ namespace llarp
                     msg                 ? "SUCCEEDED"
                         : msg.timed_out ? "timed out"
                                         : "failed");
-                log::info(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
+                log::debug(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
                 prev_msg.respond(msg.body_str(), msg.is_error());
             });
     }
@@ -1715,6 +1748,41 @@ namespace llarp
         m.respond(messages::ERROR_RESPONSE, true);
     }
 
+    void LinkManager::_handle_path_switch(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        session_tag tag;
+        HopID remote_pivot_txid, local_pivot_txid;
+
+        try
+        {
+            if (inner_body)
+                std::tie(tag, remote_pivot_txid, local_pivot_txid) =
+                    SessionPathSwitch::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                std::tie(tag, remote_pivot_txid, local_pivot_txid) =
+                    SessionPathSwitch::deserialize(oxenc::bt_dict_consumer{m.body()});
+
+            if (auto session = _router.session_endpoint()->get_session(tag))
+            {
+                session->recv_path_switch(remote_pivot_txid);
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Received path-switch request for unknown session (tag:{})", tag);
+            return m.respond(SessionPathSwitch::BAD_TAG, true);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        m.respond(messages::ERROR_RESPONSE, true);
+    }
+
+    void LinkManager::handle_path_switch(oxen::quic::message m) { return _handle_path_switch(std::move(m)); }
+
     void LinkManager::handle_initiate_session(oxen::quic::message m) { return _handle_initiate_session(std::move(m)); }
 
     void LinkManager::_handle_close_session(oxen::quic::message m, std::optional<std::string> inner_body)
@@ -1726,9 +1794,9 @@ namespace llarp
         try
         {
             if (inner_body)
-                tag = CloseSession::deserialize_response(oxenc::bt_dict_consumer{*inner_body});
+                tag = CloseSession::deserialize(oxenc::bt_dict_consumer{*inner_body});
             else
-                tag = CloseSession::deserialize_response(oxenc::bt_dict_consumer{m.body()});
+                tag = CloseSession::deserialize(oxenc::bt_dict_consumer{m.body()});
 
             if (_router.session_endpoint()->close_session(tag))
                 return m.respond(messages::OK_RESPONSE);

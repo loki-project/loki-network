@@ -35,5 +35,5 @@ namespace llarp
 
     uspan session_tag::span() const { return buf; }
 
-    std::string session_tag::to_string() const { return {reinterpret_cast<const char*>(buf.data()), buf.size()}; }
+    std::string session_tag::to_string() const { return oxenc::to_hex(buf.begin(), buf.end()); }
 }  // namespace llarp

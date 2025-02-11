@@ -32,13 +32,8 @@ namespace llarp::path
 
     std::string BuildStats::to_string() const
     {
-        return fmt::format(
-            "{:.2f} percent success (success={} attempts={} timeouts={} fails={})",
-            SuccessRatio() * 100.0,
-            success,
-            attempts,
-            timeouts,
-            build_fails);
+        return "Stats:[ success:{} | attempts:{} | timeouts:{} | fails:{} ]"_format(
+            success, attempts, timeouts, build_fails);
     }
 
     double BuildStats::SuccessRatio() const
@@ -434,13 +429,13 @@ namespace llarp::path
 
         if (auto maybe_rcs = _router.node_db()->get_n_random_rcs_conditional(hops_needed, filter))
         {
-            log::info(logcat, "Found {} RCs for aligned path (needed: {})", maybe_rcs->size(), hops_needed);
+            log::trace(logcat, "Found {} RCs for aligned path (needed: {})", maybe_rcs->size(), hops_needed);
             hops.insert(hops.end(), maybe_rcs->begin(), maybe_rcs->end());
             hops.emplace_back(std::move(pivot_rc));
             return hops;
         }
 
-        log::warning(logcat, "Failed to find RC for aligned path! (needed:{})", num_hops);
+        log::info(logcat, "Failed to find RC for aligned path! (needed:{})", num_hops);
         return std::nullopt;
     }
 
@@ -541,11 +536,6 @@ namespace llarp::path
                 log::warning(
                     logcat, "Failed to find RC for aligned path! (needed:{}, remaining:{})", num_hops, hops_needed);
 
-                if (not hops.empty())
-                {
-                    for (auto& h : hops)
-                        log::info(logcat, "{}", h);
-                }
                 return std::nullopt;
             }
 
@@ -590,7 +580,7 @@ namespace llarp::path
     {
         if (is_stopped())
         {
-            log::info(logcat, "Path builder is stopped, aborting path build...");
+            log::debug(logcat, "Path builder is stopped, aborting path build...");
             return false;
         }
 
@@ -615,12 +605,12 @@ namespace llarp::path
 
             if (auto [it, b] = _paths.try_emplace(path->upstream_rxid(), nullptr); not b)
             {
-                log::warning(logcat, "Pending build to {} already underway... aborting...", path->upstream_rxid());
+                log::debug(logcat, "Pending build to {} already underway... aborting...", path->upstream_rxid());
                 return nullptr;
             }
         }
 
-        log::info(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
+        log::debug(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
     }
@@ -703,7 +693,7 @@ namespace llarp::path
             if (not build3(std::move(upstream), std::move(payload), [this, new_path](oxen::quic::message m) mutable {
                     if (m)
                     {
-                        log::critical(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
+                        log::info(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
                         return path_build_succeeded(std::move(new_path));
                     }
 

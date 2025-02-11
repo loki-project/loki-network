@@ -391,7 +391,7 @@ namespace llarp
 
     std::string IPPacket::info_line() const
     {
-        return "IPPacket:[ type={} | src={} | dest={} | size={} ]"_format(
+        return "IPPacket:[ type:{} | src:{} | dest:{} | size:{} ]"_format(
             ip_protocol_name(_proto), _src_addr, _dst_addr, size());
     }
 

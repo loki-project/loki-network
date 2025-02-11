@@ -71,13 +71,9 @@ namespace llarp
 
             bool unlink_session(session_tag t);
 
+            bool is_linked_to(session_tag t) const;
+
             bool is_linked() const { return not _linked_sessions.empty(); }
-
-            void enable_exit_traffic();
-
-            void mark_exit_closed();
-
-            bool update_exit(uint64_t tx_id);
 
             bool is_expired(std::chrono::milliseconds now = llarp::time_now_ms()) const;
 

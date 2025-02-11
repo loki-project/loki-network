@@ -130,6 +130,8 @@ namespace llarp
         void handle_updated_field(std::unordered_set<dns::SRVData> srvs);
 
       public:
+        intro_set take_intros() && { return std::move(intros); }
+
         bool operator==(const ClientContact& other) const
         {
             return std::tie(pubkey, intros, SRVs, protos, exit_policy)

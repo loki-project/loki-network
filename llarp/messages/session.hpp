@@ -15,7 +15,6 @@ namespace llarp
             - 'i' : RouterID of initiator
             - 'p' : HopID at the pivot taken from local ClientIntro
             - 'r' : HopID at the pivot taken from remote's ClientIntro
-            - 's' : session_tag for current session
             - 't' : Use Tun interface (bool)
             - 'u' : Authentication field
                 - bt-encoded dict, values TBD
@@ -46,7 +45,6 @@ namespace llarp
                     btdp.append("i", local.to_view());
                     btdp.append("p", local_pivot_txid.to_view());
                     btdp.append("r", remote_pivot_txid.to_view());
-                    // btdp.append("s", tag.view());
                     btdp.append("t", use_tun);
                     // TOTHINK: this auth field
                     if (auth_token)
@@ -159,7 +157,7 @@ namespace llarp
             return std::move(btdp).str();
         }
 
-        inline static session_tag deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        inline static session_tag deserialize(oxenc::bt_dict_consumer&& btdc)
         {
             try
             {
@@ -190,14 +188,47 @@ namespace llarp
 
     /** Fields for setting a session path:
      */
-    namespace SetSessionPath
+    namespace SessionPathSwitch
     {
-        inline static std::string serialize()
+        static auto logcat = llarp::log::Cat("path-switch");
+
+        inline const auto BAD_TAG = messages::serialize_response({{messages::STATUS_KEY, "BAD TAG"}});
+
+        /** Fields for switching session paths:
+            - 'p' : HopID at the pivot taken from local ClientIntro
+            - 'r' : HopID at the pivot taken from remote's ClientIntro
+            - 's' : session_tag for current session
+         */
+        inline static std::string serialize(session_tag t, HopID local_pivot_txid, HopID remote_pivot_txid)
         {
             oxenc::bt_dict_producer btdp;
 
+            btdp.append("p", local_pivot_txid.to_view());
+            btdp.append("r", remote_pivot_txid.to_view());
+            btdp.append("s", t.view());
+
             return std::move(btdp).str();
         };
-    }  // namespace SetSessionPath
+
+        inline static std::tuple<session_tag, HopID, HopID> deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            session_tag t;
+            HopID remote_pivot_txid, local_pivot_txid;
+
+            try
+            {
+                remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
+                t.read(btdc.require<std::string_view>("t"));
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing PathSwitch message: {}", e.what());
+                throw;
+            }
+
+            return {std::move(t), std::move(remote_pivot_txid), std::move(local_pivot_txid)};
+        }
+    }  // namespace SessionPathSwitch
 
 }  // namespace llarp

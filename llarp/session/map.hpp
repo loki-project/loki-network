@@ -37,7 +37,7 @@ namespace llarp
 
         /** Called by owning object to apply a callback to every session currently mapped
          */
-        void for_each(std::function<void(std::shared_ptr<session_t>)> hook)
+        void for_each(std::function<void(std::shared_ptr<session_t>&)> hook)
         {
             Lock_t l{session_mutex};
 

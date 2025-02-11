@@ -105,7 +105,7 @@ namespace llarp
 
         virtual std::string to_string() const
         {
-            return "RC:[ '4'={} | 'i'='{}' | 'p'={} | 't'={} | v={} ]"_format(
+            return "RC:[ '4':{} | 'i':'{}' | 'p':{} | 't':{} | v:{} ]"_format(
                 _addr.to_string(), ACTIVE_NETID, _router_id, _timestamp.time_since_epoch().count(), VERSION);
         }
 

@@ -82,7 +82,7 @@ namespace llarp::path
 
     std::string TransitHop::to_string() const
     {
-        return "TransitHop:[ terminal={}, tx={}, rx={}, upstream={}, downstream={}, expiry={} ]"_format(
+        return "TransitHop:[ terminal:{} | tx:{} | rx:{} | upstream={} | downstream={} | expiry={} ]"_format(
             terminal_hop, _txid, _rxid, _upstream, _downstream, expiry.count());
     }
 

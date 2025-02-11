@@ -13,33 +13,42 @@ namespace llarp
         inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
 
         /** Bt-encoded contents:
-            - 'x' : EncryptedClientContact
+            - 'e' : EncryptedClientContact
+            - 'i' : (Optional) RouterID of dispatching client, only sent on session paths
 
             Note: we are bt-encoding to leave space for future fields (ex: version)
          */
-        inline static std::string serialize(const EncryptedClientContact& ecc)
+        inline static std::string serialize(
+            const EncryptedClientContact& ecc, std::optional<RouterID> remote = std::nullopt)
         {
             oxenc::bt_dict_producer btdp;
 
-            btdp.append("x", ecc.bt_payload());
+            btdp.append("e", ecc.bt_payload());
+            if (remote.has_value())
+                btdp.append("i", remote->to_view());
 
             return std::move(btdp).str();
         }
 
-        inline static EncryptedClientContact deserialize(oxenc::bt_dict_consumer&& btdc)
+        inline static std::tuple<EncryptedClientContact, std::optional<RouterID>> deserialize(
+            oxenc::bt_dict_consumer&& btdc)
         {
             EncryptedClientContact ecc;
+            std::optional<RouterID> sender = std::nullopt;
 
             try
             {
-                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("x"));
+                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("e"));
+
+                if (btdc.skip_until("i"))
+                    sender.emplace(btdc.consume_string_view());
             }
             catch (const std::exception& e)
             {
                 throw std::runtime_error{"Exception caught deserializing EncryptedClientContact: {}"_format(e.what())};
             }
 
-            return ecc;
+            return {std::move(ecc), std::move(sender)};
         }
     }  // namespace PublishClientContact
 

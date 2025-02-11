@@ -412,7 +412,7 @@ namespace llarp::rpc
         _router.loop()->call([&]() {
             try
             {
-                // _router.session_endpoint()->close_session(session_tag t)
+                _router.session_endpoint()->close_session(NetworkAddress::from_pubkey(pk, true));
                 log::info(logcat, "RPC Server dispatched `session_close` to remote:{}", pk.to_network_address(false));
             }
             catch (const std::exception& e)

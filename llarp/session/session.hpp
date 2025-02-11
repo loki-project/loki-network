@@ -81,8 +81,6 @@ namespace llarp
 
             void _init_ep();
 
-            const std::shared_ptr<path::Path>& current_path() const { return _current_path; }
-
           public:
             BaseSession(
                 Router& r,
@@ -99,6 +97,8 @@ namespace llarp
 
             bool is_outbound() const { return _is_outbound; }
 
+            const std::shared_ptr<path::Path>& current_path() const { return _current_path; }
+
             const NetworkAddress& remote() const { return _remote; }
 
             NetworkAddress remote() { return _remote; }
@@ -111,6 +111,13 @@ namespace llarp
             void recv_path_data_message(std::vector<uint8_t> data);
 
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
+
+            void send_path_switch();
+
+            void recv_path_switch(HopID new_remote_txid);
+
+            void publish_client_contact(
+                const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
 
             void tcp_backend_connect();
 
@@ -160,12 +167,16 @@ namespace llarp
 
             intro_path_map intro_path_mapping{};
 
+            void _populate_intro_map(intro_set& intros);
+
+            void _switch_paths();
+
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            std::shared_ptr<path::Path> current_path() { return _current_path; }
+            void update_remote_intros(intro_set intros);
 
             void blacklist_snode(const RouterID& snode) override;
 
