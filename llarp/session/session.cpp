@@ -93,15 +93,24 @@ namespace llarp::session
 
         _current_path->link_session(_tag);
         assert(_current_path->is_linked());
+
+        log::debug(logcat, "Session to remote ({}) set new current path {}", _remote, _current_path->to_string());
     }
 
-    void recv_path_switch2(HopID new_remote_txid, HopID new_local_txid)
+    void BaseSession::recv_path_switch2(HopID new_remote_txid, HopID new_local_txid)
     {
         log::debug(
             logcat,
             "Received new remote and local pivot txIDs [ remote:{} | local:{} ]",
             new_remote_txid,
             new_local_txid);
+
+        _remote_pivot_txid = std::move(new_remote_txid);
+
+        if (_current_path->pivot_txid() == new_local_txid)
+            return;
+
+        // TESTNET: TODO:
     }
 
     void BaseSession::recv_path_switch(HopID new_remote_txid)
@@ -365,7 +374,17 @@ namespace llarp::session
         // cleared the intro_path_map before populating it again
         if (not _paths.empty())
         {
+            for (auto& [intro, pathset] : intro_path_mapping)
+            {
+                if (pathset.empty())
+                    log::critical(logcat, "THIS SHOULD NOT HAPPEN");
+                else
+                    return set_new_current_path(*pathset.begin());
+            }
         }
+
+        log::debug(logcat, "No valid paths left for new intros; building new paths...");
+        build_and_switch_paths();
     }
 
     void OutboundSession::path_died([[maybe_unused]] std::shared_ptr<path::Path> p)

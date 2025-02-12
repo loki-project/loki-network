@@ -65,8 +65,6 @@ namespace llarp
 
             void set_established();
 
-            // void recv_path_data_message(bstring data);
-
             void link_session(session_tag t);
 
             bool unlink_session(session_tag t);
@@ -161,15 +159,15 @@ namespace llarp
             uint64_t last_latency_test_id{};
         };
 
-        struct PathPtrComp
+        struct PathExpComp
         {
             bool operator()(const std::shared_ptr<Path>& lhs, const std::shared_ptr<Path>& rhs) const
             {
-                return *lhs < *rhs;
+                return lhs->intro.expiry > rhs->intro.expiry;
             }
         };
 
-        using PathPtrSet = std::set<std::shared_ptr<Path>, PathPtrComp>;
+        using PathPtrSet = std::set<std::shared_ptr<Path>, PathExpComp>;
 
     }  // namespace path
 }  // namespace llarp
