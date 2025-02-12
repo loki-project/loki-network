@@ -170,7 +170,7 @@ namespace llarp
 
         std::string ToHex() const { return oxenc::to_hex(begin(), end()); }
 
-        std::string ShortHex() const { return oxenc::to_hex(begin(), begin() + 4); }
+        std::string short_string() const { return oxenc::to_hex(begin(), begin() + 5); }
 
         bool FromHex(std::string_view str)
         {

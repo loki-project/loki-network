@@ -78,9 +78,11 @@ namespace llarp
 
         RouterID& router_id() { return static_cast<RouterID&>(pubkey()); }
 
+        std::string short_name() const { return _pubkey.short_string(); }
+
         std::string name() const { return _pubkey.to_string(); }
 
-        std::string to_string() const { return name().append(_tld); }
+        std::string to_string() const { return short_name().append(_tld); }
         static constexpr bool to_string_formattable{true};
     };
 

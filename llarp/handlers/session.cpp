@@ -55,7 +55,11 @@ namespace llarp::handlers
             if (s->using_tun())
                 _router.tun_endpoint()->unmap_session_to_local_ip(s->remote());
 
+            if (s->is_outbound())
+                std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(false);
+
             _sessions.unmap(t);
+
             log::info(logcat, "Session (tag:{}) closed and unmapped!", t);
             return true;
         }
@@ -533,7 +537,7 @@ namespace llarp::handlers
             log::debug(
                 logcat,
                 "Publishing ClientContact on {}bound session (remote:{})",
-                detail::bool_alpha(s->is_outbound(), "O", "I"),
+                detail::bool_alpha(s->is_outbound(), "Out", "In"),
                 s->remote());
             s->publish_client_contact(ecc, publish_cc_cb);
         });
@@ -732,26 +736,26 @@ namespace llarp::handlers
         }
 
         // TESTNET:
-        RouterID edge{oxenc::from_base32z("55fxrybf3jtausbnmxpgwcsz9t8qkf5pr8t5f4xyto4omjrkorpy")};
-        bool using_hacky_bullshit{false};
+        // RouterID edge{oxenc::from_base32z("55fxrybf3jtausbnmxpgwcsz9t8qkf5pr8t5f4xyto4omjrkorpy")};
+        // bool using_hacky_bullshit{false};
 
-        ClientIntro intro;
+        // ClientIntro intro;
 
-        for (auto itr = intros.begin(); itr != intros.end(); ++itr)
-        {
-            log::trace(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
-            if (itr->pivot_rid == edge)
-            {
-                using_hacky_bullshit = true;
-                intro = intros.extract(itr).value();
-                break;
-            }
-        }
+        // for (auto itr = intros.begin(); itr != intros.end(); ++itr)
+        // {
+        //     log::trace(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
+        //     if (itr->pivot_rid == edge)
+        //     {
+        //         using_hacky_bullshit = true;
+        //         intro = intros.extract(itr).value();
+        //         break;
+        //     }
+        // }
 
-        if (not using_hacky_bullshit)
-        {
-            intro = intros.extract(intros.begin()).value();
-        }
+        // if (not using_hacky_bullshit)
+        //     intro = intros.extract(intros.begin()).value();
+
+        auto intro = intros.extract(intros.begin()).value();
 
         auto& pivot = intro.pivot_rid;
 
@@ -800,25 +804,23 @@ namespace llarp::handlers
                             is_exit);
                     }
 
-                    try
+                    if (m.timed_out)
+                        log::warning(logcat, "Path build request for session initiation timed out!");
+                    else
                     {
-                        if (m.timed_out)
-                        {
-                            log::warning(logcat, "Path build request for session initiation timed out!");
-                        }
-                        else
+                        try
                         {
                             oxenc::bt_dict_consumer d{m.body()};
                             auto status = d.require<std::string_view>(messages::STATUS_KEY);
                             log::warning(logcat, "Path build returned failure status: {}", status);
                         }
-                    }
-                    catch (const std::exception& e)
-                    {
-                        log::warning(
-                            logcat,
-                            "Exception caught parsing path build response for session initiation: {}",
-                            e.what());
+                        catch (const std::exception& e)
+                        {
+                            log::warning(
+                                logcat,
+                                "Exception caught parsing path build response for session initiation: {}",
+                                e.what());
+                        }
                     }
 
                     // recurse with introduction set minus the recently attempted pivot

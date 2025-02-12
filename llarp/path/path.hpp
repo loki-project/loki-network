@@ -79,12 +79,11 @@ namespace llarp
 
             void Tick(std::chrono::milliseconds now);
 
-            bool resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func);
+            bool resolve_sns(std::string_view name, bt_control_response_hook func);
 
-            bool find_client_contact(const hash_key& location, std::function<void(oxen::quic::message)> func);
+            bool find_client_contact(const hash_key& location, bt_control_response_hook func);
 
-            bool publish_client_contact(
-                const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
+            bool publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func);
 
             /// sends a control request along a path
             ///
@@ -94,8 +93,7 @@ namespace llarp
             ///
             /// func is called with a bt-encoded response string (if applicable), and
             /// a timeout flag (if set, response string will be empty)
-            bool send_path_control_message(
-                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
+            bool send_path_control_message(std::string method, std::string body, bt_control_response_hook func);
 
             bool send_path_data_message(std::string body);
 

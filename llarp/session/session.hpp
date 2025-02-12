@@ -103,8 +103,7 @@ namespace llarp
 
             NetworkAddress remote() { return _remote; }
 
-            bool send_path_control_message(
-                std::string method, std::string body, std::function<void(oxen::quic::message)> func);
+            bool send_path_control_message(std::string method, std::string body, bt_control_response_hook func);
 
             bool send_path_data_message(std::string data);
 
@@ -112,12 +111,11 @@ namespace llarp
 
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
 
-            void send_path_switch();
+            void recv_path_switch2(HopID new_remote_txid, HopID new_local_txid);
 
             void recv_path_switch(HopID new_remote_txid);
 
-            void publish_client_contact(
-                const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func);
+            void publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func);
 
             void tcp_backend_connect();
 
@@ -139,7 +137,7 @@ namespace llarp
 
             void deactivate();
 
-            void send_path_close();
+            virtual void send_path_close();
 
             virtual std::string to_string() const;
 
@@ -167,9 +165,15 @@ namespace llarp
 
             intro_path_map intro_path_mapping{};
 
-            void _populate_intro_map(intro_set& intros);
+            void populate_intro_map(intro_set& intros);
 
-            void _switch_paths();
+            void update_local_paths();
+
+            void build_and_switch_paths();
+
+            void map_path(const std::shared_ptr<path::Path>& p);
+
+            void unmap_path(const std::shared_ptr<path::Path>& p);
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
@@ -177,10 +181,6 @@ namespace llarp
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
             void update_remote_intros(intro_set intros);
-
-            void blacklist_snode(const RouterID& snode) override;
-
-            void tick(std::chrono::milliseconds now) override;
 
             void build_more(size_t n = 0) override;
 
@@ -193,6 +193,8 @@ namespace llarp
             void path_build_succeeded(std::shared_ptr<path::Path> p) override;
 
             void path_build_failed(std::shared_ptr<path::Path> p, bool timeout = false) override;
+
+            void send_path_switch(std::shared_ptr<path::Path> _new_path);
 
             bool stop(bool send_close = false) override;
 

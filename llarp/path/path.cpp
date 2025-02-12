@@ -25,7 +25,7 @@ namespace llarp::path
           num_hops{hop_rcs.size()}
     {
         populate_internals(hop_rcs);
-        log::debug(logcat, "Path successfully constructed: {}", to_string());
+        log::debug(logcat, "Path successfully constructed -> {} : {}", to_string(), hop_string());
     }
 
     void Path::populate_internals(const std::vector<RemoteRC>& hop_rcs)
@@ -131,17 +131,17 @@ namespace llarp::path
 
     bool Path::operator!=(const Path& other) const { return not(*this == other); }
 
-    bool Path::find_client_contact(const hash_key& location, std::function<void(oxen::quic::message)> func)
+    bool Path::find_client_contact(const hash_key& location, bt_control_response_hook func)
     {
         return send_path_control_message("find_cc", FindClientContact::serialize(location), std::move(func));
     }
 
-    bool Path::publish_client_contact(const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
+    bool Path::publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func)
     {
         return send_path_control_message("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
     }
 
-    bool Path::resolve_sns(std::string_view name, std::function<void(oxen::quic::message)> func)
+    bool Path::resolve_sns(std::string_view name, bt_control_response_hook func)
     {
         return send_path_control_message("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
@@ -170,8 +170,7 @@ namespace llarp::path
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
-    bool Path::send_path_control_message(
-        std::string endpoint, std::string body, std::function<void(oxen::quic::message)> func)
+    bool Path::send_path_control_message(std::string endpoint, std::string body, bt_control_response_hook func)
     {
         auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
         auto outer_payload = make_path_message(std::move(inner_payload));
@@ -219,7 +218,7 @@ namespace llarp::path
         return "Path:[ Active:{} | Session linked:{} | Local RID:{} | Edge TX:{}/RX:{} ]"_format(
             detail::bool_alpha(is_ready()),
             detail::bool_alpha(_is_session_path),
-            _router.local_rid().ShortString(),
+            _router.local_rid().short_string(),
             upstream_txid().to_string(),
             upstream_rxid().to_string());
     }
@@ -232,7 +231,7 @@ namespace llarp::path
         {
             if (!hops.empty())
                 hops_str += " -> ";
-            hops_str += hop.router_id().ShortString();
+            hops_str += hop.router_id().short_string();
         }
         return hops_str;
     }

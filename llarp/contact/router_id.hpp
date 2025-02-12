@@ -26,8 +26,6 @@ namespace llarp
 
         std::string to_network_address(bool is_relay = true) const;
 
-        std::string ShortString() const;
-
         // will throw on failure!
         void from_network_address(std::string_view str);
 

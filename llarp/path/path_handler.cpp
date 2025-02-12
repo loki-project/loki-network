@@ -440,7 +440,7 @@ namespace llarp::path
     }
 
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_to_remote(
-        const RouterID& pivot, const std::set<RouterID>& exclude)
+        const RouterID& pivot, const std::set<RouterID>& exclude, bool strict)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
@@ -472,13 +472,19 @@ namespace llarp::path
         // make a copy here to reference rather than creating one in the lambda every iteration
         std::set<RouterID> to_exclude{exclude.begin(), exclude.end()};
         to_exclude.insert(pivot);
+
         std::vector<ipv4_net> excluded_ranges{};
-        // excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() / netmask);
+
+        if (strict)
+            excluded_ranges.emplace_back(pivot_rc.addr().to_ipv4() % netmask);
 
         if (auto maybe = select_first_hop(to_exclude))
         {
             hops.emplace_back(std::move(*maybe));
-            // excluded_ranges.emplace_back(hops.back().addr().to_ipv4() / netmask);
+
+            if (strict)
+                excluded_ranges.emplace_back(hops.back().addr().to_ipv4() % netmask);
+
             --hops_needed;
         }
         else
@@ -493,17 +499,21 @@ namespace llarp::path
             const auto& rid = rc.router_id();
             auto v4 = rc.addr().to_ipv4();
 
-            for (auto& e : excluded_ranges)
+            if (strict)
             {
-                if (e.contains(v4))
-                    return false;
+                for (auto& e : excluded_ranges)
+                {
+                    if (e.contains(v4))
+                        return false;
+                }
             }
 
             // if its already excluded, fail; (we want it added even on success)
             if (not to_exclude.insert(rid).second)
                 return false;
 
-            excluded_ranges.emplace_back(v4 % netmask);
+            if (strict)
+                excluded_ranges.emplace_back(v4 % netmask);
 
             if (_router.router_profiling().is_bad_for_path(rid, 1))
                 return false;
@@ -524,28 +534,28 @@ namespace llarp::path
         log::warning(logcat, "Failed to find {} RCs for aligned path to pivot: {}", hops_needed, pivot);
         return std::nullopt;
 
-        while (hops_needed)
-        {
-            // do this 1 at a time so we can check for IP range overlap
-            if (auto maybe_rc = _router.node_db()->get_random_rc_conditional(filter))
-            {
-                hops.emplace_back(std::move(*maybe_rc));
-            }
-            else
-            {
-                log::warning(
-                    logcat, "Failed to find RC for aligned path! (needed:{}, remaining:{})", num_hops, hops_needed);
+        // while (hops_needed)
+        // {
+        //     // do this 1 at a time so we can check for IP range overlap
+        //     if (auto maybe_rc = _router.node_db()->get_random_rc_conditional(filter))
+        //     {
+        //         hops.emplace_back(std::move(*maybe_rc));
+        //     }
+        //     else
+        //     {
+        //         log::warning(
+        //             logcat, "Failed to find RC for aligned path! (needed:{}, remaining:{})", num_hops, hops_needed);
 
-                return std::nullopt;
-            }
+        //         return std::nullopt;
+        //     }
 
-            --hops_needed;
-        }
+        //     --hops_needed;
+        // }
 
-        // add pivot rc last
-        hops.emplace_back(std::move(pivot_rc));
+        // // add pivot rc last
+        // hops.emplace_back(std::move(pivot_rc));
 
-        return hops;
+        // return hops;
     }
 
     bool PathHandler::build_path_to_random()
@@ -610,7 +620,7 @@ namespace llarp::path
             }
         }
 
-        log::debug(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
+        log::trace(logcat, "Building path -> {} : {}", path->to_string(), path->hop_string());
 
         return path;
     }
@@ -671,7 +681,7 @@ namespace llarp::path
         return ONION::serialize_frames(std::move(frames));
     }
 
-    bool PathHandler::build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler)
+    bool PathHandler::build3(RouterID upstream, std::string payload, bt_control_response_hook handler)
     {
         return _router.send_control_message(std::move(upstream), "path_build", std::move(payload), std::move(handler));
     }

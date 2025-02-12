@@ -1,9 +1,9 @@
 #pragma once
 
+#include "types.hpp"
+
 #include <llarp/contact/relay_contact.hpp>
 #include <llarp/contact/router_id.hpp>
-
-#include <oxen/quic.hpp>
 
 namespace llarp::link
 {
@@ -11,12 +11,12 @@ namespace llarp::link
     {
         Connection(
             std::shared_ptr<oxen::quic::connection_interface> c,
-            std::shared_ptr<oxen::quic::BTRequestStream> s,
+            bt_control_stream s,
             bool _is_relay = true,
             bool _is_active = false);
 
         std::shared_ptr<oxen::quic::connection_interface> conn;
-        std::shared_ptr<oxen::quic::BTRequestStream> control_stream;
+        bt_control_stream control_stream;
 
         std::atomic<bool> is_active{false};
 
@@ -27,9 +27,3 @@ namespace llarp::link
         void close_quietly();
     };
 }  // namespace llarp::link
-
-/**
-    TODO:
-    - add a boolean in this connection object
-    - do not continue to try to send things to the bootstrap until the connection is actually established!
- */

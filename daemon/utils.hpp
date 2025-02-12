@@ -11,13 +11,17 @@ namespace llarp::controller
 {
     static auto logcat = log::Cat("rpc-controller");
 
+    struct rpc_controller;
+
     struct lokinet_instance
     {
+        friend struct rpc_controller;
+
       private:
         static size_t next_id;
+        // RouterID rid;
 
       public:
-        lokinet_instance() = delete;
         lokinet_instance(omq::ConnectionID c) : ID{++next_id}, cid{std::move(c)} {}
 
         const size_t ID;
@@ -42,9 +46,11 @@ namespace llarp::controller
         void _status(omq::address src);
         void _close(omq::address src, std::string remote);
 
-      public:
-        bool omq_connect(const std::vector<std::string>& bind_addrs);
+        // bool _initial_info_request();
 
+        bool _omq_connect(const std::vector<std::string>& bind_addrs);
+
+      public:
         bool start(std::vector<std::string>& bind_addrs);
 
         void list_all() const;

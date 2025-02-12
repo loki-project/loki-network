@@ -197,7 +197,7 @@ namespace llarp
         /** Fields for switching session paths:
             - 'p' : HopID at the pivot taken from local ClientIntro
             - 'r' : HopID at the pivot taken from remote's ClientIntro
-            - 's' : session_tag for current session
+            - 't' : session_tag for current session
          */
         inline static std::string serialize(session_tag t, HopID local_pivot_txid, HopID remote_pivot_txid)
         {
@@ -205,7 +205,7 @@ namespace llarp
 
             btdp.append("p", local_pivot_txid.to_view());
             btdp.append("r", remote_pivot_txid.to_view());
-            btdp.append("s", t.view());
+            btdp.append("t", t.view());
 
             return std::move(btdp).str();
         };

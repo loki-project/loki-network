@@ -301,7 +301,7 @@ namespace llarp
 
             for (const auto& [rid, count] : rid_result_counters)
             {
-                log::trace(logcat, "RID: {}, Freq: {}", rid.ShortString(), count);
+                log::trace(logcat, "RID: {}, Freq: {}", rid.short_string(), count);
                 if (count >= MIN_RID_FETCH_FREQ)
                     union_set.insert(rid);
                 else
@@ -452,7 +452,7 @@ namespace llarp
         }
 
         log::warning(logcat, "RC fetching was unsuccessful; reselecting RC fetch source...");
-        fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
+        cycle_fetch_source();
     }
 
     void NodeDB::fetch_rids()
@@ -476,68 +476,75 @@ namespace llarp
         rid_result_counters.clear();
 
         do
-            fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
+            cycle_fetch_source();
         while (rid_sources.contains(fetch_source));
 
         auto& src = fetch_source;
+        log::debug(logcat, "New fetch source is {}", src);
 
-        for (const auto& target : rid_sources)
-        {
-            if (target == src)
-                continue;
+        auto send_hook = [this, src](const bt_control_stream& control) mutable {
+            std::ranges::for_each(rid_sources.begin(), rid_sources.end(), [&](const RouterID& target) mutable {
+                if (target == src)
+                    return;
 
-            log::trace(logcat, "Sending FetchRIDs request to {} via {}", target, src);
-            _router.link_manager()->fetch_router_ids(
-                src,
-                FetchRIDMessage::serialize(target),
-                [this, source = src, target = target](oxen::quic::message m) mutable {
-                    response_counter += 1;
-                    if (not m)
-                    {
-                        log::info(
-                            logcat,
-                            "RID fetch from {} via {} {}",
-                            target,
-                            source,
-                            m.timed_out ? "timed out" : "failed: {}"_format(m.view()));
-                        ingest_fetched_rids(source);
-                    }
-                    else
-                    {
-                        try
-                        {
-                            std::set<RouterID> router_ids;
-                            oxenc::bt_dict_consumer btdc{m.body()};
+                log::trace(logcat, "Sending FetchRIDs request to {} via {}", target, src);
+                control->command(
+                    "fetch_rids",
+                    FetchRIDMessage::serialize(target),
+                    [&, source = src, target = target](oxen::quic::message msg) mutable {
+                        _router.loop()->call([&, m = std::move(msg)]() mutable {
+                            response_counter += 1;
 
-                            btdc.required("r");
-
+                            if (not m)
                             {
-                                auto sublist = btdc.consume_list_consumer();
-
-                                while (not sublist.is_finished())
-                                    router_ids.emplace(sublist.consume_string_view());
+                                log::info(
+                                    logcat,
+                                    "RID fetch from {} via {} {}",
+                                    target,
+                                    source,
+                                    m.timed_out ? "timed out" : "failed: {}"_format(m.view()));
+                                ingest_fetched_rids(source);
                             }
+                            else
+                            {
+                                try
+                                {
+                                    std::set<RouterID> router_ids;
+                                    oxenc::bt_dict_consumer btdc{m.body()};
 
-                            btdc.require_signature("~", [&target](ustring_view msg, ustring_view sig) {
-                                if (sig.size() != 64)
-                                    throw std::runtime_error{"Invalid signature: not 64 bytes"};
-                                if (not crypto::verify(target, msg, sig))
-                                    throw std::runtime_error{
-                                        "Failed to verify signature for fetch RouterIDs response."};
-                            });
+                                    btdc.required("r");
 
-                            ingest_fetched_rids(source, std::move(router_ids));
-                        }
-                        catch (const std::exception& e)
-                        {
-                            log::critical(logcat, "Error handling fetch RouterIDs response: {}", e.what());
-                            ingest_fetched_rids(source);
-                        }
-                    }
-                });
+                                    {
+                                        auto sublist = btdc.consume_list_consumer();
+
+                                        while (not sublist.is_finished())
+                                            router_ids.emplace(sublist.consume_string_view());
+                                    }
+
+                                    btdc.require_signature("~", [&target](ustring_view msg, ustring_view sig) {
+                                        if (sig.size() != 64)
+                                            throw std::runtime_error{"Invalid signature: not 64 bytes"};
+                                        if (not crypto::verify(target, msg, sig))
+                                            throw std::runtime_error{
+                                                "Failed to verify signature for fetch RouterIDs response."};
+                                    });
+
+                                    ingest_fetched_rids(source, std::move(router_ids));
+                                }
+                                catch (const std::exception& e)
+                                {
+                                    log::critical(logcat, "Error handling fetch RouterIDs response: {}", e.what());
+                                    ingest_fetched_rids(source);
+                                }
+                            }
+                        });
+                    });
+            });
 
             fetch_counter += 1;
-        }
+        };
+
+        _router.link_manager()->fetch_router_ids(src, std::move(send_hook));
     }
 
     void NodeDB::rid_fetch_result()
@@ -567,7 +574,7 @@ namespace llarp
 
     bool NodeDB::is_bootstrap_node(const RemoteRC& rc) const
     {
-        return has_bootstraps() ? _bootstraps.contains(rc) : false;
+        return has_bootstraps() ? _bootstraps.contains(rc) || _bootstraps.contains(rc.router_id()) : false;
     }
 
     void NodeDB::start_tickers()
@@ -619,7 +626,7 @@ namespace llarp
             log::warning(logcat, "Client stopped RelayContact fetch without a sucessful response!");
         }
         else
-            log::debug(logcat, "Client successfully completed RC fetching!");
+            log::trace(logcat, "Client successfully completed RC fetching!");
     }
 
     void NodeDB::post_rid_fetch(bool shutdown)
@@ -638,7 +645,7 @@ namespace llarp
             log::warning(logcat, "Client stopped RouterID fetch without a sucessful response!");
         }
         else
-            log::debug(logcat, "Client successfully completed RouterID fetch!");
+            log::trace(logcat, "Client successfully completed RouterID fetch!");
     }
 
     void NodeDB::stop_bootstrap(bool success)
@@ -977,7 +984,7 @@ namespace llarp
     void NodeDB::cycle_fetch_source()
     {
         fetch_source = *std::next(known_rids.begin(), csrng.boundedrand(known_rids.size()));
-        log::debug(logcat, "New fetch source is {}", fetch_source);
+        log::trace(logcat, "New fetch source is {}", fetch_source);
     }
 
     bool NodeDB::verify_store_gossip_rc(const RemoteRC& rc)

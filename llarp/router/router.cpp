@@ -68,8 +68,9 @@ namespace llarp
         auto [_nsessions, _range, _is_exit] = _session_endpoint->session_stats();
 
         return {
-            {"instance", {{"running", true}, {"local range", _range}, {"exit node", _is_exit}}},
-            {"connections", {{"inbound", _in}, {"outbound", _out}, {"relay", _relay}, {"client", _client}}},
+            {"instance",
+             {{"id", local_rid().ToHex()}, {"running", true}, {"local range", _range}, {"exit node", _is_exit}}},
+            {"links", {{"inbound", _in}, {"outbound", _out}, {"relay", _relay}, {"client", _client}}},
             {"sessions", {{"active", _nsessions}}},
             {"nodedb", {{"RCs", _rcs}, {"RIDs", _rids}}},
             {"path ctx", {{"paths", _npaths}, {"hops", _nhops}}}};
@@ -245,7 +246,7 @@ namespace llarp
     }
 
     bool Router::send_control_message(
-        const RouterID& remote, std::string ep, std::string body, std::function<void(oxen::quic::message m)> func)
+        const RouterID& remote, std::string ep, std::string body, bt_control_response_hook func)
     {
         return _link_manager->send_control_message(remote, std::move(ep), std::move(body), std::move(func));
     }
@@ -622,7 +623,7 @@ namespace llarp
 
             log::trace(logcat, "Configuring router...");
 
-            _gossip_interval = approximate_time(TESTNET_GOSSIP_INTERVAL, 3);
+            _gossip_interval = approximate_time(TESTNET_GOSSIP_INTERVAL, 30);
 
             log::critical(
                 logcat,
@@ -1002,8 +1003,6 @@ namespace llarp
         _loop_ticker = _loop->call_every(
             ROUTER_TICK_INTERVAL, [this] { tick(); }, false);
 
-        // _route_poker->start();
-
         _systemd_ticker = _loop->call_every(
             SERVICE_MANAGER_REPORT_INTERVAL, []() { sys::service_manager->report_periodic_stats(); }, false, true);
 
@@ -1136,6 +1135,10 @@ namespace llarp
         auto rv = _loop_ticker->stop();
         log::debug(logcat, "router loop ticker stopped {}successfully!", rv ? "" : "un");
         _loop_ticker.reset();
+
+        rv = _systemd_ticker->stop();
+        log::debug(logcat, "systemd ticker stopped {}successfully!", rv ? "" : "un");
+        _systemd_ticker.reset();
 
         if (_reachability_ticker)
         {

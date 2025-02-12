@@ -23,12 +23,6 @@ namespace llarp
         return b32;
     }
 
-    std::string RouterID::ShortString() const
-    {
-        // 5 bytes produces exactly 8 base32z characters:
-        return oxenc::to_base32z(begin(), begin() + 5);
-    }
-
     nlohmann::json RouterID::ExtractStatus() const
     {
         nlohmann::json obj{{"snode", to_string()}, {"hex", ToHex()}};

@@ -1,7 +1,5 @@
 #include "link_manager.hpp"
 
-#include "connection.hpp"
-
 #include <llarp/contact/contactdb.hpp>
 #include <llarp/contact/router_id.hpp>
 #include <llarp/messages/dht.hpp>
@@ -183,6 +181,53 @@ namespace llarp
                 return n;
             });
         }
+
+        bool Endpoint::establish_and_send_control(RemoteRC rc, bt_control_send_hook send_hook)
+        {
+            return link_manager.router().loop()->call_get([&]() {
+                auto rid = rc.router_id();
+
+                try
+                {
+                    auto [itr, b] = service_conns.try_emplace(rid, nullptr);
+
+                    if (not b)
+                    {
+                        log::debug(logcat, "Attempting to establish an already existing connection!");
+                        send_hook(itr->second->control_stream);
+                        return true;
+                    }
+
+                    auto ci = endpoint->connect(
+                        KeyedAddress{rid.to_view(), rc.addr()},
+                        link_manager.tls_creds,
+                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        [this, itr = std::move(itr), rid, send_hook = std::move(send_hook)](
+                            oxen::quic::connection_interface& ci) mutable {
+                            log::debug(
+                                logcat,
+                                "{} batch dispatching to remote (rid:{})",
+                                _is_service_node ? "Relay" : "Client",
+                                rid);
+                            send_hook(itr->second->control_stream);
+                            link_manager.on_conn_open(ci);
+                        });
+
+                    auto control_stream = link_manager.make_control(ci, rid);
+
+                    itr->second = std::make_shared<link::Connection>(std::move(ci), std::move(control_stream));
+
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    return true;
+                }
+                catch (const std::exception& e)
+                {
+                    log::error(logcat, "Exception caught establishing connection to {}: {}", rid, e.what());
+                    return false;
+                }
+                return true;
+            });
+        }
     }  // namespace link
 
     std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const { return ep->connection_stats(); }
@@ -213,13 +258,16 @@ namespace llarp
         return ep->for_each_connection(std::move(func));
     }
 
-    void LinkManager::register_commands(
-        const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& remote_rid, bool client_only)
+    void LinkManager::register_commands(const bt_control_stream& s, const RouterID& remote_rid, bool client_only)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         s->register_handler("path_control"s, [this](oxen::quic::message m) mutable {
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg)); });
+        });
+
+        s->register_handler("path_switch"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_switch(std::move(msg)); });
         });
 
         if (client_only)
@@ -403,18 +451,32 @@ namespace llarp
         return e;
     }
 
-    std::shared_ptr<oxen::quic::BTRequestStream> LinkManager::make_control(
+    bt_control_stream LinkManager::make_control(
         const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& remote)
     {
-        auto control_stream = ci->template queue_incoming_stream<oxen::quic::BTRequestStream>(
-            [](oxen::quic::Stream&, uint64_t error_code) {
-                log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-            });
+        bt_control_stream control_stream;
 
-        log::trace(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
-        assert(control_stream->stream_id() == 0);
+        if (ci->is_inbound())
+        {
+            control_stream = ci->template queue_incoming_stream<oxen::quic::BTRequestStream>(
+                [](oxen::quic::Stream&, uint64_t error_code) {
+                    log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                });
+
+            log::trace(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
+            assert(control_stream->stream_id() == 0);
+        }
+        else
+        {
+            control_stream =
+                ci->template open_stream<oxen::quic::BTRequestStream>([](oxen::quic::Stream&, uint64_t error_code) {
+                    log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                });
+
+            log::trace(logcat, "Opened BTStream (ID:{})", control_stream->stream_id());
+        }
+
         register_commands(control_stream, remote, not _is_service_node);
-
         return control_stream;
     }
 
@@ -437,6 +499,8 @@ namespace llarp
             log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
             it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
         }
+        else
+            log::warning(logcat, "Could not find inbound connection corresponding to RID: {}", rid);
 
         log::critical(
             logcat,
@@ -507,7 +571,7 @@ namespace llarp
     }
 
     bool LinkManager::send_control_message(
-        const RouterID& remote, std::string endpoint, std::string body, std::function<void(oxen::quic::message m)> func)
+        const RouterID& remote, std::string endpoint, std::string body, bt_control_response_hook func)
     {
         if (is_stopping)
             return false;
@@ -527,10 +591,13 @@ namespace llarp
 
         log::debug(logcat, "Queueing control message to {}", remote);
 
-        _router.loop()->call(
-            [this, rid = remote, endpoint = std::move(endpoint), body = std::move(body), f = std::move(func)]() {
-                connect_and_send(std::move(rid), std::move(endpoint), std::move(body), std::move(f));
-            });
+        _router.loop()->call([this,
+                              rid = remote,
+                              endpoint = std::move(endpoint),
+                              body = std::move(body),
+                              f = std::move(func)]() mutable {
+            connect_and_send(std::move(rid), std::move(endpoint), std::move(body), std::move(f));
+        });
 
         return false;
     }
@@ -567,14 +634,24 @@ namespace llarp
             log::warning(logcat, "Could not find RelayContact for connection to rid:{}", rid);
     }
 
+    void LinkManager::connect_and_send(const RouterID& router, bt_control_send_hook send_hook)
+    {
+        if (auto rc = node_db->get_rc(router))
+        {
+            if (ep->establish_and_send_control(std::move(*rc), std::move(send_hook)))
+                log::info(logcat, "Begun establishing connection to {}", router);
+            else
+                log::warning(logcat, "Failed to begin establishing connection to {}", router);
+        }
+        else
+            log::error(logcat, "Error: Could not find RC for connection to rid:{}, message not sent!", router);
+    }
+
     void LinkManager::connect_and_send(
-        const RouterID& router,
-        std::optional<std::string> endpoint,
-        std::string body,
-        std::function<void(oxen::quic::message m)> func)
+        const RouterID& router, std::optional<std::string> endpoint, std::string body, bt_control_response_hook func)
     {
         // by the time we have called this, we have already checked if we have a connection to this
-        // RID in ::send_control_message_impl, at which point we will dispatch on that stream
+        // RID in ::send_control_message, at which point we will dispatch on that stream
         if (auto rc = node_db->get_rc(router))
         {
             const auto& remote_addr = rc->addr();
@@ -781,8 +858,7 @@ namespace llarp
 
     // TODO: can probably use ::send_control_message instead. Need to discuss the potential
     // difference in calling Endpoint::get_service_conn vs Endpoint::get_conn
-    void LinkManager::fetch_bootstrap_rcs(
-        const RemoteRC& source, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_bootstrap_rcs(const RemoteRC& source, std::string payload, bt_control_response_hook func)
     {
         func = [this, f = std::move(func)](oxen::quic::message m) mutable {
             _router.loop()->call([func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
@@ -797,7 +873,7 @@ namespace llarp
             return;
         }
 
-        _router.loop()->call([this, source, payload, f = std::move(func), rid = rid]() {
+        _router.loop()->call([this, source, payload, f = std::move(func), rid = rid]() mutable {
             connect_and_send(rid, "bfetch_rcs", std::move(payload), std::move(f));
         });
     }
@@ -885,8 +961,7 @@ namespace llarp
         m.respond(std::move(btdp).str(), count == 0);
     }
 
-    void LinkManager::fetch_rcs(
-        const RouterID& source, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_rcs(const RouterID& source, std::string payload, bt_control_response_hook func)
     {
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
@@ -943,8 +1018,23 @@ namespace llarp
         m.respond(std::move(btdp).str());
     }
 
-    void LinkManager::fetch_router_ids(
-        const RouterID& via, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_router_ids(const RouterID& via, bt_control_send_hook send_hook)
+    {
+        if (auto conn = ep->get_conn(via); conn)
+        {
+            log::debug(logcat, "Batch dispatching FetchRID requests to {}", via);
+            return send_hook(conn->control_stream);
+        }
+
+        log::debug(logcat, "Queueing FetchRID batch send to {}...", via);
+
+        _router.loop()->call([this, rid = via, send_hook = std::move(send_hook)]() mutable {
+            connect_and_send(std::move(rid), std::move(send_hook));
+        });
+    }
+
+    [[deprecated]] void LinkManager::fetch_router_ids(
+        const RouterID& via, std::string payload, bt_control_response_hook func)
     {
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
@@ -1764,7 +1854,7 @@ namespace llarp
                 std::tie(tag, remote_pivot_txid, local_pivot_txid) =
                     SessionPathSwitch::deserialize(oxenc::bt_dict_consumer{m.body()});
 
-            if (auto session = _router.session_endpoint()->get_session(tag))
+            if (auto session = _router.session_endpoint()->get_session<session::OutboundSession>(tag))
             {
                 session->recv_path_switch(remote_pivot_txid);
                 return m.respond(messages::OK_RESPONSE);

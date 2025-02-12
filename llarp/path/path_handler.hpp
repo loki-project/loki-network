@@ -4,6 +4,7 @@
 
 #include <llarp/address/address.hpp>
 #include <llarp/contact/client_intro.hpp>
+#include <llarp/link/types.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/thread/threading.hpp>
 #include <llarp/util/time.hpp>
@@ -116,8 +117,6 @@ namespace llarp
             std::chrono::milliseconds last_build{0s};
             std::chrono::milliseconds build_interval_limit{MIN_PATH_BUILD_INTERVAL};
 
-            std::set<RouterID> snode_blacklist;
-
             /// construct
             PathHandler(Router& _router, size_t num_paths, size_t num_hops = DEFAULT_LEN);
 
@@ -135,8 +134,6 @@ namespace llarp
             const Router& router() const { return _router; }
 
             Router& router() { return _router; }
-
-            virtual void blacklist_snode(const RouterID& remote) { snode_blacklist.insert(remote); }
 
             std::optional<std::shared_ptr<Path>> get_path(HopID id) const;
 
@@ -198,7 +195,7 @@ namespace llarp
             std::optional<std::vector<RemoteRC>> aligned_hops_between(const RouterID& edge, const RouterID& pivot);
 
             std::optional<std::vector<RemoteRC>> aligned_hops_to_remote(
-                const RouterID& pivot, const std::set<RouterID>& exclude = {});
+                const RouterID& pivot, const std::set<RouterID>& exclude = {}, bool strict = true);
 
             // The build logic is segmented into functions designed to be called sequentially.
             //  - pre_build() : This handles all checking of the vector of hops, verifying with buildlimiter, etc
@@ -223,7 +220,7 @@ namespace llarp
 
             std::string build2(const std::shared_ptr<Path>& path);
 
-            bool build3(RouterID upstream, std::string payload, std::function<void(oxen::quic::message)> handler);
+            bool build3(RouterID upstream, std::string payload, bt_control_response_hook handler);
 
             void for_each_path(std::function<void(const std::shared_ptr<Path>&)> visit) const;
 

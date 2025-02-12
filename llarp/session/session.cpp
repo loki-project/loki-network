@@ -49,8 +49,7 @@ namespace llarp::session
             };
     }
 
-    bool BaseSession::send_path_control_message(
-        std::string method, std::string body, std::function<void(oxen::quic::message)> func)
+    bool BaseSession::send_path_control_message(std::string method, std::string body, bt_control_response_hook func)
     {
         auto inner_payload = PATH::CONTROL::serialize(std::move(method), std::move(body));
 
@@ -96,28 +95,27 @@ namespace llarp::session
         assert(_current_path->is_linked());
     }
 
-    void BaseSession::send_path_switch()
+    void recv_path_switch2(HopID new_remote_txid, HopID new_local_txid)
     {
-        log::debug(logcat, "Dispatching path-switch request to remote ({})", _remote);
-        send_path_control_message(
-            "path_switch",
-            SessionPathSwitch::serialize(_tag, _current_path->pivot_txid(), _remote_pivot_txid),
-            [](oxen::quic::message m) {
-                if (m)
-                    log::info(logcat, "Session path switch was successful!");
-                else
-                    log::warning(logcat, "Session path switch {}!", m.timed_out ? "timed out" : "failed");
-            });
+        log::debug(
+            logcat,
+            "Received new remote and local pivot txIDs [ remote:{} | local:{} ]",
+            new_remote_txid,
+            new_local_txid);
     }
 
     void BaseSession::recv_path_switch(HopID new_remote_txid)
     {
-        log::debug(logcat, "Received path-switch request from remote ({})", _remote);
+        log::debug(
+            logcat,
+            "Received new pivot txID from remote ({}) [ old:{} | new:{} ] ",
+            _remote,
+            _remote_pivot_txid,
+            new_remote_txid);
         _remote_pivot_txid = new_remote_txid;
     }
 
-    void BaseSession::publish_client_contact(
-        const EncryptedClientContact& ecc, std::function<void(oxen::quic::message)> func)
+    void BaseSession::publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func)
     {
         send_path_control_message(
             "publish_cc", PublishClientContact::serialize(std::move(ecc), _r.local_rid()), std::move(func));
@@ -259,19 +257,20 @@ namespace llarp::session
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
-        _populate_intro_map(_remote_intros);
+        populate_intro_map(_remote_intros);
     }
 
     OutboundSession::~OutboundSession() = default;
 
-    void OutboundSession::_populate_intro_map(intro_set& _remote_intros)
+    void OutboundSession::populate_intro_map(intro_set& _remote_intros)
     {
         log::trace(logcat, "Populating intro map for {} intros!", _remote_intros.size());
+        Lock_t l(paths_mutex);
+
         intro_path_mapping.clear();
 
         for (auto& intro : _remote_intros)
         {
-            // if (intro.pivot_rid == _current_path->pivot_rid())
             if (intro.pivot_txid == _remote_pivot_txid)
                 intro_path_mapping.emplace(intro, path::PathPtrSet{_current_path});
             else
@@ -279,11 +278,71 @@ namespace llarp::session
         }
     }
 
+    void OutboundSession::send_path_switch(std::shared_ptr<path::Path> _new_path)
+    {
+        set_new_current_path(std::move(_new_path));
+        path_build_succeeded(_current_path);
+
+        log::debug(logcat, "Dispatching path-switch request to remote ({})", _remote);
+        send_path_control_message(
+            "path_switch",
+            SessionPathSwitch::serialize(_tag, _current_path->pivot_txid(), _remote_pivot_txid),
+            [](oxen::quic::message m) {
+                if (m)
+                    log::info(logcat, "Session path switch was successful!");
+                else
+                    log::warning(logcat, "Session path switch {}!", m.timed_out ? "timed out" : "failed");
+            });
+    }
+
     void OutboundSession::update_remote_intros(intro_set intros)
     {
         log::debug(logcat, "Updating ClientIntros for OutboundSession to remote: {}", _remote);
-        _populate_intro_map(intros);
-        _switch_paths();
+
+        /**
+            - Clear intro_path_map
+            - Check path_handler map for any paths to the new intro_set pivots
+                - If so:
+                    - add to new intro_path_map
+                    - make new current path
+                - Else:
+                    - build and switch
+         */
+
+        populate_intro_map(intros);
+        update_local_paths();
+    }
+
+    void OutboundSession::update_local_paths()
+    {
+        Lock_t l(paths_mutex);
+
+        for (auto it = _paths.begin(); it != _paths.end();)
+        {
+            bool keep_path = false;
+            auto remote_pivot = it->second->pivot_rid();
+
+            for (auto& [intro, pathset] : intro_path_mapping)
+            {
+                if (intro.pivot_rid == remote_pivot)
+                {
+                    pathset.emplace(it->second);
+                    keep_path = true;
+                    break;
+                }
+            }
+
+            if (keep_path)
+                ++it;
+            else
+                it = _paths.erase(it);
+        }
+
+        // If any of our current paths are valid to the new intros, _paths will NOT be empty. Since we
+        // cleared the intro_path_map before populating it again
+        if (not _paths.empty())
+        {
+        }
     }
 
     void OutboundSession::path_died([[maybe_unused]] std::shared_ptr<path::Path> p)
@@ -302,11 +361,9 @@ namespace llarp::session
         return obj;
     }
 
-    void OutboundSession::blacklist_snode(const RouterID& snode) { (void)snode; }
-
-    void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
+    void OutboundSession::map_path(const std::shared_ptr<path::Path>& p)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         for (auto& [intro, pathset] : intro_path_mapping)
         {
@@ -314,17 +371,16 @@ namespace llarp::session
             {
                 pathset.emplace(p);
                 log::debug(logcat, "Client intro {} has {} paths to remote pivot", intro, pathset.size());
-                break;
+                return;
             }
         }
 
-        path::PathHandler::path_build_succeeded(p);
+        log::warning(logcat, "Could not match currently held intros to path over pivot ({})", p->pivot_rid());
     }
 
-    void OutboundSession::path_build_failed(std::shared_ptr<path::Path> p, bool timeout)
+    void OutboundSession::unmap_path(const std::shared_ptr<path::Path>& p)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
-        Lock_t l(paths_mutex);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         for (auto& [intro, pathset] : intro_path_mapping)
         {
@@ -332,10 +388,28 @@ namespace llarp::session
             {
                 pathset.erase(p);
                 log::debug(logcat, "Client intro {} has {} paths to remote pivot", intro, pathset.size());
-                break;
+                return;
             }
         }
 
+        log::warning(logcat, "Could not match currently held intros to path over pivot ({})", p->pivot_rid());
+    }
+
+    void OutboundSession::path_build_succeeded(std::shared_ptr<path::Path> p)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        Lock_t l(paths_mutex);
+
+        map_path(p);
+        path::PathHandler::path_build_succeeded(p);
+    }
+
+    void OutboundSession::path_build_failed(std::shared_ptr<path::Path> p, bool timeout)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+        Lock_t l(paths_mutex);
+
+        unmap_path(p);
         path::PathHandler::path_build_failed(p, timeout);
     }
 
@@ -348,41 +422,20 @@ namespace llarp::session
         if (send_close)
         {
             std::promise<void> prom;
-            auto f = prom.get_future();
 
             _router.loop()->call([&]() mutable {
-                Lock_t l{paths_mutex};
-
-                for (auto& [_, p] : _paths)
-                {
-                    if (p and p->is_ready())
-                    {
-                        log::trace(logcat, "Sending close message on path {}", p->to_string());
-                        // send_path_close(p);
-                    }
-                }
-
+                send_path_close();
                 prom.set_value();
             });
 
-            f.get();
-            log::debug(logcat, "All paths dispatched path close message!");
+            prom.get_future().get();
+            log::debug(logcat, "Dispatched path close message!");
         }
 
         intro_path_mapping.clear();
 
-        // base class dtor clears path map
-        return path::PathHandler::stop(send_close);
-    }
-
-    /** TESTNET: TODO:
-        - change intro_path_map to hold sets of Path weak ptrs
-        - expire on ::tick()
-     */
-    void OutboundSession::tick(std::chrono::milliseconds now)
-    {
-        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-        path::PathHandler::tick(now);
+        // base class dtor clears path map and doesn't send path closes
+        return path::PathHandler::stop();
     }
 
     void OutboundSession::build_more(size_t n)
@@ -426,11 +479,11 @@ namespace llarp::session
             log::warning(logcat, "OutboundSession only initiated {} path-builds (needed: {})", count, n);
     }
 
-    void OutboundSession::_switch_paths()
+    void OutboundSession::build_and_switch_paths()
     {
         auto& [intro, pathset] = *intro_path_mapping.begin();
 
-        if (auto maybe_hops = aligned_hops_to_remote(intro.pivot_rid))
+        if (auto maybe_hops = aligned_hops_to_remote(intro.pivot_rid, {}, false))
         {
             if (auto new_path = build1(*maybe_hops))
             {
@@ -445,9 +498,9 @@ namespace llarp::session
                             {
                                 log::info(logcat, "PATH ESTABLISHED: {}", new_path->hop_string());
                                 _remote_pivot_txid = remote_pivot_txid;
-                                set_new_current_path(new_path);
-                                path_build_succeeded(std::move(new_path));
-                                return send_path_switch();
+                                // set_new_current_path(new_path);
+                                // path_build_succeeded();
+                                return send_path_switch(std::move(new_path));
                             }
 
                             try

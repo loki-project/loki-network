@@ -52,7 +52,7 @@ namespace llarp
     // inline constexpr size_t INTROSET_STORAGE_REDUNDANCY{(INTROSET_RELAY_REDUNDANCY * INTROSET_REQS_PER_RELAY)};
 
     // TESTNET: these constants are shortened for testing purposes
-    inline constexpr auto TESTNET_GOSSIP_INTERVAL{5min};
+    inline constexpr auto TESTNET_GOSSIP_INTERVAL{300s};
     inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{5min};
     inline constexpr std::chrono::milliseconds INITIAL_ATTEMPT_INTERVAL{30s};
     // as we advance towards full mesh, we try to connect to this number per tick
@@ -343,10 +343,7 @@ namespace llarp
         bool send_data_message(const RouterID& remote, std::string payload);
 
         bool send_control_message(
-            const RouterID& remote,
-            std::string endpoint,
-            std::string body,
-            std::function<void(oxen::quic::message m)> func = nullptr);
+            const RouterID& remote, std::string endpoint, std::string body, bt_control_response_hook func = nullptr);
 
         // bool is_bootstrap_node(RouterID rid) const;
 

@@ -74,9 +74,7 @@ namespace llarp
                 for (auto& [_, s] : _sessions)
                 {
                     if (s->is_outbound())
-                    {
                         std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(send_close);
-                    }
                 }
             }
 
@@ -145,9 +143,8 @@ namespace llarp
             if (auto it_a = _session_lookup.find(tag); it_a != _session_lookup.end())
             {
                 if (auto it_b = _sessions.find(it_a->second); it_b != _sessions.end())
-                {
                     _sessions.erase(it_b);
-                }
+
                 _session_lookup.erase(it_a);
             }
         }
@@ -161,9 +158,8 @@ namespace llarp
                 auto tag = it_a->second->tag();
 
                 if (auto it_b = _session_lookup.find(tag); it_b != _session_lookup.end())
-                {
                     _session_lookup.erase(it_b);
-                }
+
                 _sessions.erase(it_a);
             }
         }
