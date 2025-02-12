@@ -69,6 +69,8 @@ namespace llarp
             // policies about traffic that we are willing to carry -- Exit mode only!
             std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
 
+            void _close_session(std::shared_ptr<session::BaseSession>& s, bool send_close);
+
           public:
             SessionEndpoint(Router& r);
 
@@ -107,9 +109,9 @@ namespace llarp
                 return std::static_pointer_cast<session_t>(_sessions.get_session(remote));
             }
 
-            bool close_session(NetworkAddress remote);
+            bool close_session(NetworkAddress remote, bool send_close = false);
 
-            bool close_session(session_tag t);
+            bool close_session(session_tag t, bool send_close = false);
 
             void srv_records_changed();
 

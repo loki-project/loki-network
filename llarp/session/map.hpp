@@ -62,8 +62,7 @@ namespace llarp
             }
         }
 
-        /** Called by owning object to stop all OutboundSessions, then clear the map. InboundSession objects are not
-            PathHandlers, so they have no paths down which to send a close message.
+        /** Called by owning object to stop all Sessions, then clear the map.
          */
         void stop_sessions(bool send_close = false)
         {
@@ -73,8 +72,7 @@ namespace llarp
             {
                 for (auto& [_, s] : _sessions)
                 {
-                    if (s->is_outbound())
-                        std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(send_close);
+                    s->stop_session(send_close);
                 }
             }
 

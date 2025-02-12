@@ -54,7 +54,7 @@ namespace llarp
 
     struct ClientIntroComp
     {
-        bool operator()(const ClientIntro& lhs, const ClientIntro& rhs) const { return lhs.expiry < rhs.expiry; }
+        bool operator()(const ClientIntro& lhs, const ClientIntro& rhs) const { return lhs.expiry > rhs.expiry; }
     };
 
     using intro_set = std::set<ClientIntro, ClientIntroComp>;

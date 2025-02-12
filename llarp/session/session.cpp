@@ -213,13 +213,33 @@ namespace llarp::session
         log::debug(logcat, "Session to remote ({}) deactivated!", _remote);
     }
 
-    void BaseSession::send_path_close()
+    void BaseSession::stop_session(bool send_close, bt_control_response_hook func)
     {
-        log::debug(logcat, "Dispatching close session message...");
-        send_path_control_message(
-            "session_close", CloseSession::serialize(_tag), [remote = _remote](oxen::quic::message m) mutable {
-                log::info(logcat, "Remote ({}) {} session", remote, m ? "successfully closed" : "failed to close");
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        if (send_close)
+        {
+            std::promise<void> prom;
+
+            _r.loop()->call([&]() mutable {
+                send_path_close(std::move(func));
+                prom.set_value();
             });
+
+            prom.get_future().get();
+            log::debug(logcat, "Dispatched path close message!");
+        }
+    }
+
+    void BaseSession::send_path_close(bt_control_response_hook func)
+    {
+        if (not func)
+            func = [remote = _remote](oxen::quic::message m) mutable {
+                log::debug(logcat, "Remote ({}) {} session", remote, m ? "successfully closed" : "failed to close");
+            };
+
+        log::debug(logcat, "Dispatching close session message...");
+        send_path_control_message("session_close", CloseSession::serialize(_tag), std::move(func));
     }
 
     std::string BaseSession::to_string() const
@@ -257,12 +277,12 @@ namespace llarp::session
             throw std::runtime_error{"Cannot create OutboundSession for a remote exit and remote service!"};
 
         add_path(_current_path);
-        populate_intro_map(_remote_intros);
+        populate_intro_map(std::move(_remote_intros));
     }
 
     OutboundSession::~OutboundSession() = default;
 
-    void OutboundSession::populate_intro_map(intro_set& _remote_intros)
+    void OutboundSession::populate_intro_map(intro_set&& _remote_intros)
     {
         log::trace(logcat, "Populating intro map for {} intros!", _remote_intros.size());
         Lock_t l(paths_mutex);
@@ -271,6 +291,7 @@ namespace llarp::session
 
         for (auto& intro : _remote_intros)
         {
+            log::critical(logcat, "intro: {}", intro);
             if (intro.pivot_txid == _remote_pivot_txid)
                 intro_path_mapping.emplace(intro, path::PathPtrSet{_current_path});
             else
@@ -295,10 +316,9 @@ namespace llarp::session
             });
     }
 
-    void OutboundSession::update_remote_intros(intro_set intros)
+    void OutboundSession::update_remote_intros(intro_set&& intros)
     {
         log::debug(logcat, "Updating ClientIntros for OutboundSession to remote: {}", _remote);
-
         /**
             - Clear intro_path_map
             - Check path_handler map for any paths to the new intro_set pivots
@@ -309,7 +329,7 @@ namespace llarp::session
                     - build and switch
          */
 
-        populate_intro_map(intros);
+        populate_intro_map(std::move(intros));
         update_local_paths();
     }
 
@@ -335,7 +355,10 @@ namespace llarp::session
             if (keep_path)
                 ++it;
             else
+            {
+                _router.path_context()->drop_path(it->second);
                 it = _paths.erase(it);
+            }
         }
 
         // If any of our current paths are valid to the new intros, _paths will NOT be empty. Since we
@@ -411,6 +434,17 @@ namespace llarp::session
 
         unmap_path(p);
         path::PathHandler::path_build_failed(p, timeout);
+    }
+
+    void OutboundSession::stop_session(bool send_close, bt_control_response_hook func)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        _running = false;
+        BaseSession::stop_session(send_close, std::move(func));
+
+        intro_path_mapping.clear();
+        path::PathHandler::stop();
     }
 
     bool OutboundSession::stop(bool send_close)

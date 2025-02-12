@@ -317,7 +317,7 @@ namespace llarp::rpc
         struct request_parameters
         {
             std::string pk;
-            bool x;
+            bool x{false};
         } request;
     };
 

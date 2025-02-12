@@ -69,7 +69,10 @@ namespace llarp
 
         return {
             {"instance",
-             {{"id", local_rid().ToHex()}, {"running", true}, {"local range", _range}, {"exit node", _is_exit}}},
+             {{"id", local_rid().to_network_address(_is_service_node)},
+              {"running", true},
+              {"local range", _range},
+              {"exit node", _is_exit}}},
             {"links", {{"inbound", _in}, {"outbound", _out}, {"relay", _relay}, {"client", _client}}},
             {"sessions", {{"active", _nsessions}}},
             {"nodedb", {{"RCs", _rcs}, {"RIDs", _rids}}},
@@ -474,7 +477,7 @@ namespace llarp
 
         auto is_v4 = _local_range.is_ipv4();
 
-        log::critical(logcat, "Lokinet has private {} range: {}", is_v4 ? "ipv4" : "ipv6", _local_range);
+        log::debug(logcat, "Lokinet has private {} range: {}", is_v4 ? "ipv4" : "ipv6", _local_range);
 
         if (conf._if_name)
         {
@@ -625,7 +628,7 @@ namespace llarp
 
             _gossip_interval = approximate_time(TESTNET_GOSSIP_INTERVAL, 30);
 
-            log::critical(
+            log::info(
                 logcat,
                 "Local instance operating in {} mode{}",
                 _is_service_node ? "relay" : "client",
@@ -653,7 +656,7 @@ namespace llarp
 
             process_routerconfig();
 
-            log::critical(
+            log::debug(
                 logcat,
                 "public addr={}, listen addr={}",
                 _public_address ? _public_address->to_string() : "< NONE >",

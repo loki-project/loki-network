@@ -7,6 +7,7 @@
 #include <llarp/constants/version.hpp>
 #include <llarp/contact/client_contact.hpp>
 #include <llarp/dns/server.hpp>
+#include <llarp/messages/common.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>
 #include <llarp/util/logging/buffer.hpp>
@@ -412,7 +413,39 @@ namespace llarp::rpc
         _router.loop()->call([&]() {
             try
             {
-                _router.session_endpoint()->close_session(NetworkAddress::from_pubkey(pk, true));
+                if (auto session = _router.session_endpoint()->get_session(NetworkAddress::from_pubkey(pk, true)))
+                {
+                    session->stop_session(true, [replier = sessionclose.move()](oxen::quic::message m) mutable {
+                        nlohmann::json result;
+
+                        if (m)
+                        {
+                            result.emplace("result", "OK");
+                            log::info(logcat, "RPC call to `session_close` succeeded!");
+                            return replier.reply(result.dump());
+                        }
+
+                        std::string status{"<none given>"};
+
+                        try
+                        {
+                            oxenc::bt_dict_consumer btdc{m.body()};
+
+                            if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                                status = std::move(*s);
+                        }
+                        catch (const std::exception& e)
+                        {
+                            status = "Exception: {}"_format(e.what());
+                        }
+
+                        log::critical(logcat, "Call to InitiateSession FAILED; reason: {}", status);
+                        result.emplace("result", std::move(status));
+                        replier.reply(result.dump());
+                    });
+                }
+
+                // _router.session_endpoint()->close_session(NetworkAddress::from_pubkey(pk, true));
                 log::info(logcat, "RPC Server dispatched `session_close` to remote:{}", pk.to_network_address(false));
             }
             catch (const std::exception& e)

@@ -26,19 +26,27 @@ namespace llarp::handlers
         return {_sessions.count(), _local_range.to_string(), _is_exit_node};
     }
 
-    bool SessionEndpoint::close_session(NetworkAddress remote)
+    void SessionEndpoint::_close_session(std::shared_ptr<session::BaseSession>& s, bool send_close)
+    {
+        auto remote = s->remote();
+
+        if (send_close)
+            s->send_path_close();
+
+        if (s->using_tun())
+            _router.tun_endpoint()->unmap_session_to_local_ip(remote);
+
+        _sessions.unmap(remote);
+        log::info(logcat, "Session (remote:{}) closed and unmapped!", remote);
+    }
+
+    bool SessionEndpoint::close_session(NetworkAddress remote, bool send_close)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (auto s = _sessions.get_session(remote))
         {
-            s->send_path_close();
-
-            if (s->using_tun())
-                _router.tun_endpoint()->unmap_session_to_local_ip(remote);
-
-            _sessions.unmap(remote);
-            log::info(logcat, "Session (remote:{}) closed and unmapped!", remote);
+            _close_session(s, send_close);
             return true;
         }
 
@@ -46,21 +54,13 @@ namespace llarp::handlers
         return false;
     }
 
-    bool SessionEndpoint::close_session(session_tag t)
+    bool SessionEndpoint::close_session(session_tag t, bool send_close)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         if (auto s = _sessions.get_session(t))
         {
-            if (s->using_tun())
-                _router.tun_endpoint()->unmap_session_to_local_ip(s->remote());
-
-            if (s->is_outbound())
-                std::dynamic_pointer_cast<session::OutboundSession>(s)->stop(false);
-
-            _sessions.unmap(t);
-
-            log::info(logcat, "Session (tag:{}) closed and unmapped!", t);
+            _close_session(s, send_close);
             return true;
         }
 

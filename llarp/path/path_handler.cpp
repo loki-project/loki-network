@@ -372,17 +372,6 @@ namespace llarp::path
         return std::nullopt;
     }
 
-    // std::optional<std::vector<RemoteRC>> PathHandler::specific_hops_to_remote(std::vector<RouterID> specifgic)
-    // {
-    //     log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
-
-    //     assert(num_hops);
-
-    //     auto hops_needed = num_hops;
-    //     std::vector<RemoteRC> hops{};
-
-    // }
-
     std::optional<std::vector<RemoteRC>> PathHandler::aligned_hops_between(const RouterID& edge, const RouterID& pivot)
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);

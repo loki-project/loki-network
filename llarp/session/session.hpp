@@ -137,7 +137,9 @@ namespace llarp
 
             void deactivate();
 
-            virtual void send_path_close();
+            virtual void stop_session(bool send_close = false, bt_control_response_hook func = nullptr);
+
+            void send_path_close(bt_control_response_hook func = nullptr);
 
             virtual std::string to_string() const;
 
@@ -165,7 +167,7 @@ namespace llarp
 
             intro_path_map intro_path_mapping{};
 
-            void populate_intro_map(intro_set& intros);
+            void populate_intro_map(intro_set&& intros);
 
             void update_local_paths();
 
@@ -180,7 +182,7 @@ namespace llarp
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            void update_remote_intros(intro_set intros);
+            void update_remote_intros(intro_set&& intros);
 
             void build_more(size_t n = 0) override;
 
@@ -197,6 +199,8 @@ namespace llarp
             void send_path_switch(std::shared_ptr<path::Path> _new_path);
 
             bool stop(bool send_close = false) override;
+
+            void stop_session(bool send_close = false, bt_control_response_hook func = nullptr) override;
 
             bool is_ready() const;
 

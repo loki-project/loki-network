@@ -152,11 +152,7 @@ namespace llarp
             return true;
         }
 
-        std::string bt_encode() const
-        {
-            return oxenc::bt_serialize(_data);
-            // return {reinterpret_cast<const char*>(data()), sz};
-        }
+        std::string bt_encode() const { return oxenc::bt_serialize(_data); }
 
         bool bt_decode(std::string buf)
         {
