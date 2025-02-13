@@ -111,6 +111,8 @@ namespace llarp
 
             virtual void path_build_succeeded(std::shared_ptr<Path> p);
 
+            void _make_new_path(intro_set intro);
+
           public:
             Router& _router;
             size_t num_hops;

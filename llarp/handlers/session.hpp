@@ -22,6 +22,7 @@ namespace llarp
         class SessionEndpoint final : public path::PathHandler, public std::enable_shared_from_this<SessionEndpoint>
         {
             friend class rpc::RPCServer;
+            friend struct session::BaseSession;
 
             bool _is_exit_node{false};
             bool _is_snode_service{false};
@@ -68,6 +69,8 @@ namespace llarp
 
             // policies about traffic that we are willing to carry -- Exit mode only!
             std::optional<net::ExitPolicy> _exit_policy = std::nullopt;
+
+            void _unmap_session(session::BaseSession* s);
 
             void _close_session(std::shared_ptr<session::BaseSession>& s, bool send_close);
 

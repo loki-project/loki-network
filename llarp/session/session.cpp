@@ -226,6 +226,8 @@ namespace llarp::session
     {
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
+        deactivate();
+
         if (send_close)
         {
             std::promise<void> prom;
@@ -238,6 +240,8 @@ namespace llarp::session
             prom.get_future().get();
             log::debug(logcat, "Dispatched path close message!");
         }
+
+        _parent._unmap_session(this);
     }
 
     void BaseSession::send_path_close(bt_control_response_hook func)
@@ -291,7 +295,7 @@ namespace llarp::session
 
     OutboundSession::~OutboundSession() = default;
 
-    void OutboundSession::populate_intro_map(intro_set&& _remote_intros)
+    void OutboundSession::populate_intro_map(const intro_set& _remote_intros)
     {
         log::trace(logcat, "Populating intro map for {} intros!", _remote_intros.size());
         Lock_t l(paths_mutex);
@@ -338,11 +342,16 @@ namespace llarp::session
                     - build and switch
          */
 
-        populate_intro_map(std::move(intros));
-        update_local_paths();
+        populate_intro_map(intros);
+
+        if (not update_local_paths())
+        {
+            log::debug(logcat, "No valid paths left for new intros; building new paths...");
+            build_and_switch_paths(std::move(intros));
+        }
     }
 
-    void OutboundSession::update_local_paths()
+    bool OutboundSession::update_local_paths()
     {
         Lock_t l(paths_mutex);
 
@@ -379,12 +388,14 @@ namespace llarp::session
                 if (pathset.empty())
                     log::critical(logcat, "THIS SHOULD NOT HAPPEN");
                 else
-                    return set_new_current_path(*pathset.begin());
+                {
+                    set_new_current_path(*pathset.begin());
+                    return true;
+                }
             }
         }
 
-        log::debug(logcat, "No valid paths left for new intros; building new paths...");
-        build_and_switch_paths();
+        return false;
     }
 
     void OutboundSession::path_died([[maybe_unused]] std::shared_ptr<path::Path> p)
@@ -532,7 +543,7 @@ namespace llarp::session
             log::warning(logcat, "OutboundSession only initiated {} path-builds (needed: {})", count, n);
     }
 
-    void OutboundSession::build_and_switch_paths()
+    void OutboundSession::build_and_switch_paths(intro_set&& /* intros */)
     {
         auto& [intro, pathset] = *intro_path_mapping.begin();
 

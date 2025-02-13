@@ -80,8 +80,8 @@ namespace llarp
         }
 
         /** This functions exactly as std::unordered_map's ::insert_or_assign method. If a key equivalent
-            to `local` already exists in the container, `sesh` is assigned to the mapped type. If the key
-            does NOT exist, `sesh` is inserted as the value corresponding to the key `local`.
+            to `remote` already exists in the container, `sesh` is assigned to the mapped type. If the key
+            does NOT exist, `sesh` is inserted as the value corresponding to the key `remote`.
 
             The returned `bool` is true if the insertion took place and `false` if assignment occurred. The
             iterator is the shared_ptr that was inserted or assigned
@@ -147,11 +147,11 @@ namespace llarp
             }
         }
 
-        void unmap(const net_addr_t& local)
+        void unmap(const net_addr_t& remote)
         {
             Lock_t l{session_mutex};
 
-            if (auto it_a = _sessions.find(local); it_a != _sessions.end())
+            if (auto it_a = _sessions.find(remote); it_a != _sessions.end())
             {
                 auto tag = it_a->second->tag();
 
@@ -172,15 +172,15 @@ namespace llarp
             return false;
         }
 
-        bool have_session(const net_addr_t& local) const
+        bool have_session(const net_addr_t& remote) const
         {
             Lock_t l{session_mutex};
 
-            return _sessions.count(local);
+            return _sessions.count(remote);
         }
 
         std::shared_ptr<session_t> operator[](const session_tag& tag) { return get_session(tag); }
 
-        std::shared_ptr<session_t> operator[](const net_addr_t& local) { return get_session(local); }
+        std::shared_ptr<session_t> operator[](const net_addr_t& remote) { return get_session(remote); }
     };
 }  //  namespace llarp

@@ -167,11 +167,11 @@ namespace llarp
 
             intro_path_map intro_path_mapping{};
 
-            void populate_intro_map(intro_set&& intros);
+            void populate_intro_map(const intro_set& intros);
 
-            void update_local_paths();
+            bool update_local_paths();
 
-            void build_and_switch_paths();
+            void build_and_switch_paths(intro_set&& intros);
 
             void map_path(const std::shared_ptr<path::Path>& p);
 

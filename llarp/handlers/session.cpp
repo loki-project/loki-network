@@ -26,18 +26,25 @@ namespace llarp::handlers
         return {_sessions.count(), _local_range.to_string(), _is_exit_node};
     }
 
-    void SessionEndpoint::_close_session(std::shared_ptr<session::BaseSession>& s, bool send_close)
+    void SessionEndpoint::_unmap_session(session::BaseSession* s)
     {
-        auto remote = s->remote();
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        if (send_close)
-            s->send_path_close();
+        auto remote = s->remote();
 
         if (s->using_tun())
             _router.tun_endpoint()->unmap_session_to_local_ip(remote);
 
         _sessions.unmap(remote);
         log::info(logcat, "Session (remote:{}) closed and unmapped!", remote);
+    }
+
+    void SessionEndpoint::_close_session(std::shared_ptr<session::BaseSession>& s, bool send_close)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        s->stop_session(send_close);
+        _unmap_session(s.get());
     }
 
     bool SessionEndpoint::close_session(NetworkAddress remote, bool send_close)
@@ -734,26 +741,6 @@ namespace llarp::handlers
                 logcat, "Exhausted all pivots associated with remote (rid:{}); failed to make session!", remote);
             return;
         }
-
-        // TESTNET:
-        // RouterID edge{oxenc::from_base32z("55fxrybf3jtausbnmxpgwcsz9t8qkf5pr8t5f4xyto4omjrkorpy")};
-        // bool using_hacky_bullshit{false};
-
-        // ClientIntro intro;
-
-        // for (auto itr = intros.begin(); itr != intros.end(); ++itr)
-        // {
-        //     log::trace(logcat, "itr->pivot_rid: {}", itr->pivot_rid);
-        //     if (itr->pivot_rid == edge)
-        //     {
-        //         using_hacky_bullshit = true;
-        //         intro = intros.extract(itr).value();
-        //         break;
-        //     }
-        // }
-
-        // if (not using_hacky_bullshit)
-        //     intro = intros.extract(intros.begin()).value();
 
         auto intro = intros.extract(intros.begin()).value();
 
