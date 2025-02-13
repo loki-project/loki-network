@@ -9,13 +9,12 @@
 
 #include <llarp/auth/auth.hpp>
 #include <llarp/constants/platform.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/dns/dns.hpp>
-#include <llarp/net/net.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/router/route_poker.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/name.hpp>
-#include <llarp/service/types.hpp>
+#include <llarp/util/logging/buffer.hpp>
 #include <llarp/util/str.hpp>
 
 namespace llarp::handlers
@@ -268,153 +267,133 @@ namespace llarp::handlers
         }
     }
 
+    /** DISCUSS: Can the auth objects be further simplified?
+        - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
+            request to execute its aynchronous logic and queue the authentication job
+
+        Static Token Auth:
+        - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
+            operator
+        - The session initiator will automatically include any static tokens that are either (A) loaded into the
+            config mapping or (B) passed to the lokinet-vpn cli utility
+            - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+
+        RPC Auth:
+        - Why can't the functionality of this be entirely subsumed by the RPCClient?
+            - If the config specifies the auth_type as RPC plus
+    */
     void TunEndpoint::configure()
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
-        auto& net_conf = _router.config()->network;
+        return _router.loop()->call_get([&]() {
+            log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        /** DISCUSS: Can the auth objects be further simplified?
-            - In the original implementation, the AuthPolicy async logic was for the instance receiving the connection
-                request to execute its aynchronous logic and queue the authentication job
+            auto& net_conf = _router.config()->network;
 
-            Static Token Auth:
-            - In the re-designed auth paradigm, static tokens are either independantly coordinated with the exit/service
-                operator
-            - The session initiator will automatically include any static tokens that are either (A) loaded into the
-                config mapping or (B) passed to the lokinet-vpn cli utility
-                - As a result, the session initiator doesn't necessarily need an AuthPolicy object
+            _exit_policy = net_conf.traffic_policy;
+            _base_ipv6_range = net_conf._base_ipv6_range;
 
-            RPC Auth:
-            - Why can't the functionality of this be entirely subsumed by the RPCClient?
-                - If the config specifies the auth_type as RPC plus
-
-        */
-        // switch (net_conf.auth_type)
-        // {
-        //     case auth::AuthType::WHITELIST:
-        //     case auth::AuthType::OMQ:
-        //         // The RPCAuthPolicy constructor will throw if auth_{endpoint,method} are empty
-        //         _auth_policy = auth::make_auth_policy<auth::RPCAuthPolicy>(
-        //             router(), *net_conf.auth_endpoint, *net_conf.auth_method, router().lmq(), shared_from_this());
-
-        //         std::static_pointer_cast<auth::RPCAuthPolicy>(_auth_policy)->start();
-        //         break;
-
-        //     case auth::AuthType::FILE:
-        //         _auth_policy = auth::make_auth_policy<auth::FileAuthPolicy>(
-        //             router(), net_conf.auth_files, net_conf.auth_file_type);
-        //         break;
-
-        //     case auth::AuthType::NONE:
-        //     default:
-        //         break;
-        // }
-
-        _traffic_policy = net_conf.traffic_policy;
-        _base_ipv6_range = net_conf._base_ipv6_range;
-
-        if (net_conf.path_alignment_timeout)
-        {
-            if (is_service_node())
-                throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
-
-            _path_alignment_timeout = *net_conf.path_alignment_timeout;
-        }
-
-        _if_name = *net_conf._if_name;
-        _local_range = *net_conf._local_ip_range;
-        _local_addr = *net_conf._local_addr;
-        _local_base_ip = *net_conf._local_base_ip;
-
-        ipv6_enabled = not _local_range.is_ipv4();
-        if (ipv6_enabled and not net_conf.enable_ipv6)
-            throw std::runtime_error{"Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
-
-        _persisting_addr_file = net_conf.addr_map_persist_file;
-
-        if (not net_conf._reserved_local_ips.empty())
-        {
-            for (auto& [remote, local] : net_conf._reserved_local_ips)
+            if (net_conf.path_alignment_timeout)
             {
-                _local_ip_mapping.insert_or_assign(local, remote);
+                if (is_service_node())
+                    throw std::runtime_error{"Service nodes cannot specify path alignment timeout!"};
+
+                _path_alignment_timeout = *net_conf.path_alignment_timeout;
             }
-        }
 
-        log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
-        _local_range_iterator = IPRangeIterator(_local_range);
+            _if_name = *net_conf._if_name;
+            _local_range = *net_conf._local_ip_range;
+            _local_addr = *net_conf._local_addr;
+            _local_base_ip = *net_conf._local_base_ip;
 
-        _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
-        _local_ip_mapping.insert_or_assign(_local_base_ip, std::move(_local_netaddr));
+            ipv6_enabled = not _local_range.is_ipv4();
+            if (ipv6_enabled and not net_conf.enable_ipv6)
+                throw std::runtime_error{
+                    "Config must explicitly enable IPv6 to use local range: {}"_format(_local_range)};
 
-        vpn::InterfaceInfo info;
-        info.ifname = _if_name;
-        info.if_info = net_conf._if_info;
-        info.addrs.emplace_back(_local_range);
-
-        if (net_conf.enable_ipv6 and _base_ipv6_range)
-        {
-            log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
-            info.addrs.emplace_back(*_base_ipv6_range);
-        }
-
-        log::debug(logcat, "{} setting up network...", name());
-
-        _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
-
-        if (ipv6_enabled)
-        {
-            if constexpr (not llarp::platform::is_apple)
+            if (net_conf.addr_map_persist_file)
             {
-                if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                _persisting_addr_file = net_conf.addr_map_persist_file;
+                persist_addrs = true;
+            }
+
+            if (not net_conf._reserved_local_ips.empty())
+            {
+                for (auto& [remote, local] : net_conf._reserved_local_ips)
                 {
-                    _local_ipv6 = *maybe;
+                    _local_ip_mapping.insert_or_assign(local, remote);
                 }
             }
-        }
 
-        log::info(
-            logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+            log::debug(logcat, "Tun constructing IPRange iterator on local range: {}", _local_range);
+            _local_range_iterator = IPRangeIterator{_local_range};
 
-        _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
-        _if_name = _net_if->interface_info().ifname;
+            _local_netaddr = NetworkAddress::from_pubkey(_router.local_rid(), not _router.is_service_node());
+            _local_ip_mapping.insert_or_assign(_local_range.net_ip(), std::move(_local_netaddr));
 
-        log::info(logcat, "{} got network interface:{}", name(), _if_name);
+            vpn::InterfaceInfo info;
+            info.ifname = _if_name;
+            info.if_info = net_conf._if_info;
+            info.addrs.emplace_back(_local_range);
 
-        auto pkt_hook = [this]() {
-            for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+            if (net_conf.enable_ipv6 and _base_ipv6_range)
             {
-                log::debug(logcat, "packet router receiving {}", pkt.info_line());
-                _packet_router->handle_ip_packet(std::move(pkt));
+                log::info(logcat, "{} using ipv6 range:{}", name(), *_base_ipv6_range);
+                info.addrs.emplace_back(*_base_ipv6_range);
             }
-        };
 
-        if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
-        {
-            auto err = "{} failed to add network interface!"_format(name());
-            log::error(logcat, "{}", err);
-            throw std::runtime_error{std::move(err)};
-        }
+            log::debug(logcat, "{} setting up network...", name());
 
-        // if (auto* quic = GetQUICTunnel())
-        // {
-        // TODO:
-        // quic->listen([this](std::string_view, uint16_t port) {
-        //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
-        // });
-        // }
+            _local_ipv6 = ipv6_enabled ? _local_addr : _local_addr.mapped_ipv4_as_ipv6();
 
-        setup_dns();
+            if (ipv6_enabled)
+            {
+                if constexpr (not llarp::platform::is_apple)
+                {
+                    if (auto maybe = router().net().get_interface_ipv6_addr(_if_name))
+                    {
+                        _local_ipv6 = *maybe;
+                    }
+                }
+            }
+
+            log::info(
+                logcat, "{} has interface ipv4 address ({}) with ipv6 address ({})", name(), _local_addr, _local_ipv6);
+
+            _net_if = router().vpn_platform()->create_interface(std::move(info), &_router);
+            _if_name = _net_if->interface_info().ifname;
+
+            log::info(logcat, "{} got network interface:{}", name(), _if_name);
+
+            auto pkt_hook = [this]() mutable {
+                for (auto pkt = _net_if->read_next_packet(); not pkt.empty(); pkt = _net_if->read_next_packet())
+                {
+                    log::trace(logcat, "packet router receiving {}", pkt.info_line());
+                    _packet_router->handle_ip_packet(std::move(pkt));
+                }
+            };
+
+            if (_poller = router().loop()->add_network_interface(_net_if, std::move(pkt_hook)); not _poller)
+            {
+                auto err = "{} failed to add network interface!"_format(name());
+                log::error(logcat, "{}", err);
+                throw std::runtime_error{std::move(err)};
+            }
+
+            // if (auto* quic = GetQUICTunnel())
+            // {
+            // TODO:
+            // quic->listen([this](std::string_view, uint16_t port) {
+            //   return llarp::SockAddr{net::TruncateV6(GetIfAddr()), huint16_t{port}};
+            // });
+            // }
+
+            setup_dns();
+        });
     }
 
-    static bool is_random_snode(const dns::Message& msg)
-    {
-        return msg.questions[0].IsName("random.snode");
-    }
+    static bool is_random_snode(const dns::Message& msg) { return msg.questions[0].IsName("random.snode"); }
 
-    static bool is_localhost_loki(const dns::Message& msg)
-    {
-        return msg.questions[0].IsLocalhost();
-    }
+    static bool is_localhost_loki(const dns::Message& msg) { return msg.questions[0].IsLocalhost(); }
 
     static dns::Message& clear_dns_message(dns::Message& msg)
     {
@@ -436,7 +415,7 @@ namespace llarp::handlers
         //       [this, snode, msg, reply, isV6](
         //           const RouterID&,
         //           std::shared_ptr<session::BaseSession> s,
-        //           [[maybe_unused]] service::SessionTag tag) {
+        //           [[maybe_unused]] session_tag tag) {
         //         SendDNSReply(snode, s, msg, reply, isV6);
         //       });
         // };
@@ -568,7 +547,7 @@ namespace llarp::handlers
         //     }
         //     else if (subdomain == "netid")
         //     {
-        //       msg.AddTXTReply(fmt::format("netid={};", RouterContact::ACTIVE_NETID));
+        //       msg.AddTXTReply(fmt::format("netid={};", RelayContact::ACTIVE_NETID));
         //     }
         //     else
         //     {
@@ -807,10 +786,7 @@ namespace llarp::handlers
         return true;
     }
 
-    bool TunEndpoint::supports_ipv6() const
-    {
-        return ipv6_enabled;
-    }
+    bool TunEndpoint::supports_ipv6() const { return ipv6_enabled; }
 
     // FIXME: pass in which question it should be addressing
     bool TunEndpoint::should_hook_dns_message(const dns::Message& msg) const
@@ -842,20 +818,11 @@ namespace llarp::handlers
         return false;
     }
 
-    std::string TunEndpoint::get_if_name() const
-    {
-        return _if_name;
-    }
+    std::string TunEndpoint::get_if_name() const { return _if_name; }
 
-    bool TunEndpoint::is_service_node() const
-    {
-        return _router.is_service_node();
-    }
+    bool TunEndpoint::is_service_node() const { return _router.is_service_node(); }
 
-    bool TunEndpoint::is_exit_node() const
-    {
-        return _router.is_exit_node();
-    }
+    bool TunEndpoint::is_exit_node() const { return _router.is_exit_node(); }
 
     bool TunEndpoint::stop()
     {
@@ -969,16 +936,16 @@ namespace llarp::handlers
             log::debug(logcat, "TUN device unmapped session to remote: {}", remote);
         }
         else
-        {
-            log::debug(logcat, "TUN device could not unmap session (remote: {})", remote);
-        }
+            log::warning(logcat, "TUN device could not unmap session (remote: {})", remote);
     }
 
+    // handles an outbound packet going OUT from user -> network
     void TunEndpoint::handle_outbound_packet(IPPacket pkt)
     {
         ip_v src, dest;
-
         auto pkt_is_ipv4 = pkt.is_ipv4();
+
+        log::trace(logcat, "outbound packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
 
         if (pkt_is_ipv4)
         {
@@ -991,13 +958,12 @@ namespace llarp::handlers
             dest = pkt.dest_ipv6();
         }
 
+        log::trace(logcat, "src:{}, dest:{}", src, dest);
+
         if constexpr (llarp::platform::is_apple)
         {
             if (ip_equals_address(dest, _local_addr, pkt_is_ipv4))
-            {
-                rewrite_and_send_packet(std::move(pkt), src, dest);
-                return;
-            }
+                return rewrite_and_send_packet(std::move(pkt), std::move(src), std::move(dest));
         }
 
         // we pass `dest` because that is our local private IP on the outgoing IPPacket
@@ -1008,54 +974,50 @@ namespace llarp::handlers
 
             if (auto session = _router.session_endpoint()->get_session(remote))
             {
-                log::debug(logcat, "Dispatching outbound packet for session (remote: {})", remote);
+                log::debug(
+                    logcat,
+                    "Dispatching outbound {}B packet for session (remote: {}): {}",
+                    pkt.size(),
+                    remote,
+                    pkt.info_line());
                 session->send_path_data_message(std::move(pkt).steal_payload());
             }
             else
-                log::warning(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
+                log::debug(logcat, "Could not find session (remote: {}) for outbound packet!", remote);
         }
         else
-            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
+        {
+            log::trace(logcat, "Could not find remote for route {}", pkt.info_line());
+
+            // make ICMP unreachable
+            if (auto icmp = pkt.make_icmp_unreachable())
+                rewrite_and_send_packet(std::move(*icmp), std::move(src), std::move(dest));
+        }
     }
 
-    bool TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, ip_v& src, bool use_ipv4)
+    std::optional<ip_v> TunEndpoint::obtain_src_for_remote(const NetworkAddress& remote, bool use_ipv4)
     {
-        // we are receiving traffic from a session to a local exit node
         if (auto maybe_src = _local_ip_mapping.get_local_from_remote(remote))
         {
             if (std::holds_alternative<ipv4>(*maybe_src))
             {
                 if (use_ipv4)
-                    src = *maybe_src;
-                else
-                {
-                    auto quicaddr = oxen::quic::Address{std::get<ipv4>(*maybe_src)};
-                    src = quicaddr.to_ipv6();
-                }
+                    return *maybe_src;
+                return oxen::quic::Address{std::get<ipv4>(*maybe_src)}.to_ipv6();
             }
-            else
-            {
-                if (use_ipv4)
-                {
-                    auto quicaddr = oxen::quic::Address{std::get<ipv6>(*maybe_src)};
-                    src = quicaddr.to_ipv4();
-                }
-                else
-                    src = *maybe_src;
-            }
-        }
-        else
-        {
-            log::critical(logcat, "Unable to find local IP for inbound packet from remote: {}", remote);
-            return false;
+
+            if (use_ipv4)
+                return oxen::quic::Address{std::get<ipv6>(*maybe_src)}.to_ipv4();
+            return *maybe_src;
         }
 
-        return true;
+        log::warning(logcat, "Unable to find src IP for inbound packet from remote: {}", remote);
+        return std::nullopt;
     }
 
-    void TunEndpoint::send_packet_to_net_if(IPPacket&& pkt)
+    void TunEndpoint::send_packet_to_net_if(IPPacket pkt)
     {
-        _router.loop()->call([this, pkt = std::move(pkt)]() { _net_if->write_packet(std::move(pkt)); });
+        _router.loop()->call([this, pkt = std::move(pkt)]() mutable { _net_if->write_packet(std::move(pkt)); });
     }
 
     void TunEndpoint::rewrite_and_send_packet(IPPacket&& pkt, ip_v src, ip_v dest)
@@ -1065,81 +1027,158 @@ namespace llarp::handlers
         else
             pkt.update_ipv6_address(std::get<ipv6>(src), std::get<ipv6>(dest));
 
+        log::trace(logcat, "Rewritten packet: {}: {}", pkt.info_line(), buffer_printer{pkt.uview()});
         send_packet_to_net_if(std::move(pkt));
     }
 
-    bool TunEndpoint::handle_inbound_packet(
-        IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
+    void TunEndpoint::handle_inbound_packet(IPPacket pkt, session_tag tag, NetworkAddress remote)
     {
         ip_v src, dest;
-
         auto pkt_is_ipv4 = pkt.is_ipv4();
 
-        if (is_exit_session and is_outbound_session)
+        auto [is_exit_pkt, is_tunneled_pkt] = tag.proto_bits();
+
+        if (is_tunneled_pkt)
         {
-            // we are receiving traffic from a session to a remote exit node
-            if (pkt_is_ipv4)
-            {
-                src = pkt.source_ipv4();
-                dest = _local_addr.to_ipv4();
-            }
-            else
-            {
-                src = pkt.source_ipv6();
-                dest = _local_ipv6.to_ipv6();
-            }
+            log::critical(logcat, "Dropping QUICTUN pkt");
+            // TODO: pass to tunnel
+            // TODO: also finish quic tunnel
+            // TODO: route this even earlier
 
-            assert(remote.is_client());
-
-            auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
-
-            if (not maybe_remote)
-            {
-                log::critical(
-                    logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src, remote);
-                return false;
-            }
-            if (*maybe_remote != remote)
-            {
-                log::critical(
-                    logcat,
-                    "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
-                    src,
-                    *maybe_remote,
-                    remote);
-                return false;
-            }
+            return;
         }
-        else
+
+        if (is_exit_pkt)
         {
-            if (is_exit_session and not is_outbound_session)
+            if (is_exit_node())  // traffic to local exit node
             {
-                // we are receiving traffic from a session to a local exit node
-                if (not is_allowing_traffic(pkt))
-                    return false;
+                log::debug(logcat, "inbound exit pkt for local exit node: {}", pkt.info_line());
+
+                if (not _exit_policy->allow_ip_traffic(pkt))
+                {
+                    log::warning(logcat, "Invalid pkt proto ({}) for local exit", pkt.protocol());
+                    return;
+                }
 
                 if (pkt_is_ipv4)
                     dest = pkt.dest_ipv4();
                 else
                     dest = pkt.dest_ipv6();
             }
-            else
+            else  // traffic to remote exit node
             {
-                // we are receiving hidden service traffic
-                if (pkt_is_ipv4)
-                    dest = _local_addr.to_ipv4();
-                else
-                    dest = _local_ipv6.to_ipv6();
-            }
+                log::debug(logcat, "inbound exit pkt from remote exit node: {}", pkt.info_line());
 
-            if (not obtain_src_for_remote(remote, src, pkt_is_ipv4))
-                return false;
+                if (pkt_is_ipv4)
+                {
+                    src = pkt.source_ipv4();
+                    dest = _local_addr.to_ipv4();
+                }
+                else
+                {
+                    src = pkt.source_ipv6();
+                    dest = _local_addr.to_ipv6();
+                }
+            }
+        }
+        else
+        {
+            log::debug(logcat, "inbound session pkt: {}", pkt.info_line());
+
+            if (pkt_is_ipv4)
+                dest = _local_addr.to_ipv4();
+            else
+                dest = _local_addr.to_ipv6();
         }
 
-        rewrite_and_send_packet(std::move(pkt), src, dest);
+        if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
+            src = std::move(*maybe_src);
+        else
+            return;
 
-        return true;
+        log::trace(logcat, "src:{}, dest:{}", src, dest);
+        rewrite_and_send_packet(std::move(pkt), src, dest);
     }
+
+    // handles an inbound packet coming IN from network -> user
+    // bool TunEndpoint::handle_inbound_packet(
+    //     IPPacket pkt, NetworkAddress remote, bool is_exit_session, bool is_outbound_session)
+    // {
+    //     ip_v src, dest;
+
+    //     auto pkt_is_ipv4 = pkt.is_ipv4();
+
+    //     if (is_exit_session and is_outbound_session)
+    //     {
+    //         log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
+    //         // we are receiving traffic from a session to a remote exit node
+    //         if (pkt_is_ipv4)
+    //         {
+    //             src = pkt.source_ipv4();
+    //             dest = _local_addr.to_ipv4();
+    //         }
+    //         else
+    //         {
+    //             src = pkt.source_ipv6();
+    //             dest = _local_ipv6.to_ipv6();
+    //         }
+
+    //         assert(remote.is_client());
+
+    //         auto maybe_remote = _local_ip_mapping.get_remote_from_local(src);
+
+    //         if (not maybe_remote)
+    //         {
+    //             log::info(logcat, "Could not find mapping of local IP (ip:{}) for session to remote: {}", src,
+    //             remote); return false;
+    //         }
+    //         if (*maybe_remote != remote)
+    //         {
+    //             log::info(
+    //                 logcat,
+    //                 "Internal mapping of local IP (ip:{}, remote:{}) did not match inbound packet from remote: {}",
+    //                 src,
+    //                 *maybe_remote,
+    //                 remote);
+    //             return false;
+    //         }
+    //     }
+    //     else
+    //     {
+    //         if (is_exit_session and not is_outbound_session)
+    //         {
+    //             log::info(logcat, "inbound exit session pkt: {}", pkt.info_line());
+    //             // we are receiving traffic from a session to a local exit node
+    //             if (not _exit_policy->allow_ip_traffic(pkt))
+    //                 return false;
+
+    //             if (pkt_is_ipv4)
+    //                 dest = pkt.dest_ipv4();
+    //             else
+    //                 dest = pkt.dest_ipv6();
+    //         }
+    //         else
+    //         {
+    //             log::info(logcat, "inbound service session pkt: {}", pkt.info_line());
+    //             // we are receiving hidden service traffic
+    //             if (pkt_is_ipv4)
+    //                 dest = _local_addr.to_ipv4();
+    //             else
+    //                 dest = _local_ipv6.to_ipv6();
+    //         }
+
+    //         if (auto maybe_src = obtain_src_for_remote(remote, pkt_is_ipv4))
+    //             src = std::move(*maybe_src);
+    //         else
+    //             return false;
+    //     }
+
+    //     log::trace(logcat, "src:{}, dest:{}", src, dest);
+
+    //     rewrite_and_send_packet(std::move(pkt), src, dest);
+
+    //     return true;
+    // }
 
     void TunEndpoint::start_poller()
     {
@@ -1150,10 +1189,7 @@ namespace llarp::handlers
 
     bool TunEndpoint::is_allowing_traffic(const IPPacket& pkt) const
     {
-        if (auto exitPolicy = get_traffic_policy())
-            return exitPolicy->allow_ip_traffic(pkt);
-
-        return true;
+        return _exit_policy ? _exit_policy->allow_ip_traffic(pkt) : true;
     }
 
     bool TunEndpoint::has_mapping_to_remote(const NetworkAddress& addr) const
@@ -1166,10 +1202,7 @@ namespace llarp::handlers
         return _local_ip_mapping.get_local_from_remote(addr);
     }
 
-    oxen::quic::Address TunEndpoint::get_if_addr() const
-    {
-        return _local_addr;
-    }
+    oxen::quic::Address TunEndpoint::get_if_addr() const { return _local_addr; }
 
     TunEndpoint::~TunEndpoint() = default;
 

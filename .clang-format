@@ -50,7 +50,7 @@ NamespaceIndentation: All
 # shorties
 AllowShortBlocksOnASingleLine: 'false'
 AllowShortCaseLabelsOnASingleLine: 'false'
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: 'false'
 AllowShortLoopsOnASingleLine: 'false'
 
@@ -62,7 +62,7 @@ SpacesInAngles: 'false'
 SpacesInContainerLiterals: 'false'
 SpacesInParentheses: 'false'
 SpacesInSquareBrackets: 'false'
-Standard: Cpp11
+Standard: c++20
 UseTab: Never
 
 # wrapping

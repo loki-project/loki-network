@@ -6,7 +6,7 @@ namespace llarp
 {
     static auto logcat = log::Cat("address");
 
-    std::optional<NetworkAddress> NetworkAddress::from_network_addr(const std::string& arg)
+    std::optional<NetworkAddress> NetworkAddress::from_network_addr(std::string_view arg)
     {
         std::optional<NetworkAddress> ret = std::nullopt;
 
@@ -47,10 +47,7 @@ namespace llarp
         return std::tie(_pubkey, _is_client) == std::tie(other._pubkey, other._is_client);
     }
 
-    bool NetworkAddress::operator!=(const NetworkAddress& other) const
-    {
-        return !(*this == other);
-    }
+    bool NetworkAddress::operator!=(const NetworkAddress& other) const { return !(*this == other); }
 
     std::optional<RelayAddress> RelayAddress::from_relay_addr(std::string arg)
     {
@@ -73,18 +70,9 @@ namespace llarp
             throw std::invalid_argument{"Invalid pubkey passed to RelayAddress constructor: {}"_format(arg)};
     }
 
-    bool RelayAddress::operator<(const RelayAddress& other) const
-    {
-        return _pubkey < other._pubkey;
-    }
+    bool RelayAddress::operator<(const RelayAddress& other) const { return _pubkey < other._pubkey; }
 
-    bool RelayAddress::operator==(const RelayAddress& other) const
-    {
-        return _pubkey == other._pubkey;
-    }
+    bool RelayAddress::operator==(const RelayAddress& other) const { return _pubkey == other._pubkey; }
 
-    bool RelayAddress::operator!=(const RelayAddress& other) const
-    {
-        return !(*this == other);
-    }
+    bool RelayAddress::operator!=(const RelayAddress& other) const { return !(*this == other); }
 }  //  namespace llarp

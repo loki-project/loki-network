@@ -5,8 +5,7 @@
 
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
-#include <llarp/net/ip.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/util/file.hpp>
 #include <llarp/util/formattable.hpp>
 
@@ -37,6 +36,7 @@ namespace llarp
     }
 
     using namespace config;
+
     namespace
     {
         struct ConfigGenParameters_impl : public ConfigGenParameters
@@ -73,15 +73,16 @@ namespace llarp
                 net_id = std::move(arg);
             });
 
-        conf.define_option<int>(
+        conf.define_option<size_t>(
             "router",
             "relay-connections",
             Default{CLIENT_ROUTER_CONNECTIONS},
             ClientOnly,
             Comment{
                 "Minimum number of routers lokinet client will attempt to maintain connections to.",
-            },
-            [=, this](int arg) {
+                "If [network]:strict-connect is defined, the number of maintained client <-> router",
+                "connections set by [router]:relay-connections will be at MOST the number of pinned edges"},
+            [=, this](size_t arg) {
                 if (arg < CLIENT_ROUTER_CONNECTIONS)
                     throw std::invalid_argument{
                         "Client relay connections must be >= {}"_format(CLIENT_ROUTER_CONNECTIONS)};
@@ -225,6 +226,147 @@ namespace llarp
         is_relay = params.is_relay;
     }
 
+    void ExitConfig::define_config_options(ConfigDefinition& conf, const ConfigGenParameters& params)
+    {
+        (void)params;
+
+        conf.define_option<bool>(
+            "exit",
+            "enable",
+            ClientOnly,
+            Default{false},
+            assignment_acceptor(exit_enabled),
+            Comment{
+                "Enable exit-node functionality for local lokinet instance.",
+            });
+
+        conf.define_option<std::string>(
+            "exit",
+            "auth",
+            ClientOnly,
+            MultiValue,
+            Comment{
+                "Specify an optional authentication token required to use a non-public exit node.",
+                "For example:",
+                "    auth=myfavouriteexit.loki:abc",
+                "uses the authentication code `abc` whenever myfavouriteexit.loki is accessed.",
+                "Can be specified multiple times to store codes for different exit nodes.",
+            },
+            [this](std::string arg) {
+                if (arg.empty())
+                    throw std::invalid_argument{"Empty argument passed to '[exit]:auth'"};
+
+                const auto pos = arg.find(":");
+
+                if (pos == std::string::npos)
+                {
+                    throw std::invalid_argument(
+                        "[exit]:auth invalid format, expects exit-address.loki:auth-token-goes-here");
+                }
+
+                const auto addr = arg.substr(0, pos);
+                auto auth = arg.substr(pos + 1);
+
+                if (is_valid_sns(addr))
+                {
+                    ons_auth_tokens.emplace(std::move(addr), std::move(auth));
+                }
+                else if (auto exit = NetworkAddress::from_network_addr(addr); exit->is_client())
+                {
+                    auth_tokens.emplace(std::move(*exit), std::move(auth));
+                }
+                else
+                    throw std::invalid_argument("[exit]:auth invalid exit address");
+            });
+
+        conf.define_option<std::string>(
+            "exit",
+            "policy",
+            MultiValue,
+            Comment{
+                "Specifies the IP traffic accepted by the local exit node traffic policy. If any are",
+                "specified then only matched traffic will be allowed and all other traffic will be",
+                "dropped. Examples:",
+                "    policy=tcp",
+                "would allow all TCP/IP packets (regardless of port);",
+                "    policy=0x69",
+                "would allow IP traffic with IP protocol 0x69;",
+                "    policy=udp/53",
+                "would allow UDP port 53; and",
+                "    policy=tcp/smtp",
+                "would allow TCP traffic on the standard smtp port (21).",
+            },
+            [this](std::string arg) {
+                // this will throw on error
+                exit_policy.protocols.emplace(arg);
+            });
+
+        conf.define_option<std::string>(
+            "exit",
+            "reserved-range",
+            ClientOnly,
+            MultiValue,
+            Comment{
+                "Reserve an ip range to use as an exit broker for a `.loki` address",
+                "Specify a `.loki` address and a reserved ip range to use as an exit broker.",
+                "Examples:",
+                "    reserved-range=whatever.loki",
+                "would route all exit traffic through whatever.loki; and",
+                "    reserved-range=stuff.loki:100.0.0.0/24",
+                "would route the IP range 100.0.0.0/24 through stuff.loki.",
+                "This option can be specified multiple times (to map different IP ranges).",
+            },
+            [this](std::string arg) {
+                if (arg.empty())
+                    return;
+
+                std::optional<IPRange> range;
+
+                const auto pos = arg.find(":");
+
+                std::string input = (pos == std::string::npos) ? "0.0.0.0/0"s : arg.substr(pos + 1);
+
+                range = IPRange::from_string(std::move(input));
+
+                if (not range.has_value())
+                    throw std::invalid_argument("[network]:exit-node invalid ip range for exit provided");
+
+                if (pos != std::string::npos)
+                    arg = arg.substr(0, pos);
+
+                if (is_valid_sns(arg))
+                    ons_ranges.emplace(std::move(arg), std::move(*range));
+                else if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
+                    ranges.emplace(std::move(*maybe_raddr), std::move(*range));
+                else
+                    throw std::invalid_argument{"[network]:exit-node bad address: {}"_format(arg)};
+            });
+
+        conf.define_option<std::string>(
+            "exit",
+            "routed-range",
+            MultiValue,
+            Comment{
+                "Route local exit node traffic through the specified IP range. If omitted, the",
+                "default is ALL public ranges.  Can be set to public to indicate that this exit",
+                "routes traffic to the public internet.",
+                "For example:",
+                "    routed-range=10.0.0.0/16",
+                "    routed-range=public",
+                "to advertise that this exit routes traffic to both the public internet, and to",
+                "10.0.x.y addresses.",
+                "",
+                "Note that this option does not automatically configure network routing; that",
+                "must be configured separately on the exit system to handle lokinet traffic.",
+            },
+            [this](std::string arg) {
+                if (auto range = IPRange::from_string(arg))
+                    exit_policy.ranges.insert(std::move(*range));
+                else
+                    throw std::invalid_argument{"Bad IP range passed to routed-range:{}"_format(arg)};
+            });
+    }
+
     void NetworkConfig::define_config_options(ConfigDefinition& conf, const ConfigGenParameters& params)
     {
         (void)params;
@@ -252,9 +394,9 @@ namespace llarp
             [this](std::string value) {
                 RouterID router;
                 if (not router.from_relay_address(value))
-                    throw std::invalid_argument{"bad snode value: " + value};
-                if (not strict_connect.insert(router).second)
-                    throw std::invalid_argument{"duplicate strict connect snode: " + value};
+                    throw std::invalid_argument{"bad .snode pubkey: {}"_format(value)};
+                if (not pinned_edges.insert(router).second)
+                    throw std::invalid_argument{"duplicate strict connect .snode: {}"_format(value)};
             },
             Comment{
                 "Public keys of routers which will act as pinned first-hops. This may be used to",
@@ -380,7 +522,7 @@ namespace llarp
             ReachableDefault,
             assignment_acceptor(is_reachable),
             Comment{
-                "Determines whether we will pubish our service's introset to the DHT.",
+                "Determines whether we will pubish our service's ClientContact to the DHT (client default: TRUE)",
             });
 
         conf.define_option<int>(
@@ -413,19 +555,26 @@ namespace llarp
         conf.define_option<bool>(
             "network",
             "exit",
+            Hidden,
             ClientOnly,
-            Default{false},
-            assignment_acceptor(allow_exit),
+            [this](bool arg) {
+                allow_exit = arg;
+                log::warning(logcat, "This option is deprecated! Use [exit]:enable instead!");
+            },
             Comment{
-                "Whether or not we should act as an exit node. Beware that this increases demand",
+                "<< DEPRECATED -- use [exit]:enable instead >>\n",
+                "Whether or not we should act as an exit node. "
+                "Beware that this increases demand",
                 "on the server and may pose liability concerns. Enable at your own risk.",
             });
 
         conf.define_option<std::string>(
             "network",
             "routed-range",
+            Hidden,
             MultiValue,
             Comment{
+                "<< DEPRECATED -- use [exit]:routed-range instead >>\n",
                 "When in exit mode announce one or more IP ranges that this exit node routes",
                 "traffic for.  If omitted, the default is all public ranges.  Can be set to",
                 "public to indicate that this exit routes traffic to the public internet.",
@@ -439,8 +588,11 @@ namespace llarp
                 "must be configured separately on the exit system to handle lokinet traffic.",
             },
             [this](std::string arg) {
+                if (not traffic_policy)
+                    traffic_policy = net::ExitPolicy{};
+
                 if (auto range = IPRange::from_string(arg))
-                    _routed_ranges.insert(std::move(*range));
+                    traffic_policy->ranges.insert(std::move(*range));
                 else
                     throw std::invalid_argument{"Bad IP range passed to routed-range:{}"_format(arg)};
             });
@@ -448,8 +600,10 @@ namespace llarp
         conf.define_option<std::string>(
             "network",
             "traffic-whitelist",
+            Hidden,
             MultiValue,
             Comment{
+                "<< DEPRECATED -- use [exit]:policy instead >>\n",
                 "Adds an IP traffic type whitelist; can be specified multiple times.  If any are",
                 "specified then only matched traffic will be allowed and all other traffic will be",
                 "dropped.  Examples:",
@@ -464,7 +618,9 @@ namespace llarp
             },
             [this](std::string arg) {
                 if (not traffic_policy)
-                    traffic_policy = net::TrafficPolicy{};
+                    traffic_policy = net::ExitPolicy{};
+
+                log::warning(logcat, "This option is deprecated! Use [exit]:policy instead!");
 
                 // this will throw on error
                 traffic_policy->protocols.emplace(arg);
@@ -473,9 +629,11 @@ namespace llarp
         conf.define_option<std::string>(
             "network",
             "exit-node",
+            Hidden,
             ClientOnly,
             MultiValue,
             Comment{
+                "<< DEPRECATED -- use [exit]:reserved-range instead >>\n",
                 "Specify a `.loki` address and an ip range to use as an exit broker.",
                 "Examples:",
                 "    exit-node=whatever.loki",
@@ -487,6 +645,8 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     return;
+
+                log::warning(logcat, "This option is deprecated! Use [exit]:reserved-range instead!");
 
                 std::optional<IPRange> range;
 
@@ -502,7 +662,7 @@ namespace llarp
                 if (pos != std::string::npos)
                     arg = arg.substr(0, pos);
 
-                if (service::is_valid_ons(arg))
+                if (is_valid_sns(arg))
                     _ons_ranges.emplace(std::move(arg), std::move(*range));
                 else if (auto maybe_raddr = NetworkAddress::from_network_addr(arg); maybe_raddr)
                     _exit_ranges.emplace(std::move(*maybe_raddr), std::move(*range));
@@ -514,9 +674,12 @@ namespace llarp
             "network",
             "exit-auth",
             ClientOnly,
+            Hidden,
             MultiValue,
             Comment{
-                "Specify an optional authentication code required to use a non-public exit node.",
+                "<< DEPRECATED -- use [exit]:auth instead >>\n",
+                "Specify an optional authentication code required to use ",
+                "a non-public exit node.",
                 "For example:",
                 "    exit-auth=myfavouriteexit.loki:abc",
                 "uses the authentication code `abc` whenever myfavouriteexit.loki is accessed.",
@@ -525,6 +688,8 @@ namespace llarp
             [this](std::string arg) {
                 if (arg.empty())
                     throw std::invalid_argument{"Empty argument passed to 'exit-auth'"};
+
+                log::warning(logcat, "This option is deprecated! Use [exit]:auth instead!");
 
                 const auto pos = arg.find(":");
 
@@ -537,7 +702,7 @@ namespace llarp
                 const auto addr = arg.substr(0, pos);
                 auto auth = arg.substr(pos + 1);
 
-                if (service::is_valid_ons(addr))
+                if (is_valid_sns(addr))
                 {
                     ons_exit_auths.emplace(std::move(addr), std::move(auth));
                 }
@@ -661,7 +826,7 @@ namespace llarp
                 auto addr_arg = arg.substr(0, pos);
                 auto ip_arg = arg.substr(pos + 1);
 
-                if (service::is_valid_ons(addr_arg))
+                if (is_valid_sns(addr_arg))
                     throw std::invalid_argument{"`mapaddr` cannot take an ONS entry: {}"_format(arg)};
 
                 if (auto maybe_raddr = NetworkAddress::from_network_addr(std::move(addr_arg)); maybe_raddr)
@@ -719,7 +884,7 @@ namespace llarp
                 if (not maybe_srv)
                     throw std::invalid_argument{"Invalid SRV Record string: {}"_format(arg)};
 
-                srv_records.push_back(std::move(*maybe_srv));
+                srv_records.emplace(std::move(*maybe_srv));
             });
 
         conf.define_option<int>(
@@ -743,7 +908,6 @@ namespace llarp
             "network",
             "persist-addrmap-file",
             ClientOnly,
-            Default{fs::path{params.default_data_dir / "addrmap.dat"}},
             Comment{
                 "If given this specifies a file in which to record mapped local tunnel addresses so",
                 "the same local address will be used for the same lokinet address on reboot. If this",
@@ -791,6 +955,7 @@ namespace llarp
 
                     log::warning(logcat, "{} {}", err, load_file ? "NOT FOUND" : "STALE");
                 }
+
                 if (not data.empty())
                 {
                     std::string_view bdata{data.data(), data.size()};
@@ -833,7 +998,7 @@ namespace llarp
                                 continue;
                             }
 
-                            if (service::is_valid_ons(*arg))
+                            if (is_valid_sns(*arg))
                             {
                                 log::warning(logcat, "{}: {}", addrmap_errorstr, "cannot accept ONS names!");
                                 continue;
@@ -1059,31 +1224,29 @@ namespace llarp
 
         auto parse_addr_for_link = [net_ptr](const std::string& arg, bool& given_port_only) {
             std::optional<oxen::quic::Address> maybe = std::nullopt;
-            std::string_view arg_v{arg}, host;
+            std::string_view arg_v{arg};
+            std::string host;
             uint16_t p{};
 
             if (auto pos = arg_v.find(':'); pos != arg_v.npos)
             {
                 // host = arg_v.substr(0, pos);
-                log::critical(logcat, "Parsing input: {}", arg);
                 std::tie(host, p) = detail::parse_addr(arg_v, DEFAULT_LISTEN_PORT);
-                log::critical(logcat, "Parsed input = {}:{}", host, p);
             }
 
             if (host.empty())
             {
-                log::critical(
-                    logcat, "Host value empty, port:{}{}", p, p == DEFAULT_LISTEN_PORT ? "(DEFAULT PORT)" : "");
+                log::debug(logcat, "Host value empty, port:{}{}", p, p == DEFAULT_LISTEN_PORT ? "(DEFAULT PORT)" : "");
                 given_port_only = p != DEFAULT_LISTEN_PORT;
                 maybe = net_ptr->get_best_public_address(true, p);
             }
             else
-                maybe = oxen::quic::Address{std::string{host}, p};
+                maybe = oxen::quic::Address{host, p};
 
             if (maybe and maybe->is_loopback())
                 throw std::invalid_argument{"{} is a loopback address"_format(arg)};
 
-            log::critical(logcat, "parsed address: {}", *maybe);
+            log::trace(logcat, "parsed address: {}", *maybe);
 
             return maybe;
         };
@@ -1220,7 +1383,7 @@ namespace llarp
             Default{not params.is_relay},
             assignment_acceptor(enable_rpc_server),
             Comment{
-                "Determines whether or not the LMQ JSON API is enabled. Defaults ",
+                "Determines whether or not the LMQ JSON API is enabled. Defaults ON/OFF for client/relays",
             });
 
         conf.define_option<std::string>(
@@ -1313,7 +1476,7 @@ namespace llarp
             "add-node",
             MultiValue,
             Comment{
-                "Specify a bootstrap file containing a list of signed RouterContacts of service "
+                "Specify a bootstrap file containing a list of signed RelayContacts of service "
                 "nodes",
                 "which can act as a bootstrap. Can be specified multiple times.",
             },
@@ -1380,7 +1543,8 @@ namespace llarp
     {
         (void)params;
 
-        constexpr Default DefaultUniqueCIDR{32};
+        constexpr Default DefaultUniqueCIDR{24};
+
         conf.define_option<int>(
             "paths",
             "unique-range-size",
@@ -1539,14 +1703,12 @@ namespace llarp
         return load_config_data(ini, std::nullopt, isRelay);
     }
 
-    bool Config::load_default_config(bool isRelay)
-    {
-        return load_string("", isRelay);
-    }
+    bool Config::load_default_config(bool isRelay) { return load_string("", isRelay); }
 
     void Config::init_config(ConfigDefinition& conf, const ConfigGenParameters& params)
     {
         router.define_config_options(conf, params);
+        exit.define_config_options(conf, params);
         network.define_config_options(conf, params);
         paths.define_config_options(conf, params);
         dns.define_config_options(conf, params);

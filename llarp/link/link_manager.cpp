@@ -1,17 +1,14 @@
 #include "link_manager.hpp"
 
-#include "connection.hpp"
-#include "contacts.hpp"
-
+#include <llarp/contact/contactdb.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/messages/dht.hpp>
-#include <llarp/messages/exit.hpp>
 #include <llarp/messages/fetch.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/messages/session.hpp>
 #include <llarp/nodedb.hpp>
 #include <llarp/path/path.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/router_id.hpp>
 
 #include <oxenc/bt_producer.h>
 #include <sodium/crypto_generichash_blake2b.h>
@@ -24,7 +21,7 @@ namespace llarp
 {
     static auto logcat = llarp::log::Cat("lquic");
 
-    static constexpr auto static_shared_key = "Lokinet static shared secret key"_usv;
+    static constexpr auto static_shared_key = "Lokinet static shared secret key"_usp;
 
     static static_secret make_static_secret(const Ed25519SecretKey& sk)
     {
@@ -57,18 +54,14 @@ namespace llarp
 
         std::shared_ptr<link::Connection> Endpoint::get_conn(const RouterID& remote) const
         {
-            return link_manager.router().loop()->call_get([this, rid = remote]() -> std::shared_ptr<link::Connection> {
-                if (auto itr = service_conns.find(rid); itr != service_conns.end())
+            if (auto itr = service_conns.find(remote); itr != service_conns.end())
+                return itr->second;
+
+            if (_is_service_node)
+            {
+                if (auto itr = client_conns.find(remote); itr != client_conns.end())
                     return itr->second;
-
-                if (_is_service_node)
-                {
-                    if (auto itr = client_conns.find(rid); itr != client_conns.end())
-                        return itr->second;
-                }
-
-                return nullptr;
-            });
+            }
 
             return nullptr;
         }
@@ -88,16 +81,18 @@ namespace llarp
             return link_manager.router().loop()->call_get([this, remote]() { return service_conns.count(remote); });
         }
 
-        void Endpoint::for_each_connection(std::function<void(link::Connection&)> hook)
+        void Endpoint::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
         {
-            link_manager.router().loop()->call([this, func = std::move(hook)]() {
-                for (const auto& [rid, conn] : service_conns)
-                    func(*conn);
+            link_manager.router().loop()->call([this, func = std::move(func)]() mutable {
+                for (auto& [rid, conn] : service_conns)
+                    if (conn)
+                        func(rid, *conn);
 
                 if (_is_service_node)
                 {
-                    for (const auto& [rid, conn] : client_conns)
-                        func(*conn);
+                    for (auto& [rid, conn] : client_conns)
+                        if (conn)
+                            func(rid, *conn);
                 }
             });
         }
@@ -107,7 +102,7 @@ namespace llarp
             link_manager._router.loop()->call([this, rid = _rid]() {
                 if (auto itr = service_conns.find(rid); itr != service_conns.end())
                 {
-                    log::critical(logcat, "Closing connection to relay RID:{}", rid);
+                    log::info(logcat, "Closing connection to relay RID:{}", rid);
                     auto& conn = *itr->second->conn;
                     conn.close_connection();
                 }
@@ -115,13 +110,13 @@ namespace llarp
                 {
                     if (auto itr = client_conns.find(rid); itr != client_conns.end())
                     {
-                        log::critical(logcat, "Closing connection to client RID:{}", rid);
+                        log::info(logcat, "Closing connection to client RID:{}", rid);
                         auto& conn = *itr->second->conn;
                         conn.close_connection();
                     }
                 }
                 else
-                    log::critical(logcat, "Could not find connection to RID:{} to close!", rid);
+                    log::warning(logcat, "Could not find connection to RID:{} to close!", rid);
             });
         }
 
@@ -143,17 +138,23 @@ namespace llarp
             return link_manager.router().loop()->call_get([this]() -> std::tuple<size_t, size_t, size_t, size_t> {
                 size_t in{0}, out{0};
 
-                for (const auto& c : service_conns)
+                for (const auto& [_, c] : service_conns)
                 {
-                    if (c.second->is_inbound())
+                    if (not c)
+                        continue;
+
+                    if (c->is_inbound())
                         ++in;
                     else
                         ++out;
                 }
 
-                for (const auto& c : client_conns)
+                for (const auto& [_, c] : client_conns)
                 {
-                    if (c.second->is_inbound())
+                    if (not c)
+                        continue;
+
+                    if (c->is_inbound())
                         ++in;
                     else
                         ++out;
@@ -168,52 +169,119 @@ namespace llarp
             return link_manager.router().loop()->call_get([this]() { return client_conns.size(); });
         }
 
-        size_t Endpoint::num_router_conns() const
+        size_t Endpoint::num_router_conns(bool active_only) const
         {
-            return link_manager.router().loop()->call_get([this]() { return service_conns.size(); });
+            return link_manager.router().loop()->call_get([&]() {
+                size_t n{};
+
+                for (const auto& [_, c] : service_conns)
+                    if (c and (active_only ? c->is_active.load() : true))
+                        ++n;
+
+                return n;
+            });
+        }
+
+        bool Endpoint::establish_and_send_control(RemoteRC rc, bt_control_send_hook send_hook)
+        {
+            return link_manager.router().loop()->call_get([&]() {
+                auto rid = rc.router_id();
+
+                try
+                {
+                    auto [itr, b] = service_conns.try_emplace(rid, nullptr);
+
+                    if (not b)
+                    {
+                        log::debug(logcat, "Attempting to establish an already existing connection!");
+                        send_hook(itr->second->control_stream);
+                        return true;
+                    }
+
+                    auto ci = endpoint->connect(
+                        KeyedAddress{rid.to_view(), rc.addr()},
+                        link_manager.tls_creds,
+                        _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        [this, itr = std::move(itr), rid, send_hook = std::move(send_hook)](
+                            oxen::quic::connection_interface& ci) mutable {
+                            log::debug(
+                                logcat,
+                                "{} batch dispatching to remote (rid:{})",
+                                _is_service_node ? "Relay" : "Client",
+                                rid.short_string());
+                            send_hook(itr->second->control_stream);
+                            link_manager.on_conn_open(ci);
+                        });
+
+                    auto control_stream = link_manager.make_control(ci, rid);
+
+                    itr->second = std::make_shared<link::Connection>(std::move(ci), std::move(control_stream));
+
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid.short_string());
+                    return true;
+                }
+                catch (const std::exception& e)
+                {
+                    log::error(
+                        logcat, "Exception caught establishing connection to {}: {}", rid.short_string(), e.what());
+                    return false;
+                }
+                return true;
+            });
         }
     }  // namespace link
 
-    std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const
-    {
-        return ep->connection_stats();
-    }
+    std::tuple<size_t, size_t, size_t, size_t> LinkManager::connection_stats() const { return ep->connection_stats(); }
 
-    size_t LinkManager::get_num_connected_routers() const
-    {
-        return ep->num_router_conns();
-    }
+    size_t LinkManager::get_num_connected_routers(bool active_only) const { return ep->num_router_conns(active_only); }
 
-    size_t LinkManager::get_num_connected_clients() const
-    {
-        return ep->num_client_conns();
-    }
+    size_t LinkManager::get_num_connected_clients() const { return ep->num_client_conns(); }
 
     using messages::serialize_response;
 
-    void LinkManager::for_each_connection(std::function<void(link::Connection&)> func)
+    std::set<RouterID> LinkManager::get_current_remotes() const
+    {
+        // invoke using Router method to wrap in call_get
+        std::set<RouterID> ret{};
+
+        for (auto& [rid, conn] : ep->service_conns)
+            if (conn and conn->is_active)
+                ret.insert(rid);
+
+        return ret;
+    }
+
+    void LinkManager::for_each_connection(std::function<void(const RouterID&, link::Connection&)> func)
     {
         if (is_stopping)
             return;
 
-        return ep->for_each_connection(func);
+        return ep->for_each_connection(std::move(func));
     }
 
-    void LinkManager::register_commands(
-        const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& remote_rid, bool client_only)
+    void LinkManager::register_commands(const bt_control_stream& s, const RouterID& remote_rid, bool client_only)
     {
-        log::debug(logcat, "{} called", __PRETTY_FUNCTION__);
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
-        s->register_handler("path_control"s, [this, rid = remote_rid](oxen::quic::message m) mutable {
-            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg), rid); });
+        s->register_handler("path_control"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_control(std::move(msg)); });
+        });
+
+        s->register_handler("path_switch"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_path_switch(std::move(msg)); });
         });
 
         if (client_only)
         {
-            s->register_handler("session_init", [this](oxen::quic::message m) mutable {
+            s->register_handler("session_init"s, [this](oxen::quic::message m) mutable {
                 _router.loop()->call([&, msg = std::move(m)]() mutable { handle_initiate_session(std::move(msg)); });
             });
-            log::debug(logcat, "Registered all client-only BTStream commands!");
+
+            s->register_handler("session_close"s, [this](oxen::quic::message m) mutable {
+                _router.loop()->call([&, msg = std::move(m)]() mutable { handle_close_session(std::move(msg)); });
+            });
+
+            log::trace(logcat, "Registered all client-only BTStream commands!");
             return;
         }
 
@@ -237,35 +305,30 @@ namespace llarp
             _router.loop()->call([&, msg = std::move(m)]() mutable { handle_gossip_rc(std::move(msg)); });
         });
 
-        for (auto& method : path_requests)
-        {
-            s->register_handler(
-                std::string{method.first}, [this, func = std::move(method.second)](oxen::quic::message m) mutable {
-                    _router.loop()->call([&, msg = std::move(m), func = std::move(func)]() mutable {
-                        auto body = msg.body_str();
-                        auto respond = [&, m = std::move(msg)](std::string response) mutable {
-                            m.respond(std::move(response), m.is_error());
-                        };
-                        std::invoke(func, this, body, std::move(respond));
-                    });
-                });
-        }
+        s->register_handler("publish_cc"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_publish_cc(std::move(msg)); });
+        });
 
-        log::debug(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
+        s->register_handler("find_cc"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_find_cc(std::move(msg)); });
+        });
+
+        s->register_handler("resolve_sns"s, [this](oxen::quic::message m) mutable {
+            _router.loop()->call([&, msg = std::move(m)]() mutable { handle_resolve_sns(std::move(msg)); });
+        });
+
+        log::trace(logcat, "Registered all commands for connection to remote RID:{}", remote_rid);
     }
 
     void LinkManager::start_tickers()
     {
         log::debug(logcat, "Starting gossip ticker...");
-        _gossip_ticker = _router.loop()->call_every(
-            _router._gossip_interval,
-            [this]() {
-                log::critical(logcat, "Regenerating and gossiping RC...");
-                _router.router_contact.resign();
-                _router.save_rc();
-                gossip_rc(_router.local_rid(), _router.router_contact.to_remote());
-            },
-            true);
+
+        _router.loop()->call_later(approximate_time(5s, 5), [&]() {
+            regenerate_and_gossip_rc();
+            _gossip_ticker =
+                _router.loop()->call_every(_router._gossip_interval, [this]() { regenerate_and_gossip_rc(); });
+        });
     }
 
     LinkManager::LinkManager(Router& r)
@@ -275,7 +338,7 @@ namespace llarp
           quic{std::make_unique<oxen::quic::Network>()},
           tls_creds{oxen::quic::GNUTLSCreds::make_from_ed_keys(
               {reinterpret_cast<const char*>(_router.identity().data()), 32},
-              {reinterpret_cast<const char*>(_router.router_id().data()), 32})},
+              {reinterpret_cast<const char*>(_router.local_rid().data()), 32})},
           ep{_router.loop()->template make_shared<link::Endpoint>(startup_endpoint(), *this)},
           is_stopping{false}
     {}
@@ -295,17 +358,17 @@ namespace llarp
               - stream constructor callback
                 - will return a BTRequestStream on the first call to get_new_stream<BTRequestStream>
                 - bt stream construction contains a stream close callback that shuts down the
-           connection if the btstream closes unexpectedly
+                    connection if the btstream closes unexpectedly
         */
         auto e = quic->endpoint(
             _router.listen_addr(),
             make_static_secret(_router.identity()),
             [this](oxen::quic::connection_interface& ci) { return on_conn_open(ci); },
             [this](oxen::quic::connection_interface& ci, uint64_t ec) { return on_conn_closed(ci, ec); },
-            [this](oxen::quic::dgram_interface&, bstring dgram) { handle_path_data_message(std::move(dgram)); },
+            [this](oxen::quic::dgram_interface&, bstring dgram) { return handle_path_data_message(std::move(dgram)); },
             is_service_node() ? alpns::SERVICE_INBOUND : alpns::CLIENT_INBOUND,
             is_service_node() ? alpns::SERVICE_OUTBOUND : alpns::CLIENT_OUTBOUND,
-            oxen::quic::opt::disable_stateless_reset{});
+            oxen::quic::opt::enable_datagrams{oxen::quic::Splitting::ACTIVE});
 
         // While only service nodes accept inbound connections, clients must have this key verify
         // callback set. It will reject any attempted inbound connection to a lokinet client prior
@@ -320,7 +383,7 @@ namespace llarp
                 {
                     if (alpn == alpns::C_ALPNS)
                     {
-                        log::critical(logcat, "{} node accepting client connection (remote ID:{})!", us, other);
+                        log::trace(logcat, "{} accepting client connection (remote:{})!", us, other);
                         ep->client_conns.emplace(other, nullptr);
                         return true;
                     }
@@ -329,7 +392,6 @@ namespace llarp
                     {
                         // verify as service node!
                         bool result = node_db->registered_routers().count(other);
-                        // result = true;  // TESTNET: turn this off for non-local testing
 
                         if (result)
                         {
@@ -350,9 +412,9 @@ namespace llarp
                                     itr->second = nullptr;
                                 }
 
-                                log::critical(
+                                log::trace(
                                     logcat,
-                                    "{} node received inbound with ongoing outbound to remote "
+                                    "{} received inbound with ongoing outbound to remote "
                                     "(RID:{}); {}!",
                                     us,
                                     other,
@@ -361,13 +423,12 @@ namespace llarp
                                 return defer_to_incoming;
                             }
 
-                            log::critical(
-                                logcat, "{} node accepting inbound from registered remote (RID:{})", us, other);
+                            log::trace(logcat, "{} accepting inbound from registered remote (RID:{})", us, other);
                         }
                         else
-                            log::critical(
+                            log::info(
                                 logcat,
-                                "{} node was unable to confirm remote (RID:{}) is registered; "
+                                "{} was unable to confirm remote (RID:{}) is registered; "
                                 "rejecting "
                                 "connection!",
                                 us,
@@ -376,14 +437,12 @@ namespace llarp
                         return result;
                     }
 
-                    log::critical(logcat, "{} node received unknown ALPN; rejecting connection!", us);
-                    return false;
+                    log::critical(logcat, "{} received unknown ALPN; rejecting connection!", us);
                 }
+                else
+                    log::critical(logcat, "Clients should not be validating inbound connections!");
 
-                // TESTNET: change this to an error message later; just because someone tries to
-                // erroneously connect to a local lokinet client doesn't mean we should kill the
-                // program?
-                throw std::runtime_error{"Clients should not be validating inbound connections!"};
+                return false;
             });
         });
 
@@ -393,103 +452,127 @@ namespace llarp
         return e;
     }
 
-    std::shared_ptr<oxen::quic::BTRequestStream> LinkManager::make_control(
-        oxen::quic::connection_interface& ci, const RouterID& remote)
+    bt_control_stream LinkManager::make_control(
+        const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& remote)
     {
-        auto control_stream = ci.template queue_incoming_stream<oxen::quic::BTRequestStream>(
-            [](oxen::quic::Stream&, uint64_t error_code) {
-                log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-            });
+        bt_control_stream control_stream;
 
-        log::critical(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
-        assert(control_stream->stream_id() == 0);
+        if (ci->is_inbound())
+        {
+            control_stream = ci->template queue_incoming_stream<oxen::quic::BTRequestStream>(
+                [](oxen::quic::Stream&, uint64_t error_code) {
+                    log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                });
+
+            log::trace(logcat, "Queued BTStream to be opened (ID:{})", control_stream->stream_id());
+            assert(control_stream->stream_id() == 0);
+        }
+        else
+        {
+            control_stream =
+                ci->template open_stream<oxen::quic::BTRequestStream>([](oxen::quic::Stream&, uint64_t error_code) {
+                    log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
+                });
+
+            log::trace(logcat, "Opened BTStream (ID:{})", control_stream->stream_id());
+        }
+
         register_commands(control_stream, remote, not _is_service_node);
-
         return control_stream;
     }
 
-    void LinkManager::on_inbound_conn(oxen::quic::connection_interface& ci)
+    void LinkManager::on_inbound_conn(std::shared_ptr<oxen::quic::connection_interface> ci)
     {
         assert(_is_service_node);
-        RouterID rid{ci.remote_key()};
+        RouterID rid{ci->remote_key()};
 
         auto control = make_control(ci, rid);
+        bool is_client_conn = false;
 
-        _router.loop()->call([&, ci_ptr = ci.shared_from_this(), bstream = std::move(control), rid]() {
-            bool is_client_conn = false;
-            if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
-            {
-                log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
-                it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream));
-            }
-            else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
-            {
-                is_client_conn = true;
-                log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
-                it->second = std::make_shared<link::Connection>(std::move(ci_ptr), std::move(bstream), false);
-            }
+        if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
+        {
+            log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid.short_string());
+            it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
+        }
+        else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
+        {
+            is_client_conn = true;
+            log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.short_string());
+            it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
+        }
+        else
+            log::warning(logcat, "Could not find inbound connection corresponding to RID: {}", rid);
 
-            log::critical(
-                logcat,
-                "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
-                _router.local_rid(),
-                rid.to_network_address(!is_client_conn));
-        });
+        log::critical(
+            logcat,
+            "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
+            _router.local_rid().to_network_address(),
+            rid.to_network_address(!is_client_conn));
     }
 
-    void LinkManager::on_outbound_conn(oxen::quic::connection_interface& ci)
+    void LinkManager::on_outbound_conn(RouterID rid)
     {
-        RouterID rid{ci.remote_key()};
         log::trace(logcat, "Outbound connection to {}", rid);
 
-        if (ep->have_service_conn(rid))
+        if (auto conn = ep->get_service_conn(rid))
         {
-            log::debug(logcat, "Fetched configured outbound connection to relay RID:{}", rid);
+            conn->is_active = true;
+            log::trace(logcat, "Fetched configured outbound connection to relay RID: {}", rid);
         }
+        else
+            log::warning(logcat, "Could not find outbound connection corresponding to RID: {}", rid);
 
         log::critical(
             logcat,
             "{} (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
             _is_service_node ? "SERVICE NODE" : "CLIENT",
-            _router.local_rid().to_network_address(_is_service_node),
-            rid);
+            _router.local_rid().to_network_address(),
+            rid.to_network_address());
     }
 
-    void LinkManager::on_conn_open(oxen::quic::connection_interface& ci)
+    void LinkManager::on_conn_open(oxen::quic::connection_interface& _ci)
     {
-        if (ci.is_inbound())
-        {
-            on_inbound_conn(ci);
-        }
-        else
-        {
-            on_outbound_conn(ci);
-        }
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        _router.loop()->call([this, wci = _ci.weak_from_this()]() {
+            auto ci = wci.lock();
+
+            if (not ci)
+            {
+                log::warning(logcat, "Connection died before connection open callback execution!");
+                return;
+            }
+
+            if (ci->is_inbound())
+                on_inbound_conn(std::move(ci));
+            else
+                on_outbound_conn(RouterID{ci->remote_key()});
+        });
     }
 
     void LinkManager::on_conn_closed(oxen::quic::connection_interface& ci, uint64_t ec)
     {
         _router.loop()->call(
             [this, ref_id = ci.reference_id(), rid = RouterID{ci.remote_key()}, error_code = ec, path = ci.path()]() {
-                log::critical(logcat, "Purging quic connection {} (ec:{}) path:{}", ref_id, error_code, path);
+                log::debug(logcat, "Purging quic connection {} (ec:{}) path:{}", ref_id, error_code, path);
 
                 if (auto s_itr = ep->service_conns.find(rid); s_itr != ep->service_conns.end())
                 {
-                    log::critical(logcat, "Quic connection to relay RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to relay RID:{} purged successfully", rid.short_string());
                     ep->service_conns.erase(s_itr);
                 }
                 else if (auto c_itr = ep->client_conns.find(rid); c_itr != ep->client_conns.end())
                 {
-                    log::critical(logcat, "Quic connection to client RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to client RID:{} purged successfully", rid.short_string());
                     ep->client_conns.erase(c_itr);
                 }
                 else
-                    log::critical(logcat, "Nothing to purge for quic connection {}", ref_id);
+                    log::trace(logcat, "Nothing to purge for quic connection {}", ref_id);
             });
     }
 
     bool LinkManager::send_control_message(
-        const RouterID& remote, std::string endpoint, std::string body, std::function<void(oxen::quic::message m)> func)
+        const RouterID& remote, std::string endpoint, std::string body, bt_control_response_hook func)
     {
         if (is_stopping)
             return false;
@@ -507,12 +590,15 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing control message to {}", remote);
+        log::debug(logcat, "Queueing control message to {}", remote);
 
-        _router.loop()->call(
-            [this, rid = remote, endpoint = std::move(endpoint), body = std::move(body), f = std::move(func)]() {
-                connect_and_send(std::move(rid), std::move(endpoint), std::move(body), std::move(f));
-            });
+        _router.loop()->call([this,
+                              rid = remote,
+                              endpoint = std::move(endpoint),
+                              body = std::move(body),
+                              f = std::move(func)]() mutable {
+            connect_and_send(std::move(rid), std::move(endpoint), std::move(body), std::move(f));
+        });
 
         return false;
     }
@@ -528,7 +614,7 @@ namespace llarp
             return true;
         }
 
-        log::critical(logcat, "Queueing data message to {}", remote);
+        log::debug(logcat, "Queueing data message to {}", remote);
 
         _router.loop()->call([this, body = std::move(body), rid = remote]() {
             connect_and_send(std::move(rid), std::nullopt, std::move(body));
@@ -537,10 +623,7 @@ namespace llarp
         return false;
     }
 
-    void LinkManager::close_connection(RouterID rid)
-    {
-        return ep->close_connection(rid);
-    }
+    void LinkManager::close_connection(RouterID rid) { return ep->close_connection(rid); }
 
     void LinkManager::test_reachability(const RouterID& rid, conn_open_hook on_open, conn_closed_hook on_close)
     {
@@ -549,24 +632,34 @@ namespace llarp
             connect_to(*rc, std::move(on_open), std::move(on_close));
         }
         else
-            log::warning(logcat, "Could not find RouterContact for connection to rid:{}", rid);
+            log::warning(logcat, "Could not find RelayContact for connection to rid:{}", rid);
+    }
+
+    void LinkManager::connect_and_send(const RouterID& router, bt_control_send_hook send_hook)
+    {
+        if (auto rc = node_db->get_rc(router))
+        {
+            if (ep->establish_and_send_control(std::move(*rc), std::move(send_hook)))
+                log::info(logcat, "Begun establishing connection to {}", router);
+            else
+                log::warning(logcat, "Failed to begin establishing connection to {}", router);
+        }
+        else
+            log::error(logcat, "Error: Could not find RC for connection to rid:{}, message not sent!", router);
     }
 
     void LinkManager::connect_and_send(
-        const RouterID& router,
-        std::optional<std::string> endpoint,
-        std::string body,
-        std::function<void(oxen::quic::message m)> func)
+        const RouterID& router, std::optional<std::string> endpoint, std::string body, bt_control_response_hook func)
     {
         // by the time we have called this, we have already checked if we have a connection to this
-        // RID in ::send_control_message_impl, at which point we will dispatch on that stream
+        // RID in ::send_control_message, at which point we will dispatch on that stream
         if (auto rc = node_db->get_rc(router))
         {
             const auto& remote_addr = rc->addr();
 
             if (auto rv = ep->establish_and_send(
                     KeyedAddress{router.to_view(), remote_addr},
-                    *rc,
+                    router,
                     std::move(endpoint),
                     std::move(body),
                     std::move(func));
@@ -597,7 +690,7 @@ namespace llarp
         auto remote_addr = rc.addr();
 
         if (auto rv = ep->establish_connection(
-                KeyedAddress{rid.to_view(), remote_addr}, rc, std::move(on_open), std::move(on_close));
+                KeyedAddress{rid.to_view(), remote_addr}, rid, std::move(on_open), std::move(on_close));
             rv)
         {
             log::info(logcat, "Begun establishing connection to {}", remote_addr);
@@ -606,20 +699,11 @@ namespace llarp
         log::warning(logcat, "Failed to begin establishing connection to {}", remote_addr);
     }
 
-    bool LinkManager::have_connection_to(const RouterID& remote) const
-    {
-        return ep->have_conn(remote);
-    }
+    bool LinkManager::have_connection_to(const RouterID& remote) const { return ep->have_conn(remote); }
 
-    bool LinkManager::have_service_connection_to(const RouterID& remote) const
-    {
-        return ep->have_service_conn(remote);
-    }
+    bool LinkManager::have_service_connection_to(const RouterID& remote) const { return ep->have_service_conn(remote); }
 
-    bool LinkManager::have_client_connection_to(const RouterID& remote) const
-    {
-        return ep->have_client_conn(remote);
-    }
+    bool LinkManager::have_client_connection_to(const RouterID& remote) const { return ep->have_client_conn(remote); }
 
     void LinkManager::close_all_links()
     {
@@ -668,10 +752,7 @@ namespace llarp
         }
     }
 
-    bool LinkManager::is_service_node() const
-    {
-        return _is_service_node;
-    }
+    bool LinkManager::is_service_node() const { return _is_service_node; }
 
     // TODO: this?  perhaps no longer necessary in the same way?
     void LinkManager::check_persisting_conns(std::chrono::milliseconds)
@@ -681,12 +762,9 @@ namespace llarp
     }
 
     // TODO: this
-    nlohmann::json LinkManager::extract_status() const
-    {
-        return {};
-    }
+    nlohmann::json LinkManager::extract_status() const { return {}; }
 
-    void LinkManager::connect_to_random(size_t num_conns)
+    void LinkManager::connect_to_keep_alive(size_t num_conns)
     {
         auto filter = [this](const RemoteRC& rc) -> bool {
             const auto& rid = rc.router_id();
@@ -696,6 +774,16 @@ namespace llarp
 
             return res;
         };
+
+        std::optional<std::vector<RemoteRC>> rcs = std::nullopt;
+
+        if (node_db->strict_connect_enabled())
+        {
+            assert(not _is_service_node);
+
+            // TESTNET: TODO: if given strict-connects, fetch their RCs SPECIFICALLY in bootstrapping
+            log::warning(logcat, "FINISH STRICT CONNECT (SEE COMMENT)");
+        }
 
         if (auto maybe = node_db->get_n_random_rcs_conditional(num_conns, filter))
         {
@@ -708,96 +796,38 @@ namespace llarp
             log::warning(logcat, "NodeDB query for {} random RCs for connection returned none", num_conns);
     }
 
-    void LinkManager::handle_path_data_message(bstring message)
+    void LinkManager::regenerate_and_gossip_rc()
     {
-        ustring nonce, hop_id_str, payload;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{message};
-            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        auto symmnonce = SymmNonce{nonce.data()};
-        HopID hopid{hop_id_str.data()};
-        auto hop = _router.path_context()->get_transit_hop(hopid);
-
-        if (not hop)
-            return;
-
-        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
-
-        // if terminal hop, pass to the correct path expecting to receive this message
-        if (hop->terminal_hop)
-        {
-            NetworkAddress sender;
-            bstring data;
-
-            try
-            {
-                oxenc::bt_dict_consumer btdc{payload};
-                std::tie(sender, data) = PathData::deserialize(btdc);
-
-                if (auto session = _router.session_endpoint()->get_session(sender))
-                {
-                    session->recv_path_data_message(std::move(data));
-                }
-                else
-                {
-                    log::warning(logcat, "Could not find session (remote:{}) to relay path data message!", sender);
-                }
-            }
-            catch (const std::exception& e)
-            {
-                log::warning(logcat, "Exception: {}", e.what());
-            }
-        }
-        else
-        {
-            // if not terminal hop, relay datagram onwards
-            auto hop_is_rx = hop->rxid() == hopid;
-
-            const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-            const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
-
-            std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
-
-            send_data_message(next_router, std::move(new_payload));
-        }
+        log::info(logcat, "Regenerating and gossiping RC...");
+        gossip_rc(_router.local_rid(), _router.relay_contact.to_remote());
+        _router.save_rc();
     }
 
     void LinkManager::gossip_rc(const RouterID& last_sender, const RemoteRC& rc)
     {
-        _router.loop()->call([this, last_sender, rc]() {
-            int count = 0;
-            const auto& gossip_src = rc.router_id();
+        int count{};
+        const auto& gossip_src = rc.router_id();
 
-            for (auto& [rid, conn] : ep->service_conns)
-            {
-                // don't send back to the gossip source or the last sender
-                if (rid == gossip_src or rid == last_sender)
-                    continue;
+        for (auto& [rid, conn] : ep->service_conns)
+        {
+            if (not conn or not conn->is_active)
+                continue;
 
-                send_control_message(
-                    rid, "gossip_rc"s, GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
-                        log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
-                    });
-                ++count;
-            }
+            // don't send back to the gossip source or the last sender
+            if (rid == gossip_src or rid == last_sender)
+                continue;
 
-            log::critical(logcat, "Dispatched {} GossipRC requests!", count);
-        });
+            count += send_control_message(
+                rid, "gossip_rc", GossipRCMessage::serialize(last_sender, rc), [](oxen::quic::message) {
+                    log::trace(logcat, "PLACEHOLDER FOR GOSSIP RC RESPONSE HANDLER");
+                });
+        }
+
+        log::critical(logcat, "Dispatched {} GossipRC requests!", count);
     }
 
     void LinkManager::handle_gossip_rc(oxen::quic::message m)
     {
-        log::debug(logcat, "Handling GossipRC request...");
-
         // RemoteRC constructor wraps deserialization in a try/catch
         RemoteRC rc;
         RouterID src;
@@ -806,9 +836,9 @@ namespace llarp
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            btdc.required("rc");
+            btdc.required("r");
             rc = RemoteRC{btdc.consume_dict_data()};
-            src.from_relay_address(btdc.require<std::string>("sender"));
+            src.from_relay_address(btdc.require<std::string>("s"));
         }
         catch (const std::exception& e)
         {
@@ -816,19 +846,20 @@ namespace llarp
             return;
         }
 
+        log::trace(logcat, "Handling GossipRC request (sender:{}, rc:{})...", src, rc);
+
         if (node_db->verify_store_gossip_rc(rc))
         {
-            log::critical(logcat, "Received updated RC, forwarding to relay peers.");
+            log::info(logcat, "Received updated RC (rid:{}), forwarding to peers", rc.router_id().short_string());
             gossip_rc(_router.local_rid(), rc);
         }
         else
-            log::debug(logcat, "Received known or old RC, not storing or forwarding.");
+            log::trace(logcat, "Received known or old RC, not storing or forwarding.");
     }
 
     // TODO: can probably use ::send_control_message instead. Need to discuss the potential
     // difference in calling Endpoint::get_service_conn vs Endpoint::get_conn
-    void LinkManager::fetch_bootstrap_rcs(
-        const RemoteRC& source, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_bootstrap_rcs(const RemoteRC& source, std::string payload, bt_control_response_hook func)
     {
         func = [this, f = std::move(func)](oxen::quic::message m) mutable {
             _router.loop()->call([func = std::move(f), msg = std::move(m)]() mutable { func(std::move(msg)); });
@@ -838,13 +869,13 @@ namespace llarp
 
         if (auto conn = ep->get_service_conn(rid); conn)
         {
-            conn->control_stream->command("bfetch_rcs"s, std::move(payload), std::move(func));
+            conn->control_stream->command("bfetch_rcs", std::move(payload), std::move(func));
             log::debug(logcat, "Dispatched bootstrap fetch request!");
             return;
         }
 
-        _router.loop()->call([this, source, payload, f = std::move(func), rid = rid]() {
-            connect_and_send(rid, "bfetch_rcs"s, std::move(payload), std::move(f));
+        _router.loop()->call([this, source, payload, f = std::move(func), rid = rid]() mutable {
+            connect_and_send(rid, "bfetch_rcs", std::move(payload), std::move(f));
         });
     }
 
@@ -860,14 +891,14 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            if (btdc.skip_until("local"))
+            if (btdc.skip_until("l"))
                 remote.emplace(btdc.consume_dict_data());
 
-            quantity = btdc.require<size_t>("quantity");
+            quantity = btdc.require<size_t>("q");
         }
         catch (const std::exception& e)
         {
-            log::critical(logcat, "Exception handling bootstarp RC Fetch request (body:{}): {}", m.body(), e.what());
+            log::critical(logcat, "Exception handling bootstrap RC Fetch request (body:{}): {}", m.body(), e.what());
             m.respond(messages::ERROR_RESPONSE, true);
             return;
         }
@@ -879,10 +910,6 @@ namespace llarp
 
             if (is_snode)
             {
-                // we already insert the
-                // TESTNET: REMOVE BEFORE TESTING NONLOCALLY
-                // node_db->put_rc(*remote);
-
                 auto remote_rc = *remote;
 
                 if (node_db->registered_routers().count(remote_rc.router_id()))
@@ -915,7 +942,7 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto sublist = btdp.append_list("rcs");
+            auto sublist = btdp.append_list("r");
 
             if (count == 0)
                 log::error(logcat, "No known RCs locally to send!");
@@ -935,8 +962,7 @@ namespace llarp
         m.respond(std::move(btdp).str(), count == 0);
     }
 
-    void LinkManager::fetch_rcs(
-        const RouterID& source, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_rcs(const RouterID& source, std::string payload, bt_control_response_hook func)
     {
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
@@ -946,7 +972,7 @@ namespace llarp
 
     void LinkManager::handle_fetch_rcs(oxen::quic::message m)
     {
-        log::critical(logcat, "Handling FetchRC request...");
+        log::debug(logcat, "Handling FetchRC request...");
         // this handler should not be registered for clients
         assert(_router.is_service_node());
 
@@ -956,11 +982,13 @@ namespace llarp
         {
             oxenc::bt_dict_consumer btdc{m.body()};
 
-            {
-                auto btlc = btdc.require<oxenc::bt_list_consumer>("explicit_ids");
+            btdc.required("x");
 
-                while (not btlc.is_finished())
-                    explicit_ids.emplace(btlc.consume<ustring_view>().data());
+            {
+                auto sublist = btdc.consume_list_consumer();
+
+                while (not sublist.is_finished())
+                    explicit_ids.emplace(sublist.consume_string_view());
             }
         }
         catch (const std::exception& e)
@@ -973,7 +1001,7 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto sublist = btdp.append_list("rcs");
+            auto sublist = btdp.append_list("r");
 
             int count = 0;
             for (const auto& rid : explicit_ids)
@@ -985,26 +1013,41 @@ namespace llarp
                 }
             }
 
-            log::critical(logcat, "Returning {} RCs for FetchRC request...", count);
+            log::info(logcat, "Returning {} RCs for FetchRC request...", count);
         }
 
         m.respond(std::move(btdp).str());
     }
 
-    void LinkManager::fetch_router_ids(
-        const RouterID& via, std::string payload, std::function<void(oxen::quic::message m)> func)
+    void LinkManager::fetch_router_ids(const RouterID& via, bt_control_send_hook send_hook)
+    {
+        if (auto conn = ep->get_conn(via); conn)
+        {
+            log::debug(logcat, "Batch dispatching FetchRID requests to {}", via);
+            return send_hook(conn->control_stream);
+        }
+
+        log::debug(logcat, "Queueing FetchRID batch send to {}...", via);
+
+        _router.loop()->call([this, rid = via, send_hook = std::move(send_hook)]() mutable {
+            connect_and_send(std::move(rid), std::move(send_hook));
+        });
+    }
+
+    [[deprecated]] void LinkManager::fetch_router_ids(
+        const RouterID& via, std::string payload, bt_control_response_hook func)
     {
         // this handler should not be registered for service nodes
         assert(not _router.is_service_node());
 
-        log::critical(logcat, "payload: {}", payload);
+        log::trace(logcat, "payload: {}", payload);
 
-        send_control_message(via, "fetch_rids"s, std::move(payload), std::move(func));
+        send_control_message(via, "fetch_rids", std::move(payload), std::move(func));
     }
 
     void LinkManager::handle_fetch_router_ids(oxen::quic::message m)
     {
-        log::critical(logcat, "Handling FetchRIDs request...");
+        log::debug(logcat, "Handling FetchRIDs request...");
         // this handler should not be registered for clients
         assert(_router.is_service_node());
 
@@ -1014,7 +1057,7 @@ namespace llarp
         try
         {
             oxenc::bt_dict_consumer btdc{m.body()};
-            source.from_network_address(btdc.require<std::string_view>("source"));
+            source.from_string(btdc.require<std::string_view>("s"));
         }
         catch (const std::exception& e)
         {
@@ -1025,11 +1068,11 @@ namespace llarp
 
         if (source != local)
         {
-            log::critical(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", m.body(), source);
+            log::info(logcat, "Relaying FetchRID request (body: {}) to intended target RID:{}", m.body(), source);
 
             auto payload = FetchRIDMessage::serialize(source);
             send_control_message(
-                source, "fetch_rids"s, std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
+                source, "fetch_rids", std::move(payload), [original = std::move(m)](oxen::quic::message msg) mutable {
                     original.respond(msg.body(), msg.is_error());
                 });
             return;
@@ -1039,411 +1082,310 @@ namespace llarp
         oxenc::bt_dict_producer btdp;
 
         {
-            auto btlp = btdp.append_list("routers");
+            auto btlp = btdp.append_list("r");
 
             for (const auto& rid : known_rids)
                 btlp.append(rid.to_view());
         }
 
-        btdp.append_signature("signature", [this](ustring_view to_sign) {
+        btdp.append_signature("~", [this](ustring_view to_sign) {
             std::array<unsigned char, 64> sig;
 
-            if (!crypto::sign(const_cast<unsigned char*>(sig.data()), _router.identity(), to_sign))
+            if (!crypto::sign(sig.data(), _router.identity(), to_sign))
                 throw std::runtime_error{"Failed to sign fetch RouterIDs response"};
 
             return sig;
         });
 
-        log::critical(logcat, "Returning ALL ({}) locally held RIDs to FetchRIDs request!", known_rids.size());
+        log::info(logcat, "Returning ALL ({}) locally held RIDs to FetchRIDs request!", known_rids.size());
         m.respond(std::move(btdp).str());
     }
 
-    void LinkManager::handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond)
+    void LinkManager::_handle_resolve_sns(oxen::quic::message m, std::optional<std::string> inner_body)
     {
+        log::trace(logcat, "Received request to publish client contact!");
+
         std::string name_hash;
 
         try
         {
-            oxenc::bt_dict_consumer btdp{body};
-
-            name_hash = btdp.require<std::string>("H");
+            if (inner_body)
+                name_hash = ResolveSNS::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                name_hash = ResolveSNS::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            respond(messages::ERROR_RESPONSE);
-            return;
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
         _router.rpc_client()->lookup_ons_hash(
-            name_hash,
-            [respond =
-                 std::move(respond)]([[maybe_unused]] std::optional<service::EncryptedONSRecord> maybe_enc) mutable {
+            name_hash, [prev_msg = std::move(m)](std::optional<EncryptedSNSRecord> maybe_enc) mutable {
                 if (maybe_enc)
-                    respond(maybe_enc->bt_encode());
+                {
+                    log::info(logcat, "RPC lookup successfully returned encrypted SNS record!");
+                    prev_msg.respond(ResolveSNS::serialize_response(*maybe_enc));
+                }
                 else
-                    respond(serialize_response({{messages::STATUS_KEY, FindNameMessage::NOT_FOUND}}));
+                {
+                    log::warning(logcat, "RPC lookup could not find SNS registry!");
+                    prev_msg.respond(ResolveSNS::NOT_FOUND, true);
+                }
             });
     }
 
-    void LinkManager::handle_resolve_ons_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "FindNameMessage request timed out!");
-            return;
-        }
+    void LinkManager::handle_resolve_sns(oxen::quic::message m) { return _handle_resolve_sns(std::move(m)); }
 
-        std::string payload;
+    void LinkManager::_handle_publish_cc(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "Received request to publish client contact!");
+
+        EncryptedClientContact enc;
+        std::optional<RouterID> sender = std::nullopt;
 
         try
         {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            payload = btdc.require<std::string>(m ? "E" : messages::STATUS_KEY);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (m)
-        {
-            // TODO: wtf
-        }
-        else
-        {
-            if (payload == "ERROR")
-            {
-                log::info(logcat, "FindNameMessage failed with unkown error!");
-
-                // resend?
-            }
-            else if (payload == FindNameMessage::NOT_FOUND)
-            {
-                log::info(logcat, "FindNameMessage failed with unkown error!");
-                // what to do here?
-            }
+            if (inner_body)
+                std::tie(enc, sender) = PublishClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
             else
-                log::info(logcat, "FindNameMessage failed with unkown error!");
-        }
-    }
-
-    void LinkManager::handle_publish_intro(std::string_view body, std::function<void(std::string)> respond)
-    {
-        service::EncryptedIntroSet enc;
-        std::string introset;
-        uint64_t is_relayed, relay_order;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc_a{body};
-
-            introset = btdc_a.require<std::string>("I");
-            relay_order = btdc_a.require<uint64_t>("O");
-            is_relayed = btdc_a.require<uint64_t>("R");
-
-            enc = *service::EncryptedIntroSet::construct(std::move(introset));
+                std::tie(enc, sender) = PublishClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "Exception: {}", e.what());
-            respond(messages::ERROR_RESPONSE);
-            return;
+            log::warning(logcat, "Exception: {}: payload: {}", e.what(), buffer_printer{m.body()});
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        const auto addr = dht::Key_t{reinterpret_cast<uint8_t*>(enc.derived_signing_key.data())};
-        const auto local_key = _router.rc().router_id();
+        if (enc.is_expired())
+        {
+            log::warning(logcat, "Received expired EncryptedClientContact!");
+            return m.respond(PublishClientContact::EXPIRED, true);
+        }
 
         if (not enc.verify())
         {
-            log::error(logcat, "Received PublishIntroMessage with invalid introset: {}", introset);
-            respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_INTROSET}}));
-            return;
+            log::warning(logcat, "Received invalid EncryptedClientContact!");
+            return m.respond(PublishClientContact::INVALID, true);
         }
 
-        auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
-
-        if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
+        if (not _is_service_node)
         {
-            log::error(logcat, "Received PublishIntroMessage but only know {} nodes", closest_rcs.size());
-            respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INSUFFICIENT}}));
-            return;
+            if (not sender.has_value())
+            {
+                log::warning(logcat, "Received new EncryptedClientContact from path control with no RouterID!");
+                return m.respond(messages::ERROR_RESPONSE, true);
+            }
+
+            auto intro = enc.decrypt(*sender);
+
+            // error message prints in ::decrypt(...)
+            if (not intro)
+                return m.respond(messages::ERROR_RESPONSE, true);
+
+            if (auto session = _router.session_endpoint()->get_session(NetworkAddress::from_pubkey(*sender, true)))
+            {
+                log::debug(logcat, "Storing ClientContact for remote rid:{}", *sender);
+                _router.contact_db().put_cc(std::move(enc));
+
+                if (session->is_outbound())
+                    std::dynamic_pointer_cast<session::OutboundSession>(session)->update_remote_intros(
+                        std::move(*intro).take_intros());
+
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Could not find session (remote: {}) for updated ClientContact!", *sender);
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        if (is_relayed)
+        auto dht_key = enc.key();
+
+        // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
+        // allow it to continue propagating
+        if (not inner_body)
         {
-            if (relay_order >= path::DEFAULT_PATHS_HELD)
-            {
-                log::error(logcat, "Received PublishIntroMessage with invalide relay order: {}", relay_order);
-                respond(serialize_response({{messages::STATUS_KEY, PublishIntroMessage::INVALID_ORDER}}));
-                return;
-            }
-
-            log::info(logcat, "Relaying PublishIntroMessage for {}", addr);
-
-            const auto& peer_rc = closest_rcs[relay_order];
-            const auto& peer_key = peer_rc.router_id();
-
-            if (peer_key == local_key)
-            {
-                log::info(
-                    logcat,
-                    "Received PublishIntroMessage in which we are peer index {}.. storing introset",
-                    relay_order);
-
-                _router.contacts().put_intro(std::move(enc));
-                respond(messages::OK_RESPONSE);
-            }
-            else
-            {
-                log::info(logcat, "Received PublishIntroMessage; propagating to peer index {}", relay_order);
-
-                send_control_message(
-                    peer_key,
-                    "publish_intro",
-                    PublishIntroMessage::serialize(enc, relay_order, is_relayed),
-                    [respond = std::move(respond)](oxen::quic::message m) mutable {
-                        if (m.timed_out)
-                            return;  // drop if timed out; requester will have timed out as well
-                        respond(m.body_str());
-                    });
-            }
-
-            return;
+            log::debug(logcat, "Received relayed PublishClientContact request (key: {}); accepting...", dht_key);
+            _router.contact_db().put_cc(std::move(enc));
+            return m.respond(messages::OK_RESPONSE);
         }
 
-        int rc_index = -1, index = 0;
+        auto local_rid = _router.local_rid();
+
+        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+        const auto& closest_peer = closest_rcs.begin()->router_id();
+
+        // TESTNET: testing this method
+        auto other_closest = _router.node_db()->find_closest_to(dht_key).router_id();
+        log::info(logcat, "First-closest and closest are {}EQUAL", closest_peer == other_closest ? "" : "NOT ");
 
         for (const auto& rc : closest_rcs)
         {
-            if (rc.router_id() == local_key)
+            auto& _rid = rc.router_id();
+
+            log::trace(logcat, "Closest RCs to received ClientContact: {}", _rid);
+
+            if (_rid == local_rid)
             {
-                rc_index = index;
-                break;
+                log::info(
+                    logcat,
+                    "Received PublishClientContact (key: {}) for which we are a candidate; accepting...",
+                    dht_key);
+                _router.contact_db().put_cc(std::move(enc));
+                return m.respond(messages::OK_RESPONSE);
             }
-            ++index;
         }
 
-        if (rc_index >= 0)
-        {
-            log::info(logcat, "Received PublishIntroMessage for {}; we are candidate {}", addr, relay_order);
+        log::info(
+            logcat,
+            "Received PublishClientContact (key: {}); propagating to closest peer (rid: {})...",
+            enc.key(),
+            closest_peer);
 
-            _router.contacts().put_intro(std::move(enc));
-            respond(messages::OK_RESPONSE);
-        }
-        else
-            log::warning(logcat, "Received non-relayed PublishIntroMessage from {}; we are not the candidate", addr);
+        send_control_message(
+            closest_peer,
+            "publish_cc",
+            PublishClientContact::serialize(std::move(enc), std::move(sender)),
+            [prev_msg = std::move(m)](oxen::quic::message msg) mutable {
+                log::info(
+                    logcat,
+                    "Relayed PublishClientContact {}! Relaying response...",
+                    msg                 ? "SUCCEEDED"
+                        : msg.timed_out ? "timed out"
+                                        : "failed");
+                log::trace(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
+                prev_msg.respond(msg.body_str(), msg.is_error());
+            });
     }
 
-    // DISCUSS: I feel like ::handle_publish_intro_response should be the callback that handles the
-    // response to a relayed publish_intro (above line 1131-ish)
+    void LinkManager::handle_publish_cc(oxen::quic::message m) { return _handle_publish_cc(std::move(m)); }
 
-    void LinkManager::handle_publish_intro_response(oxen::quic::message m)
+    void LinkManager::_handle_find_cc(oxen::quic::message m, std::optional<std::string> inner_body)
     {
-        if (m.timed_out)
-        {
-            log::info(logcat, "PublishIntroMessage timed out!");
-            return;
-        }
+        log::trace(logcat, "Received request to find client contact!");
 
-        std::string payload;
+        hash_key dht_key;
 
         try
         {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            payload = btdc.require<std::string>(messages::STATUS_KEY);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (m)
-        {
-            // DISCUSS: not sure what to do on success of a publish intro command?
-        }
-        else
-        {
-            if (payload == "ERROR")
-            {
-                log::info(logcat, "PublishIntroMessage failed with remote exception!");
-                // Do something smart here probably
-                return;
-            }
-
-            log::info(logcat, "PublishIntroMessage failed with error code: {}", payload);
-
-            if (payload == PublishIntroMessage::INVALID_INTROSET)
-            {
-            }
-            else if (payload == PublishIntroMessage::EXPIRED)
-            {
-            }
-            else if (payload == PublishIntroMessage::INSUFFICIENT)
-            {
-            }
-            else if (payload == PublishIntroMessage::INVALID_ORDER)
-            {
-            }
-        }
-    }
-
-    void LinkManager::handle_find_intro(std::string_view body, std::function<void(std::string)> respond)
-    {
-        ustring location;
-        uint64_t relay_order, is_relayed;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{body};
-
-            relay_order = btdc.require<uint64_t>("O");
-            is_relayed = btdc.require<uint64_t>("R");
-            location = btdc.require<ustring>("S");
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            respond(messages::ERROR_RESPONSE);
-            return;
-        }
-
-        const auto addr = dht::Key_t{location.data()};
-
-        if (is_relayed)
-        {
-            if (relay_order >= path::DEFAULT_PATHS_HELD)
-            {
-                log::warning(logcat, "Received FindIntroMessage with invalid relay order: {}", relay_order);
-                respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INVALID_ORDER}}));
-                return;
-            }
-
-            auto closest_rcs = _router.node_db()->find_many_closest_to(addr, path::DEFAULT_PATHS_HELD);
-
-            if (closest_rcs.size() != path::DEFAULT_PATHS_HELD)
-            {
-                log::error(logcat, "Received FindIntroMessage but only know {} nodes", closest_rcs.size());
-                respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::INSUFFICIENT_NODES}}));
-                return;
-            }
-
-            log::info(logcat, "Relaying FindIntroMessage for {}", addr);
-
-            const auto& peer_rc = closest_rcs[relay_order];
-            const auto& peer_key = peer_rc.router_id();
-
-            send_control_message(
-                peer_key,
-                "find_intro",
-                FindIntroMessage::serialize(addr, is_relayed, relay_order),
-                [respond = std::move(respond)](oxen::quic::message relay_response) mutable {
-                    if (relay_response)
-                        log::info(
-                            logcat,
-                            "Relayed FindIntroMessage returned successful response; transmitting "
-                            "to initial "
-                            "requester");
-                    else if (relay_response.timed_out)
-                        log::critical(logcat, "Relayed FindIntroMessage timed out! Notifying initial requester");
-                    else
-                        log::critical(logcat, "Relayed FindIntroMessage failed! Notifying initial requester");
-
-                    respond(relay_response.body_str());
-                });
-        }
-        else
-        {
-            if (auto maybe_intro = _router.contacts().get_encrypted_introset(addr))
-                respond(serialize_response({{"INTROSET", maybe_intro->bt_encode()}}));
+            if (inner_body)
+                dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{*inner_body});
             else
-            {
-                log::warning(logcat, "Received FindIntroMessage with relayed == false and no local introset entry");
-                respond(serialize_response({{messages::STATUS_KEY, FindIntroMessage::NOT_FOUND}}));
-            }
-        }
-    }
-
-    void LinkManager::handle_find_intro_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "FindIntroMessage timed out!");
-            return;
-        }
-
-        std::string payload;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            payload = btdc.require<std::string>((m) ? "INTROSET" : messages::STATUS_KEY);
+                dht_key = FindClientContact::deserialize(oxenc::bt_dict_consumer{m.body()});
         }
         catch (const std::exception& e)
         {
             log::warning(logcat, "Exception: {}", e.what());
-            return;
+            return m.respond(messages::ERROR_RESPONSE, true);
         }
 
-        // success case, neither timed out nor errored
-        if (m)
+        if (auto maybe_cc = _router.contact_db().get_encrypted_cc(dht_key))
         {
-            if (auto enc = service::EncryptedIntroSet::construct(payload))
+            log::info(
+                logcat,
+                "Received FindClientContact request (key: {}); returning local EncryptedClientContact...",
+                dht_key);
+            return m.respond(FindClientContact::serialize_response(std::move(*maybe_cc)));
+        }
+
+        // If the optional was nullopt, then this was a relay <-> relay request. As a result, we should NOT
+        // allow it to continue propagating
+        if (not inner_body)
+        {
+            log::critical(
+                logcat,
+                "Received relayed FindClientContact request (key: {}); could not find locally, relaying error...",
+                dht_key);
+            return m.respond(FindClientContact::NOT_FOUND, true);
+        }
+
+        auto local_rid = _router.local_rid();
+
+        auto closest_rcs = _router.node_db()->find_many_closest_to(dht_key, path::DEFAULT_PATHS_HELD);
+        auto n_closest = closest_rcs.size();
+
+        for (const auto& rc : closest_rcs)
+        {
+            auto& _rid = rc.router_id();
+
+            if (_rid == local_rid)
             {
-                _router.contacts().put_intro(std::move(*enc));
+                log::warning(
+                    logcat,
+                    "We are closest peer for FindClientContact request (key: {}); no EncryptedClientContact found"
+                    "locally!",
+                    dht_key);
+                return m.respond(FindClientContact::NOT_FOUND, true);
             }
         }
-        else
+
+        auto counter = std::make_shared<size_t>(n_closest);
+
+        auto hook = [prev_msg = std::move(m), counter](oxen::quic::message msg) mutable {
+            if (*counter == 0)
+                return;
+
+            if (msg)
+            {
+                *counter = 0;
+                log::info(logcat, "Relayed FindClientContact request SUCCEEDED! Relaying response...");
+                log::trace(logcat, "Relayed FindClientContact response: {}", buffer_printer{msg.body()});
+            }
+            else if (--*counter == 0)
+            {
+                log::warning(logcat, "All FindClientContact requests FAILED! Relaying response...");
+            }
+            else
+                return;
+
+            prev_msg.respond(msg.body_str(), msg.is_error());
+        };
+
+        log::info(logcat, "Relaying FindClientContactMessage (key: {}) to {} peers", dht_key, n_closest);
+
+        for (const auto& rc : closest_rcs)
         {
-            log::info(logcat, "FindIntroMessage failed with error: {}", payload);
-            // Do something smart here probably
+            send_control_message(rc.router_id(), "find_cc", FindClientContact::serialize(dht_key), hook);
         }
     }
+
+    void LinkManager::handle_find_cc(oxen::quic::message m) { return _handle_find_cc(std::move(m)); }
 
     void LinkManager::handle_path_build(oxen::quic::message m, const RouterID& from)
     {
         if (!_router.path_context()->is_transit_allowed())
         {
             log::warning(logcat, "got path build request when not permitting transit");
-            m.respond(PathBuildMessage::NO_TRANSIT, true);
-            return;
+            return m.respond(PATH::BUILD::NO_TRANSIT, true);
         }
 
         try
         {
-            auto frames = Frames::deserialize(m.body());
+            auto frames = ONION::deserialize_frames(m.body());
             auto n_frames = frames.size();
 
             if (n_frames != path::MAX_LEN)
             {
                 log::info(logcat, "Path build message with wrong number of frames: {}", frames.size());
-                return m.respond(PathBuildMessage::BAD_FRAMES, true);
+                return m.respond(PATH::BUILD::BAD_FRAMES, true);
             }
 
             log::trace(logcat, "Deserializing frame: {}", buffer_printer{frames.front()});
 
-            SymmNonce nonce;
-            PubKey remote_pk;
-            ustring hop_payload;
-
-            std::tie(nonce, remote_pk, hop_payload) =
-                PathBuildMessage::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router.identity());
-
-            log::trace(logcat, "Deserializing hop payload: {}", buffer_printer{hop_payload});
-
-            auto hop = path::TransitHop::deserialize_hop(
-                oxenc::bt_dict_consumer{hop_payload}, from, _router, remote_pk, nonce);
-
-            hop->started = _router.now();
-            set_conn_persist(hop->downstream(), hop->expiry_time() + 10s);
+            auto hop = PATH::BUILD::deserialize_hop(oxenc::bt_dict_consumer{frames.front()}, _router, from);
 
             // we are terminal hop and everything is okay
             if (hop->upstream() == _router.local_rid())
             {
                 log::info(logcat, "We are the terminal hop; path build succeeded");
-                hop->terminal_hop = true;
+                if (not hop->terminal_hop)
+                {
+                    // TESTNET: remove this eventually
+                    log::critical(
+                        logcat, "DANIEL FIX THIS: Hop is terminal hop; constructor should have flipped this boolean");
+                    hop->terminal_hop = true;
+                }
+
                 _router.path_context()->put_transit_hop(std::move(hop));
                 return m.respond(messages::OK_RESPONSE, false);
             }
@@ -1454,7 +1396,7 @@ namespace llarp
             // clear our frame, to be randomized after onion step and appended
             frames.back().clear();
 
-            auto onion_nonce = nonce ^ hop->nonceXOR;
+            auto onion_nonce = hop->kx.nonce ^ hop->kx.xor_nonce;
 
             // (de-)onion each further frame using the established shared secret and
             // onion_nonce = nonce ^ nonceXOR
@@ -1466,7 +1408,7 @@ namespace llarp
                 crypto::onion(
                     reinterpret_cast<unsigned char*>(frames[i].data()),
                     frames[i].size(),
-                    hop->shared,
+                    hop->kx.shared_secret,
                     onion_nonce,
                     onion_nonce);
             }
@@ -1479,22 +1421,25 @@ namespace llarp
             send_control_message(
                 std::move(upstream),
                 "path_build",
-                Frames::serialize(std::move(frames)),
+                ONION::serialize_frames(std::move(frames)),
                 [this, transit_hop = std::move(hop), prev_message = std::move(m)](oxen::quic::message m) mutable {
                     if (m)
                     {
                         log::info(
                             logcat,
-                            "Upstream returned successful path build response; locally storing Hop and relaying");
+                            "Upstream returned successful path build response; locally storing Hop ({}) and relaying",
+                            transit_hop->to_string());
                         _router.path_context()->put_transit_hop(std::move(transit_hop));
                         return prev_message.respond(messages::OK_RESPONSE, false);
                     }
-                    if (m.timed_out)
-                        log::info(logcat, "Upstream timed out on path build; relaying timeout");
-                    else
-                        log::info(logcat, "Upstream returned path build failure; relaying response");
 
-                    return prev_message.respond(m.body(), m.is_error());
+                    log::info(
+                        logcat,
+                        "Upstream ({}) returned path build {}; relaying...",
+                        transit_hop->upstream(),
+                        m.timed_out ? "time out" : "failure");
+
+                    return prev_message.respond(m.body_str(), m.is_error());
                 });
         }
         catch (const std::exception& e)
@@ -1505,6 +1450,457 @@ namespace llarp
             return m.respond(e.what(), true);
         }
     }
+
+    void LinkManager::_handle_path_control(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        HopID hop_id;
+        std::string payload;
+        SymmNonce nonce;
+
+        try
+        {
+            if (inner_body)
+                std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{*inner_body});
+            else
+                std::tie(hop_id, nonce, payload) = ONION::deserialize_hop(oxenc::bt_dict_consumer{m.body()});
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+            log::warning(logcat, "Payload: {}", inner_body ? buffer_printer{*inner_body} : buffer_printer{m.body()});
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
+
+        if (!_is_service_node)
+        {
+            auto path = _router.path_context()->get_path(hop_id);
+
+            if (not path)
+            {
+                log::warning(logcat, "Client received path control with unknown rxID: {}", hop_id);
+                return m.respond(messages::ERROR_RESPONSE, true);
+            }
+
+            log::trace(logcat, "Received path control for local client: {}", buffer_printer{payload});
+
+            for (auto& hop : path->hops)
+            {
+                nonce = crypto::onion(
+                    reinterpret_cast<unsigned char*>(payload.data()),
+                    payload.size(),
+                    hop.kx.shared_secret,
+                    nonce,
+                    hop.kx.xor_nonce);
+
+                log::trace(logcat, "xchacha20 -> {}", buffer_printer{payload});
+            }
+
+            return handle_path_request(std::move(m), std::move(payload));
+        }
+
+        auto hop = _router.path_context()->get_transit_hop(hop_id);
+
+        if (not hop)
+        {
+            log::warning(logcat, "Received path control with unknown next hop (ID: {})", hop_id);
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
+
+        auto onion_nonce = nonce ^ hop->kx.xor_nonce;
+
+        crypto::onion(
+            reinterpret_cast<unsigned char*>(payload.data()),
+            payload.size(),
+            hop->kx.shared_secret,
+            onion_nonce,
+            hop->kx.xor_nonce);
+
+        if (not inner_body.has_value())
+        {
+            // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
+            if (hop->terminal_hop)
+            {
+                log::debug(logcat, "We are terminal hop for path request: {}", hop->to_string());
+                return handle_path_request(std::move(m), std::move(payload));
+            }
+
+            log::debug(logcat, "We are intermediate hop for path request: {}", hop->to_string());
+        }
+        else
+        {
+            log::info(
+                logcat, "We are bridge node for aligned path request ({})! Forwarding downstream", hop->to_string());
+            log::trace(logcat, "Payload: {}", buffer_printer{*inner_body});
+        }
+
+        auto next_ids = hop->next_id(hop_id);
+
+        if (not next_ids)
+        {
+            log::error(logcat, "Failed to query hop ({}) for next ids (input: {})", hop->to_string(), hop_id);
+            return m.respond(messages::ERROR_RESPONSE, true);
+        }
+
+        std::string new_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(payload));
+
+        send_control_message(
+            next_ids->first,
+            "path_control",
+            std::move(new_payload),
+            [hop_weak = hop->weak_from_this(), hop_id, prev_message = std::move(m)](
+                oxen::quic::message response) mutable {
+                auto hop = hop_weak.lock();
+
+                if (not hop)
+                {
+                    log::warning(logcat, "Received response to path control message with non-existent TransitHop!");
+                    return prev_message.respond(messages::ERROR_RESPONSE, true);
+                }
+
+                if (response)
+                    log::info(logcat, "Path control message returned successfully!");
+                else if (response.timed_out)
+                    log::warning(logcat, "Path control message returned as time out!");
+                else
+                    log::warning(logcat, "Path control message returned as error!");
+
+                prev_message.respond(response.body_str(), response.is_error());
+
+                // TODO: onion encrypt path message responses
+                // HopID hop_id;
+                // SymmNonce nonce;
+                // std::string payload;
+
+                // try
+                // {
+                //     std::tie(hop_id, nonce, payload) =
+                //     ONION::deserialize_hop(oxenc::bt_dict_consumer{response.body()});
+                // }
+                // catch (const std::exception& e)
+                // {
+                //     log::warning(logcat, "Exception: {}; payload: {}", e.what(),
+                //     buffer_printer{response.body()}); return prev_message.respond(messages::ERROR_RESPONSE,
+                //     true);
+                // }
+
+                // auto resp_payload = ONION::serialize_hop(hop_id.to_view(), nonce, std::move(payload));
+                // prev_message.respond(std::move(resp_payload), false);
+            });
+    }
+
+    void LinkManager::handle_path_control(oxen::quic::message m) { return _handle_path_control(std::move(m)); }
+
+    void LinkManager::handle_path_data_message(bstring data)
+    {
+        _router.loop()->call([this, message = std::move(data)]() mutable {
+            HopID hop_id;
+            std::string payload;
+            SymmNonce nonce;
+
+            try
+            {
+                std::tie(hop_id, nonce, payload) =
+                    ONION::deserialize_hop(oxenc::bt_dict_consumer{bstring_view{message}});
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception: {}", e.what());
+                return;
+            }
+
+            if (!_is_service_node)
+            {
+                auto path = _router.path_context()->get_path(hop_id);
+
+                if (not path)
+                {
+                    log::warning(logcat, "Client received path data with unknown rxID: {}", hop_id);
+                    return;
+                }
+
+                for (auto& hop : path->hops)
+                {
+                    nonce = crypto::onion(
+                        reinterpret_cast<unsigned char*>(payload.data()),
+                        payload.size(),
+                        hop.kx.shared_secret,
+                        nonce,
+                        hop.kx.xor_nonce);
+                }
+
+                log::trace(logcat, "Received path data for local client: {}", buffer_printer{payload});
+
+                try
+                {
+                    auto [tag, data] = PATH::DATA::deserialize_inner(std::move(payload));
+
+                    if (auto session = _router.session_endpoint()->get_session(tag))
+                    {
+                        session->recv_path_data_message(std::move(data));
+                    }
+                    else
+                    {
+                        log::warning(logcat, "Could not find session (tag:{}) to relay path data message!", tag);
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(logcat, "Exception: {}: {}", e.what(), buffer_printer{payload});
+                }
+                return;
+            }
+
+            auto hop = _router.path_context()->get_transit_hop(hop_id);
+
+            if (not hop)
+            {
+                log::warning(logcat, "Received path data with unknown next hop (ID: {})", hop_id);
+                return;
+            }
+
+            auto onion_nonce = nonce ^ hop->kx.xor_nonce;
+
+            crypto::onion(
+                reinterpret_cast<unsigned char*>(payload.data()),
+                payload.size(),
+                hop->kx.shared_secret,
+                onion_nonce,
+                hop->kx.xor_nonce);
+
+            std::optional<std::pair<RouterID, HopID>> next_ids = std::nullopt;
+            std::string next_payload;
+
+            log::trace(
+                logcat,
+                "We are {} hop for path data: {}: {}",
+                hop->terminal_hop ? "terminal" : "intermediate",
+                hop->to_string(),
+                buffer_printer{payload});
+
+            // if terminal hop, pass to the correct path expecting to receive this message
+            if (hop->terminal_hop)
+            {
+                HopID ihid;
+                std::string intermediate;
+
+                try
+                {
+                    std::tie(ihid, intermediate) =
+                        PATH::DATA::deserialize_intermediate(oxenc::bt_dict_consumer{payload});
+                }
+                catch (const std::exception& e)
+                {
+                    log::warning(
+                        logcat, "Path data intermediate payload exception: {}: {}", e.what(), buffer_printer{payload});
+                    return;
+                }
+
+                log::trace(logcat, "Inbound path rxid:{}, outbound path txid:{}", hop_id, ihid);
+
+                auto next_hop = _router.path_context()->get_transit_hop(ihid);
+
+                if (not next_hop)
+                {
+                    log::warning(logcat, "We are bridge node for path data message with unknown txID: {}", ihid);
+                    return;
+                }
+
+                log::trace(logcat, "Bridging path data message to hop: {}", next_hop->to_string());
+
+                next_ids = next_hop->next_id(ihid);
+
+                onion_nonce ^= next_hop->kx.xor_nonce;
+
+                crypto::onion(
+                    reinterpret_cast<unsigned char*>(intermediate.data()),
+                    intermediate.size(),
+                    next_hop->kx.shared_secret,
+                    onion_nonce,
+                    next_hop->kx.xor_nonce);
+
+                if (not next_ids)
+                {
+                    log::error(
+                        logcat, "Failed to query hop ({}) for next ids (input: {})", next_hop->to_string(), hop_id);
+                    return;
+                }
+
+                next_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(intermediate));
+            }
+            else
+            {
+                next_ids = hop->next_id(hop_id);
+
+                if (not next_ids)
+                {
+                    log::error(logcat, "Failed to query hop ({}) for next ids (input: {})", hop->to_string(), hop_id);
+                    return;
+                }
+
+                next_payload = ONION::serialize_hop(next_ids->second.to_view(), onion_nonce, std::move(payload));
+            }
+
+            send_data_message(next_ids->first, std::move(next_payload));
+        });
+    }
+
+    void LinkManager::handle_path_request(oxen::quic::message m, std::string payload)
+    {
+        std::string endpoint, body;
+
+        try
+        {
+            std::tie(endpoint, body) = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{payload});
+
+            if (_is_service_node and endpoint == "path_control")
+            {
+                log::info(logcat, "Received path control relay request; deserializing intermediate payload...");
+                auto [_, i_body] = PATH::CONTROL::deserialize(oxenc::bt_dict_consumer{std::move(body)});
+                return _handle_path_control(std::move(m), std::move(i_body));
+            }
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}; Payload: {}", e.what(), buffer_printer{payload});
+            return m.respond(messages::serialize_response({{messages::STATUS_KEY, e.what()}}), true);
+        }
+
+        if (auto it = path_requests.find(endpoint); it != path_requests.end())
+        {
+            log::debug(logcat, "Received path control request (`{}`); invoking endpoint...", endpoint);
+            std::invoke(it->second, this, std::move(m), std::move(body));
+        }
+        else
+            log::warning(logcat, "Received path control request (`{}`), which has no local handler!", endpoint);
+    }
+
+    void LinkManager::_handle_initiate_session(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        NetworkAddress initiator;
+        HopID remote_pivot_txid;
+        HopID local_pivot_txid;
+        bool use_tun;
+        shared_kx_data kx_data;
+        std::optional<std::string> maybe_auth = std::nullopt;
+        std::shared_ptr<path::Path> path_ptr;
+
+        try
+        {
+            if (inner_body)
+                std::tie(kx_data, initiator, local_pivot_txid, remote_pivot_txid, use_tun, maybe_auth) =
+                    InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{*inner_body}, _router.identity());
+            else
+                std::tie(kx_data, initiator, local_pivot_txid, remote_pivot_txid, use_tun, maybe_auth) =
+                    InitiateSession::decrypt_deserialize(oxenc::bt_dict_consumer{m.body()}, _router.identity());
+
+            if (maybe_auth and not _router.session_endpoint()->validate(initiator, maybe_auth))
+            {
+                log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
+                return m.respond(InitiateSession::AUTH_ERROR, true);
+            }
+
+            if (initiator.router_id() == _router.local_rid())
+            {
+                log::info(logcat, "Received request to initiate session from local instance; ignoring!");
+                return m.respond(InitiateSession::BAD_ADDRESS, true);
+            }
+
+            path_ptr = _router.path_context()->get_path(local_pivot_txid);
+
+            if (not path_ptr)
+            {
+                log::warning(
+                    logcat, "Failed to find local path for new inbound session over pivot: {}", local_pivot_txid);
+                return m.respond(InitiateSession::BAD_PATH, true);
+            }
+
+            if (auto tag = _router.session_endpoint()->prefigure_session(
+                    std::move(initiator),
+                    std::move(remote_pivot_txid),
+                    std::move(path_ptr),
+                    std::move(kx_data),
+                    use_tun))
+            {
+                log::debug(logcat, "InboundSession configured successfully!");
+                return m.respond(InitiateSession::serialize_response(*tag));
+            }
+
+            log::warning(logcat, "Failed to configure InboundSession!");
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        m.respond(messages::ERROR_RESPONSE, true);
+    }
+
+    void LinkManager::_handle_path_switch(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        session_tag tag;
+        HopID remote_pivot_txid, local_pivot_txid;
+
+        try
+        {
+            if (inner_body)
+                std::tie(tag, remote_pivot_txid, local_pivot_txid) =
+                    SessionPathSwitch::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                std::tie(tag, remote_pivot_txid, local_pivot_txid) =
+                    SessionPathSwitch::deserialize(oxenc::bt_dict_consumer{m.body()});
+
+            if (auto session = _router.session_endpoint()->get_session<session::OutboundSession>(tag))
+            {
+                session->recv_path_switch(remote_pivot_txid);
+                return m.respond(messages::OK_RESPONSE);
+            }
+
+            log::warning(logcat, "Received path-switch request for unknown session (tag:{})", tag);
+            return m.respond(SessionPathSwitch::BAD_TAG, true);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        m.respond(messages::ERROR_RESPONSE, true);
+    }
+
+    void LinkManager::handle_path_switch(oxen::quic::message m) { return _handle_path_switch(std::move(m)); }
+
+    void LinkManager::handle_initiate_session(oxen::quic::message m) { return _handle_initiate_session(std::move(m)); }
+
+    void LinkManager::_handle_close_session(oxen::quic::message m, std::optional<std::string> inner_body)
+    {
+        log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
+
+        session_tag tag;
+
+        try
+        {
+            if (inner_body)
+                tag = CloseSession::deserialize(oxenc::bt_dict_consumer{*inner_body});
+            else
+                tag = CloseSession::deserialize(oxenc::bt_dict_consumer{m.body()});
+
+            if (_router.session_endpoint()->close_session(tag))
+                return m.respond(messages::OK_RESPONSE);
+        }
+        catch (const std::exception& e)
+        {
+            log::warning(logcat, "Exception: {}", e.what());
+        }
+
+        m.respond(messages::ERROR_RESPONSE, true);
+    }
+
+    void LinkManager::handle_close_session(oxen::quic::message m) { return _handle_close_session(std::move(m)); }
 
     void LinkManager::handle_path_latency(oxen::quic::message m)
     {
@@ -1557,467 +1953,6 @@ namespace llarp
         {
             log::warning(logcat, "Exception: {}", e.what());
             m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-    }
-
-    void LinkManager::handle_obtain_exit(oxen::quic::message m)
-    {
-        [[maybe_unused]] uint64_t flag;
-        ustring_view sig;
-        std::string_view dict_data;
-
-        HopID txid;
-        RouterID target;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-
-                flag = btdc.require<uint64_t>("E");
-                target.from_string(btdc.require<std::string_view>("I"));
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            throw;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        const auto rx_id = transit_hop->rxid();
-
-        // TODO:
-        auto success = (crypto::verify(to_usv(target.to_view()), to_usv(dict_data), sig)
-                        /* and _router.exit_context()->obtain_new_exit(PubKey{pubkey.data()}, rx_id, flag != 0) */);
-
-        m.respond(ObtainExitMessage::sign_and_serialize_response(_router.identity(), txid), not success);
-    }
-
-    void LinkManager::handle_obtain_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "ObtainExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            throw;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            if (crypto::verify(_router.local_rid(), to_usv(dict_data), sig))
-                path_ptr->enable_exit_traffic();
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for ObtainExitMessage!", txid.to_view());
-        }
-    }
-
-    void LinkManager::handle_update_exit(oxen::quic::message m)
-    {
-        std::string_view path_id, dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-            oxenc::bt_dict_consumer btdc{dict_data};
-
-            sig = to_usv(btlc.consume_string_view());
-            path_id = btdc.require<std::string_view>("P");
-            txid.from_string(btdc.require<std::string_view>("T"));
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        // TODO:
-        // if (auto exit_ep =
-        //         _router.exit_context().find_endpoint_for_path(PathID_t{to_usv(path_id).data()}))
-        // {
-        //   if (crypto::verify(exit_ep->PubKey().data(), to_usv(dict_data), sig))
-        //   {
-        //     (exit_ep->UpdateLocalPath(transit_hop->info.rxID))
-        //         ? m.respond(UpdateExitMessage::sign_and_serialize_response(_router.identity(),
-        //         tx_id)) : m.respond(
-        //             serialize_response({{messages::STATUS_KEY,
-        //             UpdateExitMessage::UPDATE_FAILED}}), true);
-        //   }
-        //   // If we fail to verify the message, no-op
-        // }
-    }
-
-    void LinkManager::handle_update_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "UpdateExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            if (crypto::verify(_router.local_rid(), to_usv(dict_data), sig))
-            {
-                // if (path_ptr->update_exit(std::stoul(tx_id)))
-                // {
-                //     // TODO: talk to tom and Jason about how this stupid shit was a no-op originally
-                //     // see Path::HandleUpdateExitVerifyMessage
-                // }
-                // else
-                // {
-                // }
-            }
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for UpdateExitMessage!", txid.to_view());
-        }
-    }
-
-    void LinkManager::handle_close_exit(oxen::quic::message m)
-    {
-        std::string_view dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            m.respond(messages::ERROR_RESPONSE, true);
-            return;
-        }
-
-        auto transit_hop = _router.path_context()->get_transit_hop(txid);
-
-        const auto rx_id = transit_hop->rxid();
-
-        // TODO:
-        // if (auto exit_ep = router().exit_context().find_endpoint_for_path(rx_id))
-        // {
-        //   if (crypto::verify(exit_ep->PubKey().data(), to_usv(dict_data), sig))
-        //   {
-        //     exit_ep->Close();
-        //     m.respond(CloseExitMessage::sign_and_serialize_response(_router.identity(), tx_id));
-        //   }
-        // }
-
-        m.respond(serialize_response({{messages::STATUS_KEY, CloseExitMessage::UPDATE_FAILED}}), true);
-    }
-
-    void LinkManager::handle_close_exit_response(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "CloseExitMessage timed out!");
-            return;
-        }
-        if (m.is_error())
-        {
-            // TODO: what to do here
-        }
-
-        std::string_view nonce, dict_data;
-        ustring_view sig;
-
-        HopID txid;
-
-        try
-        {
-            oxenc::bt_list_consumer btlc{m.body()};
-            dict_data = btlc.consume_dict_data();
-
-            {
-                oxenc::bt_dict_consumer btdc{dict_data};
-                txid.from_string(btdc.require<std::string_view>("T"));
-                nonce = btdc.require<std::string_view>("Y");
-            }
-
-            sig = to_usv(btlc.consume_string_view());
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        if (auto path_ptr = _router.path_context()->get_path(txid))
-        {
-            //
-        }
-        else
-        {
-            log::critical(logcat, "Could not find path (txid:{}) for CloseExitMessage!", txid.to_view());
-        }
-        // TODO:
-        // if (path_ptr->SupportsAnyRoles(path::ePathRoleExit | path::ePathRoleSVC)
-        //     and crypto::verify(_router.pubkey(), to_usv(dict_data), sig))
-        //   path_ptr->mark_exit_closed();
-    }
-
-    void LinkManager::handle_path_control(oxen::quic::message m, const RouterID& /* from */)
-    {
-        ustring nonce, hop_id_str, payload;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{m.body()};
-            std::tie(hop_id_str, nonce, payload) = Onion::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        auto symmnonce = SymmNonce{nonce.data()};
-        HopID hopid{hop_id_str.data()};
-        auto hop = _router.path_context()->get_transit_hop(hopid);
-
-        // TODO: use "path_control" for both directions?  If not, drop message on
-        // floor if we don't have the path_id in question; if we decide to make this
-        // bidirectional, will need to check if we have a Path with path_id.
-        if (not hop)
-            return;
-
-        symmnonce = crypto::onion(payload.data(), payload.size(), hop->shared, symmnonce, hop->nonceXOR);
-
-        // if terminal hop, payload should contain a request (e.g. "ons_resolve"); handle and respond.
-        if (hop->terminal_hop)
-        {
-            handle_inner_request(
-                std::move(m),
-                std::string{reinterpret_cast<const char*>(payload.data()), payload.size()},
-                std::move(hop));
-            return;
-        }
-
-        auto hop_is_rx = hop->rxid() == hopid;
-
-        const auto& next_id = hop_is_rx ? hop->txid() : hop->rxid();
-        const auto& next_router = hop_is_rx ? hop->upstream() : hop->downstream();
-
-        std::string new_payload = Onion::serialize(symmnonce, next_id, payload);
-
-        send_control_message(
-            next_router,
-            "path_control"s,
-            std::move(new_payload),
-            [hop_weak = hop->weak_from_this(), hopid, prev_message = std::move(m)](
-                oxen::quic::message response) mutable {
-                auto hop = hop_weak.lock();
-
-                if (not hop)
-                    return;
-
-                ustring hop_id, nonce, payload;
-
-                try
-                {
-                    oxenc::bt_dict_consumer btdc{response.body()};
-                    std::tie(hop_id, nonce, payload) = Onion::deserialize(btdc);
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Exception: {}", e.what());
-                    return;
-                }
-
-                auto symmnonce = SymmNonce{nonce.data()};
-                auto resp_payload = Onion::serialize(symmnonce, HopID{hop_id.data()}, payload);
-                prev_message.respond(std::move(resp_payload), false);
-            });
-    }
-
-    void LinkManager::handle_inner_request(
-        oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop)
-    {
-        std::string endpoint, body;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{payload};
-            std::tie(endpoint, body) = PathControl::deserialize(btdc);
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-            return;
-        }
-
-        // If a handler exists for "method", call it; else drop request on the floor.
-        auto itr = path_requests.find(endpoint);
-
-        if (itr == path_requests.end())
-        {
-            log::info(logcat, "Received path control request \"{}\", which has no handler.", endpoint);
-            return;
-        }
-
-        auto respond = [m = std::move(m), hop_weak = hop->weak_from_this()](std::string response) mutable {
-            auto hop = hop_weak.lock();
-            if (not hop)
-                return;  // transit hop gone, drop response
-
-            auto n = SymmNonce::make_random();
-            m.respond(Onion::serialize(n, hop->rxid(), response), false);
-        };
-
-        std::invoke(itr->second, this, std::move(body), std::move(respond));
-    }
-
-    void LinkManager::handle_initiate_session(oxen::quic::message m)
-    {
-        if (not m)
-        {
-            log::info(logcat, "Initiate session message timed out!");
-            return;
-        }
-
-        NetworkAddress initiator;
-        service::SessionTag tag;
-        HopID pivot_txid;
-        bool use_tun;
-        std::optional<std::string> maybe_auth = std::nullopt;
-        std::shared_ptr<path::Path> path_ptr;
-
-        try
-        {
-            oxenc::bt_dict_consumer btdc{m.body()};
-
-            std::tie(initiator, pivot_txid, tag, use_tun, maybe_auth) =
-                InitiateSession::decrypt_deserialize(btdc, _router.identity());
-
-            if (not _router.session_endpoint()->validate(initiator, maybe_auth))
-            {
-                log::warning(logcat, "Failed to authenticate session initiation request from remote:{}", initiator);
-                return m.respond(InitiateSession::AUTH_DENIED, true);
-            }
-
-            path_ptr = _router.path_context()->get_path(pivot_txid);
-
-            if (not path_ptr)
-            {
-                log::warning(logcat, "Failed to find local path corresponding to session over pivot: {}", pivot_txid);
-                return m.respond(messages::ERROR_RESPONSE, true);
-            }
-
-            if (_router.session_endpoint()->prefigure_session(
-                    std::move(initiator), std::move(tag), std::move(path_ptr), use_tun))
-            {
-                return m.respond(messages::OK_RESPONSE);
-            }
-
-            log::warning(logcat, "Failed to configure InboundSession!");
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
-        }
-
-        _router.path_context()->drop_path(path_ptr);
-        m.respond(messages::ERROR_RESPONSE, true);
-    }
-
-    void LinkManager::handle_convo_intro(oxen::quic::message m)
-    {
-        if (m.timed_out)
-        {
-            log::info(logcat, "Convo intro message timed out!");
-            return;
-        }
-
-        try
-        {
-            //
-        }
-        catch (const std::exception& e)
-        {
-            log::warning(logcat, "Exception: {}", e.what());
             return;
         }
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "connection.hpp"
+#include "types.hpp"
 
 #include <llarp/address/address.hpp>
 #include <llarp/constants/path.hpp>
@@ -11,9 +12,7 @@
 #include <llarp/util/compare_ptr.hpp>
 #include <llarp/util/decaying_hashset.hpp>
 #include <llarp/util/logging.hpp>
-#include <llarp/util/priority_queue.hpp>
 
-#include <oxen/quic.hpp>
 #include <oxen/quic/format.hpp>
 
 #include <atomic>
@@ -25,22 +24,8 @@ namespace llarp
     struct LinkManager;
     class NodeDB;
 
-    using conn_open_hook = oxen::quic::connection_established_callback;
-    using conn_closed_hook = oxen::quic::connection_closed_callback;
-    using stream_open_hook = oxen::quic::stream_open_callback;
-    using stream_closed_hook = oxen::quic::stream_close_callback;
-
-    using keep_alive = oxen::quic::opt::keep_alive;
-    using inbound_alpns = oxen::quic::opt::inbound_alpns;
-    using outbound_alpns = oxen::quic::opt::outbound_alpns;
-
-    using static_secret = oxen::quic::opt::static_secret;
-
     inline const keep_alive RELAY_KEEP_ALIVE{10s};
     inline const keep_alive CLIENT_KEEP_ALIVE{10s};
-
-    inline constexpr int MIN_CLIENT_ROUTER_CONNS{8};
-    inline constexpr int MAX_CLIENT_ROUTER_CONNS{10};
 
     namespace alpns
     {
@@ -90,21 +75,23 @@ namespace llarp
 
             size_t num_client_conns() const;
 
-            size_t num_router_conns() const;
+            size_t num_router_conns(bool active_only = true) const;
 
             template <typename... Opt>
-            bool establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts);
+            bool establish_connection(KeyedAddress remote, RouterID rid, Opt&&... opts);
+
+            bool establish_and_send_control(RemoteRC rc, bt_control_send_hook send_hook);
 
             template <typename... Opt>
             bool establish_and_send(
                 KeyedAddress remote,
-                RemoteRC rc,
+                RouterID rid,
                 std::optional<std::string> endpoint,
                 std::string body,
-                std::function<void(oxen::quic::message m)> func = nullptr,
+                bt_control_response_hook func = nullptr,
                 Opt&&... opts);
 
-            void for_each_connection(std::function<void(link::Connection&)> func);
+            void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
             void close_connection(RouterID rid);
 
@@ -123,10 +110,7 @@ namespace llarp
         static std::unique_ptr<LinkManager> make(Router& r);
 
         bool send_control_message(
-            const RouterID& remote,
-            std::string endpoint,
-            std::string body,
-            std::function<void(oxen::quic::message)> = nullptr);
+            const RouterID& remote, std::string endpoint, std::string body, bt_control_response_hook = nullptr);
 
         bool send_data_message(const RouterID& remote, std::string data);
 
@@ -162,14 +146,12 @@ namespace llarp
 
         std::atomic<bool> is_stopping;
 
-        void handle_path_data_message(bstring dgram);
+        bt_control_stream make_control(
+            const std::shared_ptr<oxen::quic::connection_interface>& ci, const RouterID& rid);
 
-        std::shared_ptr<oxen::quic::BTRequestStream> make_control(
-            oxen::quic::connection_interface& ci, const RouterID& rid);
+        void on_inbound_conn(std::shared_ptr<oxen::quic::connection_interface> ci);
 
-        void on_inbound_conn(oxen::quic::connection_interface& ci);
-
-        void on_outbound_conn(oxen::quic::connection_interface& ci);
+        void on_outbound_conn(RouterID id);
 
         void on_conn_open(oxen::quic::connection_interface& ci);
 
@@ -177,31 +159,32 @@ namespace llarp
 
         std::shared_ptr<oxen::quic::Endpoint> startup_endpoint();
 
-        void register_commands(
-            const std::shared_ptr<oxen::quic::BTRequestStream>& s, const RouterID& rid, bool client_only = false);
+        void register_commands(const bt_control_stream& s, const RouterID& rid, bool client_only = false);
 
       public:
         void start_tickers();
 
         const oxen::quic::Address& local() { return addr; }
 
+        void regenerate_and_gossip_rc();
+
         void gossip_rc(const RouterID& last_sender, const RemoteRC& rc);
 
-        void handle_gossip_rc(oxen::quic::message m);
+        void handle_gossip_rc(oxen::quic::message);
 
-        void fetch_rcs(const RouterID& source, std::string payload, std::function<void(oxen::quic::message m)> func);
+        void fetch_rcs(const RouterID& source, std::string payload, bt_control_response_hook func);
 
-        void handle_fetch_rcs(oxen::quic::message m);
+        void handle_fetch_rcs(oxen::quic::message);
 
-        void fetch_router_ids(
-            const RouterID& via, std::string payload, std::function<void(oxen::quic::message m)> func);
+        void fetch_router_ids(const RouterID& via, bt_control_send_hook send_hook);
 
-        void handle_fetch_router_ids(oxen::quic::message m);
+        void fetch_router_ids(const RouterID& via, std::string payload, bt_control_response_hook func);
 
-        void fetch_bootstrap_rcs(
-            const RemoteRC& source, std::string payload, std::function<void(oxen::quic::message m)> func);
+        void handle_fetch_router_ids(oxen::quic::message);
 
-        void handle_fetch_bootstrap_rcs(oxen::quic::message m);
+        void fetch_bootstrap_rcs(const RemoteRC& source, std::string payload, bt_control_response_hook func);
+
+        void handle_fetch_bootstrap_rcs(oxen::quic::message);
 
         bool have_connection_to(const RouterID& remote) const;
 
@@ -217,7 +200,9 @@ namespace llarp
             const RouterID& router,
             std::optional<std::string> endpoint,
             std::string body,
-            std::function<void(oxen::quic::message m)> func = nullptr);
+            bt_control_response_hook func = nullptr);
+
+        void connect_and_send(const RouterID& router, bt_control_send_hook send_hook);
 
         void close_connection(RouterID rid);
 
@@ -229,7 +214,7 @@ namespace llarp
 
         std::tuple<size_t, size_t, size_t, size_t> connection_stats() const;
 
-        size_t get_num_connected_routers() const;
+        size_t get_num_connected_routers(bool active_only = true) const;
 
         size_t get_num_connected_clients() const;
 
@@ -239,71 +224,66 @@ namespace llarp
 
         nlohmann::json extract_status() const;
 
-        void for_each_connection(std::function<void(link::Connection&)> func);
+        std::set<RouterID> get_current_remotes() const;
+
+        void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
         // Attempts to connect to a number of random routers.
         //
         // This will try to connect to *up to* num_conns routers, but will not
         // check if we already have a connection to any of the random set, as making
         // that thread safe would be slow...I think.
-        void connect_to_random(size_t num_conns);
+        void connect_to_keep_alive(size_t num_conns);
 
         /// always maintain this many client connections to other routers
         int client_router_connections = 4;
 
       private:
-        // DHT messages
-        void handle_resolve_ons(std::string_view body, std::function<void(std::string)> respond);    // relay
-        void handle_find_intro(std::string_view body, std::function<void(std::string)> respond);     // relay
-        void handle_publish_intro(std::string_view body, std::function<void(std::string)> respond);  // relay
+        // TESTNET: // NEW CLIENT_CONTACT HANDLERS
+        void handle_publish_cc(oxen::quic::message);
+        void handle_find_cc(oxen::quic::message);
+        void handle_resolve_sns(oxen::quic::message);
+
+        // Inner handlers for relayed requests
+        void _handle_path_control(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_publish_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_find_cc(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_resolve_sns(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_initiate_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_close_session(oxen::quic::message, std::optional<std::string> = std::nullopt);
+        void _handle_path_switch(oxen::quic::message, std::optional<std::string> = std::nullopt);
 
         // Path messages
         void handle_path_build(oxen::quic::message, const RouterID& from);  // relay
         void handle_path_latency(oxen::quic::message);                      // relay
         void handle_path_transfer(oxen::quic::message);                     // relay
 
-        // Exit messages
-        void handle_obtain_exit(oxen::quic::message);  // relay
-        void handle_update_exit(oxen::quic::message);  // relay
-        void handle_close_exit(oxen::quic::message);   // relay
-
         // Sessions
         void handle_initiate_session(oxen::quic::message);
-        void handle_set_session_tag(oxen::quic::message);
-        void handle_set_session_path(oxen::quic::message);
-
-        // Misc
-        void handle_convo_intro(oxen::quic::message);
+        void handle_close_session(oxen::quic::message);
+        void handle_path_switch(oxen::quic::message);
 
         // These requests come over a path (as a "path_control" request),
-        // may or may not need to make a request to another relay,
+        // we may or may not need to make a request to another relay,
         // then respond (onioned) back along the path.
-        std::unordered_map<
-            std::string_view,
-            void (LinkManager::*)(std::string_view body, std::function<void(std::string)> respond)>
+        std::unordered_map<std::string_view, void (LinkManager::*)(oxen::quic::message, std::optional<std::string>)>
             path_requests = {
-                {"resolve_ons"sv, &LinkManager::handle_resolve_ons},
-                {"publish_intro"sv, &LinkManager::handle_publish_intro},
-                {"find_intro"sv, &LinkManager::handle_find_intro}};
+                {"path_control"sv, &LinkManager::_handle_path_control},
+                {"publish_cc"sv, &LinkManager::_handle_publish_cc},
+                {"find_cc"sv, &LinkManager::_handle_find_cc},
+                {"resolve_sns"sv, &LinkManager::_handle_resolve_sns},
+                {"session_init"sv, &LinkManager::_handle_initiate_session},
+                {"session_close"sv, &LinkManager::_handle_close_session},
+                {"path_switch"sv, &LinkManager::_handle_path_switch}};
 
         // Path relaying
-        void handle_path_control(oxen::quic::message, const RouterID& from);
-
-        void handle_inner_request(oxen::quic::message m, std::string payload, std::shared_ptr<path::TransitHop> hop);
-
-        // DHT responses
-        void handle_resolve_ons_response(oxen::quic::message);
-        void handle_find_intro_response(oxen::quic::message);
-        void handle_publish_intro_response(oxen::quic::message);
+        void handle_path_data_message(bstring dgram);
+        void handle_path_control(oxen::quic::message);
+        void handle_path_request(oxen::quic::message, std::string payload);
 
         // Path responses
         void handle_path_latency_response(oxen::quic::message);
         void handle_path_transfer_response(oxen::quic::message);
-
-        // Exit responses
-        void handle_obtain_exit_response(oxen::quic::message);
-        void handle_update_exit_response(oxen::quic::message);
-        void handle_close_exit_response(oxen::quic::message);
     };
 
     namespace link
@@ -313,20 +293,19 @@ namespace llarp
         template <typename... Opt>
         bool Endpoint::establish_and_send(
             KeyedAddress remote,
-            RemoteRC rc,
+            RouterID rid,
             std::optional<std::string> ep,
             std::string body,
-            std::function<void(oxen::quic::message m)> func,
+            bt_control_response_hook func,
             Opt&&... opts)
         {
             return link_manager.router().loop()->call_get([&]() {
                 try
                 {
-                    const auto& rid = rc.router_id();
                     const auto& is_control = ep.has_value();
-                    const auto us = _is_service_node ? "Relay"s : "Client"s;
 
                     log::debug(logcat, "Establishing connection to RID:{}", rid);
+
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);
 
@@ -343,49 +322,45 @@ namespace llarp
                         remote,
                         link_manager.tls_creds,
                         _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
+                        [this, itr, rid, ep = std::move(ep), body = std::move(body), func = std::move(func)](
+                            oxen::quic::connection_interface& ci) mutable {
+                            auto& control_stream = itr->second->control_stream;
+                            log::debug(
+                                logcat,
+                                "{} dispatching {} on outbound connection to remote (rid:{})",
+                                _is_service_node ? "Relay" : "Client",
+                                ep.has_value() ? "control message (ep:{})"_format(*ep) : "data message",
+                                rid);
+
+                            (ep.has_value()) ? control_stream->command(std::move(*ep), std::move(body), std::move(func))
+                                             : ci.send_datagram(std::move(body));
+                            link_manager.on_conn_open(ci);
+                        },
                         std::forward<Opt>(opts)...);
 
-                    // auto
-                    auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
-                        [](oxen::quic::Stream&, uint64_t error_code) {
-                            log::warning(logcat, "BTRequestStream closed unexpectedly (ec:{})", error_code);
-                        });
-
-                    link_manager.register_commands(control_stream, rid, not _is_service_node);
-
-                    log::debug(
-                        logcat,
-                        "{} dispatching {} on outbound connection to remote (rid:{})",
-                        us,
-                        is_control ? "control message (ep:{})"_format(*ep) : "data message",
-                        rid);
-
-                    (is_control) ? control_stream->command(std::move(*ep), std::move(body), std::move(func))
-                                 : conn_interface->send_datagram(std::move(body));
+                    auto control_stream = link_manager.make_control(conn_interface, rid);
 
                     itr->second =
-                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream));
 
                     log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
                     return true;
                 }
-                catch (...)
+                catch (const std::exception& e)
                 {
-                    log::error(logcat, "Error: failed to establish connection to {}", remote);
+                    log::error(logcat, "Exception caught establishing connection to {}: {}", remote, e.what());
                     return false;
                 }
             });
         }
 
         template <typename... Opt>
-        bool Endpoint::establish_connection(KeyedAddress remote, RemoteRC rc, Opt&&... opts)
+        bool Endpoint::establish_connection(KeyedAddress remote, RouterID rid, Opt&&... opts)
         {
             return link_manager.router().loop()->call_get([&]() {
                 try
                 {
-                    const auto& rid = rc.router_id();
-
-                    log::debug(logcat, "Establishing connection to RID:{}", rid);
+                    log::debug(logcat, "Establishing connection to RID:{}", rid.short_string());
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);
 
@@ -401,7 +376,7 @@ namespace llarp
                         _is_service_node ? RELAY_KEEP_ALIVE : CLIENT_KEEP_ALIVE,
                         std::forward<Opt>(opts)...);
 
-                    log::critical(logcat, "Created outbound connection with path: {}", conn_interface->path());
+                    log::trace(logcat, "Created outbound connection with path: {}", conn_interface->path());
 
                     auto control_stream = conn_interface->template open_stream<oxen::quic::BTRequestStream>(
                         [](oxen::quic::Stream&, uint64_t error_code) {
@@ -411,9 +386,9 @@ namespace llarp
                     link_manager.register_commands(control_stream, rid, not _is_service_node);
 
                     itr->second =
-                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream), true);
+                        std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream));
 
-                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid.short_string());
                     return true;
                 }
                 catch (...)

@@ -4,7 +4,7 @@
 using Path_t   = llarp::path::Path;
 using Path_ptr = llarp::path::Path_ptr;
 using Set_t    = llarp::path::Path::UniqueEndpointSet_t;
-using RC_t     = llarp::RouterContact;
+using RC_t     = llarp::RelayContact;
 
 static RC_t
 MakeHop(const char name)

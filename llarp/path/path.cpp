@@ -1,12 +1,12 @@
 #include "path.hpp"
 
 #include <llarp/messages/dht.hpp>
-#include <llarp/messages/exit.hpp>
 #include <llarp/messages/path.hpp>
 #include <llarp/profiling.hpp>
 #include <llarp/router/router.hpp>
-#include <llarp/service/intro_set.hpp>
 #include <llarp/util/buffer.hpp>
+
+#include <ranges>
 
 namespace llarp::path
 {
@@ -14,72 +14,105 @@ namespace llarp::path
 
     Path::Path(
         Router& rtr,
-        const std::vector<RemoteRC>& _hops,
+        const std::vector<RemoteRC>& hop_rcs,
         std::weak_ptr<PathHandler> _handler,
         bool is_session,
         bool is_client)
-        : handler{std::move(_handler)}, _router{rtr}, _is_session_path{is_session}, _is_client{is_client}
+        : handler{std::move(_handler)},
+          _router{rtr},
+          _is_session_path{is_session},
+          _is_client{is_client},
+          num_hops{hop_rcs.size()}
     {
-        hops.resize(_hops.size());
-        size_t hsz = _hops.size();
-
-        for (size_t idx = 0; idx < hsz; ++idx)
-        {
-            hops[idx].rc = _hops[idx];
-            do
-            {
-                hops[idx].txID.Randomize();
-            } while (hops[idx].txID.is_zero());
-
-            do
-            {
-                hops[idx].rxID.Randomize();
-            } while (hops[idx].rxID.is_zero());
-        }
-
-        for (size_t idx = 0; idx < hsz - 1; ++idx)
-        {
-            hops[idx].txID = hops[idx + 1].rxID;
-        }
-
-        // initialize parts of the introduction
-        intro.pivot_router = hops[hsz - 1].rc.router_id();
-        intro.pivot_hop_id = hops[hsz - 1].txID;
+        populate_internals(hop_rcs);
+        log::debug(logcat, "Path successfully constructed -> {} : {}", to_string(), hop_string());
     }
 
-    void Path::link_session(recv_session_dgram_cb cb)
+    void Path::populate_internals(const std::vector<RemoteRC>& hop_rcs)
     {
-        _recv_dgram = std::move(cb);
+        hops.resize(num_hops);
+
+        for (size_t i = 0; i < num_hops; ++i)
+        {
+            /** Conditions:
+                - First hop RXID is unique, the rest are the previous hop TXID
+                - Last hop upstream is it's own RID, the rest are the next hop RID
+                - First hop downstream is client's RID, the rest are the previous hop RID
+                - Local hop RXID is random, TXID is first hop RXID
+                - Local hop upstream is first hop RID, downstream is local instance RID
+            */
+
+            hops[i]._rid = hop_rcs[i].router_id();
+            hops[i]._txid = HopID::make_random();
+
+            if (i == 0)
+            {
+                hops[i]._rxid = HopID::make_random();
+                hops[i]._upstream = hop_rcs[i + 1].router_id();
+                hops[i]._downstream = _router.local_rid();
+            }
+            else if (i == num_hops - 1)
+            {
+                hops[i]._rxid = hops[i - 1]._txid;
+                hops[i]._upstream = hops[i]._rid;
+                hops[i]._downstream = hops[i - 1]._rid;
+            }
+            else
+            {
+                hops[i]._rxid = hops[i - 1]._txid;
+                hops[i]._upstream = hop_rcs[i + 1].router_id();
+                hops[i]._downstream = hops[i - 1]._rid;
+            }
+
+            // generate dh kx components
+            hops[i].kx = shared_kx_data::generate();
+
+            // Conditions written as ternaries
+            // hops[i]._rxid = i ? hops[i - 1]._txid : HopID::make_random();
+            // hops[i]._upstream = i == num_hops - 1 ? hops[i]._rid : hop_rcs[i + 1].router_id();
+            // hops[i]._downstream = i ? hops[i - 1]._rid : _router.local_rid();
+        }
+
+        hops.back().terminal_hop = true;
+
+        log::trace(logcat, "Path populated with hops: {}", hop_string());
+
+        // initialize parts of the clientintro
+        intro.pivot_rid = hops.back().router_id();
+        intro.pivot_txid = hops.back()._txid;
+
+        log::trace(
+            logcat, "Path client intro holding pivot_rid ({}) and pivot_txid ({})", intro.pivot_rid, intro.pivot_txid);
+    }
+
+    void Path::link_session(session_tag t)
+    {
+        _linked_sessions.insert(t);
+        log::trace(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
         _is_session_path = true;
     }
 
-    bool Path::unlink_session()
+    bool Path::unlink_session(session_tag t)
     {
-        if (_is_linked)
-        {
-            _is_linked = false;
-            _recv_dgram = nullptr;
-            return true;
-        }
-
-        log::warning(logcat, "Path is not currently linked to an ongoing session!");
-        return false;
+        auto n = _linked_sessions.erase(t);
+        _is_session_path = not _linked_sessions.empty();
+        log::trace(logcat, "Current path has {} linked sessions!", _linked_sessions.size());
+        return n != 0;
     }
 
-    void Path::recv_path_data_message(bstring data)
+    bool Path::is_linked_to(session_tag t) const
     {
-        if (_recv_dgram)
-            _recv_dgram(std::move(data));
-        else
-            throw std::runtime_error{"Path does not have hook to receive datagrams!"};
+        auto ret = _linked_sessions.contains(t);
+        log::debug(logcat, "Session (tag:{}) is {}linked to path {}", t, ret ? "" : "NOT ", name());
+        return ret;
     }
 
     bool Path::operator<(const Path& other) const
     {
-        auto& first_hop = hops[0];
-        auto& other_first = other.hops[0];
-        return std::tie(first_hop.txID, first_hop.rxID, first_hop.upstream)
-            < std::tie(other_first.txID, other_first.rxID, other_first.upstream);
+        auto& first_hop = hops.front();
+        auto& other_first = other.hops.front();
+        return std::tie(first_hop._txid, first_hop._rxid, first_hop._upstream)
+            < std::tie(other_first._txid, other_first._rxid, other_first._upstream);
     }
 
     bool Path::operator==(const Path& other) const
@@ -96,215 +129,101 @@ namespace llarp::path
         return ret;
     }
 
-    bool Path::operator!=(const Path& other) const
+    bool Path::operator!=(const Path& other) const { return not(*this == other); }
+
+    bool Path::find_client_contact(const hash_key& location, bt_control_response_hook func)
     {
-        return not(*this == other);
+        return send_path_control_message("find_cc", FindClientContact::serialize(location), std::move(func));
     }
 
-    bool Path::obtain_exit(
-        const Ed25519SecretKey& sk, uint64_t flag, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func)
     {
-        return send_path_control_message(
-            "obtain_exit", ObtainExitMessage::sign_and_serialize(sk, flag, std::move(tx_id)), std::move(func));
+        return send_path_control_message("publish_cc", PublishClientContact::serialize(ecc), std::move(func));
     }
 
-    bool Path::close_exit(const Ed25519SecretKey& sk, std::string tx_id, std::function<void(std::string)> func)
+    bool Path::resolve_sns(std::string_view name, bt_control_response_hook func)
     {
-        return send_path_control_message(
-            "close_exit", CloseExitMessage::sign_and_serialize(sk, std::move(tx_id)), std::move(func));
+        return send_path_control_message("resolve_sns", ResolveSNS::serialize(name), std::move(func));
     }
 
-    bool Path::find_intro(
-        const dht::Key_t& location, bool is_relayed, uint64_t order, std::function<void(std::string)> func)
-    {
-        return send_path_control_message(
-            "find_intro", FindIntroMessage::serialize(location, is_relayed, order), std::move(func));
-    }
-
-    bool Path::publish_intro(
-        const service::EncryptedIntroSet& introset,
-        bool is_relayed,
-        uint64_t order,
-        std::function<void(std::string)> func)
-    {
-        return send_path_control_message(
-            "publish_intro", PublishIntroMessage::serialize(introset, is_relayed, order), std::move(func));
-    }
-
-    bool Path::resolve_ons(std::string name, std::function<void(std::string)> func)
-    {
-        return send_path_control_message("resolve_ons", FindNameMessage::serialize(std::move(name)), std::move(func));
-    }
-
-    void Path::enable_exit_traffic()
-    {
-        log::info(logcat, "{} {} granted exit", name(), pivot_rid());
-        // _role |= ePathRoleExit;
-    }
-
-    void Path::mark_exit_closed()
-    {
-        log::info(logcat, "{} hd its exit closed", name());
-        // _role &= ePathRoleExit;
-    }
-
-    std::string Path::make_outer_payload(ustring_view payload, SymmNonce& nonce)
-    {
-        // chacha and mutate nonce for each hop
-        for (const auto& hop : hops)
-        {
-            nonce = crypto::onion(
-                const_cast<unsigned char*>(payload.data()), payload.size(), hop.shared, nonce, hop.nonceXOR);
-        }
-
-        return Onion::serialize(nonce, upstream_txid(), payload);
-    }
-
-    std::string Path::make_outer_payload(ustring_view payload)
+    std::string Path::make_path_message(std::string inner_payload)
     {
         auto nonce = SymmNonce::make_random();
 
-        return make_outer_payload(payload, nonce);
+        for (const auto& hop : std::ranges::reverse_view(hops))
+        {
+            nonce = crypto::onion(
+                reinterpret_cast<unsigned char*>(inner_payload.data()),
+                inner_payload.size(),
+                hop.kx.shared_secret,
+                nonce,
+                hop.kx.xor_nonce);
+        }
+
+        return ONION::serialize_hop(upstream_rxid().to_view(), nonce, std::move(inner_payload));
     }
 
     bool Path::send_path_data_message(std::string data)
     {
-        auto payload = PathData::serialize(std::move(data), _router.local_rid());
-        auto outer_payload = make_outer_payload(to_usv(payload));
-
+        auto inner_payload = PATH::DATA::serialize(std::move(data), _router.local_rid());
+        auto outer_payload = make_path_message(std::move(inner_payload));
         return _router.send_data_message(upstream_rid(), std::move(outer_payload));
     }
 
-    bool Path::send_path_control_message(std::string endpoint, std::string body, std::function<void(std::string)> func)
+    bool Path::send_path_control_message(std::string endpoint, std::string body, bt_control_response_hook func)
     {
-        auto inner_payload = PathControl::serialize(std::move(endpoint), std::move(body));
-        auto outer_payload = make_outer_payload(to_usv(inner_payload));
-
-        return _router.send_control_message(
-            upstream_rid(),
-            "path_control",
-            std::move(outer_payload),
-            [response_cb = std::move(func), weak = weak_from_this()](oxen::quic::message m) mutable {
-                auto self = weak.lock();
-                // TODO: do we want to allow empty callback here?
-                if ((not self) or (not response_cb))
-                    return;
-
-                if (m.timed_out)
-                {
-                    response_cb(messages::TIMEOUT_RESPONSE);
-                    return;
-                }
-
-                ustring hop_id_str, symmnonce, payload;
-
-                try
-                {
-                    oxenc::bt_dict_consumer btdc{m.body()};
-                    std::tie(hop_id_str, symmnonce, payload) = Onion::deserialize(btdc);
-                }
-                catch (const std::exception& e)
-                {
-                    log::warning(logcat, "Error parsing path control message response: {}", e.what());
-                    response_cb(messages::ERROR_RESPONSE);
-                    return;
-                }
-
-                SymmNonce nonce{symmnonce.data()};
-
-                for (const auto& hop : self->hops)
-                {
-                    nonce = crypto::onion(
-                        reinterpret_cast<unsigned char*>(payload.data()),
-                        payload.size(),
-                        hop.shared,
-                        nonce,
-                        hop.nonceXOR);
-                }
-
-                // TODO: should we do anything (even really simple) here to check if the decrypted
-                //       response is sensible (e.g. is a bt dict)?  Parsing and handling of the
-                //       contents (errors or otherwise) is the currently responsibility of the
-                //       callback.
-                response_cb(std::string{reinterpret_cast<const char*>(payload.data()), payload.size()});
-            });
+        auto inner_payload = PATH::CONTROL::serialize(std::move(endpoint), std::move(body));
+        auto outer_payload = make_path_message(std::move(inner_payload));
+        return _router.send_control_message(upstream_rid(), "path_control", std::move(outer_payload), std::move(func));
     }
 
-    bool Path::is_ready() const
-    {
-        if (is_expired(llarp::time_now_ms()))
-            return false;
+    bool Path::is_ready(std::chrono::milliseconds now) const { return _established ? !is_expired(now) : false; }
 
-        return intro.latency > 0s && _established;
+    std::shared_ptr<PathHandler> Path::get_parent()
+    {
+        if (auto parent = handler.lock())
+            return parent;
+
+        return nullptr;
     }
 
-    RouterID Path::upstream_rid()
-    {
-        return hops[0].rc.router_id();
-    }
+    TransitHop Path::edge() const { return {hops.front()}; }
 
-    const RouterID& Path::upstream_rid() const
-    {
-        return hops[0].rc.router_id();
-    }
+    RouterID Path::upstream_rid() { return hops.front().router_id(); }
 
-    HopID Path::upstream_txid()
-    {
-        return hops[0].txID;
-    }
+    const RouterID& Path::upstream_rid() const { return hops.front().router_id(); }
 
-    const HopID& Path::upstream_txid() const
-    {
-        return hops[0].txID;
-    }
+    HopID Path::upstream_txid() { return hops.front().txid(); }
 
-    HopID Path::upstream_rxid()
-    {
-        return hops[0].rxID;
-    }
+    const HopID& Path::upstream_txid() const { return hops.front().txid(); }
 
-    const HopID& Path::upstream_rxid() const
-    {
-        return hops[0].rxID;
-    }
+    HopID Path::upstream_rxid() { return hops.front().rxid(); }
 
-    RouterID Path::pivot_rid()
-    {
-        return hops.back().rc.router_id();
-    }
+    const HopID& Path::upstream_rxid() const { return hops.front().rxid(); }
 
-    const RouterID& Path::pivot_rid() const
-    {
-        return hops.back().rc.router_id();
-    }
+    RouterID Path::pivot_rid() { return hops.back().router_id(); }
 
-    HopID Path::pivot_txid()
-    {
-        return hops.back().txID;
-    }
+    const RouterID& Path::pivot_rid() const { return hops.back().router_id(); }
 
-    const HopID& Path::pivot_txid() const
-    {
-        return hops.back().txID;
-    }
+    HopID Path::pivot_txid() { return hops.back().txid(); }
 
-    HopID Path::pivot_rxid()
-    {
-        return hops.back().rxID;
-    }
+    const HopID& Path::pivot_txid() const { return hops.back().txid(); }
 
-    const HopID& Path::pivot_rxid() const
-    {
-        return hops.back().rxID;
-    }
+    HopID Path::pivot_rxid() { return hops.back().rxid(); }
+
+    const HopID& Path::pivot_rxid() const { return hops.back().rxid(); }
 
     std::string Path::to_string() const
     {
-        return "RID:{} -- TX:{}/RX:{}"_format(
-            _router.local_rid().ShortString(), upstream_txid().to_string(), upstream_rxid().to_string());
+        return "Path:[ Active:{} | Session linked:{} | Local RID:{} | Edge TX:{}/RX:{} ]"_format(
+            detail::bool_alpha(is_ready()),
+            detail::bool_alpha(_is_session_path),
+            _router.local_rid().short_string(),
+            upstream_txid().to_string(),
+            upstream_rxid().to_string());
     }
 
-    std::string Path::HopsString() const
+    std::string Path::hop_string() const
     {
         std::string hops_str;
         hops_str.reserve(hops.size() * 62);  // 52 for the pkey, 6 for .snode, 4 for the ' -> ' joiner
@@ -312,20 +231,9 @@ namespace llarp::path
         {
             if (!hops.empty())
                 hops_str += " -> ";
-            hops_str += hop.rc.router_id().ShortString();
+            hops_str += hop.router_id().short_string();
         }
         return hops_str;
-    }
-
-    nlohmann::json PathHopConfig::ExtractStatus() const
-    {
-        nlohmann::json obj{
-            {"ip", rc.addr().to_string()},
-            {"lifetime", to_json(lifetime)},
-            {"router", rc.router_id().ToHex()},
-            {"txid", txID.ToHex()},
-            {"rxid", rxID.ToHex()}};
-        return obj;
     }
 
     nlohmann::json Path::ExtractStatus() const
@@ -333,17 +241,10 @@ namespace llarp::path
         auto now = llarp::time_now_ms();
 
         nlohmann::json obj{
-            {"intro", intro.ExtractStatus()},
             {"lastRecvMsg", to_json(last_recv_msg)},
             {"lastLatencyTest", to_json(last_latency_test)},
-            {"buildStarted", to_json(buildStarted)},
             {"expired", is_expired(now)},
-            {"expiresSoon", ExpiresSoon(now)},
-            {"expiresAt", to_json(ExpireTime())},
             {"ready", is_ready()},
-            // {"txRateCurrent", m_LastTXRate},
-            // {"rxRateCurrent", m_LastRXRate},
-            // {"hasExit", SupportsAnyRoles(ePathRoleExit)}
         };
 
         std::vector<nlohmann::json> hopsObj;
@@ -352,180 +253,32 @@ namespace llarp::path
         });
         obj["hops"] = hopsObj;
 
-        // switch (_status)
-        // {
-        //   case PathStatus::BUILDING:
-        //     obj["status"] = "building";
-        //     break;
-        //   case PathStatus::ESTABLISHED:
-        //     obj["status"] = "established";
-        //     break;
-        //   case PathStatus::TIMEOUT:
-        //     obj["status"] = "timeout";
-        //     break;
-        //   case PathStatus::EXPIRED:
-        //     obj["status"] = "expired";
-        //     break;
-        //   case PathStatus::FAILED:
-        //     obj["status"] = "failed";
-        //     break;
-        //   case PathStatus::IGNORE:
-        //     obj["status"] = "ignored";
-        //     break;
-        //   default:
-        //     obj["status"] = "unknown";
-        //     break;
-        // }
         return obj;
-    }
-
-    void Path::rebuild()
-    {
-        if (auto parent = handler.lock())
-        {
-            std::vector<RemoteRC> new_hops;
-
-            for (const auto& hop : hops)
-                new_hops.emplace_back(hop.rc);
-
-            log::info(logcat, "{} rebuilding on {}", name(), to_string());
-            parent->build(new_hops);
-        }
-    }
-
-    bool Path::SendLatencyMessage(Router*)
-    {
-        // const auto now = r->now();
-        // // send path latency test
-        // routing::PathLatencyMessage latency{};
-        // latency.sent_time = randint();
-        // latency.sequence_number = NextSeqNo();
-        // m_LastLatencyTestID = latency.sent_time;
-        // m_LastLatencyTestTime = now;
-        // LogDebug(name(), " send latency test id=", latency.sent_time);
-        // if (not SendRoutingMessage(latency, r))
-        //   return false;
-        // FlushUpstream(r);
-        return true;
-    }
-
-    bool Path::update_exit(uint64_t)
-    {
-        // TODO: do we still want this concept?
-        return false;
     }
 
     void Path::Tick(std::chrono::milliseconds now)
     {
+        if (not is_ready())
+            return;
+
         if (is_expired(now))
             return;
 
-        if (_is_linked)
-        {
-        }
-
-        // m_LastRXRate = m_RXRate;
-        // m_LastTXRate = m_TXRate;
-
-        // m_RXRate = 0;
-        // m_TXRate = 0;
-
-        // if (_status == PathStatus::BUILDING)
+        // if (_is_linked)
         // {
-        //   if (buildStarted == 0s)
-        //     return;
-        //   if (now >= buildStarted)
-        //   {
-        //     const auto dlt = now - buildStarted;
-        //     if (dlt >= path::BUILD_TIMEOUT)
-        //     {
-        //       LogWarn(name(), " waited for ", to_string(dlt), " and no path was built");
-        //       r->router_profiling().MarkPathFail(this);
-        //       EnterState(PathStatus::EXPIRED, now);
-        //       return;
-        //     }
-        //   }
-        // }
-        // check to see if this path is dead
-        // if (_status == PathStatus::ESTABLISHED)
-        // {
-        //   auto dlt = now - last_latency_test;
-        //   if (dlt > path::LATENCY_INTERVAL && last_latency_test_id == 0)
-        //   {
-        //     SendLatencyMessage(r);
-        //     // latency test FEC
-        //     r->loop()->call_later(2s, [self = shared_from_this(), r]() {
-        //       if (self->last_latency_test_id)
-        //         self->SendLatencyMessage(r);
-        //     });
-        //     return;
-        //   }
-        //   dlt = now - last_recv_msg;
-        //   if (dlt >= path::ALIVE_TIMEOUT)
-        //   {
-        //     LogWarn(name(), " waited for ", to_string(dlt), " and path looks dead");
-        //     r->router_profiling().MarkPathFail(this);
-        //     EnterState(PathStatus::TIMEOUT, now);
-        //   }
-        // }
-        // if (_status == PathStatus::IGNORE and now - last_recv_msg >= path::ALIVE_TIMEOUT)
-        // {
-        //   // clean up this path as we dont use it anymore
-        //   EnterState(PathStatus::EXPIRED, now);
         // }
     }
 
-    /// how long we wait for a path to become active again after it times out
-    // constexpr auto PathReanimationTimeout = 45s;
-
-    bool Path::is_expired(std::chrono::milliseconds now) const
+    void Path::set_established()
     {
-        (void)now;
-        // if (_status == PathStatus::FAILED)
-        //   return true;
-        // if (_status == PathStatus::BUILDING)
-        //   return false;
-        // if (_status == PathStatus::TIMEOUT)
-        // {
-        //   return now >= last_recv_msg + PathReanimationTimeout;
-        // }
-        // if (_status == PathStatus::ESTABLISHED or _status == PathStatus::IGNORE)
-        // {
-        //   return now >= ExpireTime();
-        // }
-        return true;
+        log::debug(logcat, "Path marked as successfully established!");
+        _established = true;
+        intro.expiry = llarp::time_now_ms() + path::DEFAULT_LIFETIME;
     }
 
-    std::string Path::name() const
-    {
-        return fmt::format("TX={} RX={}", upstream_txid().to_string(), upstream_rxid().to_string());
-    }
+    bool Path::is_expired(std::chrono::milliseconds now) const { return intro.is_expired(now); }
 
-    /* TODO: replace this with sending an onion-ed data message
-    bool Path::SendRoutingMessage(std::string payload, Router*)
-    {
-      std::string buf(MAX_LINK_MSG_SIZE / 2, '\0');
-      buf.insert(0, payload);
-
-      // make nonce
-      TunnelNonce N;
-      N.Randomize();
-
-      // pad smaller messages
-      if (payload.size() < PAD_SIZE)
-      {
-        // randomize padding
-        crypto::randbytes(
-            reinterpret_cast<unsigned char*>(buf.data()) + payload.size(), PAD_SIZE -
-    payload.size());
-      }
-      log::debug(logcat, "Sending {}B routing message to {}", buf.size(), Endpoint());
-
-      // TODO: path relaying here
-
-      return true;
-    }
-    */
+    std::string Path::name() const { return "[ TX={} | RX={} ]"_format(upstream_txid(), upstream_rxid()); }
 
     template <typename Samples_t>
     static std::chrono::milliseconds computeLatency(const Samples_t& samps)

@@ -3,8 +3,6 @@
 #include "name.hpp"
 #include "serialize.hpp"
 
-#include <llarp/net/net_int.hpp>
-
 namespace llarp::dns
 {
     using QType_t = uint16_t;
@@ -23,7 +21,7 @@ namespace llarp::dns
 
         bool Decode(llarp_buffer_t* buf) override;
 
-        bool decode(std::span<unsigned char> /* b */) override { return {}; }
+        bool decode(std::span<uint8_t> /* b */) override { return {}; }
 
         std::string to_string() const;
 

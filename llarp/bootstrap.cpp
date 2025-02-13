@@ -32,7 +32,7 @@ namespace llarp
 
         try
         {
-            ret &= emplace(buf).second;
+            ret &= emplace(buf, true).second;
         }
         catch (...)
         {
@@ -55,7 +55,7 @@ namespace llarp
             oxenc::bt_list_consumer btlc{buf};
 
             while (not btlc.is_finished())
-                ret &= emplace(btlc.consume_dict_data()).second;
+                ret &= emplace(btlc.consume_dict_data(), true).second;
         }
         catch (const std::exception& e)
         {
@@ -78,10 +78,7 @@ namespace llarp
         return false;
     }
 
-    bool BootstrapList::contains(const RemoteRC& rc) const
-    {
-        return count(rc);
-    }
+    bool BootstrapList::contains(const RemoteRC& rc) const { return count(rc); }
 
     std::string_view BootstrapList::bt_encode() const
     {
@@ -111,7 +108,7 @@ namespace llarp
 
         for (auto itr = begin(); itr != end(); ++itr)
         {
-            if (RouterContact::is_obsolete(*itr))
+            if (RelayContact::is_obsolete(*itr))
             {
                 log::debug(logcat, "Deleting obsolete BootstrapRC (rid:{})", itr->router_id());
                 itr = erase(itr);
@@ -126,7 +123,7 @@ namespace llarp
             log::critical(logcat, "BootstrapRC list force loading fallbacks...");
             auto fallbacks = llarp::load_bootstrap_fallbacks();
 
-            if (auto itr = fallbacks.find(RouterContact::ACTIVE_NETID); itr != fallbacks.end())
+            if (auto itr = fallbacks.find(RelayContact::ACTIVE_NETID); itr != fallbacks.end())
             {
                 log::debug(logcat, "Loading {} default fallback bootstrap router(s)!", itr->second.size());
                 log::critical(logcat, "Fallback bootstrap loaded: {}", itr->second.current());
@@ -156,7 +153,7 @@ namespace llarp
 
         if (not fs::exists(fpath))
         {
-            log::critical(logcat, "Bootstrap RC file non-existant at path:{}", fpath);
+            log::critical(logcat, "Bootstrap RC file non-existent at path:{}", fpath);
             return result;
         }
 

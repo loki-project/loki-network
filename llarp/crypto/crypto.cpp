@@ -1,6 +1,7 @@
 #include "crypto.hpp"
 
-#include <llarp/address/keys.hpp>
+#include <llarp/contact/keys.hpp>
+#include <llarp/util/random.hpp>
 
 #include <oxenc/endian.h>
 #include <sodium/core.h>
@@ -28,7 +29,7 @@ namespace llarp
         const PubKey& client_pk,
         const PubKey& server_pk,
         const uint8_t* themPub,
-        const Ed25519Hash& local_edhash)
+        const Ed25519PrivateData& local_edhash)
     {
         SharedSecret shared;
         crypto_generichash_state h;
@@ -57,7 +58,7 @@ namespace llarp
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk.to_edhash()))
+        if (dh(dh_result, sk.to_pubkey(), pk, pk.data(), sk.to_eddata()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -72,7 +73,7 @@ namespace llarp
     {
         SharedSecret dh_result;
 
-        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk.to_edhash()))
+        if (dh(dh_result, pk, sk.to_pubkey(), pk.data(), sk.to_eddata()))
         {
             return crypto_generichash_blake2b(
                        shared.data(), shared.size(), n.data(), n.size(), dh_result.data(), dh_result.size())
@@ -152,14 +153,9 @@ namespace llarp
         return crypto_generichash_blake2b(result.data(), ShortHash::SIZE, buf, size, nullptr, 0) != -1;
     }
 
-    bool crypto::hmac(uint8_t* result, uint8_t* buf, size_t size, const SharedSecret& secret)
+    bool crypto::hmac(uint8_t* result, const uint8_t* buf, size_t size, const SharedSecret& secret)
     {
-        return crypto_generichash_blake2b(result, HMACSIZE, buf, size, secret.data(), HMACSECSIZE) != -1;
-    }
-
-    static bool hash(uint8_t* result, const llarp_buffer_t& buff)
-    {
-        return crypto_generichash_blake2b(result, HASHSIZE, buff.base, buff.sz, nullptr, 0) != -1;
+        return crypto_generichash_blake2b(result, HMACSIZE, buf, size, secret.data(), SharedSecret::SIZE) != -1;
     }
 
     bool crypto::sign(Signature& sig, const Ed25519SecretKey& secret, uint8_t* buf, size_t size)
@@ -177,7 +173,7 @@ namespace llarp
         return crypto_sign_detached(sig, nullptr, buf.data(), buf.size(), sk.data()) != -1;
     }
 
-    bool crypto::sign(Signature& sig, const Ed25519Hash& privkey, uint8_t* buf, size_t size)
+    bool crypto::sign(Signature& sig, const Ed25519PrivateData& privkey, const uint8_t* buf, size_t size)
     {
         PubKey pubkey = privkey.to_pubkey();
 
@@ -225,7 +221,7 @@ namespace llarp
             : false;
     }
 
-    bool crypto::verify(const PubKey& pub, uint8_t* buf, size_t size, const Signature& sig)
+    bool crypto::verify(const PubKey& pub, const uint8_t* buf, size_t size, const Signature& sig)
     {
         return crypto_sign_verify_detached(sig.data(), buf, size, pub.data()) != -1;
     }
@@ -237,17 +233,12 @@ namespace llarp
             : false;
     }
 
-    bool crypto::verify(uint8_t* pub, uint8_t* buf, size_t size, uint8_t* sig)
-    {
-        return crypto_sign_verify_detached(sig, buf, size, pub) != -1;
-    }
-
     void crypto::derive_encrypt_outer_wrapping(
         const Ed25519SecretKey& shared_key,
         SharedSecret& secret,
         const SymmNonce& nonce,
         const RouterID& remote,
-        uspan payload)
+        std::span<uint8_t> payload)
     {
         // derive shared key
         if (!crypto::dh_client(secret, remote, shared_key, nonce))
@@ -267,10 +258,13 @@ namespace llarp
     }
 
     void crypto::derive_decrypt_outer_wrapping(
-        const Ed25519SecretKey& local_sk, const PubKey& remote, const SymmNonce& nonce, uspan encrypted)
+        const Ed25519SecretKey& local_sk,
+        SharedSecret& shared,
+        const PubKey& remote,
+        const SymmNonce& nonce,
+        std::span<uint8_t> encrypted)
     {
-        SharedSecret shared;
-        // derive shared secret using ephemeral pubkey and our secret key (and nonce)
+        // derive shared secret using shared secret and our secret key (and nonce)
         if (!crypto::dh_server(shared, remote, local_sk, nonce))
         {
             auto err = "DH server failed during shared key derivation!"s;
@@ -318,118 +312,52 @@ namespace llarp
         "can't in the and by be or then before so just face it this text hurts "
         "to read? lokinet yolo!";
 
-    template <typename K>
-    static bool make_scalar(AlignedBuffer<32>& out, const K& k, uint64_t i)
+    std::array<unsigned char, 32> crypto::make_scalar(const PubKey& k, uint64_t domain)
     {
         // b = BLIND-STRING || k || i
-        std::array<uint8_t, 160 + K::SIZE + sizeof(uint64_t)> buf;
+        std::array<uint8_t, 160 + PubKey::SIZE + sizeof(uint64_t)> buf;
         std::copy(derived_key_hash_str, derived_key_hash_str + 160, buf.begin());
         std::copy(k.begin(), k.end(), buf.begin() + 160);
-        oxenc::write_host_as_little(i, buf.data() + 160 + K::SIZE);
+        oxenc::write_host_as_little(domain, buf.data() + 160 + PubKey::SIZE);
+
         // n = H(b)
         // h = make_point(n)
-        ShortHash n;
-        return -1 != crypto_generichash_blake2b(n.data(), ShortHash::SIZE, buf.data(), buf.size(), nullptr, 0)
-            && -1 != crypto_core_ed25519_from_uniform(out.data(), n.data());
+        std::array<unsigned char, 64> n;
+        std::array<unsigned char, 32> out;
+
+        crypto_generichash_blake2b(n.data(), n.size(), buf.data(), buf.size(), nullptr, 0);
+        crypto_core_ed25519_scalar_reduce(out.data(), n.data());
+
+        return out;
     }
 
-    static AlignedBuffer<32> zero;
-
-    bool crypto::derive_subkey(
-        PubKey& out_pubkey, const PubKey& root_pubkey, uint64_t key_n, const AlignedBuffer<32>* hash)
+    bool crypto::derive_subkey(uint8_t* derived, size_t derived_len, const PubKey& root_pubkey, uint64_t key_n)
     {
+        if (derived_len != PubKey::SIZE)
+        {
+            log::error(logcat, "Derived pubkey must be {}!", PubKey::SIZE);
+            return false;
+        }
+
         // scalar h = H( BLIND-STRING || root_pubkey || key_n )
-        AlignedBuffer<32> h;
-        if (hash)
-            h = *hash;
-        else if (not make_scalar(h, root_pubkey, key_n))
-        {
-            log::error(logcat, "cannot make scalar");
-            return false;
-        }
-
-        return 0 == crypto_scalarmult_ed25519(out_pubkey.data(), h.data(), root_pubkey.data());
+        std::array<unsigned char, 32> h = crypto::make_scalar(root_pubkey, key_n);
+        return 0 == crypto_scalarmult_ed25519_noclamp(derived, h.data(), root_pubkey.data());
     }
 
-    bool crypto::derive_subkey_private(
-        Ed25519Hash& out_key, const Ed25519SecretKey& root_key, uint64_t key_n, const AlignedBuffer<32>* hash)
+    void crypto::randomize(uint8_t* buf, size_t len) { randombytes(buf, len); }
+
+    void crypto::randbytes(uint8_t* ptr, size_t sz) { randombytes((unsigned char*)ptr, sz); }
+
+    Ed25519SecretKey crypto::generate_identity()
     {
-        // Derives a private subkey from a root key.
-        //
-        // The basic idea is:
-        //
-        // h = H( BLIND-STRING || A || key_n )
-        // a - private key
-        // A = aB - public key
-        // s - signing hash
-        // a' = ah - derived private key
-        // A' = a'B = (ah)B - derived public key
-        // s' = H(h || s) - derived signing hash
-        //
-        // libsodium throws some wrenches in the mechanics which are a nuisance,
-        // the biggest of which is that sodium's secret key is *not* `a`; rather
-        // it is the seed.  If you want to get the private key (i.e. "a"), you
-        // need to SHA-512 hash it and then clamp that.
-        //
-        // This also makes signature verification harder: we can't just use
-        // sodium's sign function because it wants to be given the seed rather
-        // than the private key, and moreover we can't actually *get* the seed to
-        // make libsodium happy because we only have `ah` above; thus we
-        // reimplemented most of sodium's detached signing function but without
-        // the hash step.
-        //
-        // Lastly, for the signing hash s', we need some value that is both
-        // different from the root s but also unknowable from the public key
-        // (since otherwise `r` in the signing function would be known), so we
-        // generate it from a hash of `h` and the root key's (psuedorandom)
-        // signing hash, `s`.
-        //
-        const auto root_pubkey = root_key.to_pubkey();
-
-        AlignedBuffer<32> h;
-        if (hash)
-            h = *hash;
-        else if (not make_scalar(h, root_pubkey, key_n))
-        {
-            log::error(logcat, "cannot make scalar");
-            return false;
-        }
-
-        h[0] &= 248;
-        h[31] &= 63;
-        h[31] |= 64;
-
-        Ed25519Hash a = root_key.to_edhash();
-
-        // a' = ha
-        crypto_core_ed25519_scalar_mul(out_key.data(), h.data(), a.data());
-
-        // s' = H(h || s)
-        std::array<uint8_t, 64> buf;
-        std::copy(h.begin(), h.end(), buf.begin());
-        std::copy(a.signing_hash().begin(), a.signing_hash().end(), buf.begin() + 32);
-        return -1 != crypto_generichash_blake2b(out_key.signing_hash().data(), 32, buf.data(), buf.size(), nullptr, 0);
-
-        return true;
-    }
-
-    void crypto::randomize(uint8_t* buf, size_t len)
-    {
-        randombytes(buf, len);
-    }
-
-    void crypto::randbytes(uint8_t* ptr, size_t sz)
-    {
-        randombytes((unsigned char*)ptr, sz);
-    }
-
-    void crypto::identity_keygen(Ed25519SecretKey& keys)
-    {
+        Ed25519SecretKey ret{};
         PubKey pk;
-        int result = crypto_sign_ed25519_keypair(pk.data(), keys.data());
+        [[maybe_unused]] int result = crypto_sign_ed25519_keypair(pk.data(), ret.data());
         assert(result != -1);
-        const PubKey sk_pk = keys.to_pubkey();
+        const PubKey sk_pk = ret.to_pubkey();
+        (void)sk_pk;
         assert(pk == sk_pk);
+        return ret;
     }
 
     bool crypto::check_identity_privkey(const Ed25519SecretKey& keys)
@@ -442,28 +370,6 @@ namespace llarp
         if (crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data()) == -1)
             return false;
         return keys.to_pubkey() == pk && sk == keys;
-    }
-
-    void crypto::encryption_keygen(Ed25519SecretKey& keys)
-    {
-        auto d = keys.data();
-        randbytes(d, 32);
-        crypto_scalarmult_curve25519_base(d + 32, d);  //  expects xkey
-    }
-
-    bool crypto::pqe_encrypt(PQCipherBlock& ciphertext, SharedSecret& sharedkey, const PQPubKey& pubkey)
-    {
-        return crypto_kem_enc(ciphertext.data(), sharedkey.data(), pubkey.data()) != -1;
-    }
-    bool crypto::pqe_decrypt(const PQCipherBlock& ciphertext, SharedSecret& sharedkey, const uint8_t* secretkey)
-    {
-        return crypto_kem_dec(sharedkey.data(), ciphertext.data(), secretkey) != -1;
-    }
-
-    void crypto::pqe_keygen(PQKeyPair& keypair)
-    {
-        auto d = keypair.data();
-        crypto_kem_keypair(d + PQ_SECRETKEYSIZE, d);
     }
 
 #ifdef HAVE_CRYPT
@@ -482,29 +388,9 @@ namespace llarp
     }
 #endif
 
-    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& sec)
-    {
-        return sec.data() + 32;
-    }
+    const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& sec) { return sec.data() + 32; }
 
-    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& k)
-    {
-        return k.data() + PQ_SECRETKEYSIZE;
-    }
-
-    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& k)
-    {
-        return k.data();
-    }
-
-    uint64_t randint()
-    {
-        uint64_t i;
-        randombytes((uint8_t*)&i, sizeof(i));
-        return i;
-    }
-
-    // Called during static initialization to initialize libsodium and ntru.  (The CSRNG return is
+    // Called during static initialization to initialize libsodium.  (The CSRNG return is
     // not useful, but just here to get this called during static initialization of `csrng`).
     static CSRNG _initialize_crypto()
     {
@@ -513,12 +399,9 @@ namespace llarp
             log::critical(logcat, "sodium_init() failed, unable to continue!");
             std::abort();
         }
-        char* avx2 = std::getenv("AVX2_FORCE_DISABLE");
-        ntru_init(avx2 && avx2 == "1"sv);
 
         return CSRNG{};
     }
 
     CSRNG csrng = _initialize_crypto();
-
 }  // namespace llarp

@@ -2,7 +2,9 @@
 
 #include "formattable.hpp"
 #include "logging.hpp"
+#include "random.hpp"
 
+#include <oxenc/base32z.h>
 #include <oxenc/bt.h>
 #include <oxenc/hex.h>
 
@@ -17,8 +19,6 @@
 
 extern "C"
 {
-    extern void randombytes(unsigned char* const ptr, unsigned long long sz);
-
     extern int sodium_is_zero(const unsigned char* n, const size_t nlen);
 }
 namespace llarp
@@ -63,7 +63,9 @@ namespace llarp
             return ret;
         }
 
-        bool operator==(const AlignedBuffer& other) const { return _data == other._data; }
+        auto operator<=>(const AlignedBuffer& other) const { return _data <=> other._data; }
+
+        bool operator==(const AlignedBuffer& other) const { return (*this <=> other) == 0; }
 
         bool operator!=(const AlignedBuffer& other) const { return _data != other._data; }
 
@@ -151,11 +153,7 @@ namespace llarp
             return true;
         }
 
-        std::string bt_encode() const
-        {
-            return oxenc::bt_serialize(_data);
-            // return {reinterpret_cast<const char*>(data()), sz};
-        }
+        std::string bt_encode() const { return oxenc::bt_serialize(_data); }
 
         bool bt_decode(std::string buf)
         {
@@ -169,7 +167,7 @@ namespace llarp
 
         std::string ToHex() const { return oxenc::to_hex(begin(), end()); }
 
-        std::string ShortHex() const { return oxenc::to_hex(begin(), begin() + 4); }
+        std::string short_string() const { return oxenc::to_base32z(begin(), begin() + 5); }
 
         bool FromHex(std::string_view str)
         {
@@ -298,8 +296,6 @@ namespace llarp
         static constexpr bool to_string_formattable = true;
     };
 
-    // auto bt_printer::log_cat = log::Cat("bt_printer");
-
 }  // namespace llarp
 
 namespace std
@@ -309,9 +305,14 @@ namespace std
     {
         std::size_t operator()(const llarp::AlignedBuffer<sz>& buf) const noexcept
         {
-            std::size_t h = 0;
-            std::memcpy(&h, buf.data(), sizeof(std::size_t));
-            return h;
+            if constexpr (alignof(llarp::AlignedBuffer<sz>) >= sizeof(size_t))
+                return *reinterpret_cast<const size_t*>(buf.data());
+            else
+            {
+                std::size_t h{};
+                std::memcpy(&h, buf.data(), sizeof(h));
+                return h;
+            }
         }
     };
 }  // namespace std

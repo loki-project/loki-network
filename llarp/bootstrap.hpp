@@ -1,7 +1,6 @@
 #pragma once
 
-#include "router_contact.hpp"
-
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/crypto.hpp>
 
 #include <set>
@@ -52,7 +51,7 @@ namespace llarp
         void randomize()
         {
             if (size() > 1)
-                _curr = std::next(begin(), std::uniform_int_distribution<size_t>{0, size() - 1}(csrng));
+                _curr = std::next(begin(), csrng.boundedrand(size()));
         }
 
         void clear_list() { clear(); }

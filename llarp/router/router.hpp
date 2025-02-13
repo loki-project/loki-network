@@ -5,13 +5,13 @@
 #include <llarp/bootstrap.hpp>
 #include <llarp/consensus/reachability_testing.hpp>
 #include <llarp/constants/link_layer.hpp>
+#include <llarp/contact/relay_contact.hpp>
 #include <llarp/crypto/key_manager.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/handlers/session.hpp>
 #include <llarp/handlers/tun.hpp>
 #include <llarp/path/path_context.hpp>
 #include <llarp/profiling.hpp>
-#include <llarp/router_contact.hpp>
 #include <llarp/rpc/rpc_client.hpp>
 #include <llarp/rpc/rpc_server.hpp>
 #include <llarp/util/buffer.hpp>
@@ -52,8 +52,8 @@ namespace llarp
     // inline constexpr size_t INTROSET_STORAGE_REDUNDANCY{(INTROSET_RELAY_REDUNDANCY * INTROSET_REQS_PER_RELAY)};
 
     // TESTNET: these constants are shortened for testing purposes
-    inline constexpr std::chrono::milliseconds TESTNET_GOSSIP_INTERVAL{10min};
-    inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{10min};
+    inline constexpr auto TESTNET_GOSSIP_INTERVAL{300s};
+    inline constexpr std::chrono::milliseconds RC_UPDATE_INTERVAL{5min};
     inline constexpr std::chrono::milliseconds INITIAL_ATTEMPT_INTERVAL{30s};
     // as we advance towards full mesh, we try to connect to this number per tick
     inline constexpr int FULL_MESH_ITERATION{1};
@@ -69,11 +69,11 @@ namespace llarp
 
     inline constexpr auto SERVICE_MANAGER_REPORT_INTERVAL{5s};
 
-    struct Contacts;
+    struct ContactDB;
 
     struct Router : std::enable_shared_from_this<Router>
     {
-        friend class NodeDB;
+        // friend class NodeDB;
         friend struct LinkManager;
 
         explicit Router(
@@ -95,8 +95,8 @@ namespace llarp
         bool use_file_logging{false};
 
         // our router contact
-        LocalRC router_contact;
-        std::shared_ptr<oxenmq::OxenMQ> _lmq;
+        LocalRC relay_contact;
+        std::shared_ptr<oxenmq::OxenMQ> _omq;
         path::BuildLimiter _pathbuild_limiter;
 
         std::atomic<bool> _is_stopping{false};
@@ -132,7 +132,7 @@ namespace llarp
         std::shared_ptr<vpn::Platform> _vpn;
 
         std::shared_ptr<path::PathContext> _path_context;
-        std::shared_ptr<Contacts> _contacts;
+        std::shared_ptr<ContactDB> _contact_db;
         std::shared_ptr<NodeDB> _node_db;
 
         std::shared_ptr<EventTicker> _loop_ticker;
@@ -149,21 +149,16 @@ namespace llarp
 
         std::shared_ptr<Config> _config;
 
-        uint32_t _path_build_count{0};
-
         std::unique_ptr<rpc::RPCServer> _rpc_server;
-
-        const std::chrono::milliseconds _random_start_delay{
-            platform::is_simulation ? std::chrono::milliseconds{(llarp::randint() % 1250) + 2000} : 0s};
 
         std::shared_ptr<rpc::RPCClient> _rpc_client;
         bool whitelist_received{false};
 
         oxenmq::address rpc_addr;
         Profiling _router_profiling;
-        fs::path _profile_file;
 
-        int client_router_connections;
+        size_t min_client_outbounds{};
+        std::atomic<bool> initial_client_connect_complete{false};
 
         // should we be sending padded messages every interval?
         bool send_padding{false};
@@ -201,7 +196,7 @@ namespace llarp
       public:
         void start();
 
-        bool fully_meshed() const;
+        bool is_fully_meshed() const;
 
         bool using_tun_if() const { return _using_tun; }
 
@@ -209,9 +204,11 @@ namespace llarp
 
         bool is_bootstrap_seed() const { return _bootstrap_seed; }
 
-        int required_num_client_conns() const { return client_router_connections; }
+        size_t client_outbounds_needed() const { return min_client_outbounds; }
 
-        void for_each_connection(std::function<void(link::Connection&)> func);
+        std::set<RouterID> get_current_remotes() const;
+
+        void for_each_connection(std::function<void(const RouterID&, link::Connection&)> func);
 
         const std::shared_ptr<handlers::TunEndpoint>& tun_endpoint() const { return _tun; }
 
@@ -221,9 +218,9 @@ namespace llarp
 
         const std::shared_ptr<QUICTunnel>& quic_tunnel() const { return _quic_tun; }
 
-        const Contacts& contacts() const { return *_contacts; }
+        const ContactDB& contacts() const { return *_contact_db; }
 
-        Contacts& contacts() { return *_contacts; }
+        ContactDB& contact_db() { return *_contact_db; }
 
         std::shared_ptr<Config> config() const { return _config; }
 
@@ -231,7 +228,7 @@ namespace llarp
 
         const llarp::net::Platform& net() const;
 
-        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _lmq; }
+        const std::shared_ptr<oxenmq::OxenMQ>& lmq() const { return _omq; }
 
         const std::shared_ptr<rpc::RPCClient>& rpc_client() const { return _rpc_client; }
 
@@ -239,9 +236,7 @@ namespace llarp
 
         const Ed25519SecretKey& identity() const { return _key_manager->identity_key; }
 
-        const RouterID& router_id() const { return _key_manager->public_key; }
-
-        const RouterID& local_rid() const { return router_contact.router_id(); }
+        const RouterID& local_rid() const { return _key_manager->public_key; }
 
         Profiling& router_profiling() { return _router_profiling; }
 
@@ -255,7 +250,7 @@ namespace llarp
 
         const std::shared_ptr<path::PathContext>& path_context() const { return _path_context; }
 
-        const LocalRC& rc() const { return router_contact; }
+        const LocalRC& rc() const { return relay_contact; }
 
         oxen::quic::Address listen_addr() const;
 
@@ -265,26 +260,23 @@ namespace llarp
 
         const std::set<RouterID>& get_whitelist() const;
 
-        void set_router_whitelist(
-            const std::vector<RouterID>& whitelist,
-            const std::vector<RouterID>& greylist,
-            const std::vector<RouterID>& unfunded);
+        void set_router_whitelist(const std::vector<RouterID>& whitelist);
 
         template <std::invocable Callable>
         void queue_work(Callable&& func)
         {
-            _lmq->job(std::forward<Callable>(func));
+            _omq->job(std::forward<Callable>(func));
         }
 
         template <std::invocable Callable>
         void queue_disk_io(Callable&& func)
         {
-            _lmq->job(std::forward<Callable>(func), _disk_thread);
+            _omq->job(std::forward<Callable>(func), _disk_thread);
         }
 
         /// Return true if we are operating as a service node and have received a service node
         /// whitelist
-        bool have_snode_whitelist() const;
+        bool has_whitelist() const;
 
         /// return true if we look like we are a decommissioned service node
         bool appears_decommed() const;
@@ -303,7 +295,7 @@ namespace llarp
 
         std::chrono::milliseconds Uptime() const;
 
-        std::chrono::milliseconds _last_tick = 0s;
+        std::chrono::milliseconds _last_tick{0s};
 
         std::function<void(void)> _router_close_cb;
 
@@ -319,7 +311,9 @@ namespace llarp
 
         std::string status_line();
 
-        bool is_running() const;
+        bool is_running() const { return _is_running; }
+
+        bool is_stopping() const { return _is_stopping; }
 
         bool is_service_node() const;
 
@@ -349,22 +343,17 @@ namespace llarp
         bool send_data_message(const RouterID& remote, std::string payload);
 
         bool send_control_message(
-            const RouterID& remote,
-            std::string endpoint,
-            std::string body,
-            std::function<void(oxen::quic::message m)> func = nullptr);
+            const RouterID& remote, std::string endpoint, std::string body, bt_control_response_hook func = nullptr);
 
-        bool is_bootstrap_node(RouterID rid) const;
+        // bool is_bootstrap_node(RouterID rid) const;
 
         std::chrono::milliseconds now() const { return llarp::time_now_ms(); }
 
         /// count the number of unique service nodes connected via pubkey
-        size_t num_router_connections() const;
+        size_t num_router_connections(bool active_only = true) const;
 
         /// count the number of unique clients connected by pubkey
         size_t num_client_connections() const;
-
-        uint32_t NextPathBuildNumber();
 
         void teardown();
 

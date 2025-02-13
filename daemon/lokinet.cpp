@@ -1,11 +1,9 @@
 #include <llarp.hpp>
 #include <llarp/config/config.hpp>  // for ensure_config
-// #include <llarp/constants/files.hpp>
 #include <llarp/constants/platform.hpp>
 #include <llarp/constants/version.hpp>
 #include <llarp/ev/loop.hpp>
 #include <llarp/util/exceptions.hpp>
-// #include <llarp/util/logging.hpp>
 #include <llarp/util/lokinet_init.h>
 #include <llarp/util/thread/threading.hpp>
 
@@ -14,14 +12,9 @@
 #include <oxen/log.hpp>
 
 #include <csignal>
-// #include <cstdlib>
-// #include <iostream>
 #include <memory>
-// #include <optional>
 #include <stdexcept>
-// #include <string>
 #include <thread>
-// #include <utility>
 
 #ifdef _WIN32
 #include <llarp/win32/service_manager.hpp>
@@ -63,7 +56,7 @@ namespace
     static void run_main_context(std::optional<fs::path> confFile, const llarp::RuntimeOptions opts);
 
     // variable declarations
-    static auto logcat = llarp::log::Cat("main");
+    static auto logcat = llarp::log::Cat("daemon");
     std::shared_ptr<llarp::Context> ctx;
     std::promise<int> exit_code;
 
@@ -339,11 +332,8 @@ namespace
 #endif
 
         CLI::App cli{
-            "LokiNET is a free, open source, private, decentralized, market-based sybil resistant "
-            "and "
-            "IP "
-            "based onion routing network",
-            "lokinet"};
+            "Lokinet is a free, open source, private, decentralized, market-based sybil resistant "
+            "and IP based onion routing network lokinet"};
         command_line_options options{};
 
         // flags: boolean values in command_line_options struct

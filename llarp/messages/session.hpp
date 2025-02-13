@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.hpp"
+#include "path.hpp"
 
 #include <llarp/address/address.hpp>
 #include <llarp/auth/auth.hpp>
@@ -9,12 +9,12 @@
 namespace llarp
 {
     /** Fields for initiating sessions:
+        - 'k' : shared pubkey used to derive symmetric key
         - 'n' : symmetric nonce
-        - 's' : shared pubkey used to derive symmetric key
         - 'x' : encrypted payload
             - 'i' : RouterID of initiator
-            - 'p' : HopID at the pivot node of the newly constructed path
-            - 's' : SessionTag for current session
+            - 'p' : HopID at the pivot taken from local ClientIntro
+            - 'r' : HopID at the pivot taken from remote's ClientIntro
             - 't' : Use Tun interface (bool)
             - 'u' : Authentication field
                 - bt-encoded dict, values TBD
@@ -23,15 +23,15 @@ namespace llarp
     {
         static auto logcat = llarp::log::Cat("session-init");
 
-        inline constexpr auto auth_denied = "AUTH_DENIED"sv;
+        inline const auto AUTH_ERROR = messages::serialize_response({{messages::STATUS_KEY, "AUTH ERROR"}});
+        inline const auto BAD_PATH = messages::serialize_response({{messages::STATUS_KEY, "BAD PATH"}});
+        inline const auto BAD_ADDRESS = messages::serialize_response({{messages::STATUS_KEY, "BAD ADDRESS"}});
 
-        inline const auto AUTH_DENIED = messages::serialize_response({{messages::STATUS_KEY, auth_denied}});
-
-        inline static std::string serialize_encrypt(
+        inline static std::tuple<std::string, shared_kx_data> serialize_encrypt(
             const RouterID& local,
             const RouterID& remote,
-            service::SessionTag& tag,
-            HopID pivot_txid,
+            HopID local_pivot_txid,
+            HopID remote_pivot_txid,
             std::optional<std::string_view> auth_token,
             bool use_tun)
         {
@@ -43,71 +43,77 @@ namespace llarp
                     oxenc::bt_dict_producer btdp;
 
                     btdp.append("i", local.to_view());
-                    btdp.append("p", pivot_txid.to_view());
-                    btdp.append("s", tag.to_view());
+                    btdp.append("p", local_pivot_txid.to_view());
+                    btdp.append("r", remote_pivot_txid.to_view());
                     btdp.append("t", use_tun);
-                    // DISCUSS: this auth field
+                    // TOTHINK: this auth field
                     if (auth_token)
                         btdp.append("u", *auth_token);
 
                     payload = std::move(btdp).str();
                 }
 
-                Ed25519SecretKey shared_key;
-                crypto::encryption_keygen(shared_key);
+                auto kx_data = shared_kx_data::generate();
 
-                SharedSecret shared;
-                auto nonce = SymmNonce::make_random();
+                kx_data.client_dh(remote);
+                kx_data.encrypt(payload);
+                kx_data.generate_xor();
 
-                crypto::derive_encrypt_outer_wrapping(shared_key, shared, nonce, remote, to_uspan(payload));
+                auto new_payload = ONION::serialize_hop(kx_data.pubkey.to_view(), kx_data.nonce, std::move(payload));
 
-                oxenc::bt_dict_producer btdp;
-
-                btdp.append("n", nonce.to_view());
-                btdp.append("s", shared_key.to_pubkey().to_view());
-                btdp.append("x", payload);
-
-                return std::move(btdp).str();
+                return {PATH::CONTROL::serialize("session_init", std::move(new_payload)), std::move(kx_data)};
             }
-            catch (...)
+            catch (const std::exception& e)
             {
-                log::error(messages::logcat, "Error: InitiateSessionMessage failed to bt encode contents");
+                log::error(messages::logcat, "Exception caught encrypting session initiation message: {}", e.what());
                 throw;
             }
         };
 
-        inline static std::tuple<NetworkAddress, HopID, service::SessionTag, bool, std::optional<std::string>>
-        decrypt_deserialize(oxenc::bt_dict_consumer& btdc, const Ed25519SecretKey& local)
+        inline static std::tuple<shared_kx_data, NetworkAddress, HopID, HopID, bool, std::optional<std::string>>
+        decrypt_deserialize(oxenc::bt_dict_consumer&& outer_btdc, const Ed25519SecretKey& local)
         {
             SymmNonce nonce;
-            RouterID shared_pubkey;
-            ustring payload;
+            PubKey shared_pubkey;
+            std::string payload;
+            SharedSecret shared;
+            shared_kx_data kx_data{};
 
             try
             {
-                nonce = SymmNonce::make(btdc.require<std::string>("n"));
-                shared_pubkey = RouterID{btdc.require<std::string>("s")};
-                payload = btdc.require<ustring>("x");
+                std::tie(payload, kx_data) = ONION::deserialize_decrypt(std::move(outer_btdc), local);
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing/decrypting hop dict: {}", e.what());
+                throw;
+            }
 
-                crypto::derive_decrypt_outer_wrapping(local, shared_pubkey, nonce, to_uspan(payload));
+            try
+            {
+                oxenc::bt_dict_consumer btdc{payload};
 
-                {
-                    RouterID remote;
-                    service::SessionTag tag;
-                    HopID pivot_txid;
-                    bool use_tun;
-                    std::optional<std::string> maybe_auth = std::nullopt;
+                NetworkAddress initiator;
+                RouterID init_rid;
+                HopID remote_pivot_txid;
+                HopID local_pivot_txid;
+                bool use_tun;
+                std::optional<std::string> maybe_auth = std::nullopt;
 
-                    remote.from_string(btdc.require<std::string_view>("i"));
-                    auto initiator = NetworkAddress::from_pubkey(remote, true);
-                    pivot_txid.from_string(btdc.require<std::string_view>("p"));
-                    tag.from_string(btdc.require<std::string_view>("s"));
-                    use_tun = btdc.require<bool>("t");
-                    maybe_auth = btdc.maybe<std::string>("u");
+                init_rid.from_string(btdc.require<std::string_view>("i"));
+                initiator = NetworkAddress::from_pubkey(init_rid, true);
+                remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
+                use_tun = btdc.require<bool>("t");
+                maybe_auth = btdc.maybe<std::string>("u");
 
-                    return {
-                        std::move(initiator), std::move(pivot_txid), std::move(tag), use_tun, std::move(maybe_auth)};
-                }
+                return {
+                    std::move(kx_data),
+                    std::move(initiator),
+                    std::move(local_pivot_txid),
+                    std::move(remote_pivot_txid),
+                    use_tun,
+                    std::move(maybe_auth)};
             }
             catch (const std::exception& e)
             {
@@ -116,7 +122,57 @@ namespace llarp
             }
         }
 
+        inline static std::string serialize_response(session_tag& t)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("t", t.view());
+            return std::move(btdp).str();
+        }
+
+        inline static session_tag deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        {
+            try
+            {
+                session_tag tag;
+                tag.read(btdc.require<std::string_view>("t"));
+                return tag;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing session initiation response:{}", e.what());
+                throw;
+            }
+        }
+
     }  // namespace InitiateSession
+
+    namespace CloseSession
+    {
+        static auto logcat = llarp::log::Cat("session-close");
+
+        inline static std::string serialize(session_tag& t)
+        {
+            oxenc::bt_dict_producer btdp;
+            btdp.append("t", t.view());
+            return std::move(btdp).str();
+        }
+
+        inline static session_tag deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            try
+            {
+                session_tag tag;
+                tag.read(btdc.require<std::string_view>("t"));
+                return tag;
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing session close response:{}", e.what());
+                throw;
+            }
+        }
+
+    }  // namespace CloseSession
 
     /** Fields for setting a session tag:
      */
@@ -126,38 +182,53 @@ namespace llarp
         {
             oxenc::bt_dict_producer btdp;
 
-            try
-            {
-                //
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: SetSessionTagMessage failed to bt encode contents");
-            }
-
             return std::move(btdp).str();
         };
     }  // namespace SetSessionTag
 
     /** Fields for setting a session path:
      */
-    namespace SetSessionPath
+    namespace SessionPathSwitch
     {
-        inline static std::string serialize()
+        static auto logcat = llarp::log::Cat("path-switch");
+
+        inline const auto BAD_TAG = messages::serialize_response({{messages::STATUS_KEY, "BAD TAG"}});
+
+        /** Fields for switching session paths:
+            - 'p' : HopID at the pivot taken from local ClientIntro
+            - 'r' : HopID at the pivot taken from remote's ClientIntro
+            - 't' : session_tag for current session
+         */
+        inline static std::string serialize(session_tag t, HopID local_pivot_txid, HopID remote_pivot_txid)
         {
             oxenc::bt_dict_producer btdp;
 
-            try
-            {
-                //
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: SetSessionPathMessage failed to bt encode contents");
-            }
+            btdp.append("p", local_pivot_txid.to_view());
+            btdp.append("r", remote_pivot_txid.to_view());
+            btdp.append("t", t.view());
 
             return std::move(btdp).str();
         };
-    }  // namespace SetSessionPath
+
+        inline static std::tuple<session_tag, HopID, HopID> deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            session_tag t;
+            HopID remote_pivot_txid, local_pivot_txid;
+
+            try
+            {
+                remote_pivot_txid.from_string(btdc.require<std::string_view>("p"));
+                local_pivot_txid.from_string(btdc.require<std::string_view>("r"));
+                t.read(btdc.require<std::string_view>("t"));
+            }
+            catch (const std::exception& e)
+            {
+                log::warning(logcat, "Exception caught deserializing PathSwitch message: {}", e.what());
+                throw;
+            }
+
+            return {std::move(t), std::move(remote_pivot_txid), std::move(local_pivot_txid)};
+        }
+    }  // namespace SessionPathSwitch
 
 }  // namespace llarp

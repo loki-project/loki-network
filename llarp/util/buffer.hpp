@@ -3,7 +3,7 @@
 #include "common.hpp"
 #include "mem.h"
 
-#include <oxenc/common.h>
+#include <oxenc/span.h>
 
 #include <algorithm>
 #include <cassert>
@@ -21,72 +21,41 @@
 
 namespace llarp
 {
-    using uspan = std::span<uint8_t>;
+    using namespace std::literals;
+
+    using cspan = oxenc::const_span<const char>;
+    using uspan = oxenc::const_span<const unsigned char>;
+    using span = oxenc::const_span<const std::byte>;
+
     using ustring = std::basic_string<uint8_t>;
     using ustring_view = std::basic_string_view<uint8_t>;
-    using bspan = std::span<std::byte>;
     using bstring = std::basic_string<std::byte>;
     using bstring_view = std::basic_string_view<std::byte>;
-
-    namespace detail
-    {
-        template <size_t N>
-        struct bsv_literal
-        {
-            consteval bsv_literal(const char (&s)[N])
-            {
-                for (size_t i = 0; i < N; i++)
-                    str[i] = static_cast<std::byte>(s[i]);
-            }
-            std::byte str[N];  // we keep the null on the end, in case you pass .data() to a C func
-            using size = std::integral_constant<size_t, N - 1>;
-        };
-        template <size_t N>
-        struct usv_literal
-        {
-            consteval usv_literal(const char (&s)[N])
-            {
-                for (size_t i = 0; i < N; i++)
-                    str[i] = static_cast<unsigned char>(s[i]);
-            }
-            unsigned char str[N];  // we keep the null on the end, in case you pass .data() to a C func
-            using size = std::integral_constant<size_t, N - 1>;
-        };
-    }  // namespace detail
 
     inline ustring operator""_us(const char* str, size_t len) noexcept
     {
         return {reinterpret_cast<const unsigned char*>(str), len};
     }
 
-    template <detail::usv_literal UStr>
-    constexpr ustring_view operator""_usv() noexcept
+    namespace detail
     {
-        return {UStr.str, decltype(UStr)::size::value};
-    }
+        // Helper function to switch between string_view and ustring_view
+        inline ustring_view to_usv(std::string_view v)
+        {
+            return {reinterpret_cast<const uint8_t*>(v.data()), v.size()};
+        }
 
-    template <detail::bsv_literal BStr>
-    constexpr bstring_view operator""_bsv()
-    {
-        return {BStr.str, decltype(BStr)::size::value};
-    }
+        template <oxenc::basic_char T>
+        inline std::span<uint8_t> to_uspan(std::basic_string<T>& v)
+        {
+            return std::span<uint8_t>{reinterpret_cast<uint8_t*>(v.data()), v.size()};
+        }
 
-    inline bstring operator""_bs(const char* str, size_t len) noexcept
-    {
-        return {reinterpret_cast<const std::byte*>(str), len};
-    }
+        static constexpr auto T = "T"sv, F = "F"sv;
 
-    // Helper function to switch between string_view and ustring_view
-    inline ustring_view to_usv(std::string_view v)
-    {
-        return {reinterpret_cast<const uint8_t*>(v.data()), v.size()};
-    }
+        inline constexpr auto bool_alpha(bool b, std::string_view t = T, std::string_view f = F) { return b ? t : f; }
+    }  // namespace detail
 
-    template <oxenc::basic_char T>
-    inline uspan to_uspan(std::basic_string<T>& v)
-    {
-        return uspan{reinterpret_cast<uint8_t*>(v.data()), v.size()};
-    }
 }  // namespace llarp
 
 /// TODO: replace usage of these with std::span (via a backport until we move to C++20).  That's a

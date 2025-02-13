@@ -1,12 +1,11 @@
 #pragma once
 
-#include "keys.hpp"
 #include "utils.hpp"
 
-#include <llarp/router_id.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/contact/keys.hpp>
+#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/util/aligned.hpp>
-#include <llarp/util/concept.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -40,7 +39,9 @@ namespace llarp
         explicit NetworkAddress(std::string_view addr, std::string_view tld);
 
         // This private constructor expects NO '.snode' or '.loki' suffix
-        explicit NetworkAddress(RouterID rid, bool is_client) : _pubkey{std::move(rid)}, _is_client{is_client} {}
+        explicit NetworkAddress(RouterID rid, bool is_client)
+            : _pubkey{std::move(rid)}, _is_client{is_client}, _tld{_is_client ? TLD::LOKI : TLD::SNODE}
+        {}
 
       public:
         NetworkAddress() = default;
@@ -60,7 +61,7 @@ namespace llarp
 
         // Will throw invalid_argument with bad input. Assumes that the network address terminates in either '.loki'
         // or '.snode'
-        static std::optional<NetworkAddress> from_network_addr(const std::string& arg);
+        static std::optional<NetworkAddress> from_network_addr(std::string_view arg);
 
         // Assumes that the pubkey passed is NOT terminated in either a '.loki' or '.snode' suffix
         static NetworkAddress from_pubkey(const RouterID& rid, bool is_client);
@@ -77,10 +78,11 @@ namespace llarp
 
         RouterID& router_id() { return static_cast<RouterID&>(pubkey()); }
 
+        std::string short_name() const { return _pubkey.short_string(); }
+
         std::string name() const { return _pubkey.to_string(); }
 
-        std::string to_string() const { return name().append(_tld); }
-
+        std::string to_string() const { return short_name().append(_tld); }
         static constexpr bool to_string_formattable{true};
     };
 

@@ -46,15 +46,7 @@ namespace llarp::rpc
     //
     //  Inputs: none
     //
-    //  Returns: massive dump of status info including
-    //    "running"
-    //    "numNodesKnown"
-    //    "dht"
-    //    "services"
-    //    "exit"
-    //    "links"
-    //    "outboundMessages"
-    //    etc
+    //  Returns: massive dump of status info
     //
     struct Status : NoArgs
     {
@@ -291,6 +283,62 @@ namespace llarp::rpc
         } request;
     };
 
+    //  RPC: find_cc
+    //    Lookup client contact via path request
+    //
+    //  Inputs:
+    //    "pk" : client pubkey
+    //
+    //  Returns:
+    //    "cc" : client contact, or error string
+    struct FindCC : RPCRequest
+    {
+        static constexpr auto name = "find_cc"sv;
+
+        struct request_parameters
+        {
+            std::string pk;
+        } request;
+    };
+
+    //  RPC: session_init
+    //    Initiate session to remote instance
+    //
+    //  Inputs:
+    //    "pk" : remote pubkey
+    //    "x"  : is exit session (boolean)
+    //
+    //  Returns:
+    //    "ip" : mapped IP address, or error string
+    struct SessionInit : RPCRequest
+    {
+        static constexpr auto name = "session_init"sv;
+
+        struct request_parameters
+        {
+            std::string pk;
+            bool x{false};
+        } request;
+    };
+
+    //  RPC: session_close
+    //    Close session to remote instance
+    //
+    //  Inputs:
+    //    "pk" : remote pubkey
+    //
+    //  Returns:
+    //    "b" : T/F if close was successful
+    struct SessionClose : RPCRequest
+    {
+        static constexpr auto name = "session_close"sv;
+
+        struct request_paramters
+        {
+            std::string pk;
+        } request;
+    };
+
     // List of all RPC request structs to allow compile-time enumeration of all supported types
     using rpc_request_types = tools::type_list<
         Halt,
@@ -300,6 +348,9 @@ namespace llarp::rpc
         QuicConnect,   // debug
         QuicListener,  // debug
         LookupSnode,
+        FindCC,
+        SessionInit,
+        SessionClose,
         MapExit,
         ListExits,
         SwapExits,

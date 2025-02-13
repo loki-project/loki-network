@@ -2,6 +2,7 @@
 
 #include "buffer.hpp"
 #include "formattable.hpp"
+#include "random.hpp"
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
@@ -50,6 +51,19 @@ namespace llarp
     auto get_timestamp()
     {
         return std::chrono::duration_cast<unit_t>(get_timestamp());
+    }
+
+    /** Returns a time of type `unit_t` in the window of [`about`, `about` + `upper_bound`].
+
+        example:
+            - "Between 5 and 8 minutes":
+
+                auto t = approximate_time(5min, 3);
+     */
+    template <typename unit_t>
+    auto approximate_time(unit_t about, size_t upper_bound) -> unit_t
+    {
+        return about + unit_t{csrng.boundedrand(upper_bound + 1)};
     }
 
 }  // namespace llarp

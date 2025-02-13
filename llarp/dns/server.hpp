@@ -3,10 +3,9 @@
 #include "message.hpp"
 #include "platform.hpp"
 
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/config/config.hpp>
 #include <llarp/ev/loop.hpp>
-#include <llarp/net/net.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/util/compare_ptr.hpp>
 
 #include <oxen/quic.hpp>
@@ -57,7 +56,7 @@ namespace llarp::dns
         virtual void send_to(
             const oxen::quic::Address& to, const oxen::quic::Address& from, std::vector<uint8_t> data) const
         {
-            send_to(to, from, IPPacket{data.data(), data.size()});
+            send_to(to, from, IPPacket{std::move(data)});
         }
 
         /// stop reading packets and end operation
@@ -136,7 +135,7 @@ namespace llarp::dns
             : QueryJob_Base{query}, src{std::move(source)}, resolver{to_}, asker{from_}
         {}
 
-        void send_reply(std::vector<uint8_t> buf) override { src->send_to(asker, resolver, IPPacket{buf}); }
+        void send_reply(std::vector<uint8_t> buf) override { src->send_to(asker, resolver, IPPacket{std::move(buf)}); }
     };
 
     /// handler of dns query hooking

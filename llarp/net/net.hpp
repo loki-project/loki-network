@@ -1,9 +1,6 @@
 #pragma once
 
-#include "interface_info.hpp"
 #include "net.h"
-#include "net_int.hpp"
-#include "uint128.hpp"
 
 #include <llarp/address/ip_range.hpp>
 #include <llarp/util/mem.hpp>
@@ -32,18 +29,32 @@
 
 namespace llarp
 {
-    inline int cmp(const in_addr& a, const in_addr& b)
-    {
-        return memcmp(&a, &b, sizeof(in_addr));
-    }
+    inline int cmp(const in_addr& a, const in_addr& b) { return memcmp(&a, &b, sizeof(in_addr)); }
 
-    inline int cmp(const in6_addr& a, const in6_addr& b)
-    {
-        return memcmp(&a, &b, sizeof(in6_addr));
-    }
+    inline int cmp(const in6_addr& a, const in6_addr& b) { return memcmp(&a, &b, sizeof(in6_addr)); }
 
     namespace net
     {
+        /// info about a network interface lokinet does not own
+        struct InterfaceInfo
+        {
+            // TODO: is this needed?
+            /// a gateway we can use if it exists
+            std::optional<ip_net_v> _gateway;
+
+            /// human readable name of interface
+            std::string name;
+            /// interface's index
+            int index;
+            /// the addresses owned by this interface
+            std::vector<IPRange> addrs;
+
+            std::string to_string() const
+            {
+                return "{} [ idx:{} | addrs:{} ]"_format(name, index, fmt::join(addrs, ","));
+            }
+        };
+
         struct if_info
         {
             explicit if_info(int _af = AF_INET) : af{_af} {}
@@ -52,9 +63,9 @@ namespace llarp
             std::optional<std::string> if_name = std::nullopt;
             std::optional<oxen::quic::Address> if_addr = std::nullopt;
             std::optional<oxen::quic::Address> if_netmask = std::nullopt;
-            std::optional<int> if_index = std::nullopt;
+            std::optional<unsigned int> if_index = std::nullopt;
 
-            operator bool() const { return if_name and if_addr /* and if_netmask */ and if_index; }
+            operator bool() const { return if_name and if_addr; }
         };
 
         /// network platform (all methods virtual so it can be mocked by unit tests)
@@ -127,15 +138,9 @@ namespace llarp
 
 }  // namespace llarp
 
-inline bool operator==(const in_addr& a, const in_addr& b)
-{
-    return llarp::cmp(a, b) == 0;
-}
+inline bool operator==(const in_addr& a, const in_addr& b) { return llarp::cmp(a, b) == 0; }
 
-inline bool operator==(const in6_addr& a, const in6_addr& b)
-{
-    return llarp::cmp(a, b) == 0;
-}
+inline bool operator==(const in6_addr& a, const in6_addr& b) { return llarp::cmp(a, b) == 0; }
 
 inline bool operator==(const sockaddr_in& a, const sockaddr_in& b)
 {
@@ -162,15 +167,9 @@ inline bool operator==(const sockaddr& a, const sockaddr& b)
     }
 }
 
-inline bool operator<(const in_addr& a, const in_addr& b)
-{
-    return llarp::cmp(a, b) < 0;
-}
+inline bool operator<(const in_addr& a, const in_addr& b) { return llarp::cmp(a, b) < 0; }
 
-inline bool operator<(const in6_addr& a, const in6_addr& b)
-{
-    return llarp::cmp(a, b) < 0;
-}
+inline bool operator<(const in6_addr& a, const in6_addr& b) { return llarp::cmp(a, b) < 0; }
 
 inline bool operator<(const sockaddr_in6& a, const sockaddr_in6& b)
 {

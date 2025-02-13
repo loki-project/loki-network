@@ -92,7 +92,7 @@ namespace llarp::net
                     oxen::quic::Address addr{i->ifa_addr};
                     auto nma = reinterpret_cast<sockaddr_in*>(i->ifa_netmask)->sin_addr.s_addr;
                     auto m = std::popcount(nma);
-                    log::trace(
+                    log::debug(
                         logcat, "Adding {} {} (mask={}) to current ranges", addr.is_ipv4() ? "ipv4" : "ipv6", addr, m);
                     current_ranges.emplace_back(std::move(addr), std::move(m));
                 }
@@ -287,8 +287,5 @@ namespace llarp::net
 
     const Platform_Impl g_plat{};
 
-    const Platform* Platform::Default_ptr()
-    {
-        return &g_plat;
-    }
+    const Platform* Platform::Default_ptr() { return &g_plat; }
 }  // namespace llarp::net

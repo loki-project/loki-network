@@ -2,8 +2,9 @@
 
 #include "types.hpp"
 
-#include <llarp/router_id.hpp>
+#include <llarp/contact/router_id.hpp>
 #include <llarp/util/buffer.hpp>
+#include <llarp/util/random.hpp>
 
 #include <cstdint>
 
@@ -42,7 +43,7 @@ namespace llarp
         bool shorthash(ShortHash&, uint8_t*, size_t size);
 
         /// blake2s 256 bit hmac
-        bool hmac(uint8_t*, uint8_t*, size_t, const SharedSecret&);
+        bool hmac(uint8_t*, const uint8_t*, size_t, const SharedSecret&);
 
         /// ed25519 sign
         bool sign(Signature&, const Ed25519SecretKey&, uint8_t* buf, size_t size);
@@ -52,13 +53,12 @@ namespace llarp
         bool sign(uint8_t* sig, const Ed25519SecretKey& sk, ustring_view buf);
 
         /// ed25519 sign (custom with derived keys)
-        bool sign(Signature&, const Ed25519Hash&, uint8_t* buf, size_t size);
+        bool sign(Signature&, const Ed25519PrivateData&, const uint8_t* buf, size_t size);
 
         /// ed25519 verify
         bool verify(const PubKey&, ustring_view, ustring_view);
-        bool verify(const PubKey&, uint8_t*, size_t, const Signature&);
+        bool verify(const PubKey&, const uint8_t*, size_t, const Signature&);
         bool verify(ustring_view, ustring_view, ustring_view);
-        bool verify(uint8_t*, uint8_t*, size_t, uint8_t*);
 
         /// Used in path-build and session initiation messages. Derives a shared secret key for symmetric DH, encrypting
         /// the given payload in-place. Will throw on failure of either the client DH derivation or the xchacha20
@@ -68,26 +68,23 @@ namespace llarp
             SharedSecret& secret,
             const SymmNonce& nonce,
             const RouterID& remote,
-            uspan payload);
+            std::span<uint8_t> payload);
 
         /// Used in receiving path-build and session initiation messages. Derives a shared secret key using an ephemeral
         /// pubkey and the provided nonce. The encrypted payload is mutated in-place. Will throw on failure of either
         /// the server DH derivation or the xchacha20 payload mutation
         void derive_decrypt_outer_wrapping(
-            const Ed25519SecretKey& local, const PubKey& remote, const SymmNonce& nonce, uspan encrypted);
+            const Ed25519SecretKey& local,
+            SharedSecret& shared,
+            const PubKey& remote,
+            const SymmNonce& nonce,
+            std::span<uint8_t> encrypted);
+
+        std::array<unsigned char, 32> make_scalar(const PubKey& k, uint64_t domain);
 
         /// derive sub keys for public keys.  hash is really only intended for
         /// testing ands key_n if given.
-        bool derive_subkey(
-            PubKey& derived, const PubKey& root, uint64_t key_n, const AlignedBuffer<32>* hash = nullptr);
-
-        /// derive sub keys for private keys.  hash is really only intended for
-        /// testing ands key_n if given.
-        bool derive_subkey_private(
-            Ed25519Hash& derived,
-            const Ed25519SecretKey& root,
-            uint64_t key_n,
-            const AlignedBuffer<32>* hash = nullptr);
+        bool derive_subkey(uint8_t* derived, size_t derived_len, const PubKey& root, uint64_t key_n);
 
         /// randomize buffer
         void randomize(uint8_t* buf, size_t len);
@@ -95,20 +92,7 @@ namespace llarp
         /// randomizer memory
         void randbytes(uint8_t*, size_t);
 
-        /// generate signing keypair
-        void identity_keygen(Ed25519SecretKey&);
-
-        /// generate encryption keypair
-        void encryption_keygen(Ed25519SecretKey&);
-
-        /// generate post quantum encrytion key
-        void pqe_keygen(PQKeyPair&);
-
-        /// post quantum decrypt (buffer, sharedkey_dst, sec)
-        bool pqe_decrypt(const PQCipherBlock&, SharedSecret&, const uint8_t*);
-
-        /// post quantum encrypt (buffer, sharedkey_dst,  pub)
-        bool pqe_encrypt(PQCipherBlock&, SharedSecret&, const PQPubKey&);
+        Ed25519SecretKey generate_identity();
 
         bool check_identity_privkey(const Ed25519SecretKey&);
 
@@ -120,22 +104,6 @@ namespace llarp
 
     const uint8_t* seckey_to_pubkey(const Ed25519SecretKey& secret);
 
-    const uint8_t* pq_keypair_to_pubkey(const PQKeyPair& keypair);
-
-    const uint8_t* pq_keypair_to_seckey(const PQKeyPair& keypair);
-
     /// rng type that uses llarp::randint(), which is cryptographically secure
-    struct CSRNG
-    {
-        using result_type = uint64_t;
-
-        static constexpr uint64_t min() { return std::numeric_limits<uint64_t>::min(); }
-
-        static constexpr uint64_t max() { return std::numeric_limits<uint64_t>::max(); }
-
-        uint64_t operator()() { return llarp::randint(); }
-    };
-
-    extern CSRNG csrng;
 
 }  // namespace llarp

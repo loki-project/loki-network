@@ -1,9 +1,9 @@
 #pragma once
 
+#include <llarp/contact/router_id.hpp>
+#include <llarp/contact/sns.hpp>
 #include <llarp/crypto/types.hpp>
-#include <llarp/dht/key.hpp>
-#include <llarp/router_id.hpp>
-#include <llarp/service/name.hpp>
+#include <llarp/ev/types.hpp>
 
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
@@ -12,9 +12,32 @@ namespace llarp
 {
     struct Router;
 
+    inline constexpr oxenmq::LogLevel oxenlog_to_omq_level(log::Level level)
+    {
+        switch (level)
+        {
+            case log::Level::critical:
+                return oxenmq::LogLevel::fatal;
+            case log::Level::err:
+                return oxenmq::LogLevel::error;
+            case log::Level::warn:
+                return oxenmq::LogLevel::warn;
+            case log::Level::info:
+                return oxenmq::LogLevel::info;
+            case log::Level::debug:
+                return oxenmq::LogLevel::debug;
+            case log::Level::trace:
+            case log::Level::off:
+            default:
+                return oxenmq::LogLevel::trace;
+        }
+    }
+
     namespace rpc
     {
-        /// The LokidRpcClient uses loki-mq to talk to make API requests to lokid.
+        inline constexpr auto PING_INTERVAL{30s};
+
+        /// The RPCClient uses oxen-mq to talk to make API requests to OMQ endpoints
         struct RPCClient : public std::enable_shared_from_this<RPCClient>
         {
             explicit RPCClient(std::shared_ptr<oxenmq::OxenMQ> lmq, std::weak_ptr<Router> r);
@@ -30,7 +53,7 @@ namespace llarp
             uint64_t block_height() const { return _block_height; }
 
             void lookup_ons_hash(
-                std::string namehash, std::function<void(std::optional<service::EncryptedONSRecord>)> resultHandler);
+                std::string namehash, std::function<void(std::optional<EncryptedSNSRecord>)> resultHandler);
 
             /// inform that if connected to a router successfully
             void inform_connection(RouterID router, bool success);
@@ -38,6 +61,8 @@ namespace llarp
             void start_pings();
 
           private:
+            void ping();
+
             /// do a lmq command on the current connection
             void command(std::string_view cmd);
 
@@ -48,13 +73,13 @@ namespace llarp
             template <typename HandlerFunc_t, typename Args_t>
             void request(std::string_view cmd, HandlerFunc_t func, const Args_t& args)
             {
-                m_lokiMQ->request(*m_Connection, std::move(cmd), std::move(func), args);
+                _omq->request(*_conn, std::move(cmd), std::move(func), args);
             }
 
             template <typename HandlerFunc_t>
             void request(std::string_view cmd, HandlerFunc_t func)
             {
-                m_lokiMQ->request(*m_Connection, std::move(cmd), std::move(func));
+                _omq->request(*_conn, std::move(cmd), std::move(func));
             }
 
             // Handles a service node list update; takes the "service_node_states" object of an
@@ -64,8 +89,10 @@ namespace llarp
             // Handles notification of a new block
             void handle_new_block(oxenmq::Message& msg);
 
-            std::optional<oxenmq::ConnectionID> m_Connection;
-            std::shared_ptr<oxenmq::OxenMQ> m_lokiMQ;
+            std::shared_ptr<EventTicker> _ping_ticker;
+
+            std::optional<oxenmq::ConnectionID> _conn;
+            std::shared_ptr<oxenmq::OxenMQ> _omq;
 
             std::weak_ptr<Router> _router;
             std::atomic<bool> _is_updating_list;

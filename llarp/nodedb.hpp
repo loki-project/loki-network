@@ -1,10 +1,9 @@
 #pragma once
 
+#include "contact/relay_contact.hpp"
+#include "contact/router_id.hpp"
 #include "crypto/crypto.hpp"
-#include "dht/key.hpp"
 #include "router/router.hpp"
-#include "router_contact.hpp"
-#include "router_id.hpp"
 #include "util/common.hpp"
 #include "util/thread/threading.hpp"
 
@@ -23,6 +22,8 @@ namespace llarp
     // TESTNET: the following constants have been shortened for testing purposes
 
     inline constexpr auto FETCH_INTERVAL{10min};
+    inline constexpr auto PURGE_INTERVAL{5min};
+    inline constexpr auto FLUSH_INTERVAL{5min};
 
     /*  RC Fetch Constants  */
     // fallback to bootstrap if we have less than this many RCs
@@ -38,7 +39,7 @@ namespace llarp
     // the number of rid sources that we make rid fetch requests to
     inline constexpr size_t RID_SOURCE_COUNT{8};
     // upper limit on how many rid fetch requests to rid sources can fail
-    inline constexpr size_t MAX_RID_ERRORS{2};
+    inline constexpr int MAX_RID_ERRORS{2};
     // each returned rid must appear this number of times across all responses
     inline constexpr int MIN_RID_FETCH_FREQ{6};  //  TESTNET:
     // the total number of accepted returned rids should be above this number
@@ -62,8 +63,6 @@ namespace llarp
     // threshold amount of verifications to promote an unconfirmed rc/rid
     inline constexpr int CONFIRMATION_THRESHOLD{3};
 
-    inline constexpr auto FLUSH_INTERVAL{15min};
-
     template <
         typename ID_t,
         std::enable_if_t<std::is_same_v<ID_t, RouterID> || std::is_same_v<ID_t, RemoteRC>, int> = 0>
@@ -86,17 +85,18 @@ namespace llarp
         bool operator<(const Unconfirmed& other) const { return id < other.id; }
     };
 
+    using rc_set = std::set<RemoteRC, XorMetric>;
+
     class NodeDB
     {
+        friend struct Router;
+
         Router& _router;
         const fs::path _root;
-        // const std::function<void(std::function<void()>)> _disk_hook;
 
-        bool _is_service_node;
+        bool _is_service_node{false};
 
-        std::chrono::milliseconds _next_flush_time;
-
-        /******** RouterID/RouterContacts ********/
+        /******** RouterID/RelayContacts ********/
 
         using Lock_t = util::NullLock;
         mutable util::NullMutex nodedb_mutex;
@@ -129,20 +129,15 @@ namespace llarp
 
         BootstrapList _bootstraps{};
 
-        /** RouterID lists    // TODO: get rid of all these, replace with better decom/not staked
-           sets
-            - white: active routers
-            - gray: fully funded, but decommissioned routers
-            - green: registered, but not fully-staked routers
-        */
-        std::set<RouterID> _router_whitelist{};
-        std::set<RouterID> _router_greylist{};
-        std::set<RouterID> _router_greenlist{};
-
         // All registered relays (service nodes)
         std::set<RouterID> _registered_routers;
+
         // if populated from a config file, lists specific exclusively used as path first-hops
         std::set<RouterID> _pinned_edges;
+
+        // if true, ONLY use pinned edges for first hop
+        bool _strict_connect{false};
+
         // source of "truth" for RC updating. This relay will also mediate requests to the
         // 8 selected active RID's for RID fetching
         RouterID fetch_source;
@@ -154,6 +149,8 @@ namespace llarp
         std::unordered_map<RouterID, std::atomic<int>> rid_result_counters{};
 
         std::atomic<int> fetch_counter{};
+        std::atomic<int> fail_counter{};
+        std::atomic<int> response_counter{};
 
         template <std::invocable Callable>
         void _disk_hook(Callable&& f) const
@@ -161,6 +158,7 @@ namespace llarp
             _router.queue_disk_io(std::forward<Callable>(f));
         }
 
+        // Returns true iff the RID is known, but not the RC
         bool want_rc(const RouterID& rid) const;
 
         /// asynchronously remove the files for a set of rcs on disk given their public ident key
@@ -180,6 +178,7 @@ namespace llarp
         std::shared_ptr<EventTicker> _rid_fetch_ticker;
         std::shared_ptr<EventTicker> _rc_fetch_ticker;
 
+        std::shared_ptr<EventTicker> _purge_ticker;
         std::shared_ptr<EventTicker> _flush_ticker;
 
       public:
@@ -188,12 +187,13 @@ namespace llarp
             return std::make_shared<NodeDB>(std::move(rootdir), r);
         }
 
-        explicit NodeDB(fs::path rootdir, Router* r)
-            : _router{*r}, _root{std::move(rootdir)}, _next_flush_time{time_now_ms() + FLUSH_INTERVAL}
+        explicit NodeDB(fs::path rootdir, Router* r) : _router{*r}, _root{std::move(rootdir)}
         {
             _ensure_skiplist(_root);
             rid_result_counters.clear();
         }
+
+        bool strict_connect_enabled() const { return _strict_connect; }
 
         void start_tickers();
 
@@ -208,47 +208,39 @@ namespace llarp
 
         std::optional<RemoteRC> get_rc_by_rid(const RouterID& rid);
 
-        bool process_fetched_rcs(std::set<RemoteRC>& rcs);
+        void process_fetched_rcs(std::set<RemoteRC> rcs);
 
         void ingest_fetched_rids(const RouterID& source, std::optional<std::set<RouterID>> ids = std::nullopt);
 
-        bool process_fetched_rids();
+        void process_fetched_rids();
 
         std::vector<RouterID> get_expired_rcs();
 
         // TESTNET: new bootstrap/initial fetch functions
         void fetch_rcs();
         void fetch_rids();
-        void bootstrap();  //  private
+        void bootstrap();
 
-        void stop_rid_fetch(bool success = true);
-        void stop_rc_fetch(bool success = true);
+        void post_rid_fetch(bool shutdown = false);
+        void post_rc_fetch(bool shutdown = false);
 
-        void rid_fetch_result(const RouterID& via);
+        void rid_fetch_result();
         void rc_fetch_result(std::optional<std::set<RemoteRC>> result = std::nullopt);
-        void stop_bootstrap(bool success = true);  //  private
+        void stop_bootstrap(bool success = true);
         bool is_bootstrapping() const { return _is_bootstrapping; }
         bool needs_bootstrap() const { return _needs_bootstrap; }
         bool bootstrap_completed() const { return not(_is_bootstrapping or _needs_bootstrap); }
-        bool is_bootstrap_node(RouterID rid) const;
-        void purge_rcs(std::chrono::milliseconds now);
-
-        //  Bootstrap fallback fetching
-        // void fallback_to_bootstrap();
-        // void post_snode_bootstrap();
-        // void bootstrap_cooldown();
+        bool is_bootstrap_node(const RemoteRC& rc) const;
+        void purge_rcs(std::chrono::milliseconds now = llarp::time_now_ms());
 
         // Populate rid_sources with random sample from known_rids. A set of rids is passed
         // if only specific RID's need to be re-selected; to re-select all, pass the member
         // variable ::known_rids
-        bool reselect_router_id_sources(std::set<RouterID> specific);
+        void reselect_router_id_sources(std::set<RouterID> specific);
 
-        void set_router_whitelist(
-            const std::vector<RouterID>& whitelist,
-            const std::vector<RouterID>& greylist,
-            const std::vector<RouterID>& greenlist);
+        void set_router_whitelist(const std::vector<RouterID>& whitelist);
 
-        std::optional<RouterID> get_random_whitelist_router() const;
+        std::optional<RouterID> get_random_registered_router() const;
 
         // client:
         //   if pinned edges were specified, connections are allowed only to those and
@@ -285,10 +277,6 @@ namespace llarp
 
         void set_bootstrap_routers(BootstrapList& from_router);
 
-        const std::set<RouterID>& whitelist() const { return _router_whitelist; }
-
-        const std::set<RouterID>& greylist() const { return _router_greylist; }
-
         std::set<RouterID>& registered_routers() { return _registered_routers; }
 
         const std::set<RouterID>& registered_routers() const { return _registered_routers; }
@@ -313,10 +301,10 @@ namespace llarp
         bool tick(std::chrono::milliseconds now);
 
         /// find the absolute closets router to a dht location
-        RemoteRC find_closest_to(dht::Key_t location) const;
+        RemoteRC find_closest_to(hash_key location) const;
 
-        /// find many routers closest to dht key
-        std::vector<RemoteRC> find_many_closest_to(dht::Key_t location, uint32_t numRouters) const;
+        /// find many routers closest to dht key; if num_routers = 0, return ALL routers
+        rc_set find_many_closest_to(hash_key location, uint32_t num_routers = 0) const;
 
         /// return true if we have an rc by its ident pubkey
         bool has_rc(const RouterID& pk) const;
@@ -335,7 +323,7 @@ namespace llarp
 
         /** The following random conditional functions utilize a simple implementation of reservoir
             sampling to return either 1 or n random RC's using only one pass through the set of
-           RC's.
+            RC's.
 
             Pseudocode:
               - begin iterating through the set
@@ -347,7 +335,20 @@ namespace llarp
         std::optional<RemoteRC> get_random_rc_conditional(std::function<bool(RemoteRC)> hook) const;
 
         std::optional<std::vector<RemoteRC>> get_n_random_rcs_conditional(
-            size_t n, std::function<bool(RemoteRC)> hook, bool exact = false) const;
+            size_t n, std::function<bool(RemoteRC)> hook, bool exact = false, bool use_strict_connect = false) const;
+
+        /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
+        bool put_rc(RemoteRC rc);
+
+        /// if we consider it valid (want_rc),
+        /// put this rc into the cache if it is not there or is newer than the one there already
+        /// returns true if the rc was inserted
+        bool put_rc_if_newer(RemoteRC rc);
+
+        bool verify_store_gossip_rc(const RemoteRC& rc);
+
+      private:
+        void cycle_fetch_source();
 
         // Updates `current` to not contain any of the elements of `replace` and resamples (up to
         // `target_size`) from population to refill it.
@@ -355,13 +356,16 @@ namespace llarp
         void replace_subset(
             std::set<T>& current, const std::set<T>& replace, std::set<T> population, size_t target_size, RNG&& rng)
         {
-            // Remove the ones we are replacing from current:
-            current.erase(replace.begin(), replace.end());
+            for (auto it = replace.begin(); it != replace.end(); ++it)
+            {
+                // Remove the ones we are replacing from current:
+                current.erase(*it);
+                // Remove from the population to not reselect
+                population.erase(*it);
+            }
 
-            // Remove ones we are replacing, and ones we already have, from the population so that
-            // we won't reselect them:
-            population.erase(replace.begin(), replace.end());
-            population.erase(current.begin(), current.end());
+            for (auto it = current.begin(); it != current.end(); ++it)
+                population.erase(*it);
 
             if (current.size() < target_size)
                 std::sample(
@@ -372,38 +376,30 @@ namespace llarp
                     rng);
         }
 
-        /// visit all known_rcs
-        template <typename Visit>
-        void visit_all(Visit visit) const
-        {
-            _router.loop()->call([this, visit]() {
-                for (const auto& item : known_rcs)
-                    visit(item);
-            });
-        }
-
         /// remove an entry given a filter that inspects the rc
         template <typename Filter>
         void remove_if(Filter visit)
         {
-            _router.loop()->call([this, visit]() {
-                std::unordered_set<RouterID> removed;
+            // only called from within event loop ticker
+            assert(_router.loop()->in_event_loop());
 
-                for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
+            std::unordered_set<RouterID> removed;
+
+            for (auto itr = rc_lookup.begin(); itr != rc_lookup.end();)
+            {
+                if (visit(itr->second))
                 {
-                    if (visit(itr->second))
-                    {
-                        removed.insert(itr->first);
-                        known_rcs.erase(itr->second);
-                        itr = rc_lookup.erase(itr);
-                    }
-                    else
-                        ++itr;
+                    removed.insert(itr->first);
+                    known_rids.erase(itr->first);
+                    known_rcs.erase(itr->second);
+                    itr = rc_lookup.erase(itr);
                 }
+                else
+                    ++itr;
+            }
 
-                if (not removed.empty())
-                    remove_many_from_disk_async(std::move(removed));
-            });
+            if (not removed.empty())
+                remove_many_from_disk_async(std::move(removed));
         }
 
         template <
@@ -450,22 +446,6 @@ namespace llarp
                 container.emplace(std::move(id));
             }
         }
-
-        /// remove rcs that are older than we want to keep.  For relays, this is when
-        /// they  become "outdated" (i.e. 12hrs).  Clients will hang on to them until
-        /// they are fully "expired" (i.e. 30 days), as the client may go offline for
-        /// some time and can still try to use those RCs to re-learn the network.
-        void remove_stale_rcs();
-
-        /// put (or replace) the RC if we consider it valid (want_rc).  returns true if put.
-        bool put_rc(RemoteRC rc);
-
-        /// if we consider it valid (want_rc),
-        /// put this rc into the cache if it is not there or is newer than the one there already
-        /// returns true if the rc was inserted
-        bool put_rc_if_newer(RemoteRC rc);
-
-        bool verify_store_gossip_rc(const RemoteRC& rc);
     };
 }  // namespace llarp
 

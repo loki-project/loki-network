@@ -73,7 +73,7 @@ add_library(libevent::threads ALIAS event_pthreads)
 add_library(libevent::extra ALIAS event_extra)
 
 
-system_or_submodule(OXENC oxenc liboxenc>=1.0.10 oxen-encoding)
+system_or_submodule(OXENC oxenc liboxenc>=1.1.0 oxen-encoding)
 system_or_submodule(OXENMQ oxenmq liboxenmq>=1.2.14 oxen-mq)
 
 
@@ -87,7 +87,7 @@ if(WITH_HIVE)
 endif()
 
 
-system_or_submodule(CLI11 CLI11 CLI11>=2.2.0 CLI11)
+system_or_submodule(CLI11 CLI11 CLI11>=2.3.0 CLI11)
 
 
 if(WITH_PEERSTATS)
@@ -103,8 +103,6 @@ endif()
 
 
 # we get oxen-logging from libquic; forcing submodule ensures fmt>10.0.0
-#set(OXEN_LOGGING_FMT_HEADER_ONLY ON CACHE INTERNAL "")
-#set(OXEN_LOGGING_SPDLOG_HEADER_ONLY ON CACHE INTERNAL "")
 set(OXEN_LOGGING_FORCE_SUBMODULES ON CACHE INTERNAL "")
 add_subdirectory(oxen-libquic)
 

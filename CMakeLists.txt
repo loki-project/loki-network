@@ -301,8 +301,8 @@ if(WITH_HIVE)
   add_definitions(-DLOKINET_HIVE)
 endif()
 
-add_subdirectory(crypto)
 add_subdirectory(llarp)
+
 if(BUILD_DAEMON)
   add_subdirectory(daemon)
 endif()

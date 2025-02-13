@@ -5,10 +5,7 @@
 
 namespace llarp
 {
-    void in_addr_set(in_addr* addr, const char* str)
-    {
-        inet_aton(str, addr);
-    }
+    void in_addr_set(in_addr* addr, const char* str) { inet_aton(str, addr); }
 
     void Config_Init(py::module& mod)
     {
@@ -104,7 +101,7 @@ namespace llarp
                     self.routers.clear();
                     for (const auto& arg : args)
                     {
-                        RouterContact rc{};
+                        RelayContact rc{};
                         if (rc.Read(arg))
                             self.routers.emplace(std::move(rc));
                         else

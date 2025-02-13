@@ -2,96 +2,185 @@
 
 #include "common.hpp"
 
-#include <llarp/service/intro_set.hpp>
+#include <llarp/contact/client_contact.hpp>
+#include <llarp/contact/sns.hpp>
 
 namespace llarp
 {
-    namespace FindIntroMessage
+    namespace PublishClientContact
     {
-        inline constexpr auto NOT_FOUND = "NOT FOUND"sv;
-        inline constexpr auto INVALID_ORDER = "INVALID ORDER"sv;
-        inline constexpr auto INSUFFICIENT_NODES = "INSUFFICIENT NODES"sv;
+        inline const auto INVALID = messages::serialize_response({{messages::STATUS_KEY, "INVALID CC"}});
+        inline const auto EXPIRED = messages::serialize_response({{messages::STATUS_KEY, "EXPIRED CC"}});
 
-        inline static std::string serialize(const dht::Key_t& location, bool is_relayed, uint64_t order)
-        {
-            oxenc::bt_dict_producer btdp;
+        /** Bt-encoded contents:
+            - 'e' : EncryptedClientContact
+            - 'i' : (Optional) RouterID of dispatching client, only sent on session paths
 
-            try
-            {
-                btdp.append("O", order);
-                btdp.append("R", is_relayed ? 1 : 0);
-                btdp.append("S", location.to_view());
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: FindIntroMessage failed to bt encode contents!");
-            }
-
-            return std::move(btdp).str();
-        }
-    }  // namespace FindIntroMessage
-
-    namespace FindNameMessage
-    {
-        inline constexpr auto NOT_FOUND = "NOT FOUND"sv;
-
-        inline static std::string serialize(std::string name_hash)
-        {
-            oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                btdp.append("H", std::move(name_hash));
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
-            }
-
-            return std::move(btdp).str();
-        }
-
-        inline static std::string serialize_response(std::string encrypted_name)
-        {
-            oxenc::bt_dict_producer btdp;
-
-            try
-            {
-                btdp.append("E", std::move(encrypted_name));
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
-            }
-
-            return std::move(btdp).str();
-        }
-    }  // namespace FindNameMessage
-
-    namespace PublishIntroMessage
-    {
-        inline constexpr auto INVALID_INTROSET = "INVALID INTROSET"sv;
-        inline constexpr auto EXPIRED = "EXPIRED INTROSET"sv;
-        inline constexpr auto INSUFFICIENT = "INSUFFICIENT NODES"sv;
-        inline constexpr auto INVALID_ORDER = "INVALID ORDER"sv;
-
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
         inline static std::string serialize(
-            const service::EncryptedIntroSet& introset, uint64_t relay_order, uint64_t is_relayed)
+            const EncryptedClientContact& ecc, std::optional<RouterID> remote = std::nullopt)
         {
             oxenc::bt_dict_producer btdp;
 
-            try
-            {
-                btdp.append("I", introset.bt_encode());
-                btdp.append("O", relay_order);
-                btdp.append("R", is_relayed);
-            }
-            catch (...)
-            {
-                log::error(messages::logcat, "Error: FindNameMessage failed to bt encode contents!");
-            }
+            btdp.append("e", ecc.bt_payload());
+            if (remote.has_value())
+                btdp.append("i", remote->to_view());
 
             return std::move(btdp).str();
         }
-    }  // namespace PublishIntroMessage
+
+        inline static std::tuple<EncryptedClientContact, std::optional<RouterID>> deserialize(
+            oxenc::bt_dict_consumer&& btdc)
+        {
+            EncryptedClientContact ecc;
+            std::optional<RouterID> sender = std::nullopt;
+
+            try
+            {
+                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("e"));
+
+                if (btdc.skip_until("i"))
+                    sender.emplace(btdc.consume_string_view());
+            }
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error{"Exception caught deserializing EncryptedClientContact: {}"_format(e.what())};
+            }
+
+            return {std::move(ecc), std::move(sender)};
+        }
+    }  // namespace PublishClientContact
+
+    namespace FindClientContact
+    {
+        inline const auto NOT_FOUND = messages::serialize_response({{messages::STATUS_KEY, "NOT FOUND"}});
+        inline const auto INSUFFICIENT = messages::serialize_response({{messages::STATUS_KEY, "INSUFFICIENT NODES"}});
+        inline const auto INVALID_ORDER = messages::serialize_response({{messages::STATUS_KEY, "INVALID ORDER"}});
+
+        /** Bt-encoded contents:
+            - 'k' : DHT key corresponding to client contact
+
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
+        inline static std::string serialize(const hash_key& location)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            btdp.append("k", location.to_view());
+
+            return std::move(btdp).str();
+        }
+
+        inline static hash_key deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            hash_key key;
+
+            try
+            {
+                key.from_string(btdc.require<std::string_view>("k"));
+            }
+            catch (const std::exception& e)
+            {
+                log::error(messages::logcat, "Error: failed to deserialize FindClientContact contents: {}", e.what());
+                throw;
+            }
+
+            return key;
+        }
+
+        /** Bt-encoded contents:
+            - 'x' : EncryptedClientContact
+
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
+        inline static std::string serialize_response(EncryptedClientContact ecc)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            btdp.append("x", ecc.bt_payload());
+
+            return std::move(btdp).str();
+        }
+
+        inline static EncryptedClientContact deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        {
+            EncryptedClientContact ecc;
+
+            try
+            {
+                ecc = EncryptedClientContact::deserialize(btdc.require<std::string_view>("x"));
+            }
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error{"Exception caught deserializing EncryptedClientContact: {}"_format(e.what())};
+            }
+
+            return ecc;
+        }
+    }  //  namespace FindClientContact
+
+    namespace ResolveSNS
+    {
+        inline const auto NOT_FOUND = messages::serialize_response({{messages::STATUS_KEY, "NOT FOUND"}});
+
+        /** Bt-encoded contents:
+            - 's' : SNS name
+
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
+        inline static std::string serialize(std::string_view name_hash)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            btdp.append("s", name_hash);
+
+            return std::move(btdp).str();
+        }
+
+        inline static std::string deserialize(oxenc::bt_dict_consumer&& btdc)
+        {
+            try
+            {
+                return btdc.require<std::string>("s");
+            }
+            catch (const std::exception& e)
+            {
+                log::error(messages::logcat, "Error: failed to deserialize ResolveSNS contents: {}", e.what());
+                throw;
+            }
+        }
+
+        /** Bt-encoded contents:
+            - 'x' : EncryptedSNSRecord
+
+            Note: we are bt-encoding to leave space for future fields (ex: version)
+         */
+        inline static std::string serialize_response(const EncryptedSNSRecord& enc)
+        {
+            oxenc::bt_dict_producer btdp;
+
+            btdp.append("x", enc.bt_payload());
+
+            return std::move(btdp).str();
+        }
+
+        inline static EncryptedSNSRecord deserialize_response(oxenc::bt_dict_consumer&& btdc)
+        {
+            EncryptedSNSRecord enc{};
+
+            try
+            {
+                enc = EncryptedSNSRecord::deserialize(btdc.require<std::string_view>("x"));
+            }
+            catch (const std::exception& e)
+            {
+                log::error(messages::logcat, "Error: failed to deserialize ResolveSNS contents: {}", e.what());
+                throw;
+            }
+
+            return enc;
+        }
+    }  // namespace ResolveSNS
+
 }  // namespace llarp

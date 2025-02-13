@@ -5,18 +5,29 @@
 #include <llarp/config/config.hpp>
 #include <llarp/config/ini.hpp>
 #include <llarp/constants/version.hpp>
+#include <llarp/contact/client_contact.hpp>
 #include <llarp/dns/server.hpp>
+#include <llarp/messages/common.hpp>
 #include <llarp/router/router.hpp>
 #include <llarp/rpc/rpc_request_definitions.hpp>
+#include <llarp/util/logging/buffer.hpp>
 
 #include <nlohmann/json.hpp>
+#include <oxenc/base32z.h>
 
 #include <exception>
 #include <vector>
 
 namespace llarp::rpc
 {
-    static auto logcat = llarp::log::Cat("lokinet.rpc");
+    static auto logcat = llarp::log::Cat("rpc-server");
+
+    template <typename T>
+        requires std::derived_from<T, RPCRequest>
+    static void log_print_rpc(T& req)
+    {
+        log::info(logcat, "RPC Server received request for endpoint `{}`", req.name);
+    }
 
     // Fake packet source that serializes repsonses back into dns
     class DummyPacketSource final : public dns::PacketSource_Base
@@ -70,8 +81,8 @@ namespace llarp::rpc
         regs.emplace(RPC::name, std::move(cback));
     }
 
-    RPCServer::RPCServer(LMQ_ptr lmq, Router& r)
-        : m_LMQ{std::move(lmq)}, m_Router(r), log_subs{*m_LMQ, llarp::logRingBuffer}
+    RPCServer::RPCServer(std::shared_ptr<oxenmq::OxenMQ> lmq, Router& r)
+        : m_LMQ{std::move(lmq)}, _router(r), log_subs{*m_LMQ, llarp::logRingBuffer}
     {
         // copied logic loop as placeholder
         for (const auto& addr : r.config()->api.rpc_bind_addrs)
@@ -113,35 +124,45 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Halt& halt)
     {
-        if (not m_Router.is_running())
+        log_print_rpc(halt);
+
+        if (not _router.is_running())
         {
             SetJSONError("Router is not running", halt.response);
             return;
         }
         SetJSONResponse("OK", halt.response);
-        m_Router.stop();
+        _router.stop();
     }
 
     void RPCServer::invoke(Version& version)
     {
-        nlohmann::json result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(m_Router.Uptime())}};
+        log_print_rpc(version);
+
+        nlohmann::json result{{"version", llarp::LOKINET_VERSION_FULL}, {"uptime", to_json(_router.Uptime())}};
 
         SetJSONResponse(result, version.response);
     }
 
     void RPCServer::invoke(Status& status)
     {
-        (m_Router.is_running()) ? SetJSONResponse(m_Router.ExtractStatus(), status.response)
-                                : SetJSONError("Router is not yet ready", status.response);
+        log_print_rpc(status);
+
+        (_router.is_running()) ? SetJSONResponse(_router.ExtractStatus(), status.response)
+                               : SetJSONError("Router is not yet ready", status.response);
     }
 
     void RPCServer::invoke(GetStatus& getstatus)
     {
-        SetJSONResponse(m_Router.ExtractSummaryStatus(), getstatus.response);
+        log_print_rpc(getstatus);
+
+        SetJSONResponse(_router.ExtractSummaryStatus(), getstatus.response);
     }
 
     void RPCServer::invoke(QuicConnect& quicconnect)
     {
+        log_print_rpc(quicconnect);
+
         auto& req = quicconnect.request;
 
         if (req.port == 0 and req.closeID == 0)
@@ -157,7 +178,7 @@ namespace llarp::rpc
         }
 
         // auto endpoint =
-        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     (req.endpoint.empty()) ? GetEndpointByName(_router, "default") : GetEndpointByName(_router,
         //     req.endpoint);
 
         // if (not endpoint)
@@ -204,6 +225,8 @@ namespace llarp::rpc
 
     void RPCServer::invoke(QuicListener& quiclistener)
     {
+        log_print_rpc(quiclistener);
+
         auto req = quiclistener.request;
 
         if (req.port == 0 and req.closeID == 0)
@@ -213,7 +236,7 @@ namespace llarp::rpc
         }
 
         // auto endpoint =
-        //     (req.endpoint.empty()) ? GetEndpointByName(m_Router, "default") : GetEndpointByName(m_Router,
+        //     (req.endpoint.empty()) ? GetEndpointByName(_router, "default") : GetEndpointByName(_router,
         //     req.endpoint);
 
         // if (not endpoint)
@@ -270,16 +293,181 @@ namespace llarp::rpc
         }
     }
 
+    void RPCServer::invoke(FindCC& findcc)
+    {
+        log_print_rpc(findcc);
+
+        if (_router.is_service_node())
+        {
+            SetJSONError("Not supported", findcc.response);
+            return;
+        }
+
+        RouterID pk;
+
+        if (findcc.request.pk.empty())
+        {
+            SetJSONError("No pubkey provided!", findcc.response);
+            return;
+        }
+
+        if (not pk.from_string(oxenc::from_base32z(findcc.request.pk)))
+        {
+            SetJSONError("Invalid pubkey provided: " + findcc.request.pk, findcc.response);
+            return;
+        }
+
+        _router.loop()->call([&, replier = findcc.move()]() mutable {
+            _router.session_endpoint()->lookup_client_intro(pk, [&](std::optional<llarp::ClientContact> cc) {
+                nlohmann::json result;
+                if (cc)
+                {
+                    auto cc_str = "{}"_format(*cc);
+                    result.emplace("cc", cc_str);
+                    log::info(logcat, "RPC call to `find_cc` returned successfully: {}", cc_str);
+                }
+                else
+                {
+                    log::warning(logcat, "RPC call to `find_cc` failed!");
+                    result.emplace("cc", "ERROR");
+                }
+                replier.reply(result.dump());
+            });
+        });
+    }
+
+    void RPCServer::invoke(SessionInit& sessioninit)
+    {
+        log_print_rpc(sessioninit);
+
+        // TESTNET: TODO: remove when relay sessions are streamlined
+        if (_router.is_service_node())
+        {
+            SetJSONError("Not supported", sessioninit.response);
+            return;
+        }
+
+        RouterID pk;
+
+        if (sessioninit.request.pk.empty())
+        {
+            SetJSONError("No pubkey provided!", sessioninit.response);
+            return;
+        }
+
+        if (not pk.from_string(oxenc::from_base32z(sessioninit.request.pk)))
+        {
+            SetJSONError("Invalid pubkey provided: " + sessioninit.request.pk, sessioninit.response);
+            return;
+        }
+
+        _router.loop()->call([&]() {
+            try
+            {
+                log::debug(logcat, "Beginning session init to remote instance: {}", pk.to_network_address(false));
+                _router.session_endpoint()->_initiate_session(
+                    NetworkAddress::from_pubkey(pk, true),
+                    [&, replier = sessioninit.move()](ip_v ip) mutable {
+                        nlohmann::json result;
+                        std::string a = std::holds_alternative<ipv4>(ip) ? std::get<ipv4>(ip).to_string()
+                                                                         : std::get<ipv6>(ip).to_string();
+                        result.emplace("ip", a);
+                        log::info(logcat, "RPC call to `session_init` succeeded: {}", a);
+                        replier.reply(result.dump());
+                    },
+                    sessioninit.request.x);
+                log::info(logcat, "RPC Server dispatched `session_init` to remote:{}", pk.to_network_address(false));
+            }
+            catch (const std::exception& e)
+            {
+                log::critical(logcat, "Failed to parse remote instance netaddr: {}", e.what());
+            }
+        });
+    }
+
+    void RPCServer::invoke(SessionClose& sessionclose)
+    {
+        log_print_rpc(sessionclose);
+
+        // TESTNET: TODO: remove when relay sessions are streamlined
+        if (_router.is_service_node())
+        {
+            SetJSONError("Not supported", sessionclose.response);
+            return;
+        }
+
+        RouterID pk;
+
+        if (sessionclose.request.pk.empty())
+        {
+            SetJSONError("No pubkey provided!", sessionclose.response);
+            return;
+        }
+
+        if (not pk.from_string(oxenc::from_base32z(sessionclose.request.pk)))
+        {
+            SetJSONError("Invalid pubkey provided: " + sessionclose.request.pk, sessionclose.response);
+            return;
+        }
+
+        _router.loop()->call([&]() {
+            try
+            {
+                if (auto session = _router.session_endpoint()->get_session(NetworkAddress::from_pubkey(pk, true)))
+                {
+                    session->stop_session(true, [replier = sessionclose.move()](oxen::quic::message m) mutable {
+                        nlohmann::json result;
+
+                        if (m)
+                        {
+                            result.emplace("result", "OK");
+                            log::info(logcat, "RPC call to `session_close` succeeded!");
+                            return replier.reply(result.dump());
+                        }
+
+                        std::string status{"<none given>"};
+
+                        try
+                        {
+                            oxenc::bt_dict_consumer btdc{m.body()};
+
+                            if (auto s = btdc.maybe<std::string>(messages::STATUS_KEY))
+                                status = std::move(*s);
+                        }
+                        catch (const std::exception& e)
+                        {
+                            status = "Exception: {}"_format(e.what());
+                        }
+
+                        log::critical(logcat, "Call to InitiateSession FAILED; reason: {}", status);
+                        result.emplace("result", std::move(status));
+                        replier.reply(result.dump());
+                    });
+                }
+
+                // _router.session_endpoint()->close_session(NetworkAddress::from_pubkey(pk, true));
+                log::info(logcat, "RPC Server dispatched `session_close` to remote:{}", pk.to_network_address(false));
+            }
+            catch (const std::exception& e)
+            {
+                log::critical(logcat, "Failed to parse remote instance netaddr: {}", e.what());
+            }
+        });
+    }
+
     // TODO: fix this because it's bad
     void RPCServer::invoke(LookupSnode& lookupsnode)
     {
-        if (not m_Router.is_service_node())
+        log_print_rpc(lookupsnode);
+
+        if (not _router.is_service_node())
         {
             SetJSONError("Not supported", lookupsnode.response);
             return;
         }
 
         RouterID routerID;
+
         if (lookupsnode.request.routerID.empty())
         {
             SetJSONError("No remote ID provided", lookupsnode.response);
@@ -292,8 +480,8 @@ namespace llarp::rpc
             return;
         }
 
-        // m_Router.loop()->call([&]() {
-        //   auto endpoint = m_Router.exit_context().get_exit_endpoint("default");
+        // _router.loop()->call([&]() {
+        //   auto endpoint = _router.exit_context().get_exit_endpoint("default");
 
         //   if (endpoint == nullptr)
         //   {
@@ -318,12 +506,14 @@ namespace llarp::rpc
 
     void RPCServer::invoke(MapExit& mapexit)
     {
+        log_print_rpc(mapexit);
+
         MapExit exit_request;
         // steal replier from exit RPC endpoint
         exit_request.replier.emplace(mapexit.move());
 
         // TODO: connect this to remote service session management (service::Handler)
-        // m_Router.hidden_service_context().GetDefault()->map_exit(
+        // _router.hidden_service_context().GetDefault()->map_exit(
         //     mapexit.request.address,
         //     mapexit.request.token,
         //     mapexit.request.ip_range,
@@ -337,24 +527,28 @@ namespace llarp::rpc
 
     void RPCServer::invoke(ListExits& listexits)
     {
+        log_print_rpc(listexits);
+
         (void)listexits;
-        // if (not m_Router.hidden_service_context().hasEndpoints())
+        // if (not _router.hidden_service_context().hasEndpoints())
         // {
         //   SetJSONError("No mapped endpoints found", listexits.response);
         //   return;
         // }
 
-        // auto status = m_Router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
+        // auto status = _router.hidden_service_context().GetDefault()->ExtractStatus()["exitMap"];
 
         // SetJSONResponse((status.empty()) ? "No exits" : status, listexits.response);
     }
 
     void RPCServer::invoke(UnmapExit& unmapexit)
     {
+        log_print_rpc(unmapexit);
+
         try
         {
             // for (auto& ip : unmapexit.request.ip_range)
-            //   m_Router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
+            //   _router.hidden_service_context().GetDefault()->UnmapExitRange(ip);
         }
         catch (std::exception& e)
         {
@@ -372,10 +566,12 @@ namespace llarp::rpc
     //  logic and leaves the message handling to the unmap_exit struct
     void RPCServer::invoke(SwapExits& swapexits)
     {
+        log_print_rpc(swapexits);
+
         (void)swapexits;
         // MapExit map_request;
         // UnmapExit unmap_request;
-        // auto endpoint = m_Router.hidden_service_context().GetDefault();
+        // auto endpoint = _router.hidden_service_context().GetDefault();
         // auto current_exits = endpoint->ExtractStatus()["exitMap"];
 
         // if (current_exits.empty())
@@ -447,13 +643,15 @@ namespace llarp::rpc
 
     void RPCServer::invoke(DNSQuery& dnsquery)
     {
+        log_print_rpc(dnsquery);
+
         std::string qname = (dnsquery.request.qname.empty()) ? "" : dnsquery.request.qname;
         dns::QType_t qtype = (dnsquery.request.qtype) ? dnsquery.request.qtype : dns::qTypeA;
 
         dns::Message msg{dns::Question{qname, qtype}};
 
-        // auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(m_Router, "default")
-        //                                                     : GetEndpointByName(m_Router, dnsquery.request.endpoint);
+        // auto endpoint = (dnsquery.request.endpoint.empty()) ? GetEndpointByName(_router, "default")
+        //                                                     : GetEndpointByName(_router, dnsquery.request.endpoint);
 
         // if (endpoint == nullptr)
         // {
@@ -480,6 +678,8 @@ namespace llarp::rpc
 
     void RPCServer::invoke(Config& config)
     {
+        log_print_rpc(config);
+
         if (config.request.filename.empty() and not config.request.ini.empty())
         {
             SetJSONError("No filename specified for .ini file", config.response);
@@ -491,7 +691,7 @@ namespace llarp::rpc
             return;
         }
 
-        if (not ends_with(config.request.filename, ".ini"))
+        if (config.request.filename.ends_with(".ini"))
         {
             SetJSONError("Must append '.ini' to filename", config.response);
             return;

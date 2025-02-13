@@ -4,7 +4,6 @@
 
 #include <llarp/config/config.hpp>
 
-// #include <oxen/log/omq_logger.hpp>
 #include <oxenmq/address.h>
 #include <oxenmq/oxenmq.h>
 
@@ -15,6 +14,10 @@ namespace llarp::rpc
     using rpc_input = std::variant<std::monostate, nlohmann::json, oxenc::bt_dict_consumer>;
 
     inline void parse_request(NoArgs&, rpc_input) {}
+
+    void parse_request(FindCC& findcc, rpc_input input);
+    void parse_request(SessionInit& sessioninit, rpc_input input);
+    void parse_request(SessionClose& sessionclose, rpc_input input);
 
     void parse_request(QuicConnect& quicconnect, rpc_input input);
     void parse_request(QuicListener& quiclistener, rpc_input input);

@@ -1,5 +1,4 @@
-#ifndef LLARP_HPP
-#define LLARP_HPP
+#pragma once
 
 #include <future>
 #include <iostream>
@@ -17,7 +16,7 @@ namespace llarp
 
     class EventLoop;
     struct Config;
-    struct RouterContact;
+    struct RelayContact;
     struct Config;
     struct Router;
     class NodeDB;
@@ -96,5 +95,3 @@ namespace llarp
         std::unique_ptr<std::future<void>> loop_waiter;
     };
 }  // namespace llarp
-
-#endif

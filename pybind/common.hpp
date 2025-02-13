@@ -21,7 +21,7 @@ namespace llarp
 
     void RouterID_Init(py::module& mod);
 
-    void RouterContact_Init(py::module& mod);
+    void RelayContact_Init(py::module& mod);
 
     void Config_Init(py::module& mod);
 

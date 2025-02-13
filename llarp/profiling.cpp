@@ -1,5 +1,7 @@
 #include "profiling.hpp"
 
+#include "path/path.hpp"
+#include "router/router.hpp"
 #include "util/file.hpp"
 
 #include <oxenc/bt_producer.h>
@@ -85,7 +87,7 @@ namespace llarp
         last_decay = llarp::time_now_ms();
     }
 
-    void RouterProfile::Tick()
+    void RouterProfile::tick()
     {
         static constexpr auto updateInterval = 30s;
         const auto now = llarp::time_now_ms();
@@ -121,22 +123,11 @@ namespace llarp
         return checkIsGood(path_fail, path_success, chances);
     }
 
-    Profiling::Profiling() : _profiling_disabled(false) {}
+    void Profiling::disable() { _profiling_disabled.store(true); }
 
-    void Profiling::disable()
-    {
-        _profiling_disabled.store(true);
-    }
+    void Profiling::enable() { _profiling_disabled.store(false); }
 
-    void Profiling::enable()
-    {
-        _profiling_disabled.store(false);
-    }
-
-    bool Profiling::is_enabled() const
-    {
-        return not _profiling_disabled.load();
-    }
+    bool Profiling::is_enabled() const { return not _profiling_disabled.load(); }
 
     bool Profiling::is_bad_for_connect(const RouterID& r, uint64_t chances)
     {
@@ -177,7 +168,7 @@ namespace llarp
             return;
         util::Lock lock(_m);
         for (auto& [rid, profile] : _profiles)
-            profile.Tick();
+            profile.tick();
     }
 
     void Profiling::connect_timeout(const RouterID& r)
@@ -204,6 +195,9 @@ namespace llarp
 
     void Profiling::hop_fail(const RouterID& r)
     {
+        if (_profiling_disabled.load())
+            return;
+
         util::Lock lock{_m};
         auto& profile = _profiles[r];
         profile.path_fail += 1;
@@ -212,6 +206,9 @@ namespace llarp
 
     void Profiling::path_fail(path::Path* p)
     {
+        if (_profiling_disabled.load())
+            return;
+
         util::Lock lock{_m};
         bool first = true;
         for (const auto& hop : p->hops)
@@ -221,7 +218,7 @@ namespace llarp
                 first = false;
             else
             {
-                auto& profile = _profiles[hop.rc.router_id()];
+                auto& profile = _profiles[hop.router_id()];
                 profile.path_fail += 1;
                 profile.last_update = llarp::time_now_ms();
             }
@@ -230,10 +227,13 @@ namespace llarp
 
     void Profiling::path_timeout(path::Path* p)
     {
+        if (_profiling_disabled.load())
+            return;
+
         util::Lock lock{_m};
         for (const auto& hop : p->hops)
         {
-            auto& profile = _profiles[hop.rc.router_id()];
+            auto& profile = _profiles[hop.router_id()];
             profile.path_timeout += 1;
             profile.last_update = llarp::time_now_ms();
         }
@@ -241,11 +241,14 @@ namespace llarp
 
     void Profiling::path_success(path::Path* p)
     {
+        if (_profiling_disabled.load())
+            return;
+
         util::Lock lock{_m};
         const auto sz = p->hops.size();
         for (const auto& hop : p->hops)
         {
-            auto& profile = _profiles[hop.rc.router_id()];
+            auto& profile = _profiles[hop.router_id()];
             // redeem previous fails by halfing the fail count and setting timeout to zero
             profile.path_fail /= 2;
             profile.path_timeout = 0;
@@ -255,7 +258,25 @@ namespace llarp
         }
     }
 
-    bool Profiling::save(const fs::path fpath)
+    void Profiling::stop_save_ticker()
+    {
+        if (_disk_saver)
+        {
+            log::trace(logcat, "Stopping router profile disk saving");
+            _disk_saver->stop();
+            _disk_saver.reset();
+        }
+    }
+
+    void Profiling::start_save_ticker(Router& r)
+    {
+        _disk_saver = r.loop()->call_every(SAVE_INTERVAL, [this]() {
+            log::debug(logcat, "Writing router profiles to disk...");
+            save_to_disk();
+        });
+    }
+
+    bool Profiling::save_to_disk()
     {
         std::string buf;
         {
@@ -276,11 +297,11 @@ namespace llarp
 
         try
         {
-            util::buffer_to_file(fpath, buf);
+            util::buffer_to_file(_profile_file, buf);
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "Failed to save profiling data to {}: {}", fpath, e.what());
+            log::warning(logcat, "Failed to save profiling data to {}: {}", _profile_file, e.what());
             return false;
         }
 
@@ -307,17 +328,17 @@ namespace llarp
         }
     }
 
-    bool Profiling::load(const fs::path fname)
+    bool Profiling::load_from_disk()
     {
         try
         {
-            std::string data = util::file_to_string(fname);
+            std::string data = util::file_to_string(_profile_file);
             util::Lock lock{_m};
             BDecode(bt_dict_consumer{data});
         }
         catch (const std::exception& e)
         {
-            log::warning(logcat, "failed to load router profiles from {}: {}", fname, e.what());
+            log::warning(logcat, "failed to load router profiles from {}: {}", _profile_file, e.what());
             return false;
         }
         _last_save = llarp::time_now_ms();

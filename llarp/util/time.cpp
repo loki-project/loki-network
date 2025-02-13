@@ -15,20 +15,11 @@ namespace llarp
         static const auto started_at_steady = std::chrono::steady_clock::now();
     }  // namespace
 
-    std::chrono::steady_clock::time_point get_time()
-    {
-        return std::chrono::steady_clock::now();
-    }
+    std::chrono::steady_clock::time_point get_time() { return std::chrono::steady_clock::now(); }
 
-    std::chrono::nanoseconds get_timestamp()
-    {
-        return std::chrono::steady_clock::now().time_since_epoch();
-    }
+    std::chrono::nanoseconds get_timestamp() { return std::chrono::steady_clock::now().time_since_epoch(); }
 
-    uint64_t to_milliseconds(std::chrono::milliseconds ms)
-    {
-        return ms.count();
-    }
+    uint64_t to_milliseconds(std::chrono::milliseconds ms) { return ms.count(); }
 
     /// get our uptime in ms
     std::chrono::milliseconds uptime()
@@ -51,10 +42,7 @@ namespace llarp
         return t + time_since_epoch<std::chrono::milliseconds, std::chrono::system_clock>(started_at_system);
     }
 
-    nlohmann::json to_json(const std::chrono::milliseconds& t)
-    {
-        return to_milliseconds(t);
-    }
+    nlohmann::json to_json(const std::chrono::milliseconds& t) { return to_milliseconds(t); }
 
     static auto extract_h_m_s_ms(const std::chrono::milliseconds& dur)
     {

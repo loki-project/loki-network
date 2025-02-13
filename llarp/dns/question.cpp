@@ -93,10 +93,7 @@ namespace llarp::dns
         return qname.substr(0, pos);
     }
 
-    std::string Question::Name() const
-    {
-        return qname.substr(0, qname.find_last_of('.'));
-    }
+    std::string Question::Name() const { return qname.substr(0, qname.find_last_of('.')); }
 
     bool Question::HasTLD(const std::string& tld) const
     {
@@ -105,6 +102,6 @@ namespace llarp::dns
 
     std::string Question::to_string() const
     {
-        return fmt::format("[DNSQuestion qname={} qtype={:x} qclass={:x}]", qname, qtype, qclass);
+        return "DNSQuestion:[ qname:{} | qtype:{:x} | qclass:{:x} ]"_format(qname, qtype, qclass);
     }
 }  // namespace llarp::dns

@@ -1,11 +1,11 @@
 #pragma once
 
 #include <llarp/address/address.hpp>
-#include <llarp/address/ip_packet.hpp>
 #include <llarp/constants/path.hpp>
+#include <llarp/contact/tag.hpp>
 #include <llarp/ev/tcp.hpp>
+#include <llarp/net/ip_packet.hpp>
 #include <llarp/path/path.hpp>
-#include <llarp/service/tag.hpp>
 
 #include <oxen/quic.hpp>
 
@@ -15,23 +15,27 @@
 namespace llarp
 {
     using on_session_init_hook = std::function<void(ip_v)>;
+    using recv_session_dgram_cb = std::function<void(std::vector<uint8_t>)>;
+
+    inline constexpr size_t PATHS_PER_INTRO{2};
 
     namespace link
     {
         class TunnelManager;
-    }
+    }  //  namespace link
 
     namespace handlers
     {
         class SessionEndpoint;
     }  // namespace handlers
 
+    using intro_path_map = std::map<ClientIntro, path::PathPtrSet, ClientIntroComp>;
+
     /** Snode vs Client Session
         - client to client: shared secret (symmetric key) is negotiated
         - client to snode:
           - the traffic to the pivot is encrypted
           - the pivot is the terminus, so data doesn't need to be encrypted
-          - could set HopID to 0 to indicate
     */
 
     namespace session
@@ -45,16 +49,25 @@ namespace llarp
             Router& _r;
             handlers::SessionEndpoint& _parent;
 
-            service::SessionTag _tag;
+            session_tag _tag;
             NetworkAddress _remote;
+
+            std::optional<shared_kx_data> session_keys{};
+
+            // used for bridging data messages across aligned paths
+            HopID _remote_pivot_txid;
 
             bool _use_tun;
             bool _is_outbound;
+            bool _is_active{false};
 
+            const bool _is_snode_session{false};
             const bool _is_exit_session{false};
 
             std::shared_ptr<path::Path> _current_path;
-            HopID _current_hop_id;
+            HopID _pivot_txid;
+
+            recv_session_dgram_cb _recv_dgram;
 
             // manually routed QUIC endpoint
             std::shared_ptr<oxen::quic::Endpoint> _ep;
@@ -68,35 +81,41 @@ namespace llarp
 
             void _init_ep();
 
-            const std::shared_ptr<path::Path>& current_path() const { return _current_path; }
-
           public:
             BaseSession(
                 Router& r,
                 std::shared_ptr<path::Path> _p,
                 handlers::SessionEndpoint& parent,
                 NetworkAddress remote,
-                service::SessionTag _t,
+                HopID remote_pivot_txid,
+                session_tag _t,
                 bool use_tun,
-                bool is_exit,
-                bool is_outbound);
+                bool is_outbound,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             virtual ~BaseSession() = default;
 
             bool is_outbound() const { return _is_outbound; }
 
+            const std::shared_ptr<path::Path>& current_path() const { return _current_path; }
+
             const NetworkAddress& remote() const { return _remote; }
 
             NetworkAddress remote() { return _remote; }
 
-            bool send_path_control_message(
-                std::string method, std::string body, std::function<void(std::string)> func = nullptr);
+            bool send_path_control_message(std::string method, std::string body, bt_control_response_hook func);
 
             bool send_path_data_message(std::string data);
 
-            void recv_path_data_message(bstring data);
+            void recv_path_data_message(std::vector<uint8_t> data);
 
             void set_new_current_path(std::shared_ptr<path::Path> _new_path);
+
+            void recv_path_switch2(HopID new_remote_txid, HopID new_local_txid);
+
+            void recv_path_switch(HopID new_remote_txid);
+
+            void publish_client_contact(const EncryptedClientContact& ecc, bt_control_response_hook func);
 
             void tcp_backend_connect();
 
@@ -104,11 +123,27 @@ namespace llarp
 
             bool using_tun() const { return _use_tun; }
 
-            service::SessionTag tag() { return _tag; }
+            session_tag tag() { return _tag; }
 
-            const service::SessionTag& tag() const { return _tag; }
+            const session_tag& tag() const { return _tag; }
+
+            void set_new_tag(const session_tag& tag);
 
             bool is_exit_session() const { return _is_exit_session; }
+
+            bool is_active() const { return _is_active; }
+
+            void activate();
+
+            void deactivate();
+
+            virtual void stop_session(bool send_close = false, bt_control_response_hook func = nullptr);
+
+            void send_path_close(bt_control_response_hook func = nullptr);
+
+            virtual std::string to_string() const;
+
+            static constexpr bool to_string_formattable = true;
         };
 
         struct OutboundSession final : public llarp::path::PathHandler,
@@ -120,32 +155,34 @@ namespace llarp
                 NetworkAddress _remote,
                 handlers::SessionEndpoint& parent,
                 std::shared_ptr<path::Path> path,
-                service::SessionTag _t,
-                bool is_exit);
+                HopID remote_pivot_txid,
+                session_tag _t,
+                intro_set cc,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~OutboundSession() override;
 
           private:
-            Ed25519SecretKey _session_key;  // DISCUSS: is this useful?
-
             std::chrono::milliseconds _last_use;
 
-            const bool _is_snode_session{false};
+            intro_path_map intro_path_mapping{};
+
+            void populate_intro_map(const intro_set& intros);
+
+            bool update_local_paths();
+
+            void build_and_switch_paths(intro_set&& intros);
+
+            void map_path(const std::shared_ptr<path::Path>& p);
+
+            void unmap_path(const std::shared_ptr<path::Path>& p);
 
           public:
             std::shared_ptr<path::PathHandler> get_self() override { return shared_from_this(); }
 
             std::weak_ptr<path::PathHandler> get_weak() override { return weak_from_this(); }
 
-            std::shared_ptr<path::Path> current_path()
-            {
-                if (auto itr = _paths.find(_remote.router_id()); itr != _paths.end())
-                    return itr->second;
-
-                return nullptr;
-            }
-
-            void blacklist_snode(const RouterID& snode) override;
+            void update_remote_intros(intro_set&& intros);
 
             void build_more(size_t n = 0) override;
 
@@ -153,28 +190,28 @@ namespace llarp
 
             nlohmann::json ExtractStatus() const;
 
-            void reset_path_state() override;
-
             void path_died(std::shared_ptr<path::Path> p) override;
-
-            bool is_path_dead(std::shared_ptr<path::Path> p, std::chrono::milliseconds dlt);
 
             void path_build_succeeded(std::shared_ptr<path::Path> p) override;
 
+            void path_build_failed(std::shared_ptr<path::Path> p, bool timeout = false) override;
+
+            void send_path_switch(std::shared_ptr<path::Path> _new_path);
+
             bool stop(bool send_close = false) override;
 
-            void send_path_close(std::shared_ptr<path::Path> p);
+            void stop_session(bool send_close = false, bt_control_response_hook func = nullptr) override;
 
             bool is_ready() const;
 
             const RouterID& remote_endpoint() const { return _remote.router_id(); }
 
-            std::optional<HopID> current_hop_id() const
+            std::optional<HopID> current_pivot_txid() const
             {
-                if (_current_hop_id.is_zero())
+                if (_pivot_txid.is_zero())
                     return std::nullopt;
 
-                return _current_hop_id;
+                return _pivot_txid;
             }
 
             bool is_expired(std::chrono::milliseconds now) const;
@@ -186,12 +223,12 @@ namespace llarp
                 NetworkAddress _remote,
                 std::shared_ptr<path::Path> _path,
                 handlers::SessionEndpoint& parent,
-                service::SessionTag _t,
-                bool use_tun);
+                HopID remote_pivot_txid,
+                session_tag _t,
+                bool use_tun,
+                std::optional<shared_kx_data> kx_data = std::nullopt);
 
             ~InboundSession() = default;
-
-            void set_new_tag(const service::SessionTag& tag);
         };
     }  // namespace session
 
