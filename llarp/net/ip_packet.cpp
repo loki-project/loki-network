@@ -93,7 +93,7 @@ namespace llarp
             auto srcv4 = ipv4{oxenc::big_to_host(_header->src)};
             auto dstv4 = ipv4{oxenc::big_to_host(_header->dest)};
 
-            log::trace(logcat, "srcv4={}:{}, dstv4={}:{}", srcv4, src_port, dstv4, dest_port);
+            log::trace(logcat, "srcv4:{}:{}, dstv4:{}:{}", srcv4, src_port, dstv4, dest_port);
 
             _src_addr = oxen::quic::Address{srcv4, src_port};
             _dst_addr = oxen::quic::Address{dstv4, dest_port};
@@ -103,7 +103,7 @@ namespace llarp
             auto srcv6 = ipv6{&_v6_header->src};
             auto dstv6 = ipv6{&_v6_header->dest};
 
-            log::trace(logcat, "srcv6={}:{}, dstv6={}:{}", srcv6, src_port, dstv6, dest_port);
+            log::trace(logcat, "srcv6:{}:{}, dstv6:{}:{}", srcv6, src_port, dstv6, dest_port);
 
             _src_addr = oxen::quic::Address{srcv6, src_port};
             _dst_addr = oxen::quic::Address{dstv6, dest_port};

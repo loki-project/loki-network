@@ -44,7 +44,6 @@ namespace llarp::handlers
         log::trace(logcat, "{} called", __PRETTY_FUNCTION__);
 
         s->stop_session(send_close);
-        _unmap_session(s.get());
     }
 
     bool SessionEndpoint::close_session(NetworkAddress remote, bool send_close)
@@ -147,11 +146,12 @@ namespace llarp::handlers
 
         // always accept ipv4 (currently)
         uint8_t protoflags = meta::to_underlying(protocol_flag::IPV4);
+
         if (!_is_v4)
             protoflags |= meta::to_underlying(protocol_flag::IPV6);
-        // if we are a full client, we accept standard and tunneled (tcp2quic) traffic
+        // if we are a full client, we accept standard and tunneled (QUICTUN) traffic
         if (_router.using_tun_if())
-            protoflags |= meta::to_underlying(protocol_flag::TCP2QUIC);
+            protoflags |= meta::to_underlying(protocol_flag::QUICTUN);
 
         if (_is_exit_node)
             protoflags |= meta::to_underlying(protocol_flag::EXIT);
@@ -312,7 +312,8 @@ namespace llarp::handlers
 
             for (const auto& [_, path] : _paths)
             {
-                log::info(logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid(), sns);
+                log::info(
+                    logcat, "Querying pivot:{} for name lookup (target: {})", path->pivot_rid().short_string(), sns);
                 path->resolve_sns(sns, response_handler);
             }
         }
@@ -392,7 +393,7 @@ namespace llarp::handlers
                 log::debug(
                     logcat,
                     "Querying pivot (rid:{}) for ClientContact lookup target (rid:{})",
-                    path->pivot_rid(),
+                    path->pivot_rid().short_string(),
                     remote);
 
                 path->find_client_contact(remote_key, response_handler);
@@ -746,13 +747,13 @@ namespace llarp::handlers
 
         auto& pivot = intro.pivot_rid;
 
-        log::debug(logcat, "Initiating session path-build to remote:{} via pivot:{}", remote, pivot);
+        log::debug(logcat, "Initiating session path-build to remote ({}) via pivot {}", remote, pivot.short_string());
 
         auto maybe_hops = aligned_hops_to_remote(pivot);
 
         if (not maybe_hops)
         {
-            log::error(logcat, "Failed to get hops for path-build to pivot:{}", pivot);
+            log::error(logcat, "Failed to get hops for path-build to pivot {}", pivot.short_string());
             return _make_session_path(std::move(intros), std::move(remote), std::move(cb), is_exit);
         }
 
@@ -839,7 +840,10 @@ namespace llarp::handlers
                         _make_session_path(std::move(*cc).take_intros(), remote, std::move(hook), is_exit);
                     }
                     else if (--*counter == 0)
-                        log::warning(logcat, "Failed to initiate session at 'find_cc' (target:{})", remote.router_id());
+                        log::warning(
+                            logcat,
+                            "Failed to initiate session at 'find_cc' (target:{})",
+                            remote.router_id().short_string());
                 });
         });
 

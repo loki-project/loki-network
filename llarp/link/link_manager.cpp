@@ -208,7 +208,7 @@ namespace llarp
                                 logcat,
                                 "{} batch dispatching to remote (rid:{})",
                                 _is_service_node ? "Relay" : "Client",
-                                rid);
+                                rid.short_string());
                             send_hook(itr->second->control_stream);
                             link_manager.on_conn_open(ci);
                         });
@@ -217,12 +217,13 @@ namespace llarp
 
                     itr->second = std::make_shared<link::Connection>(std::move(ci), std::move(control_stream));
 
-                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid.short_string());
                     return true;
                 }
                 catch (const std::exception& e)
                 {
-                    log::error(logcat, "Exception caught establishing connection to {}: {}", rid, e.what());
+                    log::error(
+                        logcat, "Exception caught establishing connection to {}: {}", rid.short_string(), e.what());
                     return false;
                 }
                 return true;
@@ -382,7 +383,7 @@ namespace llarp
                 {
                     if (alpn == alpns::C_ALPNS)
                     {
-                        log::critical(logcat, "{} accepting client connection (remote ID:{})!", us, other);
+                        log::trace(logcat, "{} accepting client connection (remote:{})!", us, other);
                         ep->client_conns.emplace(other, nullptr);
                         return true;
                     }
@@ -411,7 +412,7 @@ namespace llarp
                                     itr->second = nullptr;
                                 }
 
-                                log::debug(
+                                log::trace(
                                     logcat,
                                     "{} received inbound with ongoing outbound to remote "
                                     "(RID:{}); {}!",
@@ -490,13 +491,13 @@ namespace llarp
 
         if (auto it = ep->service_conns.find(rid); it != ep->service_conns.end())
         {
-            log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid);
+            log::debug(logcat, "Configuring inbound connection from relay RID:{}", rid.short_string());
             it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
         }
         else if (auto it = ep->client_conns.find(rid); it != ep->client_conns.end())
         {
             is_client_conn = true;
-            log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.to_network_address(false));
+            log::debug(logcat, "Configuring inbound connection from client RID:{}", rid.short_string());
             it->second = std::make_shared<link::Connection>(std::move(ci), std::move(control), false, true);
         }
         else
@@ -505,7 +506,7 @@ namespace llarp
         log::critical(
             logcat,
             "SERVICE NODE (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
-            _router.local_rid(),
+            _router.local_rid().to_network_address(),
             rid.to_network_address(!is_client_conn));
     }
 
@@ -525,8 +526,8 @@ namespace llarp
             logcat,
             "{} (RID:{}) ESTABLISHED CONNECTION TO RID:{}",
             _is_service_node ? "SERVICE NODE" : "CLIENT",
-            _router.local_rid().to_network_address(_is_service_node),
-            rid);
+            _router.local_rid().to_network_address(),
+            rid.to_network_address());
     }
 
     void LinkManager::on_conn_open(oxen::quic::connection_interface& _ci)
@@ -557,12 +558,12 @@ namespace llarp
 
                 if (auto s_itr = ep->service_conns.find(rid); s_itr != ep->service_conns.end())
                 {
-                    log::debug(logcat, "Quic connection to relay RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to relay RID:{} purged successfully", rid.short_string());
                     ep->service_conns.erase(s_itr);
                 }
                 else if (auto c_itr = ep->client_conns.find(rid); c_itr != ep->client_conns.end())
                 {
-                    log::debug(logcat, "Quic connection to client RID:{} purged successfully", rid);
+                    log::debug(logcat, "Quic connection to client RID:{} purged successfully", rid.short_string());
                     ep->client_conns.erase(c_itr);
                 }
                 else
@@ -849,7 +850,7 @@ namespace llarp
 
         if (node_db->verify_store_gossip_rc(rc))
         {
-            log::info(logcat, "Received updated RC (rid:{}), forwarding to peers", rc.router_id());
+            log::info(logcat, "Received updated RC (rid:{}), forwarding to peers", rc.router_id().short_string());
             gossip_rc(_router.local_rid(), rc);
         }
         else
@@ -1252,7 +1253,7 @@ namespace llarp
                     msg                 ? "SUCCEEDED"
                         : msg.timed_out ? "timed out"
                                         : "failed");
-                log::debug(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
+                log::trace(logcat, "Relayed PublishClientContact response: {}", buffer_printer{msg.body()});
                 prev_msg.respond(msg.body_str(), msg.is_error());
             });
     }
@@ -1328,7 +1329,7 @@ namespace llarp
             {
                 *counter = 0;
                 log::info(logcat, "Relayed FindClientContact request SUCCEEDED! Relaying response...");
-                log::info(logcat, "Relayed FindClientContact response: {}", buffer_printer{msg.body()});
+                log::trace(logcat, "Relayed FindClientContact response: {}", buffer_printer{msg.body()});
             }
             else if (--*counter == 0)
             {
@@ -1482,7 +1483,7 @@ namespace llarp
                 return m.respond(messages::ERROR_RESPONSE, true);
             }
 
-            log::info(logcat, "Received path control for local client: {}", buffer_printer{payload});
+            log::trace(logcat, "Received path control for local client: {}", buffer_printer{payload});
 
             for (auto& hop : path->hops)
             {
@@ -1528,11 +1529,11 @@ namespace llarp
             log::debug(logcat, "We are intermediate hop for path request: {}", hop->to_string());
         }
         else
+        {
             log::info(
-                logcat,
-                "We are bridge node for aligned path request ({})! Forwarding downstream: {}",
-                hop->to_string(),
-                buffer_printer{*inner_body});
+                logcat, "We are bridge node for aligned path request ({})! Forwarding downstream", hop->to_string());
+            log::trace(logcat, "Payload: {}", buffer_printer{*inner_body});
+        }
 
         auto next_ids = hop->next_id(hop_id);
 

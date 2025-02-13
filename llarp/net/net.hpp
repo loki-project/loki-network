@@ -51,7 +51,7 @@ namespace llarp
 
             std::string to_string() const
             {
-                return "{} [ idx={}, addrs={}]"_format(name, index, fmt::join(addrs, ","));
+                return "{} [ idx:{} | addrs:{} ]"_format(name, index, fmt::join(addrs, ","));
             }
         };
 

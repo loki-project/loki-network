@@ -987,7 +987,7 @@ namespace llarp::handlers
         }
         else
         {
-            log::debug(logcat, "Could not find remote for route {}", pkt.info_line());
+            log::trace(logcat, "Could not find remote for route {}", pkt.info_line());
 
             // make ICMP unreachable
             if (auto icmp = pkt.make_icmp_unreachable())
@@ -1040,7 +1040,7 @@ namespace llarp::handlers
 
         if (is_tunneled_pkt)
         {
-            log::critical(logcat, "Dropping tcp2quic pkt");
+            log::critical(logcat, "Dropping QUICTUN pkt");
             // TODO: pass to tunnel
             // TODO: also finish quic tunnel
             // TODO: route this even earlier

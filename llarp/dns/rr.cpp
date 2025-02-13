@@ -85,8 +85,8 @@ namespace llarp::dns
 
     std::string ResourceRecord::to_string() const
     {
-        return fmt::format(
-            "[RR name={} type={} class={} ttl={} rdata-size={}]", rr_name, rr_type, rr_class, ttl, rData.size());
+        return "RR:[ name:{} | type:{} | class:{} | ttl:{} | rdata-size:{} ]"_format(
+            rr_name, rr_type, rr_class, ttl, rData.size());
     }
 
     bool ResourceRecord::HasCNameForTLD(const std::string& tld) const

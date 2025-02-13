@@ -401,7 +401,7 @@ namespace llarp
 
         cycle_fetch_source();
         auto& src = fetch_source;
-        log::debug(logcat, "Dispatching FetchRC's request to {} for {} RCs!", src, needed.size());
+        log::debug(logcat, "Dispatching FetchRC's request to {} for {} RCs!", src.short_string(), needed.size());
 
         _router.link_manager()->fetch_rcs(
             src, FetchRCMessage::serialize(needed), [this, source = src](oxen::quic::message m) mutable {
@@ -698,7 +698,7 @@ namespace llarp
         auto rc = _is_bootstrapping.exchange(true) ? _bootstraps.next() : _bootstraps.current();
         auto source = rc.router_id();
 
-        log::debug(logcat, "Dispatching BootstrapRC to {}", source);
+        log::debug(logcat, "Dispatching BootstrapRC to {}", source.short_string());
 
         auto num_needed = _is_service_node ? SERVICE_NODE_BOOTSTRAP_SOURCE_COUNT : CLIENT_BOOTSTRAP_SOURCE_COUNT;
 
@@ -711,7 +711,7 @@ namespace llarp
 
                 if (not m)
                 {
-                    log::warning(logcat, "BootstrapRC fetch request to {} failed", src);
+                    log::warning(logcat, "BootstrapRC fetch request to {} failed", src.short_string());
                     return;
                 }
 
@@ -735,7 +735,8 @@ namespace llarp
                 }
                 catch (const std::exception& e)
                 {
-                    log::warning(logcat, "Failed to parse BootstrapRC fetch response from {}: {}", src, e.what());
+                    log::warning(
+                        logcat, "Failed to parse BootstrapRC fetch response from {}: {}", src.short_string(), e.what());
                     return;
                 }
 
@@ -754,7 +755,7 @@ namespace llarp
                 log::warning(
                     logcat,
                     "BootstrapRC response from {} returned {} RCs ({} minimum needed); continuing bootstrapping...",
-                    src,
+                    src.short_string(),
                     num,
                     MIN_ACTIVE_RCS);
             });

@@ -165,8 +165,12 @@ namespace llarp
 
     std::string ClientContact::to_string() const
     {
-        return "CC:[ 'a':{} | 'e':{} | 'i':{{{}}} | 'p':{} | 's':{} ]"_format(
-            pubkey, exit_policy.has_value(), fmt::join(intros, ","), protos, not SRVs.empty());
+        return "CC:[ 'a':{} | 'e':{} | 'i':[ {{}} ] | 'p':{} | 's':{} ]"_format(
+            pubkey.short_string(),
+            exit_policy.has_value(),
+            fmt::join(intros, " | "),
+            protoflag_string(protos),
+            not SRVs.empty());
     }
 
     EncryptedClientContact EncryptedClientContact::deserialize(std::string_view buf)

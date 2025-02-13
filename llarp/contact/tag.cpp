@@ -11,7 +11,7 @@ namespace llarp
     {
         randombytes(buf.data(), SIZE);
         std::memcpy(buf.data(), &protocol, sizeof(uint8_t));
-        log::debug(logcat, "new session tag generated: {}", buffer_printer{buf});
+        log::trace(logcat, "new session tag generated: {}", buffer_printer{buf});
     }
 
     session_tag session_tag::make(uint8_t protocol) { return session_tag{protocol}; }
@@ -19,7 +19,7 @@ namespace llarp
     std::tuple<bool, bool> session_tag::proto_bits() const
     {
         auto& p = buf[0];
-        return {p & meta::to_underlying(protocol_flag::EXIT), p & meta::to_underlying(protocol_flag::TCP2QUIC)};
+        return {p & meta::to_underlying(protocol_flag::EXIT), p & meta::to_underlying(protocol_flag::QUICTUN)};
     }
 
     void session_tag::read(std::string_view data)

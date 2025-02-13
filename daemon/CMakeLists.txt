@@ -59,7 +59,6 @@ foreach(exe ${exetargets})
   elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     target_link_directories(${exe} PRIVATE /usr/local/lib)
   endif()
-#  target_link_libraries(${exe} PUBLIC lokinet-base lokinet-core)
   target_link_libraries(${exe} PRIVATE lokinet_daemon)
   if(STRIP_SYMBOLS)
     add_custom_command(TARGET ${exe}

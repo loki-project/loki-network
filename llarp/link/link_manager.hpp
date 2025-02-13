@@ -360,7 +360,7 @@ namespace llarp
             return link_manager.router().loop()->call_get([&]() {
                 try
                 {
-                    log::debug(logcat, "Establishing connection to RID:{}", rid);
+                    log::debug(logcat, "Establishing connection to RID:{}", rid.short_string());
                     // add to service conns
                     auto [itr, b] = service_conns.try_emplace(rid, nullptr);
 
@@ -388,7 +388,7 @@ namespace llarp
                     itr->second =
                         std::make_shared<link::Connection>(std::move(conn_interface), std::move(control_stream));
 
-                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid);
+                    log::info(logcat, "Outbound connection to RID:{} added to service conns...", rid.short_string());
                     return true;
                 }
                 catch (...)

@@ -11,17 +11,10 @@ namespace llarp
 
     std::string RouterID::to_network_address(bool is_relay) const
     {
-        std::string b32 = oxenc::to_base32z(begin(), end());
-        b32 += is_relay ? RELAY_TLD : CLIENT_TLD;
-        return b32;
+        return to_string() += is_relay ? RELAY_TLD : CLIENT_TLD;
     }
 
-    std::string RouterID::to_string() const
-    {
-        std::string b32 = oxenc::to_base32z(begin(), end());
-        b32 += RELAY_TLD;
-        return b32;
-    }
+    std::string RouterID::to_string() const { return oxenc::to_base32z(begin(), end()); }
 
     nlohmann::json RouterID::ExtractStatus() const
     {

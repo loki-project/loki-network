@@ -4,6 +4,7 @@
 #include "logging.hpp"
 #include "random.hpp"
 
+#include <oxenc/base32z.h>
 #include <oxenc/bt.h>
 #include <oxenc/hex.h>
 
@@ -166,7 +167,7 @@ namespace llarp
 
         std::string ToHex() const { return oxenc::to_hex(begin(), end()); }
 
-        std::string short_string() const { return oxenc::to_hex(begin(), begin() + 5); }
+        std::string short_string() const { return oxenc::to_base32z(begin(), begin() + 5); }
 
         bool FromHex(std::string_view str)
         {
